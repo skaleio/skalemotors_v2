@@ -1,0 +1,2137 @@
+import { useMemo, useState, useEffect } from "react";
+import { Search, Plus, Eye, Edit, MoreHorizontal, Trash2, Upload, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+
+import type { Database } from "@/lib/types/database";
+import { useAuth } from "@/contexts/AuthContext";
+import { useVehicles } from "@/hooks/useVehicles";
+import { formatCLP } from "@/lib/format";
+import { vehicleService } from "@/lib/services/vehicles";
+import { supabase } from "@/lib/supabase";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
+
+const statusColors = {
+  disponible: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
+  reservado: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
+  vendido: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
+  en_reparacion: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
+  fuera_de_servicio: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+};
+
+const statusLabels = {
+  disponible: "Disponible",
+  reservado: "Reservado",
+  vendido: "Vendido",
+  en_reparacion: "En reparación",
+  fuera_de_servicio: "Fuera de servicio",
+};
+
+const typeLabels = {
+  nuevo: "Nuevo",
+  usado: "Usado",
+  consignado: "Consignado"
+};
+
+// Funciones helper para formatear números con puntos (formato chileno)
+const formatNumberInput = (value: string): string => {
+  try {
+    // Remover todo excepto números y puntos
+    const cleaned = value.replace(/[^\d.]/g, '');
+    // Asegurar que solo haya un punto
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+    return cleaned;
+  } catch (error) {
+    console.error('Error en formatNumberInput:', error);
+    return '';
+  }
+};
+
+const parseNumberInput = (value: string): number => {
+  try {
+    // Remover puntos y convertir a número
+    const cleaned = value.replace(/\./g, '');
+    const parsed = parseFloat(cleaned);
+    // Validar que sea un número válido
+    if (isNaN(parsed) || !isFinite(parsed)) {
+      return 0;
+    }
+    return parsed;
+  } catch (error) {
+    console.error('Error en parseNumberInput:', error);
+    return 0;
+  }
+};
+
+const formatNumberDisplay = (value: number): string => {
+  try {
+    // Validar que sea un número válido
+    if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
+      return '';
+    }
+    if (value === 0) return '';
+    // Formatear con puntos como separadores de miles
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  } catch (error) {
+    console.error('Error en formatNumberDisplay:', error);
+    return '';
+  }
+};
+
+export default function Inventory() {
+  const { user } = useAuth();
+  const { vehicles, loading, refetch } = useVehicles({
+    branchId: user?.branch_id ?? undefined,
+    enabled: !!user,
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedType, setSelectedType] = useState<string>("all");
+  const [selectedMake, setSelectedMake] = useState<string>("all");
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+  const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newVehicle, setNewVehicle] = useState({
+    make: "",
+    model: "",
+    vin: "",
+    year: 0,
+    color: "",
+    mileage: 0,
+    category: "nuevo" as "nuevo" | "usado" | "consignado",
+    price: 0,
+    cost: 0,
+    minDownPayment: 0,
+    engine_size: "",
+    fuel_type: "gasolina" as "gasolina" | "diesel" | "híbrido" | "eléctrico",
+    transmission: "automático" as "manual" | "automático" | "cvt",
+    location: "",
+    drivetrain: "",
+    trunk_capacity: "",
+    sunroof: undefined as string | undefined,
+    images: [] as File[],
+  });
+
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter((vehicle) => {
+      const matchesSearch =
+        searchQuery === "" ||
+        vehicle.make.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        vehicle.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (vehicle.vin || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus = selectedStatus === "all" || vehicle.status === selectedStatus;
+      const matchesType = selectedType === "all" || vehicle.category === selectedType;
+      const matchesMake = selectedMake === "all" || vehicle.make === selectedMake;
+      return matchesSearch && matchesStatus && matchesType && matchesMake;
+    });
+  }, [vehicles, searchQuery, selectedMake, selectedStatus, selectedType]);
+
+  const uniqueMakes = useMemo(() => {
+    return Array.from(new Set(vehicles.map((v) => v.make))).sort();
+  }, [vehicles]);
+
+  const totalValue = filteredVehicles.reduce((sum, v) => sum + Number(v.price || 0), 0);
+  const totalMargin = filteredVehicles.reduce((sum, v) => sum + Number(v.margin || 0), 0);
+
+  const selectedVehicleComputed = useMemo(() => {
+    if (!selectedVehicle) return null;
+    const margin = Number(selectedVehicle.margin ?? 0);
+    const price = Number(selectedVehicle.price ?? 0);
+    const minDownPayment = Math.round(price * 0.2);
+    const engine = selectedVehicle.engine_size || "—";
+
+    return {
+      margin,
+      minDownPayment,
+      engine,
+      ownership: selectedVehicle.category === "consignado" ? "Consignado" : "Propio",
+      location: selectedVehicle.location || "—",
+      drivetrain: "—",
+      trunkCapacityLiters: "—",
+      sunroof: "—",
+    };
+  }, [selectedVehicle]);
+
+  // Pre-llenar formulario cuando se selecciona un vehículo para editar
+  useEffect(() => {
+    if (vehicleToEdit) {
+      const features = (vehicleToEdit.features as any) || {};
+      setNewVehicle({
+        make: vehicleToEdit.make || "",
+        model: vehicleToEdit.model || "",
+        vin: vehicleToEdit.vin || "",
+        year: vehicleToEdit.year || new Date().getFullYear(),
+        color: vehicleToEdit.color || "",
+        mileage: vehicleToEdit.mileage || 0,
+        category: vehicleToEdit.category || "nuevo",
+        price: Number(vehicleToEdit.price || 0),
+        cost: Number(vehicleToEdit.cost || 0),
+        minDownPayment: Number(features.min_down_payment || 0),
+        engine_size: vehicleToEdit.engine_size || "",
+        fuel_type: vehicleToEdit.fuel_type || "gasolina",
+        transmission: vehicleToEdit.transmission || "automático",
+        location: vehicleToEdit.location || "",
+        drivetrain: features.drivetrain || "",
+        trunk_capacity: features.trunk_capacity_liters || "",
+        sunroof: features.sunroof || undefined,
+        images: [], // Las imágenes existentes se mantienen en el vehículo, solo se pueden agregar nuevas
+      });
+    }
+  }, [vehicleToEdit]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const fileArray = Array.from(files);
+    setNewVehicle((prev) => ({
+      ...prev,
+      images: [...prev.images, ...fileArray],
+    }));
+  };
+
+  const removeImage = (index: number) => {
+    setNewVehicle((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleCreateVehicle = async () => {
+    if (!user?.branch_id) {
+      alert("Error: No hay sucursal asignada. Por favor contacta al administrador.");
+      console.error("No hay sucursal asignada");
+      return;
+    }
+
+    // Validar campos requeridos
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
+      alert("Por favor completa todos los campos requeridos (marcados con *)");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      console.log("🔄 Iniciando creación de vehículo...");
+      console.log("📋 Datos del formulario:", {
+        make: newVehicle.make,
+        model: newVehicle.model,
+        vin: newVehicle.vin,
+        year: newVehicle.year,
+        hasImages: newVehicle.images.length > 0
+      });
+      
+      // Calcular margen
+      const margin = newVehicle.price - newVehicle.cost;
+      const minDownPayment = newVehicle.minDownPayment || 0;
+
+      // Preparar features con campos adicionales
+      const features = {
+        drivetrain: newVehicle.drivetrain || null,
+        trunk_capacity_liters: newVehicle.trunk_capacity || null,
+        sunroof: newVehicle.sunroof ?? null,
+        min_down_payment: minDownPayment,
+      };
+
+      // Crear el vehículo primero (sin imágenes)
+      // Asegurar que los números sean del tipo correcto para Supabase
+      const vehicleData = {
+        vin: newVehicle.vin.toUpperCase().trim(),
+        make: newVehicle.make.trim(),
+        model: newVehicle.model.trim(),
+        year: Number(newVehicle.year),
+        color: newVehicle.color.trim(),
+        mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
+        fuel_type: newVehicle.fuel_type,
+        transmission: newVehicle.transmission,
+        engine_size: newVehicle.engine_size?.trim() || null,
+        category: newVehicle.category,
+        price: Number(newVehicle.price),
+        cost: newVehicle.cost ? Number(newVehicle.cost) : null,
+        margin: Number(margin),
+        status: "disponible" as const,
+        branch_id: user.branch_id,
+        location: newVehicle.location?.trim() || null,
+        images: [], // Inicialmente vacío, se llenará después de subir las imágenes
+        features: features as any,
+      };
+
+      console.log("📝 Datos del vehículo a crear:", vehicleData);
+      console.log("📝 Validando datos antes de enviar...");
+      
+      // Validar que todos los campos requeridos estén presentes
+      if (!vehicleData.vin || !vehicleData.make || !vehicleData.model || !vehicleData.color || !vehicleData.year) {
+        throw new Error("Faltan campos requeridos en los datos del vehículo");
+      }
+      
+      console.log("✅ Validación pasada, enviando a Supabase...");
+      
+      // Crear vehículo directamente con timeout
+      const createPromise = vehicleService.create(vehicleData);
+      const createTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout creando vehículo')), 30000)
+      );
+      
+      const createdVehicle = await Promise.race([createPromise, createTimeout]) as any;
+      console.log("✅ Vehículo creado exitosamente con ID:", createdVehicle.id);
+
+      // Subir imágenes a Supabase Storage
+      if (newVehicle.images.length > 0) {
+        console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es)...`);
+        const imageUrls: string[] = [];
+        
+        for (const file of newVehicle.images) {
+          try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${createdVehicle.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            
+            console.log(`📤 Subiendo imagen: ${fileName}`);
+            // Subir archivo a Storage
+            const { error: uploadError } = await supabase.storage
+              .from('vehicles')
+              .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+
+            if (uploadError) {
+              console.error("❌ Error subiendo imagen:", uploadError);
+              continue;
+            }
+
+            // Obtener URL pública
+            const { data: { publicUrl } } = supabase.storage
+              .from('vehicles')
+              .getPublicUrl(fileName);
+
+            imageUrls.push(publicUrl);
+            console.log(`✅ Imagen subida: ${publicUrl}`);
+          } catch (error) {
+            console.error("❌ Error procesando imagen:", error);
+          }
+        }
+
+        // Actualizar vehículo con las URLs de las imágenes
+        if (imageUrls.length > 0) {
+          console.log(`🔄 Actualizando vehículo con ${imageUrls.length} imagen(es)...`);
+          try {
+            const updatePromise = vehicleService.update(createdVehicle.id, { images: imageUrls as any });
+            const updateTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout actualizando imágenes')), 20000)
+            );
+            await Promise.race([updatePromise, updateTimeout]);
+            console.log(`✅ ${imageUrls.length} imagen(es) agregada(s) al vehículo`);
+          } catch (updateError: any) {
+            console.error("❌ Error actualizando vehículo con imágenes:", updateError);
+            // No lanzar error, el vehículo ya fue creado
+            // Las imágenes se pueden agregar después manualmente
+          }
+        } else {
+          console.warn("⚠️ No se pudieron subir las imágenes");
+        }
+      } else {
+        console.log("ℹ️ No hay imágenes para subir");
+      }
+
+      // Cerrar diálogo primero
+      setShowAddDialog(false);
+      
+      // Resetear formulario
+      setNewVehicle({
+        make: "",
+        model: "",
+        vin: "",
+        year: 0,
+        color: "",
+        mileage: 0,
+        category: "nuevo",
+        price: 0,
+        cost: 0,
+        minDownPayment: 0,
+        engine_size: "",
+        fuel_type: "gasolina",
+        transmission: "automático",
+        location: "",
+        drivetrain: "",
+        trunk_capacity: "",
+        sunroof: undefined,
+        images: [],
+      });
+      
+      console.log("✅ Vehículo guardado exitosamente");
+      
+      // Refetch con timeout para evitar que se quede colgado
+      // Usar un solo refetch con manejo robusto de errores
+      try {
+        const refetchPromise = refetch();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout en refetch')), 8000)
+        );
+        
+        await Promise.race([refetchPromise, timeoutPromise]);
+        console.log("✅ Lista actualizada correctamente");
+      } catch (refetchError: any) {
+        console.warn("⚠️ Error o timeout en refetch, pero el vehículo fue creado:", refetchError);
+        // Intentar refetch en segundo plano sin bloquear
+        setTimeout(() => {
+          refetch().catch(err => {
+            console.error("Error en refetch manual:", err);
+            // No hacer nada más, el vehículo ya fue creado
+          });
+        }, 500);
+      }
+    } catch (error: any) {
+      console.error("❌ Error creando vehículo:", error);
+      console.error("Detalles del error:", {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint
+      });
+      
+      // Mensaje de error más claro para el usuario
+      let errorMessage = error?.message || "Error desconocido al crear el vehículo";
+      
+      // Si el error es sobre permisos o sesión
+      if (errorMessage.includes("sesión") || errorMessage.includes("permisos")) {
+        errorMessage = "Tu sesión ha expirado. Por favor, recarga la página e inicia sesión nuevamente.";
+      }
+      
+      alert(`Error al crear vehículo:\n\n${errorMessage}\n\nSi el problema persiste, contacta al administrador.`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateVehicle = async () => {
+    if (!vehicleToEdit || !user?.branch_id) {
+      alert("Error: No hay vehículo seleccionado o sucursal asignada.");
+      return;
+    }
+
+    // Validar campos requeridos
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
+      alert("Por favor completa todos los campos requeridos (marcados con *)");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      console.log("🔄 Iniciando actualización de vehículo...");
+      
+      // Calcular margen
+      const margin = newVehicle.price - newVehicle.cost;
+      const minDownPayment = newVehicle.minDownPayment || 0;
+
+      // Preparar features con campos adicionales
+      const features = {
+        drivetrain: newVehicle.drivetrain || null,
+        trunk_capacity_liters: newVehicle.trunk_capacity || null,
+        sunroof: newVehicle.sunroof ?? null,
+        min_down_payment: minDownPayment,
+      };
+
+      // Preparar datos de actualización
+      const updateData = {
+        vin: newVehicle.vin.toUpperCase().trim(),
+        make: newVehicle.make.trim(),
+        model: newVehicle.model.trim(),
+        year: parseInt(String(newVehicle.year), 10),
+        color: newVehicle.color.trim(),
+        mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
+        fuel_type: newVehicle.fuel_type,
+        transmission: newVehicle.transmission,
+        engine_size: newVehicle.engine_size?.trim() || null,
+        category: newVehicle.category,
+        price: Number(newVehicle.price),
+        cost: newVehicle.cost ? Number(newVehicle.cost) : null,
+        margin: Number(margin),
+        location: newVehicle.location?.trim() || null,
+        features: features as any,
+      };
+
+      console.log("📝 Datos del vehículo a actualizar:", updateData);
+      
+      // Actualizar vehículo
+      await vehicleService.update(vehicleToEdit.id, updateData);
+      console.log("✅ Vehículo actualizado exitosamente");
+
+      // Si hay nuevas imágenes, subirlas
+      if (newVehicle.images.length > 0) {
+        console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es) nuevas...`);
+        const imageUrls: string[] = [];
+        const existingImages = (vehicleToEdit.images as unknown as string[] | null) || [];
+        
+        for (const file of newVehicle.images) {
+          try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            
+            console.log(`📤 Subiendo imagen: ${fileName}`);
+            const { error: uploadError } = await supabase.storage
+              .from('vehicles')
+              .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+
+            if (uploadError) {
+              console.error("❌ Error subiendo imagen:", uploadError);
+              continue;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('vehicles')
+              .getPublicUrl(fileName);
+
+            imageUrls.push(publicUrl);
+            console.log(`✅ Imagen subida: ${publicUrl}`);
+          } catch (error) {
+            console.error("❌ Error procesando imagen:", error);
+          }
+        }
+
+        // Actualizar vehículo con las nuevas URLs de las imágenes
+        if (imageUrls.length > 0) {
+          const allImages = [...existingImages, ...imageUrls];
+          await vehicleService.update(vehicleToEdit.id, { images: allImages as any });
+          console.log(`✅ ${imageUrls.length} imagen(es) agregada(s) al vehículo`);
+        }
+      }
+
+      // Cerrar diálogo y resetear
+      setVehicleToEdit(null);
+      setNewVehicle({
+        make: "",
+        model: "",
+        vin: "",
+        year: 0,
+        color: "",
+        mileage: 0,
+        category: "nuevo",
+        price: 0,
+        cost: 0,
+        minDownPayment: 0,
+        engine_size: "",
+        fuel_type: "gasolina",
+        transmission: "automático",
+        location: "",
+        drivetrain: "",
+        trunk_capacity: "",
+        sunroof: undefined,
+        images: [],
+      });
+      
+      console.log("✅ Vehículo actualizado exitosamente");
+      
+      // Refetch con timeout
+      try {
+        await Promise.race([
+          refetch(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout en refetch')), 10000)
+          )
+        ]);
+        console.log("✅ Lista actualizada correctamente");
+      } catch (refetchError) {
+        console.warn("⚠️ Error o timeout en refetch:", refetchError);
+        setTimeout(() => {
+          refetch().catch(err => console.error("Error en refetch manual:", err));
+        }, 1000);
+      }
+    } catch (error: any) {
+      console.error("❌ Error actualizando vehículo:", error);
+      console.error("Detalles del error:", {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint
+      });
+      alert(`Error al actualizar vehículo: ${error?.message || "Error desconocido"}\n\nRevisa la consola para más detalles.`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteVehicle = async () => {
+    if (!vehicleToDelete || !user) {
+      setVehicleToDelete(null);
+      setIsDeleting(false);
+      return;
+    }
+
+    const vehicleToDeleteCopy = vehicleToDelete;
+    
+    // Cerrar el diálogo y limpiar estado inmediatamente
+    setVehicleToDelete(null);
+    setIsDeleting(true);
+    
+    // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la operación
+    requestAnimationFrame(async () => {
+      try {
+        await vehicleService.delete(vehicleToDeleteCopy.id);
+        console.log(`✅ Vehículo eliminado: ${vehicleToDeleteCopy.make} ${vehicleToDeleteCopy.model}`);
+      } catch (error: any) {
+        console.error("Error eliminando vehículo:", error);
+      } finally {
+        // Limpiar estado de loading
+        setIsDeleting(false);
+        
+        // Refrescar la lista después de que todo se haya limpiado
+        setTimeout(() => {
+          refetch();
+        }, 100);
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
+          <p className="text-muted-foreground">
+            Gestiona el stock de vehículos de tu automotora
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button 
+            onClick={() => {
+              // Resetear formulario antes de abrir
+              setNewVehicle({
+                make: "",
+                model: "",
+                vin: "",
+                year: 0,
+                color: "",
+                mileage: 0,
+                category: "nuevo",
+                price: 0,
+                cost: 0,
+                minDownPayment: 0,
+                engine_size: "",
+                fuel_type: "gasolina",
+                transmission: "automático",
+                location: "",
+                drivetrain: "",
+                trunk_capacity: "",
+                sunroof: undefined,
+                images: [],
+              });
+              setShowAddDialog(true);
+            }}
+            className="bg-black hover:bg-gray-900 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Agregar Vehículo
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por marca, modelo, VIN, PPU..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            {Object.entries(statusLabels).map(([key, label]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedType} onValueChange={setSelectedType}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los tipos</SelectItem>
+            {Object.entries(typeLabels).map(([key, label]) => (
+              <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedMake} onValueChange={setSelectedMake}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por marca" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las marcas</SelectItem>
+            {uniqueMakes.map((make) => (
+              <SelectItem key={make} value={make}>{make}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Total Vehículos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredVehicles.length}</div>
+            <p className="text-xs text-muted-foreground">
+              de {vehicles.length} en stock
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Valor Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCLP(totalValue)}</div>
+            <p className="text-xs text-muted-foreground">
+              precio de lista
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Margen Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-success">{formatCLP(totalMargin)}</div>
+            <p className="text-xs text-muted-foreground">
+              margen proyectado
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Publicados</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">
+              {filteredVehicles.filter(v => v.status === 'disponible').length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              en portales activos
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Vehicles Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Vehículos en Stock</CardTitle>
+          <CardDescription>
+            {filteredVehicles.length} vehículo{filteredVehicles.length !== 1 ? 's' : ''} encontrado{filteredVehicles.length !== 1 ? 's' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Vehículo</TableHead>
+                <TableHead>Detalles</TableHead>
+                <TableHead>Precio</TableHead>
+                <TableHead>Margen</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="w-[100px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Cargando vehículos...
+                  </TableCell>
+                </TableRow>
+              )}
+              {filteredVehicles.map((vehicle) => (
+                <TableRow
+                  key={vehicle.id}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedVehicle(vehicle)}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <img 
+                        src={((vehicle.images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
+                        alt={`${vehicle.make} ${vehicle.model}`}
+                        className="w-12 h-12 rounded-lg object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/placeholder.svg";
+                        }}
+                      />
+                      <div>
+                        <div className="font-medium">
+                          {vehicle.make} {vehicle.model}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{vehicle.engine_size || ""}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="text-sm">
+                        <span className="font-medium">{vehicle.year}</span> • {vehicle.color}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        VIN: {vehicle.vin} • {(vehicle.mileage || 0).toLocaleString()} km
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {vehicle.transmission} • {vehicle.fuel_type || "—"}
+                      </div>
+                      {vehicle.arrival_date && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(() => {
+                            const arrivalDate = new Date(vehicle.arrival_date);
+                            const daysDiff = Math.floor((Date.now() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24));
+                            if (daysDiff === 0) return "Llegó hoy";
+                            if (daysDiff === 1) return "Llegó hace 1 día";
+                            if (daysDiff < 30) return `Llegó hace ${daysDiff} días`;
+                            const months = Math.floor(daysDiff / 30);
+                            if (months === 1) return "Llegó hace 1 mes";
+                            if (months < 12) return `Llegó hace ${months} meses`;
+                            const years = Math.floor(months / 12);
+                            return years === 1 ? "Llegó hace 1 año" : `Llegó hace ${years} años`;
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="font-medium">{formatCLP(Number(vehicle.price || 0))}</div>
+                      <div className="text-sm text-muted-foreground">Costo: {formatCLP(Number(vehicle.cost || 0))}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className={`font-medium ${(Number(vehicle.margin || 0)) > 0 ? 'text-success' : 'text-danger'}`}>
+                      {formatCLP(Number(vehicle.margin || 0))}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {Number(vehicle.price || 0) > 0 ? ((Number(vehicle.margin || 0)) / Number(vehicle.price || 0) * 100).toFixed(1) : "0.0"}%
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant="outline" 
+                      className={statusColors[vehicle.status]}
+                    >
+                      {statusLabels[vehicle.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {typeLabels[vehicle.category]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Ver detalles"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedVehicle(vehicle);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Editar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVehicleToEdit(vehicle);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <DropdownMenu onOpenChange={(open) => {
+                        // Asegurar que el menú se cierre correctamente
+                        if (!open) {
+                          // Pequeño delay para asegurar que el estado se actualice
+                          setTimeout(() => {
+                            // Forzar actualización del DOM
+                            requestAnimationFrame(() => {});
+                          }, 0);
+                        }
+                      }}>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                            }}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent 
+                          align="end"
+                          onCloseAutoFocus={(e) => {
+                            e.preventDefault();
+                          }}
+                        >
+                          {vehicle.status === 'ingreso' && (
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                              Publicar
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle.status === 'disponible' && (
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                              Pausar publicación
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            Ajustar precio
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            Reservar para lead
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            Marcar como vendido
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setVehicleToDelete(vehicle);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Borrar vehículo
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {!loading && filteredVehicles.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No se encontraron vehículos con los filtros aplicados.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal Detalle Vehículo */}
+      <Dialog open={!!selectedVehicle} onOpenChange={(open) => !open && setSelectedVehicle(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Detalle del Vehículo</DialogTitle>
+            <DialogDescription>
+              Información completa del vehículo seleccionado
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedVehicle && selectedVehicleComputed && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Fotos */}
+              <div className="space-y-3">
+                <div className="rounded-xl overflow-hidden border bg-muted">
+                  <img
+                    src={(selectedVehicle.images as unknown as string[] | null)?.[0] || "/placeholder.svg"}
+                    alt="Foto vehículo"
+                    className="w-full h-[280px] object-cover"
+                  />
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {(((selectedVehicle.images as unknown as string[] | null) ?? []).length
+                    ? (selectedVehicle.images as unknown as string[])
+                    : ["/placeholder.svg"])
+                    .slice(0, 5)
+                    .map((src, idx) => (
+                      <button
+                        key={`${src}-${idx}`}
+                        type="button"
+                        className="rounded-lg overflow-hidden border hover:opacity-90"
+                        onClick={() => {
+                          // Cambiar imagen principal moviendo la imagen seleccionada a la primera posición
+                          const base = (((selectedVehicle.images as unknown as string[] | null) ?? []).length
+                            ? (selectedVehicle.images as unknown as string[])
+                            : ["/placeholder.svg"]);
+                          const next = [...base];
+                          const picked = next[idx];
+                          next.splice(idx, 1);
+                          next.unshift(picked);
+                          setSelectedVehicle({ ...selectedVehicle, images: next as any });
+                        }}
+                      >
+                        <img src={src} alt="thumb" className="w-full h-14 object-cover" />
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* Ficha */}
+              <div className="space-y-4">
+                <div>
+                  <div className="text-2xl font-bold">
+                    {selectedVehicle.make} {selectedVehicle.model} {selectedVehicle.year}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedVehicle.engine_size || ""}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Propio o Consignado</div>
+                    <div className="font-semibold">{selectedVehicleComputed.ownership}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Valor por vender</div>
+                    <div className="font-semibold">{formatCLP(Number(selectedVehicle.price || 0))}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Pie mínimo</div>
+                    <div className="font-semibold">{formatCLP(selectedVehicleComputed.minDownPayment)}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Ganancia estimada</div>
+                    <div className="font-semibold text-success">{formatCLP(selectedVehicleComputed.margin)}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border p-4">
+                  <div className="font-semibold mb-3">Características</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Kilometraje y año</div>
+                      <div className="font-medium">
+                          {(selectedVehicle.mileage || 0).toLocaleString()} km · {selectedVehicle.year}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Motor</div>
+                      <div className="font-medium">{selectedVehicleComputed.engine}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Tipo combustible</div>
+                        <div className="font-medium">{selectedVehicle.fuel_type || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Tracción</div>
+                      <div className="font-medium">{selectedVehicleComputed.drivetrain}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Ubicación física</div>
+                      <div className="font-medium">{selectedVehicleComputed.location}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Transmisión</div>
+                      <div className="font-medium">{selectedVehicle.transmission}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Capacidad de cajuela (L)</div>
+                      <div className="font-medium">{selectedVehicleComputed.trunkCapacityLiters}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Techo corredizo</div>
+                      <div className="font-medium">{selectedVehicleComputed.sunroof}</div>
+                    </div>
+                    {selectedVehicle.arrival_date && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">Fecha de llegada</div>
+                        <div className="font-medium">
+                          {(() => {
+                            const arrivalDate = new Date(selectedVehicle.arrival_date);
+                            const formattedDate = arrivalDate.toLocaleDateString('es-CL', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            });
+                            const daysDiff = Math.floor((Date.now() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24));
+                            let timeText = "";
+                            if (daysDiff === 0) timeText = " (Llegó hoy)";
+                            else if (daysDiff === 1) timeText = " (Llegó hace 1 día)";
+                            else if (daysDiff < 30) timeText = ` (Llegó hace ${daysDiff} días)`;
+                            else {
+                              const months = Math.floor(daysDiff / 30);
+                              if (months === 1) timeText = " (Llegó hace 1 mes)";
+                              else if (months < 12) timeText = ` (Llegó hace ${months} meses)`;
+                              else {
+                                const years = Math.floor(months / 12);
+                                timeText = years === 1 ? " (Llegó hace 1 año)" : ` (Llegó hace ${years} años)`;
+                              }
+                            }
+                            return `${formattedDate}${timeText}`;
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para agregar vehículo */}
+      <Dialog 
+        open={showAddDialog} 
+        onOpenChange={(open) => {
+          setShowAddDialog(open);
+          if (!open) {
+            // Resetear formulario al cerrar
+            setNewVehicle({
+              make: "",
+              model: "",
+              vin: "",
+              year: 0,
+              color: "",
+              mileage: 0,
+              category: "nuevo",
+              price: 0,
+              cost: 0,
+              minDownPayment: 0,
+              engine_size: "",
+              fuel_type: "gasolina",
+              transmission: "automático",
+              location: "",
+              drivetrain: "",
+              trunk_capacity: "",
+              sunroof: undefined,
+              images: [],
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Agregar Nuevo Vehículo</DialogTitle>
+            <DialogDescription>
+              Completa todos los campos para agregar un vehículo al inventario
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            {/* Fotos del vehículo */}
+            <div className="md:col-span-2">
+              <Label htmlFor="images">Fotos del vehículo</Label>
+              <div className="mt-2">
+                <div className="flex flex-wrap gap-4 mb-4">
+                  {newVehicle.images.map((file, index) => {
+                    const imageUrl = URL.createObjectURL(file);
+                    return (
+                      <div key={index} className="relative">
+                        <img
+                          src={imageUrl}
+                          alt={`Vehículo ${index + 1}`}
+                          className="w-24 h-24 object-cover rounded-lg border"
+                          onLoad={() => URL.revokeObjectURL(imageUrl)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Input
+                  id="images"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Nombre del vehículo (Marca) */}
+            <div>
+              <Label htmlFor="make">Marca *</Label>
+              <Input
+                id="make"
+                value={newVehicle.make}
+                onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                placeholder="Ej: Toyota"
+                required
+              />
+            </div>
+
+            {/* Modelo */}
+            <div>
+              <Label htmlFor="model">Modelo *</Label>
+              <Input
+                id="model"
+                value={newVehicle.model}
+                onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                placeholder="Ej: Corolla Cross"
+                required
+              />
+            </div>
+
+            {/* VIN */}
+            <div>
+              <Label htmlFor="vin">VIN *</Label>
+              <Input
+                id="vin"
+                value={newVehicle.vin}
+                onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value.toUpperCase() })}
+                placeholder="Ej: JTD2026DEMO0000001"
+                required
+              />
+            </div>
+
+            {/* Año */}
+            <div>
+              <Label htmlFor="year">Año *</Label>
+              <Input
+                id="year"
+                type="text"
+                value={newVehicle.year || ''}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, ''); // Solo números
+                  if (value === '') {
+                    setNewVehicle({ ...newVehicle, year: 0 });
+                  } else {
+                    const yearNum = parseInt(value);
+                    if (!isNaN(yearNum)) {
+                      setNewVehicle({ ...newVehicle, year: yearNum });
+                    }
+                  }
+                }}
+                placeholder="Ej: 2024"
+                required
+              />
+            </div>
+
+            {/* Color */}
+            <div>
+              <Label htmlFor="color">Color *</Label>
+              <Input
+                id="color"
+                value={newVehicle.color}
+                onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                placeholder="Ej: Blanco"
+                required
+              />
+            </div>
+
+            {/* Kilometraje */}
+            <div>
+              <Label htmlFor="mileage">Kilometraje</Label>
+              <Input
+                id="mileage"
+                type="text"
+                value={formatNumberDisplay(newVehicle.mileage)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando kilometraje:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 15.000"
+              />
+            </div>
+
+            {/* Propio o Consignado */}
+            <div>
+              <Label htmlFor="category">Propio o Consignado *</Label>
+              <Select
+                value={newVehicle.category}
+                onValueChange={(value: "nuevo" | "usado" | "consignado") =>
+                  setNewVehicle({ ...newVehicle, category: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nuevo">Nuevo (Propio)</SelectItem>
+                  <SelectItem value="usado">Usado (Propio)</SelectItem>
+                  <SelectItem value="consignado">Consignado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Valor por vender */}
+            <div>
+              <Label htmlFor="price">Valor por vender (CLP) *</Label>
+              <Input
+                id="price"
+                type="text"
+                value={formatNumberDisplay(newVehicle.price)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando precio:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 15.990.000"
+                required
+              />
+            </div>
+
+            {/* Costo */}
+            <div>
+              <Label htmlFor="cost">Costo (CLP)</Label>
+              <Input
+                id="cost"
+                type="text"
+                value={formatNumberDisplay(newVehicle.cost)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando costo:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 12.000.000"
+              />
+            </div>
+
+            {/* Pie mínimo */}
+            <div>
+              <Label htmlFor="minDownPayment">Pie mínimo *</Label>
+              <Input
+                id="minDownPayment"
+                type="text"
+                value={formatNumberDisplay(newVehicle.minDownPayment)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando pie mínimo:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 3.000.000"
+                required
+              />
+            </div>
+
+            {/* Ganancia estimada (calculada) */}
+            <div>
+              <Label>Ganancia estimada (calculada)</Label>
+              <Input
+                value={formatCLP(newVehicle.price - newVehicle.cost)}
+                disabled
+                className="bg-gray-100 dark:bg-gray-800"
+              />
+            </div>
+
+            {/* Motor */}
+            <div>
+              <Label htmlFor="engine_size">Motor</Label>
+              <Input
+                id="engine_size"
+                value={newVehicle.engine_size}
+                onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
+                placeholder="Ej: 1.8L, 2.0L"
+              />
+            </div>
+
+            {/* Tipo Combustible */}
+            <div>
+              <Label htmlFor="fuel_type">Tipo Combustible</Label>
+              <Select
+                value={newVehicle.fuel_type}
+                onValueChange={(value: "gasolina" | "diesel" | "híbrido" | "eléctrico") =>
+                  setNewVehicle({ ...newVehicle, fuel_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gasolina">Gasolina</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="híbrido">Híbrido</SelectItem>
+                  <SelectItem value="eléctrico">Eléctrico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Transmisión */}
+            <div>
+              <Label htmlFor="transmission">Transmisión</Label>
+              <Select
+                value={newVehicle.transmission}
+                onValueChange={(value: "manual" | "automático" | "cvt") =>
+                  setNewVehicle({ ...newVehicle, transmission: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="automático">Automático</SelectItem>
+                  <SelectItem value="cvt">CVT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tracción */}
+            <div>
+              <Label htmlFor="drivetrain">Tracción</Label>
+              <Select
+                value={newVehicle.drivetrain || undefined}
+                onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Delantera">Delantera</SelectItem>
+                  <SelectItem value="Trasera">Trasera</SelectItem>
+                  <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
+                  <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Ubicación Física */}
+            <div>
+              <Label htmlFor="location">Ubicación Física</Label>
+              <Input
+                id="location"
+                value={newVehicle.location}
+                onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
+                placeholder="Ej: Patio A, Estacionamiento 3"
+              />
+            </div>
+
+            {/* Capacidad de cajuela */}
+            <div>
+              <Label htmlFor="trunk_capacity">Capacidad de Cajuela (Litros)</Label>
+              <Input
+                id="trunk_capacity"
+                type="text"
+                value={newVehicle.trunk_capacity}
+                onChange={(e) => {
+                  try {
+                    const value = e.target.value.replace(/\D/g, ''); // Solo números
+                    setNewVehicle({ ...newVehicle, trunk_capacity: value });
+                  } catch (error) {
+                    console.error('Error procesando capacidad de cajuela:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  // Permitir pegar pero procesar el valor
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const value = pastedText.replace(/\D/g, '');
+                  setNewVehicle({ ...newVehicle, trunk_capacity: value });
+                }}
+                placeholder="Ej: 450"
+              />
+            </div>
+
+            {/* Techo corredizo */}
+            <div>
+              <Label htmlFor="sunroof">Techo Corredizo</Label>
+              <Select
+                value={newVehicle.sunroof || undefined}
+                onValueChange={(value) => setNewVehicle({ ...newVehicle, sunroof: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no_especificado">No especificado</SelectItem>
+                  <SelectItem value="Sí">Sí</SelectItem>
+                  <SelectItem value="No">No</SelectItem>
+                  <SelectItem value="Panorámico">Panorámico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAddDialog(false);
+                setNewVehicle({
+                  make: "",
+                  model: "",
+                  vin: "",
+                  year: 0,
+                  color: "",
+                  mileage: 0,
+                  category: "nuevo",
+                  price: 0,
+                  cost: 0,
+                  minDownPayment: 0,
+                  engine_size: "",
+                  fuel_type: "gasolina",
+                  transmission: "automático",
+                  location: "",
+                  drivetrain: "",
+                  trunk_capacity: "",
+                  sunroof: undefined,
+                  images: [],
+                });
+              }}
+              disabled={isSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateVehicle}
+              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+            >
+              {isSaving ? "Guardando..." : "Guardar Vehículo"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar vehículo */}
+      <Dialog 
+        open={!!vehicleToEdit} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setVehicleToEdit(null);
+            // Resetear formulario al cerrar
+            setNewVehicle({
+              make: "",
+              model: "",
+              vin: "",
+              year: 0,
+              color: "",
+              mileage: 0,
+              category: "nuevo",
+              price: 0,
+              cost: 0,
+              minDownPayment: 0,
+              engine_size: "",
+              fuel_type: "gasolina",
+              transmission: "automático",
+              location: "",
+              drivetrain: "",
+              trunk_capacity: "",
+              sunroof: undefined,
+              images: [],
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Vehículo</DialogTitle>
+            <DialogDescription>
+              Modifica los datos del vehículo {vehicleToEdit?.make} {vehicleToEdit?.model}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            {/* Fotos del vehículo */}
+            <div className="md:col-span-2">
+              <Label htmlFor="edit-images">Fotos del vehículo</Label>
+              <div className="mt-2">
+                {/* Mostrar imágenes existentes */}
+                {vehicleToEdit && ((vehicleToEdit.images as unknown as string[] | null) || []).length > 0 && (
+                  <div className="flex flex-wrap gap-4 mb-4">
+                    <p className="text-sm text-muted-foreground w-full">Imágenes actuales:</p>
+                    {((vehicleToEdit.images as unknown as string[]) || []).map((img, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={img}
+                          alt={`Vehículo ${index + 1}`}
+                          className="w-24 h-24 object-cover rounded-lg border"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Mostrar nuevas imágenes seleccionadas */}
+                {newVehicle.images.length > 0 && (
+                  <div className="flex flex-wrap gap-4 mb-4">
+                    <p className="text-sm text-muted-foreground w-full">Nuevas imágenes a agregar:</p>
+                    {newVehicle.images.map((file, index) => {
+                      const imageUrl = URL.createObjectURL(file);
+                      return (
+                        <div key={index} className="relative">
+                          <img
+                            src={imageUrl}
+                            alt={`Nueva ${index + 1}`}
+                            className="w-24 h-24 object-cover rounded-lg border"
+                            onLoad={() => URL.revokeObjectURL(imageUrl)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <Input
+                  id="edit-images"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selecciona imágenes adicionales para agregar al vehículo
+                </p>
+              </div>
+            </div>
+
+            {/* Resto de campos - reutilizando los mismos del formulario de agregar */}
+            {/* Marca */}
+            <div>
+              <Label htmlFor="edit-make">Marca *</Label>
+              <Input
+                id="edit-make"
+                value={newVehicle.make}
+                onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                placeholder="Ej: Toyota"
+                required
+              />
+            </div>
+
+            {/* Modelo */}
+            <div>
+              <Label htmlFor="edit-model">Modelo *</Label>
+              <Input
+                id="edit-model"
+                value={newVehicle.model}
+                onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                placeholder="Ej: Corolla Cross"
+                required
+              />
+            </div>
+
+            {/* VIN */}
+            <div>
+              <Label htmlFor="edit-vin">VIN *</Label>
+              <Input
+                id="edit-vin"
+                value={newVehicle.vin}
+                onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value.toUpperCase() })}
+                placeholder="Ej: JTD2026DEMO0000001"
+                required
+              />
+            </div>
+
+            {/* Año */}
+            <div>
+              <Label htmlFor="edit-year">Año *</Label>
+              <Input
+                id="edit-year"
+                type="text"
+                value={newVehicle.year || ''}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, ''); // Solo números
+                  if (value === '') {
+                    setNewVehicle({ ...newVehicle, year: 0 });
+                  } else {
+                    const yearNum = parseInt(value);
+                    if (!isNaN(yearNum)) {
+                      setNewVehicle({ ...newVehicle, year: yearNum });
+                    }
+                  }
+                }}
+                placeholder="Ej: 2024"
+                required
+              />
+            </div>
+
+            {/* Color */}
+            <div>
+              <Label htmlFor="edit-color">Color *</Label>
+              <Input
+                id="edit-color"
+                value={newVehicle.color}
+                onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                placeholder="Ej: Blanco"
+                required
+              />
+            </div>
+
+            {/* Kilometraje */}
+            <div>
+              <Label htmlFor="edit-mileage">Kilometraje</Label>
+              <Input
+                id="edit-mileage"
+                type="text"
+                value={formatNumberDisplay(newVehicle.mileage)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando kilometraje:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 15.000"
+              />
+            </div>
+
+            {/* Propio o Consignado */}
+            <div>
+              <Label htmlFor="edit-category">Propio o Consignado *</Label>
+              <Select
+                value={newVehicle.category}
+                onValueChange={(value: "nuevo" | "usado" | "consignado") =>
+                  setNewVehicle({ ...newVehicle, category: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nuevo">Nuevo (Propio)</SelectItem>
+                  <SelectItem value="usado">Usado (Propio)</SelectItem>
+                  <SelectItem value="consignado">Consignado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Valor por vender */}
+            <div>
+              <Label htmlFor="edit-price">Valor por vender (CLP) *</Label>
+              <Input
+                id="edit-price"
+                type="text"
+                value={formatNumberDisplay(newVehicle.price)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando precio:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 15.990.000"
+                required
+              />
+            </div>
+
+            {/* Costo */}
+            <div>
+              <Label htmlFor="edit-cost">Costo (CLP)</Label>
+              <Input
+                id="edit-cost"
+                type="text"
+                value={formatNumberDisplay(newVehicle.cost)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando costo:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 12.000.000"
+              />
+            </div>
+
+            {/* Pie mínimo */}
+            <div>
+              <Label htmlFor="minDownPayment">Pie mínimo *</Label>
+              <Input
+                id="minDownPayment"
+                type="text"
+                value={formatNumberDisplay(newVehicle.minDownPayment)}
+                onChange={(e) => {
+                  try {
+                    const formatted = formatNumberInput(e.target.value);
+                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                  } catch (error) {
+                    console.error('Error procesando pie mínimo:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const formatted = formatNumberInput(pastedText);
+                  setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 3.000.000"
+                required
+              />
+            </div>
+
+            {/* Ganancia estimada (calculada) */}
+            <div>
+              <Label>Ganancia estimada (calculada)</Label>
+              <Input
+                value={formatCLP(newVehicle.price - newVehicle.cost)}
+                disabled
+                className="bg-gray-100 dark:bg-gray-800"
+              />
+            </div>
+
+            {/* Motor */}
+            <div>
+              <Label htmlFor="edit-engine_size">Motor</Label>
+              <Input
+                id="edit-engine_size"
+                value={newVehicle.engine_size}
+                onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
+                placeholder="Ej: 1.8L, 2.0L"
+              />
+            </div>
+
+            {/* Tipo Combustible */}
+            <div>
+              <Label htmlFor="edit-fuel_type">Tipo Combustible</Label>
+              <Select
+                value={newVehicle.fuel_type}
+                onValueChange={(value: "gasolina" | "diesel" | "híbrido" | "eléctrico") =>
+                  setNewVehicle({ ...newVehicle, fuel_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gasolina">Gasolina</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="híbrido">Híbrido</SelectItem>
+                  <SelectItem value="eléctrico">Eléctrico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Transmisión */}
+            <div>
+              <Label htmlFor="edit-transmission">Transmisión</Label>
+              <Select
+                value={newVehicle.transmission}
+                onValueChange={(value: "manual" | "automático" | "cvt") =>
+                  setNewVehicle({ ...newVehicle, transmission: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="automático">Automático</SelectItem>
+                  <SelectItem value="cvt">CVT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tracción */}
+            <div>
+              <Label htmlFor="edit-drivetrain">Tracción</Label>
+              <Select
+                value={newVehicle.drivetrain || undefined}
+                onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Delantera">Delantera</SelectItem>
+                  <SelectItem value="Trasera">Trasera</SelectItem>
+                  <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
+                  <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Ubicación Física */}
+            <div>
+              <Label htmlFor="edit-location">Ubicación Física</Label>
+              <Input
+                id="edit-location"
+                value={newVehicle.location}
+                onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
+                placeholder="Ej: Patio A, Estacionamiento 3"
+              />
+            </div>
+
+            {/* Capacidad de cajuela */}
+            <div>
+              <Label htmlFor="edit-trunk_capacity">Capacidad de Cajuela (Litros)</Label>
+              <Input
+                id="edit-trunk_capacity"
+                type="text"
+                value={newVehicle.trunk_capacity}
+                onChange={(e) => {
+                  try {
+                    const value = e.target.value.replace(/\D/g, '');
+                    setNewVehicle({ ...newVehicle, trunk_capacity: value });
+                  } catch (error) {
+                    console.error('Error procesando capacidad de cajuela:', error);
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedText = e.clipboardData.getData('text');
+                  const value = pastedText.replace(/\D/g, '');
+                  setNewVehicle({ ...newVehicle, trunk_capacity: value });
+                }}
+                placeholder="Ej: 450"
+              />
+            </div>
+
+            {/* Techo corredizo */}
+            <div>
+              <Label htmlFor="edit-sunroof">Techo Corredizo</Label>
+              <Select
+                value={newVehicle.sunroof || undefined}
+                onValueChange={(value) => setNewVehicle({ ...newVehicle, sunroof: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no_especificado">No especificado</SelectItem>
+                  <SelectItem value="Sí">Sí</SelectItem>
+                  <SelectItem value="No">No</SelectItem>
+                  <SelectItem value="Panorámico">Panorámico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVehicleToEdit(null);
+                setNewVehicle({
+                  make: "",
+                  model: "",
+                  vin: "",
+                  year: 0,
+                  color: "",
+                  mileage: 0,
+                  category: "nuevo",
+                  price: 0,
+                  cost: 0,
+                  minDownPayment: 0,
+                  engine_size: "",
+                  fuel_type: "gasolina",
+                  transmission: "automático",
+                  location: "",
+                  drivetrain: "",
+                  trunk_capacity: "",
+                  sunroof: undefined,
+                  images: [],
+                });
+              }}
+              disabled={isSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateVehicle}
+              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+            >
+              {isSaving ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmación para eliminar */}
+      {vehicleToDelete && (
+        <AlertDialog 
+          open={!!vehicleToDelete}
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) {
+              // Solo permitir cerrar si no está eliminando
+              requestAnimationFrame(() => {
+                setVehicleToDelete(null);
+                setIsDeleting(false);
+              });
+            }
+          }}
+        >
+          <AlertDialogContent 
+            onInteractOutside={(e) => {
+              if (isDeleting) {
+                e.preventDefault();
+              }
+            }}
+            onEscapeKeyDown={(e) => {
+              if (isDeleting) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará permanentemente el vehículo{" "}
+                <strong>
+                  {vehicleToDelete.make} {vehicleToDelete.model} {vehicleToDelete.year}
+                </strong>{" "}
+                del inventario.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel 
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!isDeleting) {
+                    requestAnimationFrame(() => {
+                      setVehicleToDelete(null);
+                      setIsDeleting(false);
+                    });
+                  }
+                }}
+                disabled={isDeleting}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!isDeleting) {
+                    handleDeleteVehicle();
+                  }
+                }}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {isDeleting ? "Eliminando..." : "Eliminar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
+  );
+}

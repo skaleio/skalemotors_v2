@@ -1,0 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos para resaltado de resultados de búsqueda */
+.highlight-search-result {
+  animation: highlight-pulse 2s ease-in-out;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* SkaleMotors Design System - Automotive CRM */
+
+@layer base {
+  :root {
+    /* Brand Identity */
+    --brand: 210 40% 2%;         /* #0F172A - slate-900 */
+    --brand-foreground: 0 0% 100%;
+
+    /* Core Colors */
+    --background: 0 0% 100%;
+    --foreground: 210 40% 2%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 40% 2%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 40% 2%;
+
+    /* Primary - Blue for actions */
+    --primary: 224 76% 48%;       /* #1E40AF - blue-800 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Light backgrounds */
+    --secondary: 210 40% 98%;
+    --secondary-foreground: 210 40% 2%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent - Cyan for highlights */
+    --accent: 188 95% 43%;        /* #06B6D4 - cyan-500 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 142 76% 36%;       /* #16A34A - green-600 */
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;        /* #F59E0B - amber-500 */
+    --warning-foreground: 210 40% 2%;
+
+    --danger: 0 74% 50%;          /* #DC2626 - red-600 */
+    --danger-foreground: 0 0% 100%;
+
+    --destructive: 0 74% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 76% 48%;
+
+    /* Border radius for automotive feel */
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Brand Identity Dark */
+    --brand: 210 40% 98%;
+    --brand-foreground: 210 40% 2%;
+
+    /* Core Colors Dark */
+    --background: 210 40% 2%;       /* #0F172A - slate-900 */
+    --foreground: 210 40% 98%;
+
+    --card: 220 13% 9%;             /* #1E293B - slate-800 */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 13% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary Dark - Bright blue */
+    --primary: 188 95% 43%;         /* #06B6D4 - cyan-500 */
+    --primary-foreground: 210 40% 2%;
+
+    /* Secondary Dark */
+    --secondary: 215 25% 27%;       /* #475569 - slate-600 */
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 25% 15%;           /* #334155 - slate-700 */
+    --muted-foreground: 217 19% 60%;
+
+    /* Accent Dark */
+    --accent: 224 76% 48%;          /* #1E40AF - blue-800 */
+    --accent-foreground: 210 40% 98%;
+
+    /* Status Colors Dark */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 210 40% 2%;
+
+    --danger: 0 74% 50%;
+    --danger-foreground: 0 0% 100%;
+
+    --destructive: 0 74% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs Dark */
+    --border: 215 25% 15%;
+    --input: 215 25% 15%;
+    --ring: 188 95% 43%;
+
+    /* Sidebar Dark */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .skale-logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 1.125rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
