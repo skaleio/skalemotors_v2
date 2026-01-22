@@ -39,6 +39,26 @@ import { toast } from "@/hooks/use-toast";
 // Datos de integraciones disponibles
 const availableIntegrations = [
   {
+    id: "chileautos",
+    name: "Chileautos",
+    description: "Publica y sincroniza tu inventario en Chileautos",
+    icon: Globe,
+    category: "Portales",
+    features: ["Publicación automática", "Sincronización de inventario", "Gestión de avisos"],
+    color: "blue",
+    popular: true
+  },
+  {
+    id: "mercadolibre",
+    name: "Mercado Libre",
+    description: "Conecta y publica vehículos en Mercado Libre",
+    icon: Globe,
+    category: "Portales",
+    features: ["Publicaciones centralizadas", "Gestión de stock", "Optimización de avisos"],
+    color: "orange",
+    popular: true
+  },
+  {
     id: "crm",
     name: "CRM Avanzado",
     description: "Gestión completa de clientes y leads",
@@ -176,6 +196,18 @@ export default function Onboarding() {
   const [teamMembers, setTeamMembers] = useState([
     { name: "", email: "", role: "vendedor" }
   ]);
+  const [platformConnections, setPlatformConnections] = useState({
+    chileautos: {
+      clientId: "",
+      clientSecret: "",
+      sellerIdentifier: "",
+      connected: false
+    },
+    mercadolibre: {
+      accessToken: "",
+      connected: false
+    }
+  });
   const [preferences, setPreferences] = useState({
     theme: "light",
     notifications: true,
@@ -204,6 +236,62 @@ export default function Onboarding() {
         ? prev.filter(id => id !== integrationId)
         : [...prev, integrationId]
     );
+  };
+
+  const handlePlatformFieldChange = (
+    platform: "chileautos" | "mercadolibre",
+    field: "clientId" | "clientSecret" | "sellerIdentifier" | "accessToken",
+    value: string
+  ) => {
+    setPlatformConnections(prev => ({
+      ...prev,
+      [platform]: {
+        ...prev[platform],
+        [field]: value
+      }
+    }));
+  };
+
+  const handlePlatformConnect = (platform: "chileautos" | "mercadolibre") => {
+    if (platform === "chileautos") {
+      const { clientId, clientSecret, sellerIdentifier } = platformConnections.chileautos;
+      if (!clientId || !clientSecret || !sellerIdentifier) {
+        toast({
+          title: "Faltan datos",
+          description: "Completa Client ID, Client Secret y Seller Identifier para conectar Chileautos.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (platform === "mercadolibre") {
+      const { accessToken } = platformConnections.mercadolibre;
+      if (!accessToken) {
+        toast({
+          title: "Faltan datos",
+          description: "Ingresa tu Access Token para conectar Mercado Libre.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setPlatformConnections(prev => ({
+      ...prev,
+      [platform]: {
+        ...prev[platform],
+        connected: true
+      }
+    }));
+
+    toast({
+      title: "Conexión registrada",
+      description:
+        platform === "chileautos"
+          ? "Chileautos quedó conectado para este onboarding."
+          : "Mercado Libre quedó conectado para este onboarding.",
+    });
   };
 
   const handleCompleteOnboarding = async () => {
@@ -501,6 +589,9 @@ export default function Onboarding() {
         );
 
       case "integrations":
+        const showChileautos = selectedIntegrations.includes("chileautos");
+        const showMercadoLibre = selectedIntegrations.includes("mercadolibre");
+
         return (
           <div className="max-w-6xl mx-auto space-y-8">
             <div className="text-center space-y-4">
@@ -626,6 +717,171 @@ export default function Onboarding() {
                 );
               })}
             </div>
+
+            {(showChileautos || showMercadoLibre) && (
+              <div className="space-y-6">
+                <div className="text-left space-y-2">
+                  <h3 className={`text-xl font-semibold ${
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Conecta tus plataformas
+                  </h3>
+                  <p className={`text-sm ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Completa los datos necesarios para dejar activadas tus conexiones.
+                  </p>
+                </div>
+
+                {showChileautos && (
+                  <Card className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                            Chileautos
+                          </CardTitle>
+                          <CardDescription>
+                            Credenciales de Global Inventory API
+                          </CardDescription>
+                        </div>
+                        <Badge className={platformConnections.chileautos.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300"}>
+                          {platformConnections.chileautos.connected ? "Conectado" : "No conectado"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Client ID
+                          </label>
+                          <input
+                            type="text"
+                            value={platformConnections.chileautos.clientId}
+                            onChange={(e) => handlePlatformFieldChange("chileautos", "clientId", e.target.value)}
+                            placeholder="UUID de client_id"
+                            className={`w-full px-4 py-3 rounded-lg border ${
+                              theme === 'dark' 
+                                ? 'bg-slate-800 border-slate-600 text-white' 
+                                : 'bg-white border-gray-300 text-gray-900'
+                            } focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Client Secret
+                          </label>
+                          <input
+                            type="password"
+                            value={platformConnections.chileautos.clientSecret}
+                            onChange={(e) => handlePlatformFieldChange("chileautos", "clientSecret", e.target.value)}
+                            placeholder="Clave secreta"
+                            className={`w-full px-4 py-3 rounded-lg border ${
+                              theme === 'dark' 
+                                ? 'bg-slate-800 border-slate-600 text-white' 
+                                : 'bg-white border-gray-300 text-gray-900'
+                            } focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Seller Identifier
+                          </label>
+                          <input
+                            type="text"
+                            value={platformConnections.chileautos.sellerIdentifier}
+                            onChange={(e) => handlePlatformFieldChange("chileautos", "sellerIdentifier", e.target.value)}
+                            placeholder="GUID de la sucursal"
+                            className={`w-full px-4 py-3 rounded-lg border ${
+                              theme === 'dark' 
+                                ? 'bg-slate-800 border-slate-600 text-white' 
+                                : 'bg-white border-gray-300 text-gray-900'
+                            } focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button onClick={() => handlePlatformConnect("chileautos")}>
+                          Conectar Chileautos
+                        </Button>
+                        <a
+                          href="https://www.chileautos.cl/staticpages/global-inventory-integration"
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`text-sm underline ${
+                            theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'
+                          }`}
+                        >
+                          Ver guía de integración
+                        </a>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {showMercadoLibre && (
+                  <Card className={`${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                            Mercado Libre
+                          </CardTitle>
+                          <CardDescription>
+                            Access Token para API/MCP
+                          </CardDescription>
+                        </div>
+                        <Badge className={platformConnections.mercadolibre.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300"}>
+                          {platformConnections.mercadolibre.connected ? "Conectado" : "No conectado"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          Access Token
+                        </label>
+                        <input
+                          type="password"
+                          value={platformConnections.mercadolibre.accessToken}
+                          onChange={(e) => handlePlatformFieldChange("mercadolibre", "accessToken", e.target.value)}
+                          placeholder="Bearer Access Token"
+                          className={`w-full px-4 py-3 rounded-lg border ${
+                            theme === 'dark' 
+                              ? 'bg-slate-800 border-slate-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button onClick={() => handlePlatformConnect("mercadolibre")}>
+                          Conectar Mercado Libre
+                        </Button>
+                        <a
+                          href="https://developers.mercadolibre.cl/es_ar/mcp-server"
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`text-sm underline ${
+                            theme === 'dark' ? 'text-cyan-300' : 'text-cyan-600'
+                          }`}
+                        >
+                          Ver guía MCP Server
+                        </a>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
           </div>
         );
 

@@ -1,3 +1,14 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+dist
+dist-ssr
+build
+*.local
+
 # Logs
 logs
 *.log
@@ -7,20 +18,60 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Environment variables
 .env
 .env.*
+!.env.example
+
+# Testing
+coverage
+.nyc_output
+
+# Cache
+.cache
+.parcel-cache
+.eslintcache
+.turbo
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Archivos temporales SQL y scripts de prueba
+*_test.sql
+*_temp.sql
+fix_*.sql
+crear_*.sql
+verify_*.sql
+create_test_*.sql
+setup_*.sql
+test_*.sql
+!scripts/*.sql
+
+# Documentos temporales
+*_TEMP.md
+*_OLD.md
+DEBUG_*.md
+FIX_*.md
+CHECKPOINT_*.md

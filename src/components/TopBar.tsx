@@ -609,10 +609,10 @@ export function TopBar() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Mi cuenta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigateWithLoading('/profile')}>
+            <DropdownMenuItem onClick={() => navigateWithLoading('/app/profile')}>
               Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigateWithLoading('/settings')}>
+            <DropdownMenuItem onClick={() => navigateWithLoading('/app/settings')}>
               Configuración
             </DropdownMenuItem>
             <DropdownMenuSeparator />

@@ -1,73 +1,281 @@
-# Welcome to your Lovable project
+# 🚗 Skale Motors - CRM Automotriz Inteligente
 
-## Project info
+> Sistema CRM completo para concesionarias automotrices con IA integrada, automatización de procesos y análisis avanzado.
 
-**URL**: https://lovable.dev/projects/462ce267-ecd9-4723-91fc-6f51005dde2a
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646cff.svg)](https://vitejs.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-Latest-3ecf8e.svg)](https://supabase.com/)
 
-## How can I edit this code?
+## 📋 Tabla de Contenidos
 
-There are several ways of editing your application.
+- [Características](#-características)
+- [Tecnologías](#-tecnologías)
+- [Requisitos Previos](#-requisitos-previos)
+- [Instalación](#-instalación)
+- [Configuración](#-configuración)
+- [Scripts Disponibles](#-scripts-disponibles)
+- [Estructura del Proyecto](#-estructura-del-proyecto)
+- [Integraciones](#-integraciones)
+- [Seguridad](#-seguridad)
+- [Documentación](#-documentación)
 
-**Use Lovable**
+## ✨ Características
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/462ce267-ecd9-4723-91fc-6f51005dde2a) and start prompting.
+### Core Features
+- 📊 **Dashboard Ejecutivo** - Analytics en tiempo real con métricas de negocio
+- 🚙 **Gestión de Inventario** - Control completo de vehículos y stock
+- 👥 **CRM de Leads** - Seguimiento de clientes potenciales y conversiones
+- 📅 **Sistema de Citas** - Calendario integrado con Google Calendar
+- 💬 **WhatsApp Integration** - Comunicación directa con clientes
+- 🤖 **Studio IA** - Constructor de agentes y automatizaciones con N8N
 
-Changes made via Lovable will be committed automatically to this repo.
+### Tecnología Avanzada
+- ⚡ Interfaz ultra-rápida con React 18 y Vite
+- 🎨 UI/UX profesional con Tailwind CSS y shadcn/ui
+- 🔒 Autenticación segura con Supabase Auth
+- 📱 Diseño responsive y mobile-first
+- 🌙 Modo oscuro integrado
+- ♿ Accesibilidad WCAG 2.1 AA
 
-**Use your preferred IDE**
+## 🛠 Tecnologías
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Frontend
+- **React 18.3** - Biblioteca de UI
+- **TypeScript 5.8** - Tipado estático
+- **Vite 5.4** - Build tool y dev server
+- **Tailwind CSS 3.4** - Framework de CSS
+- **shadcn/ui** - Componentes de UI
+- **Framer Motion** - Animaciones
+- **Recharts** - Visualización de datos
+- **React Router 6** - Routing
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Backend & Database
+- **Supabase** - Backend as a Service
+  - PostgreSQL - Base de datos
+  - Row Level Security (RLS)
+  - Realtime subscriptions
+  - Edge Functions
+  - Storage
 
-Follow these steps:
+### Integraciones
+- **N8N** - Automatización de workflows
+- **Google Calendar API** - Gestión de citas
+- **WhatsApp Business API** (YCloud) - Mensajería
+- **SimpleFACTURA** - Facturación electrónica
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 📦 Requisitos Previos
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- **Node.js** >= 18.0.0
+- **npm** >= 9.0.0 o **bun** >= 1.0.0
+- **Git**
+- Cuenta de **Supabase**
 
-# Step 3: Install the necessary dependencies.
-npm i
+## 🚀 Instalación
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/tu-usuario/skale-motors.git
+cd skale-motors
+```
+
+### 2. Instalar dependencias
+
+```bash
+npm install
+# o si usas bun
+bun install
+```
+
+### 3. Configurar variables de entorno
+
+```bash
+cp env.example .env
+```
+
+Edita el archivo `.env` con tus credenciales:
+
+```env
+# Supabase
+VITE_SUPABASE_URL=tu_url_de_supabase
+VITE_SUPABASE_ANON_KEY=tu_clave_publica
+
+# Environment
+VITE_APP_ENV=development
+
+# Node scripts (backend)
+SUPABASE_URL=tu_url_de_supabase
+SUPABASE_SERVICE_ROLE_KEY=tu_clave_secreta
+```
+
+### 4. Iniciar el servidor de desarrollo
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+La aplicación estará disponible en `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## ⚙️ Configuración
 
-**Use GitHub Codespaces**
+### Base de Datos
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. Crea un proyecto en [Supabase](https://supabase.com)
+2. Ejecuta los scripts de migración:
 
-## What technologies are used for this project?
+```bash
+# Configurar políticas RLS
+psql -h db.xxx.supabase.co -U postgres -d postgres -f scripts/setup-rls-policies.sql
 
-This project is built with:
+# Configurar N8N workspaces
+psql -h db.xxx.supabase.co -U postgres -d postgres -f scripts/n8n_workspaces_setup.sql
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Crear Usuario de Prueba
 
-## How can I deploy this project?
+```bash
+npm run create:user
+```
 
-Simply open [Lovable](https://lovable.dev/projects/462ce267-ecd9-4723-91fc-6f51005dde2a) and click on Share -> Publish.
+## 📜 Scripts Disponibles
 
-## Can I connect a custom domain to my Lovable project?
+```json
+{
+  "dev": "Inicia el servidor de desarrollo",
+  "build": "Compila para producción",
+  "build:dev": "Compila en modo desarrollo",
+  "lint": "Ejecuta el linter",
+  "preview": "Vista previa del build de producción",
+  "create:user": "Script para crear usuarios de prueba"
+}
+```
 
-Yes, you can!
+### Comandos comunes
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```bash
+# Desarrollo
+npm run dev
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+# Build de producción
+npm run build
+
+# Preview del build
+npm run preview
+
+# Linting
+npm run lint
+```
+
+## 📁 Estructura del Proyecto
+
+```
+skale-motors/
+├── public/                 # Archivos estáticos
+├── src/
+│   ├── components/        # Componentes React
+│   │   ├── ui/           # Componentes de shadcn/ui
+│   │   └── ...           # Componentes custom
+│   ├── contexts/         # Context providers
+│   ├── hooks/            # Custom hooks
+│   ├── lib/              # Utilidades y servicios
+│   │   ├── services/    # Servicios de API
+│   │   └── types/       # Tipos TypeScript
+│   ├── pages/            # Páginas de la aplicación
+│   └── styles/           # Estilos globales
+├── scripts/              # Scripts de utilidad
+├── supabase/            # Configuración de Supabase
+│   ├── functions/       # Edge Functions
+│   └── config.toml      # Configuración local
+├── docs/                # Documentación adicional
+└── workflows/           # Templates de N8N
+
+```
+
+## 🔌 Integraciones
+
+### Google Calendar
+Ver [GOOGLE_CALENDAR_SETUP.md](./GOOGLE_CALENDAR_SETUP.md) para configuración completa.
+
+### N8N (Automatización)
+Ver [docs/N8N_INTEGRATION_README.md](./docs/N8N_INTEGRATION_README.md) para workflows y configuración.
+
+### WhatsApp Business
+- [WHATSAPP_YCLOUD_SETUP.md](./WHATSAPP_YCLOUD_SETUP.md) - Mensajería
+- [WHATSAPP_CALLING_API_SETUP.md](./WHATSAPP_CALLING_API_SETUP.md) - Llamadas
+
+### SimpleFACTURA
+Ver [SIMPLEFACTURA_SETUP.md](./SIMPLEFACTURA_SETUP.md) para integración de facturación.
+
+## 🔒 Seguridad
+
+- ✅ Row Level Security (RLS) habilitado en todas las tablas
+- ✅ Autenticación JWT con Supabase
+- ✅ Variables de entorno para datos sensibles
+- ✅ Validación de datos con Zod
+- ✅ Sanitización de inputs
+
+Ver [SEGURIDAD.md](./SEGURIDAD.md) para más detalles.
+
+## 📚 Documentación
+
+### Guías de Usuario
+- [GUIA_IMPLEMENTACION.md](./GUIA_IMPLEMENTACION.md) - Guía completa de implementación
+- [MIGRACION_PRODUCCION.md](./MIGRACION_PRODUCCION.md) - Deploy a producción
+
+### Documentación Técnica
+- [docs/n8n_docker_setup.md](./docs/n8n_docker_setup.md) - Setup de N8N con Docker
+- [docs/n8n_usage_examples.md](./docs/n8n_usage_examples.md) - Ejemplos de uso
+- [REORGANIZACION_STUDIO_IA.md](./REORGANIZACION_STUDIO_IA.md) - Arquitectura del Studio IA
+
+## 🚀 Deployment
+
+### Producción con Vercel
+
+```bash
+# Instalar Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+### Variables de Entorno en Producción
+
+Asegúrate de configurar todas las variables en tu plataforma de hosting:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_APP_ENV=production`
+
+## 🤝 Contribuir
+
+1. Fork el proyecto
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add: nueva funcionalidad increíble'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+### Convención de Commits
+
+Usamos [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` Nueva funcionalidad
+- `fix:` Corrección de bugs
+- `docs:` Cambios en documentación
+- `style:` Formato, punto y coma, etc
+- `refactor:` Refactorización de código
+- `test:` Añadir tests
+- `chore:` Mantenimiento
+
+## 📄 Licencia
+
+Este proyecto es privado y confidencial.
+
+## 👥 Equipo
+
+Desarrollado por el equipo de Skale Motors
+
+---
+
+**¿Necesitas ayuda?** Revisa la documentación o contacta al equipo de desarrollo.

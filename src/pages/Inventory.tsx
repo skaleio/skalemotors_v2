@@ -138,9 +138,16 @@ export default function Inventory() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
+  const [vehicleToSell, setVehicleToSell] = useState<Vehicle | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saleData, setSaleData] = useState({
+    salePrice: 0,
+    downPayment: 0,
+    paymentMethod: 'contado',
+    notes: ''
+  });
   const [newVehicle, setNewVehicle] = useState({
     make: "",
     model: "",
@@ -636,6 +643,74 @@ export default function Inventory() {
     });
   };
 
+  const handleSellVehicle = async () => {
+    if (!vehicleToSell || !user?.branch_id) {
+      alert("Error: No hay vehículo seleccionado o sucursal asignada.");
+      return;
+    }
+
+    if (saleData.salePrice <= 0) {
+      alert("Por favor ingresa un precio de venta válido");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      console.log('🔄 Registrando venta...');
+      
+      const margin = saleData.salePrice - Number(vehicleToSell.cost || 0);
+      const commission = margin * 0.15; // 15% de comisión sobre el margen
+
+      // Crear la venta
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          vehicle_id: vehicleToSell.id,
+          seller_id: user.id,
+          branch_id: user.branch_id,
+          sale_price: saleData.salePrice,
+          down_payment: saleData.downPayment,
+          financing_amount: saleData.salePrice - saleData.downPayment,
+          margin: margin,
+          commission: commission,
+          status: 'completada',
+          sale_date: new Date().toISOString().split('T')[0],
+          payment_method: saleData.paymentMethod,
+          notes: saleData.notes
+        })
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Actualizar el estado del vehículo a vendido
+      await vehicleService.update(vehicleToSell.id, { status: 'vendido' });
+
+      console.log('✅ Venta registrada exitosamente');
+      
+      // Cerrar diálogo y resetear
+      setVehicleToSell(null);
+      setSaleData({
+        salePrice: 0,
+        downPayment: 0,
+        paymentMethod: 'contado',
+        notes: ''
+      });
+
+      // Refrescar lista
+      setTimeout(() => {
+        refetch();
+      }, 100);
+
+      alert('¡Venta registrada exitosamente! 🎉');
+    } catch (error: any) {
+      console.error('❌ Error registrando venta:', error);
+      alert(`Error al registrar venta: ${error?.message || 'Error desconocido'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -962,7 +1037,19 @@ export default function Inventory() {
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             Reservar para lead
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <DropdownMenuItem 
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setVehicleToSell(vehicle);
+                              setSaleData({
+                                salePrice: Number(vehicle.price || 0),
+                                downPayment: 0,
+                                paymentMethod: 'contado',
+                                notes: ''
+                              });
+                            }}
+                          >
                             Marcar como vendido
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -2132,6 +2219,169 @@ export default function Inventory() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* Dialog para registrar venta */}
+      <Dialog 
+        open={!!vehicleToSell} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setVehicleToSell(null);
+            setSaleData({
+              salePrice: 0,
+              downPayment: 0,
+              paymentMethod: 'contado',
+              notes: ''
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Registrar Venta</DialogTitle>
+            <DialogDescription>
+              Completa los datos de la venta de {vehicleToSell?.make} {vehicleToSell?.model} {vehicleToSell?.year}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-4">
+            {/* Información del vehículo */}
+            <div className="p-4 bg-muted rounded-lg">
+              <h4 className="font-semibold mb-2">Información del Vehículo</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Vehículo:</span>
+                  <p className="font-medium">{vehicleToSell?.make} {vehicleToSell?.model} {vehicleToSell?.year}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Precio Lista:</span>
+                  <p className="font-medium">{formatCLP(Number(vehicleToSell?.price || 0))}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Costo:</span>
+                  <p className="font-medium">{formatCLP(Number(vehicleToSell?.cost || 0))}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Margen Potencial:</span>
+                  <p className="font-medium text-green-600">
+                    {formatCLP(saleData.salePrice - Number(vehicleToSell?.cost || 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Precio de venta */}
+            <div>
+              <Label htmlFor="salePrice">Precio de Venta Final *</Label>
+              <Input
+                id="salePrice"
+                type="text"
+                value={formatNumberDisplay(saleData.salePrice)}
+                onChange={(e) => {
+                  const formatted = formatNumberInput(e.target.value);
+                  setSaleData({ ...saleData, salePrice: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 15.990.000"
+                required
+              />
+            </div>
+
+            {/* Pie */}
+            <div>
+              <Label htmlFor="downPayment">Pie / Anticipo</Label>
+              <Input
+                id="downPayment"
+                type="text"
+                value={formatNumberDisplay(saleData.downPayment)}
+                onChange={(e) => {
+                  const formatted = formatNumberInput(e.target.value);
+                  setSaleData({ ...saleData, downPayment: parseNumberInput(formatted) });
+                }}
+                placeholder="Ej: 3.000.000"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Monto financiado: {formatCLP(saleData.salePrice - saleData.downPayment)}
+              </p>
+            </div>
+
+            {/* Método de pago */}
+            <div>
+              <Label htmlFor="paymentMethod">Método de Pago</Label>
+              <Select
+                value={saleData.paymentMethod}
+                onValueChange={(value) => setSaleData({ ...saleData, paymentMethod: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="contado">Contado</SelectItem>
+                  <SelectItem value="credito">Crédito</SelectItem>
+                  <SelectItem value="mixto">Mixto (Pie + Crédito)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notas */}
+            <div>
+              <Label htmlFor="notes">Notas Adicionales</Label>
+              <Input
+                id="notes"
+                value={saleData.notes}
+                onChange={(e) => setSaleData({ ...saleData, notes: e.target.value })}
+                placeholder="Ej: Cliente referido, incluye accesorios..."
+              />
+            </div>
+
+            {/* Resumen */}
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <h4 className="font-semibold text-green-700 dark:text-green-400 mb-2">Resumen de Venta</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Precio Venta:</span>
+                  <p className="font-bold">{formatCLP(saleData.salePrice)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Margen:</span>
+                  <p className="font-bold text-green-600">
+                    {formatCLP(saleData.salePrice - Number(vehicleToSell?.cost || 0))}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Comisión (15%):</span>
+                  <p className="font-bold text-blue-600">
+                    {formatCLP((saleData.salePrice - Number(vehicleToSell?.cost || 0)) * 0.15)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVehicleToSell(null);
+                setSaleData({
+                  salePrice: 0,
+                  downPayment: 0,
+                  paymentMethod: 'contado',
+                  notes: ''
+                });
+              }}
+              disabled={isSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSellVehicle}
+              disabled={isSaving || saleData.salePrice <= 0}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+            >
+              {isSaving ? "Registrando..." : "Registrar Venta"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

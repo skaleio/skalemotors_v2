@@ -1,0 +1,498 @@
+{
+  "name": "WhatsApp to CRM - SKALE Motors",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-to-crm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "whatsapp-to-crm"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extraer datos del mensaje de WhatsApp\nconst body = $input.first().json.body;\n\nif (!body || !body.entry || !body.entry[0]) {\n  return [];\n}\n\nconst changes = body.entry[0].changes;\nif (!changes || !changes[0] || !changes[0].value) {\n  return [];\n}\n\nconst value = changes[0].value;\nconst messages = value.messages || [];\n\nif (messages.length === 0) {\n  return [];\n}\n\nconst message = messages[0];\nconst from = message.from;\nconst messageId = message.id;\nconst timestamp = message.timestamp;\nconst text = message.text?.body || '';\n\n// Obtener nombre del contacto si está disponible\nconst contacts = value.contacts || [];\nconst contact = contacts[0] || {};\nconst name = contact.profile?.name || null;\n\n// Branch ID debe venir en el webhook o en metadata\nconst branchId = $input.first().json.branch_id || $env.DEFAULT_BRANCH_ID;\n\nreturn {\n  json: {\n    phone: from,\n    name: name,\n    message: text,\n    message_id: messageId,\n    timestamp: timestamp,\n    branch_id: branchId\n  }\n};"
+      },
+      "id": "extract-data",
+      "name": "Extract WhatsApp Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM leads WHERE phone = '{{ $json.phone }}' AND branch_id = '{{ $json.branch_id }}' LIMIT 1"
+      },
+      "id": "check-lead",
+      "name": "Check Lead Exists",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase SKALE Motors"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "lead-exists-check",
+      "name": "Lead Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "updateKey": "id",
+        "columnsUi": {
+          "columnValues": [
+            {
+              "column": "last_contact_at",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "notes",
+              "value": "={{ $json.notes + '\\n[' + new Date().toISOString() + '] WhatsApp: ' + $node['Extract WhatsApp Data'].json.message }}"
+            }
+          ]
+        }
+      },
+      "id": "update-lead",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1050, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase SKALE Motors"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "leads",
+        "columnsUi": {
+          "columnValues": [
+            {
+              "column": "phone",
+              "value": "={{ $node['Extract WhatsApp Data'].json.phone }}"
+            },
+            {
+              "column": "full_name",
+              "value": "={{ $node['Extract WhatsApp Data'].json.name }}"
+            },
+            {
+              "column": "source",
+              "value": "whatsapp"
+            },
+            {
+              "column": "status",
+              "value": "nuevo"
+            },
+            {
+              "column": "branch_id",
+              "value": "={{ $node['Extract WhatsApp Data'].json.branch_id }}"
+            },
+            {
+              "column": "notes",
+              "value": "={{ 'Primer contacto por WhatsApp: ' + $node['Extract WhatsApp Data'].json.message }}"
+            }
+          ]
+        }
+      },
+      "id": "create-lead",
+      "name": "Create New Lead",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1050, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase SKALE Motors"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "messages",
+        "columnsUi": {
+          "columnValues": [
+            {
+              "column": "contact_phone",
+              "value": "={{ $node['Extract WhatsApp Data'].json.phone }}"
+            },
+            {
+              "column": "contact_name",
+              "value": "={{ $node['Extract WhatsApp Data'].json.name }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $node['Extract WhatsApp Data'].json.message }}"
+            },
+            {
+              "column": "direction",
+              "value": "entrante"
+            },
+            {
+              "column": "status",
+              "value": "entregado"
+            },
+            {
+              "column": "type",
+              "value": "whatsapp"
+            },
+            {
+              "column": "branch_id",
+              "value": "={{ $node['Extract WhatsApp Data'].json.branch_id }}"
+            },
+            {
+              "column": "sent_at",
+              "value": "={{ new Date($node['Extract WhatsApp Data'].json.timestamp * 1000).toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "insert-message",
+      "name": "Insert Message",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase SKALE Motors"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ai_agent_config FROM n8n_workspaces WHERE branch_id = '{{ $node['Extract WhatsApp Data'].json.branch_id }}' LIMIT 1"
+      },
+      "id": "get-ai-config",
+      "name": "Get AI Agent Config",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase SKALE Motors"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ai_agent_config.auto_response_enabled }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "auto-response-enabled",
+      "name": "Auto Response Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Verificar horario de respuesta\nconst config = $input.first().json.ai_agent_config;\nconst now = new Date();\nconst hours = now.getHours();\nconst minutes = now.getMinutes();\nconst currentTime = hours * 60 + minutes;\n\nconst startTime = config.response_hours?.start || '09:00';\nconst endTime = config.response_hours?.end || '18:00';\n\nconst [startHour, startMin] = startTime.split(':').map(Number);\nconst [endHour, endMin] = endTime.split(':').map(Number);\n\nconst startMinutes = startHour * 60 + startMin;\nconst endMinutes = endHour * 60 + endMin;\n\nconst isWithinHours = currentTime >= startMinutes && currentTime <= endMinutes;\n\nreturn {\n  json: {\n    ...config,\n    is_within_hours: isWithinHours,\n    current_time: `${hours}:${minutes}`\n  }\n};"
+      },
+      "id": "check-hours",
+      "name": "Check Response Hours",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ 'Eres ' + $json.name + ', asistente virtual de una automotora. Personalidad: ' + $json.personality + '. Responde de manera ' + ($json.personality === 'formal' ? 'profesional y cortés' : $json.personality === 'casual' ? 'amigable y cercana' : 'técnica y detallada') + '.' }}"
+            },
+            {
+              "role": "user",
+              "content": "={{ $node['Extract WhatsApp Data'].json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 150
+        }
+      },
+      "id": "openai-response",
+      "name": "Generate AI Response",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [2050, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "2",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WHATSAPP_API_URL }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "name": "to",
+              "value": "={{ $node['Extract WhatsApp Data'].json.phone }}"
+            },
+            {
+              "name": "type",
+              "value": "text"
+            },
+            {
+              "name": "text",
+              "value": "={{ { body: $json.choices[0].message.content } }}"
+            }
+          ]
+        }
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2250, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "WhatsApp API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Message processed' } }}"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Message saved, no auto-response' } }}"
+      },
+      "id": "respond-no-auto",
+      "name": "Respond No Auto Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 400]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Extract WhatsApp Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract WhatsApp Data": {
+      "main": [
+        [
+          {
+            "node": "Check Lead Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Lead Exists": {
+      "main": [
+        [
+          {
+            "node": "Lead Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Exists?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Lead": {
+      "main": [
+        [
+          {
+            "node": "Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Lead": {
+      "main": [
+        [
+          {
+            "node": "Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Message": {
+      "main": [
+        [
+          {
+            "node": "Get AI Agent Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI Agent Config": {
+      "main": [
+        [
+          {
+            "node": "Auto Response Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Response Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Check Response Hours",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond No Auto Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Response Hours": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Response": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SKALE Motors",
+      "id": "1"
+    },
+    {
+      "name": "WhatsApp",
+      "id": "2"
+    },
+    {
+      "name": "CRM",
+      "id": "3"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-22T00:00:00.000Z",
+  "versionId": "1"
+}
