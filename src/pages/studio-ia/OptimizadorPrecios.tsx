@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, RefreshCw, CheckCircle2, BarChart3, AlertCircle } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { formatCLP } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCLP, sanitizeIntegerInput } from "@/lib/format";
+import { AlertCircle, BarChart3, CheckCircle2, DollarSign, RefreshCw, TrendingUp } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface PriceData {
   make: string;
@@ -41,25 +41,21 @@ export default function OptimizadorPrecios() {
 
   const handleAnalyze = async () => {
     if (!formData.make.trim() || !formData.model.trim() || !formData.currentPrice.trim()) {
-      toast({
-        title: "Campos requeridos",
-        description: "Por favor, completa marca, modelo y precio actual.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, completa marca, modelo y precio actual.");
       return;
     }
 
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
+
       // Simulación de análisis
       const currentPrice = parseFloat(formData.currentPrice.replace(/[^\d]/g, ''));
       const optimalPrice = currentPrice * (0.95 + Math.random() * 0.1);
       const marketAvg = currentPrice * (0.90 + Math.random() * 0.15);
       const competitorLow = currentPrice * 0.85;
       const competitorHigh = currentPrice * 1.15;
-      
+
       setAnalysis({
         currentPrice,
         optimalPrice,
@@ -70,17 +66,10 @@ export default function OptimizadorPrecios() {
         margin: optimalPrice - currentPrice,
         marginPercent: ((optimalPrice - currentPrice) / currentPrice) * 100
       });
-      
-      toast({
-        title: "Análisis completado",
-        description: "El análisis de precios está listo.",
-      });
+
+      toast.success("El análisis de precios está listo.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo realizar el análisis. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo realizar el análisis. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -154,20 +143,22 @@ export default function OptimizadorPrecios() {
                 <Label htmlFor="year">Año</Label>
                 <Input
                   id="year"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="2024"
                   value={formData.year}
-                  onChange={(e) => handleInputChange('year', e.target.value)}
+                  onChange={(e) => handleInputChange('year', sanitizeIntegerInput(e.target.value))}
                 />
               </div>
               <div>
                 <Label htmlFor="mileage">Kilometraje</Label>
                 <Input
                   id="mileage"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="0"
                   value={formData.mileage}
-                  onChange={(e) => handleInputChange('mileage', e.target.value)}
+                  onChange={(e) => handleInputChange('mileage', sanitizeIntegerInput(e.target.value))}
                 />
               </div>
             </div>
@@ -214,8 +205,8 @@ export default function OptimizadorPrecios() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleAnalyze} 
+              <Button
+                onClick={handleAnalyze}
                 disabled={loading || !formData.make.trim() || !formData.model.trim() || !formData.currentPrice.trim()}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
               >
@@ -232,8 +223,8 @@ export default function OptimizadorPrecios() {
                 )}
               </Button>
               {analysis && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -314,7 +305,7 @@ export default function OptimizadorPrecios() {
                     <div>
                       <p className="font-semibold mb-1">Recomendación</p>
                       <p className="text-sm text-muted-foreground">
-                        {analysis.recommendation === 'increase' 
+                        {analysis.recommendation === 'increase'
                           ? 'Se recomienda aumentar el precio para maximizar el margen de ganancia.'
                           : analysis.recommendation === 'decrease'
                           ? 'Se recomienda reducir el precio para mejorar la competitividad.'

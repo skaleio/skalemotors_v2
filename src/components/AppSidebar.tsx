@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Car, 
-  Calendar, 
-  FileText, 
-  CreditCard, 
-  RefreshCw, 
-  Package, 
+import {
+  LayoutDashboard,
+  Users,
+  Car,
+  Calendar,
+  FileText,
+  CreditCard,
+  RefreshCw,
+  Package,
   Globe,
   MessageCircle,
   Settings,
@@ -95,6 +95,7 @@ const menuCategories = [
     icon: Car,
     items: [
       { title: "Inventario", url: "/app/inventory", icon: Car },
+      { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
       { title: "Inventario Avanzado", url: "/app/inventory-advanced", icon: Activity },
       { title: "Publicaciones", url: "/app/listings", icon: Globe },
     ]
@@ -159,17 +160,17 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
-  
+
   // Función para encontrar la categoría que contiene la ruta actual
   const findCategoryForPath = (path: string): string | null => {
     // Normalizar la ruta (sin query params para comparación)
     const basePath = path.split('?')[0];
-    
+
     // Caso especial: ruta raíz "/app" debe coincidir exactamente con "/app"
     if (basePath === '/app' || basePath === '/app/') {
       return "Dashboard";
     }
-    
+
     // Buscar en menuCategories
     for (const category of menuCategories) {
       if (category.items.some(item => {
@@ -187,7 +188,7 @@ export function AppSidebar() {
         return category.title;
       }
     }
-    
+
     // Buscar en settingsCategory
     if (settingsCategory.items.some(item => {
       const itemBasePath = item.url.split('?')[0];
@@ -195,7 +196,7 @@ export function AppSidebar() {
     })) {
       return settingsCategory.title;
     }
-    
+
     return null;
   };
 
@@ -215,14 +216,14 @@ export function AppSidebar() {
   // Efecto para expandir automáticamente la categoría de la ruta actual
   useEffect(() => {
     const categoryForCurrentPath = findCategoryForPath(currentPath);
-    
+
     if (categoryForCurrentPath) {
       setExpandedCategories(prev => {
         // Solo actualizar si la categoría actual no está expandida
         if (prev[categoryForCurrentPath]) {
           return prev; // Ya está expandida, no hacer nada
         }
-        
+
         // Colapsar todas las categorías y expandir solo la actual
         const updated: Record<string, boolean> = {
           "Dashboard": false,
@@ -234,7 +235,7 @@ export function AppSidebar() {
           "Analytics & Herramientas": false,
           "Sistema": false,
         };
-        
+
         updated[categoryForCurrentPath] = true;
         return updated;
       });
@@ -243,12 +244,12 @@ export function AppSidebar() {
 
   const isActive = (path: string) => {
     if (path === "/") return currentPath === "/";
-    
+
     // Manejar rutas con parámetros de query (solo para Post-Venta)
     if (path.includes('?')) {
       const [basePath, queryParams] = path.split('?');
       const [currentBasePath, currentQuery] = currentPath.split('?');
-      
+
       // Si la ruta base coincide
       if (currentBasePath === basePath) {
         // Si hay parámetros de query, verificar que coincidan
@@ -261,7 +262,7 @@ export function AppSidebar() {
       }
       return false;
     }
-    
+
     // Para rutas sin query, activar si es una coincidencia exacta
     return currentPath === path;
   };
@@ -270,7 +271,7 @@ export function AppSidebar() {
     if (isActiveState) {
       return "bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/25 border border-blue-500/30";
     }
-    
+
     return "text-slate-700 hover:text-slate-900 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 transition-all duration-300 hover:shadow-md hover:border hover:border-slate-200";
   };
 
@@ -318,7 +319,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         {menuCategories.map((category) => (
-          <Collapsible 
+          <Collapsible
             key={category.title}
             open={expandedCategories[category.title]}
             onOpenChange={() => toggleCategory(category.title)}
@@ -344,8 +345,8 @@ export function AppSidebar() {
                           {category.title}
                         </span>
                         <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                          {expandedCategories[category.title] ? 
-                            <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> : 
+                          {expandedCategories[category.title] ?
+                            <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
                             <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
                           }
                         </div>
@@ -376,8 +377,8 @@ export function AppSidebar() {
                                 </span>
                               </button>
                             ) : (
-                              <NavLink 
-                                to={item.url} 
+                              <NavLink
+                                to={item.url}
                                 end={item.url === "/"}
                                 className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                               >
@@ -403,7 +404,7 @@ export function AppSidebar() {
         ))}
 
         {/* Apartado Sistema - Colapsible */}
-        <Collapsible 
+        <Collapsible
           open={expandedCategories["Sistema"]}
           onOpenChange={() => toggleCategory("Sistema")}
         >
@@ -428,8 +429,8 @@ export function AppSidebar() {
                         {settingsCategory.title}
                       </span>
                       <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                        {expandedCategories["Sistema"] ? 
-                          <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> : 
+                        {expandedCategories["Sistema"] ?
+                          <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
                           <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
                         }
                       </div>
@@ -473,7 +474,7 @@ export function AppSidebar() {
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <NavLink 
+                              <NavLink
                                 to={item.url}
                                 className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                               >
@@ -535,7 +536,7 @@ export function AppSidebar() {
             <div className="px-3 py-2">
               <p className="text-sm font-semibold text-slate-800">Mi Cuenta</p>
             </div>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => navigate('/app/profile')}
             >
@@ -543,7 +544,7 @@ export function AppSidebar() {
               <span className="text-sm text-slate-700">Perfil</span>
               <div className="ml-auto text-xs text-slate-400">⇧⌘P</div>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => navigate('/app/billing')}
             >
@@ -551,7 +552,7 @@ export function AppSidebar() {
               <span className="text-sm text-slate-700">Facturación</span>
               <div className="ml-auto text-xs text-slate-400">⌘B</div>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => navigate('/app/settings')}
             >
@@ -559,7 +560,7 @@ export function AppSidebar() {
               <span className="text-sm text-slate-700">Configuración</span>
               <div className="ml-auto text-xs text-slate-400">⌘S</div>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => {
                 // Aquí podrías abrir un modal con atajos de teclado
@@ -580,7 +581,7 @@ export function AppSidebar() {
             <div className="px-3 py-2">
               <p className="text-sm font-semibold text-slate-800">Equipo</p>
             </div>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => navigate('/app/users')}
             >
@@ -588,7 +589,7 @@ export function AppSidebar() {
               <span className="text-sm text-slate-700">Invitar usuarios</span>
               <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
               onClick={() => {
                 toast({
@@ -605,7 +606,7 @@ export function AppSidebar() {
             <DropdownMenuSeparator />
 
             {/* Cerrar Sesión */}
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-50 text-red-600"
               onClick={() => {
                 if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {

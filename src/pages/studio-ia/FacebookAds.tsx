@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Facebook, 
-  Target, 
-  DollarSign, 
-  Users, 
-  Eye, 
+import {
+  ArrowLeft,
+  Facebook,
+  Target,
+  DollarSign,
+  Users,
+  Eye,
   MousePointer,
-  CheckCircle, 
+  CheckCircle,
   AlertCircle,
   Loader2,
   Copy,
@@ -37,14 +37,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function FacebookAds() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("campaigns");
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     campaignName: "",
     objective: "",
@@ -91,7 +91,7 @@ export default function FacebookAds() {
 
   const handleCreateCampaign = async () => {
     setLoading(true);
-    
+
     setTimeout(() => {
       const newCampaign = {
         id: `camp_${Date.now()}`,
@@ -110,10 +110,10 @@ export default function FacebookAds() {
         audience: formData.audience,
         adFormat: formData.adFormat
       };
-      
+
       setCampaigns(prev => [...prev, newCampaign]);
       setLoading(false);
-      
+
       // Reset form
       setFormData({
         campaignName: "",
@@ -128,11 +128,8 @@ export default function FacebookAds() {
         description: "",
         callToAction: ""
       });
-      
-      toast({
-        title: "¡Campaña creada!",
-        description: "Tu campaña de Facebook Ads ha sido creada exitosamente.",
-      });
+
+      toast.success("Tu campaña de Facebook Ads ha sido creada exitosamente.");
     }, 2000);
   };
 
@@ -163,8 +160,8 @@ export default function FacebookAds() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           onClick={() => navigate('/app/studio-ia')}
         >
@@ -436,8 +433,8 @@ export default function FacebookAds() {
               </div>
 
               <div className="flex gap-2">
-                <Button 
-                  onClick={handleCreateCampaign} 
+                <Button
+                  onClick={handleCreateCampaign}
                   disabled={loading}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 >

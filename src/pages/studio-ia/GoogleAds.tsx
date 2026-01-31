@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Search, 
-  Target, 
-  DollarSign, 
-  Users, 
-  Eye, 
+import {
+  ArrowLeft,
+  Search,
+  Target,
+  DollarSign,
+  Users,
+  Eye,
   MousePointer,
-  CheckCircle, 
+  CheckCircle,
   AlertCircle,
   Loader2,
   Copy,
@@ -40,14 +40,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function GoogleAds() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("campaigns");
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     campaignName: "",
     campaignType: "",
@@ -95,7 +95,7 @@ export default function GoogleAds() {
 
   const handleCreateCampaign = async () => {
     setLoading(true);
-    
+
     setTimeout(() => {
       const newCampaign = {
         id: `google_camp_${Date.now()}`,
@@ -114,10 +114,10 @@ export default function GoogleAds() {
         created: new Date().toLocaleDateString(),
         keywords: formData.keywords.split(',').length
       };
-      
+
       setCampaigns(prev => [...prev, newCampaign]);
       setLoading(false);
-      
+
       // Reset form
       setFormData({
         campaignName: "",
@@ -135,11 +135,8 @@ export default function GoogleAds() {
         finalUrl: "",
         callToAction: ""
       });
-      
-      toast({
-        title: "¡Campaña creada!",
-        description: "Tu campaña de Google Ads ha sido creada exitosamente.",
-      });
+
+      toast.success("Tu campaña de Google Ads ha sido creada exitosamente.");
     }, 2000);
   };
 
@@ -178,8 +175,8 @@ export default function GoogleAds() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           onClick={() => navigate('/app/studio-ia')}
         >
@@ -498,8 +495,8 @@ export default function GoogleAds() {
               </div>
 
               <div className="flex gap-2">
-                <Button 
-                  onClick={handleCreateCampaign} 
+                <Button
+                  onClick={handleCreateCampaign}
                   disabled={loading}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 >

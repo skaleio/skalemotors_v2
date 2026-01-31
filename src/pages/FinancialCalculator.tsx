@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, DollarSign, Percent, Calendar } from "lucide-react";
+import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/format";
+import { Calculator } from "lucide-react";
+import { useState } from "react";
 
 export default function FinancialCalculator() {
   const [formData, setFormData] = useState({
@@ -39,10 +40,16 @@ export default function FinancialCalculator() {
               <Label htmlFor="vehiclePrice">Precio del Vehículo (CLP)</Label>
               <Input
                 id="vehiclePrice"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="15.990.000"
                 value={formData.vehiclePrice}
-                onChange={(e) => setFormData({ ...formData, vehiclePrice: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    vehiclePrice: sanitizeIntegerInput(e.target.value),
+                  })
+                }
               />
             </div>
 
@@ -50,10 +57,16 @@ export default function FinancialCalculator() {
               <Label htmlFor="downPayment">Pie Inicial (CLP)</Label>
               <Input
                 id="downPayment"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="3.000.000"
                 value={formData.downPayment}
-                onChange={(e) => setFormData({ ...formData, downPayment: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    downPayment: sanitizeIntegerInput(e.target.value),
+                  })
+                }
               />
             </div>
 
@@ -77,10 +90,16 @@ export default function FinancialCalculator() {
               <Label htmlFor="interestRate">Tasa de Interés Anual (%)</Label>
               <Input
                 id="interestRate"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 placeholder="8.5"
                 value={formData.interestRate}
-                onChange={(e) => setFormData({ ...formData, interestRate: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    interestRate: sanitizeDecimalInput(e.target.value),
+                  })
+                }
               />
             </div>
 

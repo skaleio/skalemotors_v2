@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Palette, Sparkles, RefreshCw, CheckCircle2, Download, Type, Image as ImageIcon } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface BrandData {
   name: string;
@@ -43,18 +43,14 @@ export default function IdentidadMarca() {
 
   const handleGenerate = async () => {
     if (!formData.name.trim()) {
-      toast({
-        title: "Campo requerido",
-        description: "Por favor, ingresa el nombre de tu automotora.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, ingresa el nombre de tu automotora.");
       return;
     }
 
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
+
       // Simulación de generación
       setBrandGuidelines({
         colors: {
@@ -69,17 +65,10 @@ export default function IdentidadMarca() {
         logo: "generated-logo.svg",
         guidelines: `Guía de marca para ${formData.name}`
       });
-      
-      toast({
-        title: "Identidad generada",
-        description: "Tu identidad de marca está lista.",
-      });
+
+      toast.success("Tu identidad de marca está lista.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo generar la identidad. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo generar la identidad. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -261,8 +250,8 @@ export default function IdentidadMarca() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={loading || !formData.name.trim()}
                 className="flex-1 bg-green-600 hover:bg-green-700"
               >
@@ -279,8 +268,8 @@ export default function IdentidadMarca() {
                 )}
               </Button>
               {brandGuidelines && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />

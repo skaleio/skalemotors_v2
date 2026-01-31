@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Image, Upload, Sparkles, RefreshCw, CheckCircle2, Download, Settings } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface ImageData {
   quality: string;
@@ -39,20 +39,13 @@ export default function OptimizadorImagenes() {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
       setUploadedImages(prev => [...prev, ...files]);
-      toast({
-        title: "Imágenes cargadas",
-        description: `${files.length} imagen(es) cargada(s) exitosamente.`,
-      });
+      toast.success(`${files.length} imagen(es) cargada(s) exitosamente.`);
     }
   };
 
   const handleProcess = async () => {
     if (uploadedImages.length === 0) {
-      toast({
-        title: "Sin imágenes",
-        description: "Por favor, carga al menos una imagen para procesar.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, carga al menos una imagen para procesar.");
       return;
     }
 
@@ -60,21 +53,14 @@ export default function OptimizadorImagenes() {
     try {
       // Simulación de procesamiento
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // En producción, aquí se procesarían las imágenes con IA
       const processed = uploadedImages.map((_, i) => `processed-image-${i + 1}.${formData.format}`);
       setProcessedImages(processed);
-      
-      toast({
-        title: "Imágenes procesadas",
-        description: `${uploadedImages.length} imagen(es) optimizada(s) exitosamente.`,
-      });
+
+      toast.success(`${uploadedImages.length} imagen(es) optimizada(s) exitosamente.`);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron procesar las imágenes. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudieron procesar las imágenes. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -258,8 +244,8 @@ export default function OptimizadorImagenes() {
             )}
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleProcess} 
+              <Button
+                onClick={handleProcess}
                 disabled={loading || uploadedImages.length === 0}
                 className="flex-1 bg-orange-600 hover:bg-orange-700"
               >
@@ -276,8 +262,8 @@ export default function OptimizadorImagenes() {
                 )}
               </Button>
               {uploadedImages.length > 0 && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -292,10 +278,7 @@ export default function OptimizadorImagenes() {
                   <span>{processedImages.length} imagen(es) procesada(s)</span>
                 </div>
                 <Button variant="outline" className="w-full" onClick={() => {
-                  toast({
-                    title: "Descarga iniciada",
-                    description: "Las imágenes optimizadas se están descargando.",
-                  });
+                  toast.success("Las imágenes optimizadas se están descargando.");
                 }}>
                   <Download className="h-4 w-4 mr-2" />
                   Descargar Todas

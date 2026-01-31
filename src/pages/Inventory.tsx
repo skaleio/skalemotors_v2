@@ -1,56 +1,56 @@
-import { useMemo, useState, useEffect } from "react";
-import { Search, Plus, Eye, Edit, MoreHorizontal, Trash2, Upload, X } from "lucide-react";
+import { Edit, Eye, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
-import type { Database } from "@/lib/types/database";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatCLP } from "@/lib/format";
 import { vehicleService } from "@/lib/services/vehicles";
-import { supabase } from "@/lib/supabase";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
+import type { Database } from "@/lib/types/database";
 
 type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
@@ -124,8 +124,73 @@ const formatNumberDisplay = (value: number): string => {
   }
 };
 
+const generateVin = () => {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rnd = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const raw = `SK${ts}${rnd}`.replace(/[^A-Z0-9]/g, '');
+  return raw.substring(0, 17).padEnd(17, '0');
+};
+
+const allowedImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+const uploadVehicleImage = async (
+  file: File,
+  fileName: string,
+  accessToken: string,
+) => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Faltan variables de entorno de Supabase");
+  }
+
+  if (!allowedImageTypes.includes(file.type)) {
+    throw new Error(`Formato no permitido: ${file.type || "desconocido"}`);
+  }
+
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/vehicles/${fileName}`, {
+    method: "PUT",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": file.type,
+      "x-upsert": "false",
+    },
+    body: file,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Error subiendo imagen (${response.status}): ${errorBody || response.statusText}`);
+  }
+};
+
+const updateVehicleImages = async (
+  vehicleId: string,
+  imageUrls: string[],
+  accessToken: string,
+) => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Faltan variables de entorno de Supabase");
+  }
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/vehicles?id=eq.${vehicleId}`, {
+    method: "PATCH",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({ images: imageUrls }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Error actualizando imágenes (${response.status}): ${errorBody || response.statusText}`);
+  }
+};
+
 export default function Inventory() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { vehicles, loading, refetch } = useVehicles({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
@@ -151,7 +216,6 @@ export default function Inventory() {
   const [newVehicle, setNewVehicle] = useState({
     make: "",
     model: "",
-    vin: "",
     year: 0,
     color: "",
     mileage: 0,
@@ -164,8 +228,6 @@ export default function Inventory() {
     transmission: "automático" as "manual" | "automático" | "cvt",
     location: "",
     drivetrain: "",
-    trunk_capacity: "",
-    sunroof: undefined as string | undefined,
     images: [] as File[],
   });
 
@@ -217,7 +279,6 @@ export default function Inventory() {
       setNewVehicle({
         make: vehicleToEdit.make || "",
         model: vehicleToEdit.model || "",
-        vin: vehicleToEdit.vin || "",
         year: vehicleToEdit.year || new Date().getFullYear(),
         color: vehicleToEdit.color || "",
         mileage: vehicleToEdit.mileage || 0,
@@ -230,8 +291,6 @@ export default function Inventory() {
         transmission: vehicleToEdit.transmission || "automático",
         location: vehicleToEdit.location || "",
         drivetrain: features.drivetrain || "",
-        trunk_capacity: features.trunk_capacity_liters || "",
-        sunroof: features.sunroof || undefined,
         images: [], // Las imágenes existentes se mantienen en el vehículo, solo se pueden agregar nuevas
       });
     }
@@ -263,7 +322,7 @@ export default function Inventory() {
     }
 
     // Validar campos requeridos
-    if (!newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
       alert("Por favor completa todos los campos requeridos (marcados con *)");
       return;
     }
@@ -274,11 +333,10 @@ export default function Inventory() {
       console.log("📋 Datos del formulario:", {
         make: newVehicle.make,
         model: newVehicle.model,
-        vin: newVehicle.vin,
         year: newVehicle.year,
         hasImages: newVehicle.images.length > 0
       });
-      
+
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
@@ -286,15 +344,14 @@ export default function Inventory() {
       // Preparar features con campos adicionales
       const features = {
         drivetrain: newVehicle.drivetrain || null,
-        trunk_capacity_liters: newVehicle.trunk_capacity || null,
-        sunroof: newVehicle.sunroof ?? null,
         min_down_payment: minDownPayment,
       };
 
       // Crear el vehículo primero (sin imágenes)
       // Asegurar que los números sean del tipo correcto para Supabase
+      const vinToCreate = generateVin();
       const vehicleData = {
-        vin: newVehicle.vin.toUpperCase().trim(),
+        vin: vinToCreate,
         make: newVehicle.make.trim(),
         model: newVehicle.model.trim(),
         year: Number(newVehicle.year),
@@ -316,46 +373,36 @@ export default function Inventory() {
 
       console.log("📝 Datos del vehículo a crear:", vehicleData);
       console.log("📝 Validando datos antes de enviar...");
-      
+
       // Validar que todos los campos requeridos estén presentes
-      if (!vehicleData.vin || !vehicleData.make || !vehicleData.model || !vehicleData.color || !vehicleData.year) {
+      if (!vehicleData.make || !vehicleData.model || !vehicleData.color || !vehicleData.year) {
         throw new Error("Faltan campos requeridos en los datos del vehículo");
       }
-      
+
       console.log("✅ Validación pasada, enviando a Supabase...");
-      
-      // Crear vehículo directamente con timeout
-      const createPromise = vehicleService.create(vehicleData);
-      const createTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout creando vehículo')), 30000)
-      );
-      
-      const createdVehicle = await Promise.race([createPromise, createTimeout]) as any;
+
+      // Crear vehículo (incluye timeout interno y verificación)
+      const createdVehicle = await vehicleService.create(vehicleData, {
+        accessToken: session?.access_token
+      }) as any;
       console.log("✅ Vehículo creado exitosamente con ID:", createdVehicle.id);
 
       // Subir imágenes a Supabase Storage
       if (newVehicle.images.length > 0) {
         console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es)...`);
         const imageUrls: string[] = [];
-        
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("No hay sesión activa para subir imágenes.");
+        }
+
         for (const file of newVehicle.images) {
           try {
             const fileExt = file.name.split('.').pop();
             const fileName = `${createdVehicle.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            
-            console.log(`📤 Subiendo imagen: ${fileName}`);
-            // Subir archivo a Storage
-            const { error: uploadError } = await supabase.storage
-              .from('vehicles')
-              .upload(fileName, file, {
-                cacheControl: '3600',
-                upsert: false
-              });
 
-            if (uploadError) {
-              console.error("❌ Error subiendo imagen:", uploadError);
-              continue;
-            }
+            console.log(`📤 Subiendo imagen: ${fileName}`);
+            await uploadVehicleImage(file, fileName, accessToken);
 
             // Obtener URL pública
             const { data: { publicUrl } } = supabase.storage
@@ -373,11 +420,7 @@ export default function Inventory() {
         if (imageUrls.length > 0) {
           console.log(`🔄 Actualizando vehículo con ${imageUrls.length} imagen(es)...`);
           try {
-            const updatePromise = vehicleService.update(createdVehicle.id, { images: imageUrls as any });
-            const updateTimeout = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout actualizando imágenes')), 20000)
-            );
-            await Promise.race([updatePromise, updateTimeout]);
+            await updateVehicleImages(createdVehicle.id, imageUrls, accessToken);
             console.log(`✅ ${imageUrls.length} imagen(es) agregada(s) al vehículo`);
           } catch (updateError: any) {
             console.error("❌ Error actualizando vehículo con imágenes:", updateError);
@@ -393,12 +436,11 @@ export default function Inventory() {
 
       // Cerrar diálogo primero
       setShowAddDialog(false);
-      
+
       // Resetear formulario
       setNewVehicle({
         make: "",
         model: "",
-        vin: "",
         year: 0,
         color: "",
         mileage: 0,
@@ -411,23 +453,24 @@ export default function Inventory() {
         transmission: "automático",
         location: "",
         drivetrain: "",
-        trunk_capacity: "",
-        sunroof: undefined,
         images: [],
       });
-      
+
       console.log("✅ Vehículo guardado exitosamente");
-      
+
       // Refetch con timeout para evitar que se quede colgado
       // Usar un solo refetch con manejo robusto de errores
       try {
         const refetchPromise = refetch();
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Timeout en refetch')), 8000)
         );
-        
+
         await Promise.race([refetchPromise, timeoutPromise]);
         console.log("✅ Lista actualizada correctamente");
+        setTimeout(() => {
+          window.location.reload();
+        }, 200);
       } catch (refetchError: any) {
         console.warn("⚠️ Error o timeout en refetch, pero el vehículo fue creado:", refetchError);
         // Intentar refetch en segundo plano sin bloquear
@@ -446,15 +489,15 @@ export default function Inventory() {
         details: error?.details,
         hint: error?.hint
       });
-      
+
       // Mensaje de error más claro para el usuario
       let errorMessage = error?.message || "Error desconocido al crear el vehículo";
-      
+
       // Si el error es sobre permisos o sesión
       if (errorMessage.includes("sesión") || errorMessage.includes("permisos")) {
         errorMessage = "Tu sesión ha expirado. Por favor, recarga la página e inicia sesión nuevamente.";
       }
-      
+
       alert(`Error al crear vehículo:\n\n${errorMessage}\n\nSi el problema persiste, contacta al administrador.`);
     } finally {
       setIsSaving(false);
@@ -468,7 +511,7 @@ export default function Inventory() {
     }
 
     // Validar campos requeridos
-    if (!newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
       alert("Por favor completa todos los campos requeridos (marcados con *)");
       return;
     }
@@ -476,7 +519,7 @@ export default function Inventory() {
     setIsSaving(true);
     try {
       console.log("🔄 Iniciando actualización de vehículo...");
-      
+
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
@@ -484,14 +527,11 @@ export default function Inventory() {
       // Preparar features con campos adicionales
       const features = {
         drivetrain: newVehicle.drivetrain || null,
-        trunk_capacity_liters: newVehicle.trunk_capacity || null,
-        sunroof: newVehicle.sunroof ?? null,
         min_down_payment: minDownPayment,
       };
 
       // Preparar datos de actualización
       const updateData = {
-        vin: newVehicle.vin.toUpperCase().trim(),
         make: newVehicle.make.trim(),
         model: newVehicle.model.trim(),
         year: parseInt(String(newVehicle.year), 10),
@@ -509,7 +549,7 @@ export default function Inventory() {
       };
 
       console.log("📝 Datos del vehículo a actualizar:", updateData);
-      
+
       // Actualizar vehículo
       await vehicleService.update(vehicleToEdit.id, updateData);
       console.log("✅ Vehículo actualizado exitosamente");
@@ -519,12 +559,12 @@ export default function Inventory() {
         console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es) nuevas...`);
         const imageUrls: string[] = [];
         const existingImages = (vehicleToEdit.images as unknown as string[] | null) || [];
-        
+
         for (const file of newVehicle.images) {
           try {
             const fileExt = file.name.split('.').pop();
             const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            
+
             console.log(`📤 Subiendo imagen: ${fileName}`);
             const { error: uploadError } = await supabase.storage
               .from('vehicles')
@@ -562,7 +602,6 @@ export default function Inventory() {
       setNewVehicle({
         make: "",
         model: "",
-        vin: "",
         year: 0,
         color: "",
         mileage: 0,
@@ -575,18 +614,16 @@ export default function Inventory() {
         transmission: "automático",
         location: "",
         drivetrain: "",
-        trunk_capacity: "",
-        sunroof: undefined,
         images: [],
       });
-      
+
       console.log("✅ Vehículo actualizado exitosamente");
-      
+
       // Refetch con timeout
       try {
         await Promise.race([
           refetch(),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Timeout en refetch')), 10000)
           )
         ]);
@@ -619,11 +656,11 @@ export default function Inventory() {
     }
 
     const vehicleToDeleteCopy = vehicleToDelete;
-    
+
     // Cerrar el diálogo y limpiar estado inmediatamente
     setVehicleToDelete(null);
     setIsDeleting(true);
-    
+
     // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la operación
     requestAnimationFrame(async () => {
       try {
@@ -634,7 +671,7 @@ export default function Inventory() {
       } finally {
         // Limpiar estado de loading
         setIsDeleting(false);
-        
+
         // Refrescar la lista después de que todo se haya limpiado
         setTimeout(() => {
           refetch();
@@ -657,7 +694,7 @@ export default function Inventory() {
     setIsSaving(true);
     try {
       console.log('🔄 Registrando venta...');
-      
+
       const margin = saleData.salePrice - Number(vehicleToSell.cost || 0);
       const commission = margin * 0.15; // 15% de comisión sobre el margen
 
@@ -687,7 +724,7 @@ export default function Inventory() {
       await vehicleService.update(vehicleToSell.id, { status: 'vendido' });
 
       console.log('✅ Venta registrada exitosamente');
-      
+
       // Cerrar diálogo y resetear
       setVehicleToSell(null);
       setSaleData({
@@ -722,13 +759,12 @@ export default function Inventory() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button 
+          <Button
             onClick={() => {
               // Resetear formulario antes de abrir
               setNewVehicle({
                 make: "",
                 model: "",
-                vin: "",
                 year: 0,
                 color: "",
                 mileage: 0,
@@ -741,8 +777,6 @@ export default function Inventory() {
                 transmission: "automático",
                 location: "",
                 drivetrain: "",
-                trunk_capacity: "",
-                sunroof: undefined,
                 images: [],
               });
               setShowAddDialog(true);
@@ -766,7 +800,7 @@ export default function Inventory() {
             className="pl-10"
           />
         </div>
-        
+
         <Select value={selectedStatus} onValueChange={setSelectedStatus}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por estado" />
@@ -817,7 +851,7 @@ export default function Inventory() {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Valor Total</CardTitle>
@@ -894,7 +928,7 @@ export default function Inventory() {
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img 
+                      <img
                         src={((vehicle.images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-12 h-12 rounded-lg object-cover"
@@ -954,8 +988,8 @@ export default function Inventory() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className={statusColors[vehicle.status]}
                     >
                       {statusLabels[vehicle.status]}
@@ -1001,9 +1035,9 @@ export default function Inventory() {
                         }
                       }}>
                         <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1015,7 +1049,7 @@ export default function Inventory() {
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent 
+                        <DropdownMenuContent
                           align="end"
                           onCloseAutoFocus={(e) => {
                             e.preventDefault();
@@ -1037,7 +1071,7 @@ export default function Inventory() {
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             Reservar para lead
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onSelect={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -1235,8 +1269,8 @@ export default function Inventory() {
       </Dialog>
 
       {/* Dialog para agregar vehículo */}
-      <Dialog 
-        open={showAddDialog} 
+      <Dialog
+        open={showAddDialog}
         onOpenChange={(open) => {
           setShowAddDialog(open);
           if (!open) {
@@ -1244,7 +1278,6 @@ export default function Inventory() {
             setNewVehicle({
               make: "",
               model: "",
-              vin: "",
               year: 0,
               color: "",
               mileage: 0,
@@ -1257,8 +1290,6 @@ export default function Inventory() {
               transmission: "automático",
               location: "",
               drivetrain: "",
-              trunk_capacity: "",
-              sunroof: undefined,
               images: [],
             });
           }
@@ -1330,18 +1361,6 @@ export default function Inventory() {
                 value={newVehicle.model}
                 onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
                 placeholder="Ej: Corolla Cross"
-                required
-              />
-            </div>
-
-            {/* VIN */}
-            <div>
-              <Label htmlFor="vin">VIN *</Label>
-              <Input
-                id="vin"
-                value={newVehicle.vin}
-                onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value.toUpperCase() })}
-                placeholder="Ej: JTD2026DEMO0000001"
                 required
               />
             </div>
@@ -1595,50 +1614,7 @@ export default function Inventory() {
               />
             </div>
 
-            {/* Capacidad de cajuela */}
-            <div>
-              <Label htmlFor="trunk_capacity">Capacidad de Cajuela (Litros)</Label>
-              <Input
-                id="trunk_capacity"
-                type="text"
-                value={newVehicle.trunk_capacity}
-                onChange={(e) => {
-                  try {
-                    const value = e.target.value.replace(/\D/g, ''); // Solo números
-                    setNewVehicle({ ...newVehicle, trunk_capacity: value });
-                  } catch (error) {
-                    console.error('Error procesando capacidad de cajuela:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  // Permitir pegar pero procesar el valor
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const value = pastedText.replace(/\D/g, '');
-                  setNewVehicle({ ...newVehicle, trunk_capacity: value });
-                }}
-                placeholder="Ej: 450"
-              />
-            </div>
 
-            {/* Techo corredizo */}
-            <div>
-              <Label htmlFor="sunroof">Techo Corredizo</Label>
-              <Select
-                value={newVehicle.sunroof || undefined}
-                onValueChange={(value) => setNewVehicle({ ...newVehicle, sunroof: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no_especificado">No especificado</SelectItem>
-                  <SelectItem value="Sí">Sí</SelectItem>
-                  <SelectItem value="No">No</SelectItem>
-                  <SelectItem value="Panorámico">Panorámico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -1649,7 +1625,6 @@ export default function Inventory() {
                 setNewVehicle({
                   make: "",
                   model: "",
-                  vin: "",
                   year: 0,
                   color: "",
                   mileage: 0,
@@ -1662,8 +1637,6 @@ export default function Inventory() {
                   transmission: "automático",
                   location: "",
                   drivetrain: "",
-                  trunk_capacity: "",
-                  sunroof: undefined,
                   images: [],
                 });
               }}
@@ -1673,7 +1646,7 @@ export default function Inventory() {
             </Button>
             <Button
               onClick={handleCreateVehicle}
-              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               {isSaving ? "Guardando..." : "Guardar Vehículo"}
@@ -1683,8 +1656,8 @@ export default function Inventory() {
       </Dialog>
 
       {/* Dialog para editar vehículo */}
-      <Dialog 
-        open={!!vehicleToEdit} 
+      <Dialog
+        open={!!vehicleToEdit}
         onOpenChange={(open) => {
           if (!open) {
             setVehicleToEdit(null);
@@ -1692,7 +1665,6 @@ export default function Inventory() {
             setNewVehicle({
               make: "",
               model: "",
-              vin: "",
               year: 0,
               color: "",
               mileage: 0,
@@ -1705,8 +1677,6 @@ export default function Inventory() {
               transmission: "automático",
               location: "",
               drivetrain: "",
-              trunk_capacity: "",
-              sunroof: undefined,
               images: [],
             });
           }
@@ -1801,18 +1771,6 @@ export default function Inventory() {
                 value={newVehicle.model}
                 onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
                 placeholder="Ej: Corolla Cross"
-                required
-              />
-            </div>
-
-            {/* VIN */}
-            <div>
-              <Label htmlFor="edit-vin">VIN *</Label>
-              <Input
-                id="edit-vin"
-                value={newVehicle.vin}
-                onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value.toUpperCase() })}
-                placeholder="Ej: JTD2026DEMO0000001"
                 required
               />
             </div>
@@ -2066,49 +2024,7 @@ export default function Inventory() {
               />
             </div>
 
-            {/* Capacidad de cajuela */}
-            <div>
-              <Label htmlFor="edit-trunk_capacity">Capacidad de Cajuela (Litros)</Label>
-              <Input
-                id="edit-trunk_capacity"
-                type="text"
-                value={newVehicle.trunk_capacity}
-                onChange={(e) => {
-                  try {
-                    const value = e.target.value.replace(/\D/g, '');
-                    setNewVehicle({ ...newVehicle, trunk_capacity: value });
-                  } catch (error) {
-                    console.error('Error procesando capacidad de cajuela:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const value = pastedText.replace(/\D/g, '');
-                  setNewVehicle({ ...newVehicle, trunk_capacity: value });
-                }}
-                placeholder="Ej: 450"
-              />
-            </div>
 
-            {/* Techo corredizo */}
-            <div>
-              <Label htmlFor="edit-sunroof">Techo Corredizo</Label>
-              <Select
-                value={newVehicle.sunroof || undefined}
-                onValueChange={(value) => setNewVehicle({ ...newVehicle, sunroof: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no_especificado">No especificado</SelectItem>
-                  <SelectItem value="Sí">Sí</SelectItem>
-                  <SelectItem value="No">No</SelectItem>
-                  <SelectItem value="Panorámico">Panorámico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -2119,7 +2035,6 @@ export default function Inventory() {
                 setNewVehicle({
                   make: "",
                   model: "",
-                  vin: "",
                   year: 0,
                   color: "",
                   mileage: 0,
@@ -2132,8 +2047,6 @@ export default function Inventory() {
                   transmission: "automático",
                   location: "",
                   drivetrain: "",
-                  trunk_capacity: "",
-                  sunroof: undefined,
                   images: [],
                 });
               }}
@@ -2143,7 +2056,7 @@ export default function Inventory() {
             </Button>
             <Button
               onClick={handleUpdateVehicle}
-              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.vin || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               {isSaving ? "Guardando..." : "Guardar Cambios"}
@@ -2154,7 +2067,7 @@ export default function Inventory() {
 
       {/* Dialog de confirmación para eliminar */}
       {vehicleToDelete && (
-        <AlertDialog 
+        <AlertDialog
           open={!!vehicleToDelete}
           onOpenChange={(open) => {
             if (!open && !isDeleting) {
@@ -2166,7 +2079,7 @@ export default function Inventory() {
             }
           }}
         >
-          <AlertDialogContent 
+          <AlertDialogContent
             onInteractOutside={(e) => {
               if (isDeleting) {
                 e.preventDefault();
@@ -2189,7 +2102,7 @@ export default function Inventory() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel 
+              <AlertDialogCancel
                 onClick={(e) => {
                   e.preventDefault();
                   if (!isDeleting) {
@@ -2221,8 +2134,8 @@ export default function Inventory() {
       )}
 
       {/* Dialog para registrar venta */}
-      <Dialog 
-        open={!!vehicleToSell} 
+      <Dialog
+        open={!!vehicleToSell}
         onOpenChange={(open) => {
           if (!open) {
             setVehicleToSell(null);

@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Car, Sparkles, Copy, Download, RefreshCw, CheckCircle2, FileText } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+import { sanitizeIntegerInput } from "@/lib/format";
+import { Car, CheckCircle2, Copy, Download, FileText, RefreshCw, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface DescriptionData {
   make: string;
@@ -45,31 +45,20 @@ export default function DescripcionesVehiculos() {
 
   const handleGenerate = async () => {
     if (!formData.make.trim() || !formData.model.trim()) {
-      toast({
-        title: "Campos requeridos",
-        description: "Por favor, ingresa la marca y modelo del vehículo.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, ingresa la marca y modelo del vehículo.");
       return;
     }
 
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       const description = generateDescriptionMock(formData);
       setGeneratedDescription(description);
-      
-      toast({
-        title: "Descripción generada",
-        description: "Tu descripción está lista para usar.",
-      });
+
+      toast.success("Tu descripción está lista para usar.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo generar la descripción. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo generar la descripción. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -87,7 +76,7 @@ export default function DescripcionesVehiculos() {
 
 ${data.make} ${data.model} ${data.year}
 
-${data.tone === 'professional' ? 
+${data.tone === 'professional' ?
   `Presentamos el ${data.make} ${data.model} ${data.year}, un vehículo que combina diseño moderno, tecnología avanzada y rendimiento excepcional.` :
   data.tone === 'friendly' ?
   `¡Conoce el ${data.make} ${data.model} ${data.year}! Este increíble vehículo tiene todo lo que buscas y más.` :
@@ -109,7 +98,7 @@ ${data.tone === 'professional' ?
   `Oportunidad única. Este vehículo no durará mucho tiempo disponible. Contáctanos ahora y agenda tu test drive.` :
   `Equipado con las últimas innovaciones tecnológicas y sistemas de seguridad avanzados, este vehículo garantiza un rendimiento óptimo en todas las condiciones.`}
 
-${data.format === 'portal' ? 
+${data.format === 'portal' ?
   '\nIDEAL PARA:\n• Uso familiar\n• Viajes largos\n• Ciudad y carretera\n• Máxima seguridad' :
   data.format === 'social' ?
   '\n✨ Lo que más te va a encantar:\n• Diseño impresionante\n• Tecnología de punta\n• Confort premium\n• Excelente relación precio-calidad' :
@@ -122,10 +111,7 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedDescription);
-    toast({
-      title: "Copiado",
-      description: "La descripción ha sido copiada al portapapeles.",
-    });
+    toast.success("La descripción ha sido copiada al portapapeles.");
   };
 
   const handleDownload = () => {
@@ -138,11 +124,8 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Descargado",
-      description: "La descripción ha sido descargada exitosamente.",
-    });
+
+    toast.success("La descripción ha sido descargada exitosamente.");
   };
 
   const handleReset = () => {
@@ -214,10 +197,11 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
                 <Label htmlFor="year">Año</Label>
                 <Input
                   id="year"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="2024"
                   value={formData.year}
-                  onChange={(e) => handleInputChange('year', e.target.value)}
+                  onChange={(e) => handleInputChange('year', sanitizeIntegerInput(e.target.value))}
                 />
               </div>
               <div>
@@ -236,10 +220,11 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
                 <Label htmlFor="mileage">Kilometraje</Label>
                 <Input
                   id="mileage"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="0"
                   value={formData.mileage}
-                  onChange={(e) => handleInputChange('mileage', e.target.value)}
+                  onChange={(e) => handleInputChange('mileage', sanitizeIntegerInput(e.target.value))}
                 />
               </div>
               <div>
@@ -295,8 +280,8 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={loading || !formData.make.trim() || !formData.model.trim()}
                 className="flex-1 bg-blue-600 hover:bg-blue-700"
               >
@@ -313,8 +298,8 @@ ${data.tone === 'professional' ? '\nPara más información, contáctanos y nuest
                 )}
               </Button>
               {generatedDescription && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />

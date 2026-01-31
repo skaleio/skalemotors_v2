@@ -1,19 +1,20 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import DashboardLoader from "@/components/DashboardLoader";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart3, TrendingUp, Users, DollarSign, Car, Calendar, ArrowUpRight, ArrowDownRight, Loader2, FileText, AlertCircle, Clock, MapPin, Phone, Mail, Send, CheckCircle2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Users } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -145,23 +146,24 @@ export default function Dashboard() {
     setContactData({ leadName: '', contactMethod: 'phone', notes: '' });
   };
 
+  const salesChange = useMemo(() => {
+    if (!stats?.salesByMonth || stats.salesByMonth.length < 2) {
+      return 0;
+    }
+    const current = stats.salesByMonth[stats.salesByMonth.length - 1].sales;
+    const previous = stats.salesByMonth[stats.salesByMonth.length - 2].sales;
+    if (!previous) {
+      return 0;
+    }
+    return ((current - previous) / previous) * 100;
+  }, [stats?.salesByMonth]);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Cargando estadísticas...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoader message="Cargando estadísticas" />;
   }
 
-  const salesChange = stats?.salesByMonth && stats.salesByMonth.length >= 2
-    ? ((stats.salesByMonth[stats.salesByMonth.length - 1].sales - stats.salesByMonth[stats.salesByMonth.length - 2].sales) / (stats.salesByMonth[stats.salesByMonth.length - 2].sales || 1)) * 100
-    : 0;
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground mt-2">
@@ -318,9 +320,9 @@ export default function Dashboard() {
               <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground">
                 <Calendar className="h-12 w-12 mb-3 opacity-20" />
                 <p className="text-sm font-medium">No tienes citas programadas</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="mt-4"
                   onClick={() => setShowNewAppointmentDialog(true)}
                 >
@@ -355,7 +357,7 @@ export default function Dashboard() {
                   <Badge variant="destructive" className="text-xs">URGENTE</Badge>
                   <span className="text-sm font-semibold">Requieren atención inmediata</span>
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20">
                     <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
@@ -363,9 +365,9 @@ export default function Dashboard() {
                       <p className="text-sm font-medium">Contactar a Juan Pérez</p>
                       <p className="text-xs text-muted-foreground">Lead nuevo sin contactar - Hace 2 horas</p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       className="flex-shrink-0"
                       onClick={() => {
                         setContactData({ ...contactData, leadName: 'Juan Pérez' });
@@ -382,9 +384,9 @@ export default function Dashboard() {
                       <p className="text-sm font-medium">Seguimiento vencido: María González</p>
                       <p className="text-xs text-muted-foreground">Último contacto hace 8 días</p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       className="flex-shrink-0"
                       onClick={() => {
                         setContactData({ ...contactData, leadName: 'María González' });
@@ -401,9 +403,9 @@ export default function Dashboard() {
                       <p className="text-sm font-medium">Confirmar test drive Carlos López</p>
                       <p className="text-xs text-muted-foreground">Programado para mañana - Sin confirmar</p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       className="flex-shrink-0"
                       onClick={() => setShowConfirmTestDriveDialog(true)}
                     >
@@ -419,7 +421,7 @@ export default function Dashboard() {
                   <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">HOY</Badge>
                   <span className="text-sm font-semibold">Para completar hoy</span>
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
                     <FileText className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -427,9 +429,9 @@ export default function Dashboard() {
                       <p className="text-sm font-medium">Enviar cotización a Ana Martínez</p>
                       <p className="text-xs text-muted-foreground">Mazda CX-5 2023 - Solicitada ayer</p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="flex-shrink-0"
                       onClick={() => setShowQuoteDialog(true)}
                     >
@@ -443,9 +445,9 @@ export default function Dashboard() {
                       <p className="text-sm font-medium">Llamar a Pedro Sánchez</p>
                       <p className="text-xs text-muted-foreground">Seguimiento programado para hoy</p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="flex-shrink-0"
                       onClick={() => {
                         setContactData({ ...contactData, leadName: 'Pedro Sánchez' });
@@ -496,19 +498,19 @@ export default function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: 'hsl(var(--border))' }}
                   />
-                  <YAxis 
+                  <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -521,10 +523,10 @@ export default function Dashboard() {
                     }}
                     labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sales" 
-                    stroke="#3b82f6" 
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#3b82f6"
                     strokeWidth={3}
                     dot={{ fill: '#3b82f6', r: 4, strokeWidth: 3, stroke: '#fff' }}
                     activeDot={{ r: 6, strokeWidth: 3, stroke: '#fff' }}
@@ -573,11 +575,11 @@ export default function Dashboard() {
                       const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
                       const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
                       return (
-                        <text 
-                          x={x} 
-                          y={y} 
-                          fill="white" 
-                          textAnchor={x > cx ? 'start' : 'end'} 
+                        <text
+                          x={x}
+                          y={y}
+                          fill="white"
+                          textAnchor={x > cx ? 'start' : 'end'}
                           dominantBaseline="central"
                           className="text-xs font-bold"
                         >
@@ -591,16 +593,16 @@ export default function Dashboard() {
                     paddingAngle={3}
                   >
                     {stats.vehiclesByCategory.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
+                      <Cell
+                        key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
                         stroke="hsl(var(--background))"
                         strokeWidth={3}
                       />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -608,7 +610,7 @@ export default function Dashboard() {
                       padding: '12px'
                     }}
                   />
-                  <Legend 
+                  <Legend
                     verticalAlign="bottom"
                     height={36}
                     iconType="circle"
@@ -647,8 +649,8 @@ export default function Dashboard() {
             {stats?.recentSales && stats.recentSales.length > 0 ? (
               <div className="space-y-3">
                 {stats.recentSales.map((sale, index) => (
-                  <div 
-                    key={sale.id} 
+                  <div
+                    key={sale.id}
                     className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-green-500/30 hover:bg-green-50/30 dark:hover:bg-green-950/10 transition-all duration-200"
                   >
                     <div className="flex items-center gap-4">
@@ -710,7 +712,7 @@ export default function Dashboard() {
           <CardContent className="pt-6">
             {stats?.leadsByStatus && stats.leadsByStatus.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart 
+                <BarChart
                   data={stats.leadsByStatus.map(item => ({
                     ...item,
                     name: statusLabels[item.status] || item.status
@@ -724,8 +726,8 @@ export default function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
+                  <XAxis
+                    dataKey="name"
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 500 }}
                     angle={-45}
                     textAnchor="end"
@@ -733,13 +735,13 @@ export default function Dashboard() {
                     tickLine={false}
                     axisLine={{ stroke: 'hsl(var(--border))' }}
                   />
-                  <YAxis 
+                  <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -750,9 +752,9 @@ export default function Dashboard() {
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.1 }}
                     labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
-                  <Bar 
-                    dataKey="count" 
-                    fill="url(#colorBar)" 
+                  <Bar
+                    dataKey="count"
+                    fill="url(#colorBar)"
                     radius={[8, 8, 0, 0]}
                     maxBarSize={50}
                   />

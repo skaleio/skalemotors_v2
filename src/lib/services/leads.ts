@@ -8,6 +8,35 @@ type LeadActivity = Database['public']['Tables']['lead_activities']['Row']
 type LeadActivityInsert = Database['public']['Tables']['lead_activities']['Insert']
 
 export const leadService = {
+  // Buscar un lead por contacto (telefono/email) y sucursal
+  async findByContact(params: { branchId?: string | null; phone?: string | null; email?: string | null }) {
+    const { branchId, phone, email } = params
+    if (!phone && !email) return null
+
+    let query = supabase
+      .from('leads')
+      .select(`
+        *,
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        branch:branches(id, name)
+      `)
+
+    if (branchId) {
+      query = query.eq('branch_id', branchId)
+    }
+
+    if (phone && email) {
+      query = query.or(`phone.eq.${phone},email.eq.${email}`)
+    } else if (phone) {
+      query = query.eq('phone', phone)
+    } else if (email) {
+      query = query.eq('email', email)
+    }
+
+    const { data, error } = await query.limit(1)
+    if (error) throw error
+    return (data?.[0] as Lead) || null
+  },
   // Obtener todos los leads
   async getAll(filters?: {
     assignedTo?: string

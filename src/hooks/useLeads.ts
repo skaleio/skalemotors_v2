@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
 import { leadService } from '@/lib/services/leads'
 import type { Database } from '@/lib/types/database'
+import { useQuery } from '@tanstack/react-query'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 
@@ -15,50 +15,32 @@ interface UseLeadsOptions {
 
 export function useLeads(options: UseLeadsOptions = {}) {
   const { assignedTo, branchId, status, source, search, enabled = true } = options
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
 
-  useEffect(() => {
-    if (!enabled) {
-      setLoading(false)
-      return
-    }
+  const queryKey = ['leads', branchId, assignedTo, status, source, search]
 
-    const fetchLeads = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const data = await leadService.getAll({
-          assignedTo,
-          branchId,
-          status,
-          source,
-          search
-        })
-        setLeads(data)
-      } catch (err) {
-        setError(err as Error)
-        console.error('Error fetching leads:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const { data: leads = [], isLoading: loading, error, refetch } = useQuery({
+    queryKey,
+    queryFn: () =>
+      leadService.getAll({
+        assignedTo,
+        branchId,
+        status,
+        source,
+        search,
+      }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: 2,
+  })
 
-    fetchLeads()
-  }, [assignedTo, branchId, status, source, search, enabled])
-
-  return { 
-    leads, 
-    loading, 
-    error, 
-    refetch: () => {
-      setLoading(true)
-      leadService.getAll({ assignedTo, branchId, status, source, search })
-        .then(setLeads)
-        .catch(setError)
-        .finally(() => setLoading(false))
-    }
+  return {
+    leads: leads as Lead[],
+    loading,
+    error: error as Error | null,
+    refetch,
   }
 }
 

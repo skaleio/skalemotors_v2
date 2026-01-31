@@ -1,10 +1,10 @@
 import { useMemo, lazy, Suspense } from "react";
-import { 
-  Car, 
-  DollarSign, 
-  TrendingUp, 
-  Clock, 
-  Package, 
+import {
+  Car,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  Package,
   BarChart3,
   PieChart,
   Calendar,
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
+import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { formatCLP } from "@/lib/format";
 import {
   BarChart,
@@ -58,8 +59,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }}></span>
             <span>{entry.name}: </span>
             <span className="font-semibold">
-              {typeof entry.value === 'number' && entry.name.toLowerCase().includes('valor') || entry.name.toLowerCase().includes('costo') || entry.name.toLowerCase().includes('margen') 
-                ? formatCLP(entry.value) 
+              {typeof entry.value === 'number' && entry.name.toLowerCase().includes('valor') || entry.name.toLowerCase().includes('costo') || entry.name.toLowerCase().includes('margen')
+                ? formatCLP(entry.value)
                 : entry.value}
             </span>
           </p>
@@ -73,6 +74,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AdvancedInventory() {
   const { user } = useAuth();
   const { vehicles, loading } = useVehicles({
+    branchId: user?.branch_id ?? undefined,
+    enabled: !!user,
+  });
+
+  const { consignaciones, loading: loadingConsignaciones } = useConsignaciones({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
@@ -203,7 +209,7 @@ export default function AdvancedInventory() {
       const totalValue = categoryVehicles.reduce((sum, v) => sum + Number(v.price || 0), 0);
       const totalCost = categoryVehicles.reduce((sum, v) => sum + Number(v.cost || 0), 0);
       const margin = totalValue - totalCost;
-      
+
       return {
         name: category === 'nuevo' ? 'Nuevo' :
               category === 'usado' ? 'Usado' :
@@ -234,6 +240,81 @@ export default function AdvancedInventory() {
       }).length
     }));
   }, [vehicles]);
+
+  // Métricas de consignaciones
+  const consignacionesMetrics = useMemo(() => {
+    if (!consignaciones.length) {
+      return {
+        total: 0,
+        totalConsignacionValue: 0,
+        totalSaleValue: 0,
+        totalMargin: 0,
+        avgMargin: 0,
+        byStatus: {} as Record<string, number>,
+        byLabel: {} as Record<string, number>,
+        enVenta: 0,
+        negociando: 0,
+      };
+    }
+
+    const total = consignaciones.length;
+    const totalConsignacionValue = consignaciones.reduce(
+      (sum, c) => sum + (Number(c.consignacion_price) || 0),
+      0
+    );
+    const totalSaleValue = consignaciones.reduce(
+      (sum, c) => sum + (Number(c.sale_price) || 0),
+      0
+    );
+    const totalMargin = totalSaleValue - totalConsignacionValue;
+    const avgMargin = total > 0 ? totalMargin / total : 0;
+
+    const byStatus = consignaciones.reduce((acc, c) => {
+      acc[c.status] = (acc[c.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const byLabel = consignaciones.reduce((acc, c) => {
+      const label = c.label || "sin_etiqueta";
+      acc[label] = (acc[label] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      total,
+      totalConsignacionValue,
+      totalSaleValue,
+      totalMargin,
+      avgMargin,
+      byStatus,
+      byLabel,
+      enVenta: byStatus.en_venta || 0,
+      negociando: byStatus.negociando || 0,
+    };
+  }, [consignaciones]);
+
+  // Datos para gráficos de consignaciones
+  const consignacionesStatusChartData = useMemo(() => {
+    const statusLabels: Record<string, string> = {
+      nuevo: "Nuevo",
+      en_revision: "En revisión",
+      en_venta: "En venta",
+      negociando: "Negociando",
+      vendido: "Vendido",
+      devuelto: "Devuelto",
+    };
+
+    return Object.entries(consignacionesMetrics.byStatus).map(([status, count]) => ({
+      name: statusLabels[status] || status,
+      value: count,
+      color: status === "en_venta" ? "#10b981" :
+             status === "negociando" ? "#f59e0b" :
+             status === "vendido" ? "#3b82f6" :
+             status === "nuevo" ? "#0ea5e9" :
+             status === "en_revision" ? "#8b5cf6" :
+             "#ef4444"
+    }));
+  }, [consignacionesMetrics.byStatus]);
 
   // Componente de skeleton para KPI cards
   const KPISkeleton = () => (
@@ -386,9 +467,9 @@ export default function AdvancedInventory() {
                     ))}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36} 
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
                     iconType="circle"
                     formatter={(value) => <span className="text-sm text-muted-foreground ml-1">{value}</span>}
                   />
@@ -421,17 +502,17 @@ export default function AdvancedInventory() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={categoryChartData} barSize={40}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#6b7280', fontSize: 12 }} 
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
                     dy={10}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#6b7280', fontSize: 12 }} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
                   />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -481,11 +562,11 @@ export default function AdvancedInventory() {
                 <BarChart data={makeChartData} layout="vertical" barSize={20}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
                   <XAxis type="number" axisLine={false} tickLine={false} hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={100} 
-                    axisLine={false} 
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={100}
+                    axisLine={false}
                     tickLine={false}
                     tick={{ fill: '#6b7280', fontSize: 12 }}
                   />
@@ -526,28 +607,28 @@ export default function AdvancedInventory() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
                     tick={{ fill: '#6b7280', fontSize: 10 }}
                     interval={0}
                     angle={-15}
                     textAnchor="end"
                     height={60}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#6b7280', fontSize: 12 }} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area 
-                    type="monotone" 
-                    dataKey="cantidad" 
-                    stroke={COLORS.secondary} 
-                    fillOpacity={1} 
-                    fill="url(#colorPrecio)" 
+                  <Area
+                    type="monotone"
+                    dataKey="cantidad"
+                    stroke={COLORS.secondary}
+                    fillOpacity={1}
+                    fill="url(#colorPrecio)"
                     strokeWidth={2}
                   />
                 </AreaChart>
@@ -585,23 +666,23 @@ export default function AdvancedInventory() {
             <ResponsiveContainer width="100%" height={350}>
               <BarChart data={valueByCategory} barGap={0} barSize={30}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#6b7280', fontSize: 12 }} 
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12 }}
                   tickFormatter={(value) => `$${(value/1000000).toFixed(0)}M`}
                 />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                <Legend 
-                  verticalAlign="top" 
-                  height={36} 
+                <Legend
+                  verticalAlign="top"
+                  height={36}
                   iconType="circle"
                   wrapperStyle={{ paddingBottom: '20px' }}
                 />
@@ -668,8 +749,8 @@ export default function AdvancedInventory() {
                       </div>
                     </div>
                     <Badge variant="outline" className={`
-                      ${vehicle.status === 'disponible' ? 'bg-green-50 text-green-700 border-green-200' : 
-                        vehicle.status === 'reservado' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                      ${vehicle.status === 'disponible' ? 'bg-green-50 text-green-700 border-green-200' :
+                        vehicle.status === 'reservado' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                         'bg-slate-50 text-slate-700 border-slate-200'}
                     `}>
                       {vehicle.status === 'disponible' ? 'Disponible' :
@@ -683,6 +764,196 @@ export default function AdvancedInventory() {
           </CardContent>
         </Card>
       )}
+
+      {/* Sección de Consignaciones */}
+      <div className="border-t pt-8 mt-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold tracking-tight mb-2">Métricas de Consignaciones</h2>
+          <p className="text-muted-foreground">
+            Análisis detallado de vehículos y clientes consignados
+          </p>
+        </div>
+
+        {/* KPI Cards Consignaciones */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          {loadingConsignaciones ? (
+            <>
+              <KPISkeleton />
+              <KPISkeleton />
+              <KPISkeleton />
+              <KPISkeleton />
+            </>
+          ) : (
+            <>
+              <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-yellow-500">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Consignaciones</CardTitle>
+                  <div className="p-2 bg-yellow-100 rounded-full">
+                    <Package className="h-4 w-4 text-yellow-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{consignacionesMetrics.total}</div>
+                  <p className="text-xs text-muted-foreground">
+                    registradas
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-blue-500">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Valor Consignación</CardTitle>
+                  <div className="p-2 bg-blue-100 rounded-full">
+                    <DollarSign className="h-4 w-4 text-blue-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCLP(consignacionesMetrics.totalConsignacionValue)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    precio de consignación
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-green-500">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Valor Venta</CardTitle>
+                  <div className="p-2 bg-green-100 rounded-full">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCLP(consignacionesMetrics.totalSaleValue)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    precio de venta total
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-emerald-500">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Margen Proyectado</CardTitle>
+                  <div className="p-2 bg-emerald-100 rounded-full">
+                    <BarChart3 className="h-4 w-4 text-emerald-600" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-600">
+                    {formatCLP(consignacionesMetrics.totalMargin)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    margen estimado
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+
+        {/* Gráficos de Consignaciones */}
+        {!loadingConsignaciones && consignacionesMetrics.total > 0 && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Distribución por Estado */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-primary" />
+                  Consignaciones por Estado
+                </CardTitle>
+                <CardDescription>
+                  Distribución de consignaciones según su estado actual
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {consignacionesStatusChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={consignacionesStatusChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {consignacionesStatusChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={36}
+                        iconType="circle"
+                        formatter={(value) => <span className="text-sm text-muted-foreground ml-1">{value}</span>}
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos para mostrar</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Resumen de Consignaciones */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Resumen de Consignaciones
+                </CardTitle>
+                <CardDescription>
+                  Métricas clave y distribución por estado
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-sm text-muted-foreground mb-1">En Venta</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {consignacionesMetrics.enVenta}
+                      </div>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-sm text-muted-foreground mb-1">Negociando</div>
+                      <div className="text-2xl font-bold text-amber-600">
+                        {consignacionesMetrics.negociando}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {Object.entries(consignacionesMetrics.byStatus).map(([status, count]) => {
+                      const statusLabels: Record<string, string> = {
+                        nuevo: "Nuevo",
+                        en_revision: "En revisión",
+                        en_venta: "En venta",
+                        negociando: "Negociando",
+                        vendido: "Vendido",
+                        devuelto: "Devuelto",
+                      };
+                      return (
+                        <div key={status} className="flex justify-between items-center p-2 rounded hover:bg-slate-50">
+                          <span className="text-sm font-medium text-slate-600">
+                            {statusLabels[status] || status}
+                          </span>
+                          <Badge variant="secondary" className="font-mono">{count}</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
 
       {/* Resumen de métricas */}
       <div className="grid gap-4 md:grid-cols-3">

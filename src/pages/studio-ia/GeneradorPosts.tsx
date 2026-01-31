@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Sparkles, Copy, Download, RefreshCw, CheckCircle2, Hash } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface PostData {
   platform: string;
@@ -39,31 +39,20 @@ export default function GeneradorPosts() {
 
   const handleGenerate = async () => {
     if (!formData.topic.trim()) {
-      toast({
-        title: "Campo requerido",
-        description: "Por favor, ingresa el tema del post.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, ingresa el tema del post.");
       return;
     }
 
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       const post = generatePostMock(formData);
       setGeneratedPost(post);
-      
-      toast({
-        title: "Post generado",
-        description: "Tu post está listo para publicar.",
-      });
+
+      toast.success("Tu post está listo para publicar.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo generar el post. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo generar el post. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -130,10 +119,7 @@ export default function GeneradorPosts() {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedPost);
-    toast({
-      title: "Copiado",
-      description: "El post ha sido copiado al portapapeles.",
-    });
+    toast.success("El post ha sido copiado al portapapeles.");
   };
 
   const handleDownload = () => {
@@ -146,11 +132,8 @@ export default function GeneradorPosts() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Descargado",
-      description: "El post ha sido descargado exitosamente.",
-    });
+
+    toast.success("El post ha sido descargado exitosamente.");
   };
 
   const handleReset = () => {
@@ -274,8 +257,8 @@ export default function GeneradorPosts() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={loading || !formData.topic.trim()}
                 className="flex-1 bg-blue-600 hover:bg-blue-700"
               >
@@ -292,8 +275,8 @@ export default function GeneradorPosts() {
                 )}
               </Button>
               {generatedPost && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />

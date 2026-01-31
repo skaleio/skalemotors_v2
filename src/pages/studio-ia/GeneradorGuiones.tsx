@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Video, Sparkles, Copy, Download, RefreshCw, CheckCircle2, Clock, TrendingUp } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface ScriptData {
   topic: string;
@@ -41,11 +41,7 @@ export default function GeneradorGuiones() {
 
   const handleGenerate = async () => {
     if (!formData.topic.trim()) {
-      toast({
-        title: "Campo requerido",
-        description: "Por favor, ingresa el tema del reel.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, ingresa el tema del reel.");
       return;
     }
 
@@ -54,20 +50,13 @@ export default function GeneradorGuiones() {
       // Simulación de generación de guión
       // En producción, aquí se conectaría con un proveedor de IA real
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       const script = generateReelScript(formData);
       setGeneratedScript(script);
-      
-      toast({
-        title: "Guión generado",
-        description: "Tu guión para reel está listo.",
-      });
+
+      toast.success("Tu guión para reel está listo.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo generar el guión. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo generar el guión. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -124,7 +113,7 @@ export default function GeneradorGuiones() {
 
     // CONTENIDO PRINCIPAL
     script += `🎯 CONTENIDO PRINCIPAL (3-${parseInt(data.duration) - 3} segundos)\n\n`;
-    
+
     if (data.style === "educational") {
       script += `Hoy te explico ${data.topic}:\n\n`;
       if (keyPointsList.length > 0) {
@@ -167,7 +156,7 @@ export default function GeneradorGuiones() {
     script += `• Textos en pantalla: Agrega subtítulos para cada punto clave\n`;
     script += `• Transiciones: Usa cortes rápidos cada 2-3 segundos\n`;
     script += `• Hashtags sugeridos: #${data.topic.replace(/\s+/g, '').toLowerCase()} #automotriz #vehiculos\n`;
-    
+
     if (data.platform === "instagram") {
       script += `• Formato: Vertical (9:16)\n`;
       script += `• Duración ideal: 15-30 segundos\n`;
@@ -190,10 +179,7 @@ export default function GeneradorGuiones() {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedScript);
-    toast({
-      title: "Copiado",
-      description: "El guión ha sido copiado al portapapeles.",
-    });
+    toast.success("El guión ha sido copiado al portapapeles.");
   };
 
   const handleDownload = () => {
@@ -206,11 +192,8 @@ export default function GeneradorGuiones() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Descargado",
-      description: "El guión ha sido descargado exitosamente.",
-    });
+
+    toast.success("El guión ha sido descargado exitosamente.");
   };
 
   const handleReset = () => {
@@ -357,8 +340,8 @@ export default function GeneradorGuiones() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={loading || !formData.topic.trim()}
                 className="flex-1 bg-blue-600 hover:bg-blue-700"
               >
@@ -375,8 +358,8 @@ export default function GeneradorGuiones() {
                 )}
               </Button>
               {generatedScript && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />

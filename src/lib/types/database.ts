@@ -184,6 +184,79 @@ export interface Database {
           updated_at?: string
         }
       }
+      consignaciones: {
+        Row: {
+          id: string
+          branch_id: string | null
+          lead_id: string | null
+          vehicle_id: string | null
+          owner_name: string
+          owner_phone: string | null
+          owner_email: string | null
+          vehicle_make: string | null
+          vehicle_model: string | null
+          vehicle_year: number | null
+          vehicle_vin: string | null
+          vehicle_km: number | null
+          label: string | null
+          status: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
+          notes: string | null
+          created_by: string | null
+          meeting_at: string | null
+          consignacion_price: number | null
+          sale_price: number | null
+          fecha: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          lead_id?: string | null
+          vehicle_id?: string | null
+          owner_name: string
+          owner_phone?: string | null
+          owner_email?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vehicle_vin?: string | null
+          vehicle_km?: number | null
+          label?: string | null
+          status?: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
+          notes?: string | null
+          created_by?: string | null
+          meeting_at?: string | null
+          consignacion_price?: number | null
+          sale_price?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          lead_id?: string | null
+          vehicle_id?: string | null
+          owner_name?: string
+          owner_phone?: string | null
+          owner_email?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vehicle_vin?: string | null
+          vehicle_km?: number | null
+          label?: string | null
+          status?: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
+          notes?: string | null
+          created_by?: string | null
+          meeting_at?: string | null
+          consignacion_price?: number | null
+          sale_price?: number | null
+          fecha?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       leads: {
         Row: {
           id: string

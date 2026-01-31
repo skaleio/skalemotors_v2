@@ -7,6 +7,20 @@ export const formatCLP = (amount: number): string => {
   }).format(amount);
 };
 
+export const sanitizeIntegerInput = (value: string): string => {
+  return value.replace(/\D/g, "");
+};
+
+export const sanitizeDecimalInput = (value: string): string => {
+  const cleaned = value.replace(/[^\d.,]/g, "");
+  const normalized = cleaned.replace(/,/g, ".");
+  const parts = normalized.split(".");
+  if (parts.length <= 1) {
+    return normalized;
+  }
+  return `${parts[0]}.${parts.slice(1).join("")}`;
+};
+
 export const formatPhone = (phone: string): string => {
   if (phone.startsWith("+56")) {
     const number = phone.slice(3);

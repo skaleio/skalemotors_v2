@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, supabaseAnonKey, supabaseUrl } from '../supabase'
 import type { Database } from '../types/database'
 
 type Vehicle = Database['public']['Tables']['vehicles']['Row']
@@ -55,57 +55,90 @@ export const vehicleService = {
   },
 
   // Crear un nuevo vehículo
-  async create(vehicle: VehicleInsert) {
+  async create(vehicle: VehicleInsert, options?: { accessToken?: string }) {
     // Limpiar campos undefined
     const cleanVehicle = Object.fromEntries(
       Object.entries(vehicle).filter(([_, v]) => v !== undefined)
     ) as VehicleInsert;
-    
+
     console.log("📤 Insertando vehículo...");
     console.log("📤 Datos:", JSON.stringify(cleanVehicle, null, 2));
-    
-    // Verificar sesión
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
-      console.error("❌ Error de sesión:", sessionError);
-      throw new Error("No hay sesión activa. Por favor, inicia sesión nuevamente.");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Faltan variables de entorno de Supabase');
     }
-    
-    // Usar el cliente de Supabase directamente (más confiable que fetch)
-    const { data, error } = await supabase
-      .from('vehicles')
-      .insert(cleanVehicle)
-      .select('*, branches(name, city, region)')
-      .single();
-    
-    if (error) {
-      console.error("❌ Error creando vehículo:", error);
-      console.error("❌ Detalles:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
+
+    const accessToken =
+      options?.accessToken ||
+      (await supabase.auth.getSession()).data?.session?.access_token;
+    if (!accessToken) {
+      throw new Error('No hay sesión activa. Por favor, inicia sesión nuevamente.');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${supabaseUrl}/rest/v1/vehicles`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation'
+        },
+        body: JSON.stringify(cleanVehicle),
+        signal: controller.signal
       });
-      
-      // Mensaje de error más amigable
-      let errorMessage = "Error al crear el vehículo";
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        console.warn('⚠️ Timeout en POST /vehicles, verificando si se creó...');
+        const existing = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('vin', cleanVehicle.vin)
+          .maybeSingle();
+        if (existing?.data) {
+          console.log('✅ Vehículo encontrado tras timeout:', existing.data.id);
+          return existing.data as Vehicle;
+        }
+        throw new Error('Timeout creando vehículo');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null);
+      const message = errorBody?.message || errorBody?.error || response.statusText;
+      const error = {
+        message,
+        code: errorBody?.code,
+        details: errorBody?.details,
+        hint: errorBody?.hint
+      };
+      console.error('❌ Error creando vehículo:', error);
+      let errorMessage = 'Error al crear el vehículo';
       if (error.code === '23505') {
-        errorMessage = "Ya existe un vehículo con este VIN";
+        errorMessage = 'Ya existe un vehículo con este VIN';
       } else if (error.code === '42501') {
-        errorMessage = "No tienes permisos para crear vehículos. Contacta al administrador.";
+        errorMessage = 'No tienes permisos para crear vehículos. Contacta al administrador.';
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
       throw new Error(errorMessage);
     }
-    
-    if (!data) {
-      throw new Error("No se recibió respuesta válida del servidor");
+
+    const data = await response.json();
+    const created = Array.isArray(data) ? data[0] : data;
+    if (!created) {
+      throw new Error('No se recibió respuesta válida del servidor');
     }
-    
-    console.log("✅ Vehículo creado exitosamente:", data.id);
-    return data as Vehicle;
+
+    console.log("✅ Vehículo creado exitosamente:", created.id);
+    return created as Vehicle;
   },
 
   // Actualizar un vehículo

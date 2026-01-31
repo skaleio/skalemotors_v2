@@ -1,66 +1,70 @@
-import { Toaster } from "@/components/ui/toaster";
+import DashboardLoader from "@/components/DashboardLoader";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ChatProvider } from "@/contexts/ChatContext";
-import ProtectedRoute from "@/components/ProtectedRoute";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Layout } from "@/components/Layout";
-import Dashboard from "./pages/Dashboard";
-import ExecutiveDashboard from "./pages/ExecutiveDashboard";
-import CRM from "./pages/CRM";
-import Leads from "./pages/Leads";
-import LeadsBoard from "./pages/LeadsBoard";
-import SalesManagement from "./pages/SalesManagement";
-import VendorManagement from "./pages/VendorManagement";
-import Inventory from "./pages/Inventory";
-import Appointments from "./pages/Appointments";
-import Quotes from "./pages/Quotes";
-import Finance from "./pages/Finance";
-import FinancialTracking from "./pages/FinancialTracking";
-import FinancialCalculator from "./pages/FinancialCalculator";
-import Billing from "./pages/Billing";
-import PostSaleCRM from "./pages/PostSaleCRM";
-import AdvancedInventory from "./pages/AdvancedInventory";
-import TradeIn from "./pages/TradeIn";
-import Deliveries from "./pages/Deliveries";
-import Listings from "./pages/Listings";
-import Messages from "./pages/Messages";
-import WebsiteBuilder from "./pages/WebsiteBuilder";
-import Reports from "./pages/Reports";
-import Alerts from "./pages/Alerts";
-import StudioIA from "./pages/StudioIA";
-import GeneradorPosts from "./pages/studio-ia/GeneradorPosts";
-import DescripcionesVehiculos from "./pages/studio-ia/DescripcionesVehiculos";
-import ScriptsLlamadas from "./pages/studio-ia/ScriptsLlamadas";
-import GeneradorGuiones from "./pages/studio-ia/GeneradorGuiones";
-import SEOAutomotriz from "./pages/studio-ia/SEOAutomotriz";
-import FacebookAds from "./pages/studio-ia/FacebookAds";
-import GoogleAds from "./pages/studio-ia/GoogleAds";
-import OptimizadorImagenes from "./pages/studio-ia/OptimizadorImagenes";
-import GeneradorLogos from "./pages/studio-ia/GeneradorLogos";
-import ConstructorAgentes from "./pages/studio-ia/ConstructorAgentes";
-import OptimizadorPrecios from "./pages/studio-ia/OptimizadorPrecios";
-import IdentidadMarca from "./pages/studio-ia/IdentidadMarca";
-import EmailMarketing from "./pages/studio-ia/EmailMarketing";
-import AnalisisClientes from "./pages/studio-ia/AnalisisClientes";
-import ChatbotAutomotora from "./pages/studio-ia/ChatbotAutomotora";
-import ScriptsVideos from "./pages/studio-ia/ScriptsVideos";
-import Settings from "./pages/Settings";
-import Integrations from "./pages/Integrations";
-import Users from "./pages/Users";
-import Calls from "./pages/Calls";
-import Profile from "./pages/Profile";
-import Loyalty from "./pages/Loyalty";
-import NotFound from "./pages/NotFound";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import Onboarding from "./pages/Onboarding";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
+const CRM = lazy(() => import("./pages/CRM"));
+const Leads = lazy(() => import("./pages/Leads"));
+const LeadsBoard = lazy(() => import("./pages/LeadsBoard"));
+const SalesManagement = lazy(() => import("./pages/SalesManagement"));
+const VendorManagement = lazy(() => import("./pages/VendorManagement"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const Consignaciones = lazy(() => import("./pages/Consignaciones"));
+const Appointments = lazy(() => import("./pages/Appointments"));
+const Quotes = lazy(() => import("./pages/Quotes"));
+const Finance = lazy(() => import("./pages/Finance"));
+const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
+const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
+const Billing = lazy(() => import("./pages/Billing"));
+const PostSaleCRM = lazy(() => import("./pages/PostSaleCRM"));
+const AdvancedInventory = lazy(() => import("./pages/AdvancedInventory"));
+const TradeIn = lazy(() => import("./pages/TradeIn"));
+const Deliveries = lazy(() => import("./pages/Deliveries"));
+const Listings = lazy(() => import("./pages/Listings"));
+const Messages = lazy(() => import("./pages/Messages"));
+const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const StudioIA = lazy(() => import("./pages/StudioIA"));
+const GeneradorPosts = lazy(() => import("./pages/studio-ia/GeneradorPosts"));
+const DescripcionesVehiculos = lazy(() => import("./pages/studio-ia/DescripcionesVehiculos"));
+const ScriptsLlamadas = lazy(() => import("./pages/studio-ia/ScriptsLlamadas"));
+const GeneradorGuiones = lazy(() => import("./pages/studio-ia/GeneradorGuiones"));
+const SEOAutomotriz = lazy(() => import("./pages/studio-ia/SEOAutomotriz"));
+const FacebookAds = lazy(() => import("./pages/studio-ia/FacebookAds"));
+const GoogleAds = lazy(() => import("./pages/studio-ia/GoogleAds"));
+const OptimizadorImagenes = lazy(() => import("./pages/studio-ia/OptimizadorImagenes"));
+const GeneradorLogos = lazy(() => import("./pages/studio-ia/GeneradorLogos"));
+const ConstructorAgentes = lazy(() => import("./pages/studio-ia/ConstructorAgentes"));
+const OptimizadorPrecios = lazy(() => import("./pages/studio-ia/OptimizadorPrecios"));
+const IdentidadMarca = lazy(() => import("./pages/studio-ia/IdentidadMarca"));
+const EmailMarketing = lazy(() => import("./pages/studio-ia/EmailMarketing"));
+const AnalisisClientes = lazy(() => import("./pages/studio-ia/AnalisisClientes"));
+const ChatbotAutomotora = lazy(() => import("./pages/studio-ia/ChatbotAutomotora"));
+const ScriptsVideos = lazy(() => import("./pages/studio-ia/ScriptsVideos"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Integrations = lazy(() => import("./pages/Integrations"));
+const Users = lazy(() => import("./pages/Users"));
+const Calls = lazy(() => import("./pages/Calls"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Loyalty = lazy(() => import("./pages/Loyalty"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,7 +85,8 @@ const App = () => (
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <BrowserRouter>
+          <BrowserRouter>
+            <Suspense fallback={<DashboardLoader message="Cargando..." />}>
             <Routes>
               {/* Rutas públicas */}
               <Route path="/" element={<Landing />} />
@@ -90,7 +95,7 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/onboarding" element={<Onboarding />} />
-              
+
               {/* Rutas protegidas */}
               <Route path="/app" element={
                 <ProtectedRoute>
@@ -145,6 +150,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Inventory />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/consignaciones" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Consignaciones />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -415,6 +427,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
             </Routes>
+            </Suspense>
           </BrowserRouter>
           </TooltipProvider>
         </ChatProvider>

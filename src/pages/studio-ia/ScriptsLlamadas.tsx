@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Phone, Sparkles, Copy, Download, RefreshCw, CheckCircle2, MessageSquare } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface ScriptData {
   type: string;
@@ -39,31 +39,20 @@ export default function ScriptsLlamadas() {
 
   const handleGenerate = async () => {
     if (!formData.purpose.trim()) {
-      toast({
-        title: "Campo requerido",
-        description: "Por favor, ingresa el propósito de la llamada.",
-        variant: "destructive"
-      });
+      toast.error("Por favor, ingresa el propósito de la llamada.");
       return;
     }
 
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       const script = generateScriptMock(formData);
       setGeneratedScript(script);
-      
-      toast({
-        title: "Script generado",
-        description: "Tu script de llamada está listo.",
-      });
+
+      toast.success("Tu script de llamada está listo.");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo generar el script. Por favor, intenta nuevamente.",
-        variant: "destructive"
-      });
+      toast.error("No se pudo generar el script. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -150,10 +139,7 @@ export default function ScriptsLlamadas() {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedScript);
-    toast({
-      title: "Copiado",
-      description: "El script ha sido copiado al portapapeles.",
-    });
+    toast.success("El script ha sido copiado al portapapeles.");
   };
 
   const handleDownload = () => {
@@ -166,11 +152,8 @@ export default function ScriptsLlamadas() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Descargado",
-      description: "El script ha sido descargado exitosamente.",
-    });
+
+    toast.success("El script ha sido descargado exitosamente.");
   };
 
   const handleReset = () => {
@@ -297,8 +280,8 @@ export default function ScriptsLlamadas() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={loading || !formData.purpose.trim()}
                 className="flex-1 bg-green-600 hover:bg-green-700"
               >
@@ -315,8 +298,8 @@ export default function ScriptsLlamadas() {
                 )}
               </Button>
               {generatedScript && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleReset}
                 >
                   <RefreshCw className="h-4 w-4" />

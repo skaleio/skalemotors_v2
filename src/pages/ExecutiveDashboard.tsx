@@ -1,10 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import DashboardLoader from "@/components/DashboardLoader";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, DollarSign, Car, Users, BarChart3, PieChart as PieChartIcon, Loader2, Calendar, Trophy, ArrowUpRight } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
-import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { ArrowUpRight, BarChart3, Calendar, Car, DollarSign, PieChart as PieChartIcon, TrendingUp, Trophy, Users } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function ExecutiveDashboard() {
   const { user } = useAuth();
@@ -17,14 +18,7 @@ export default function ExecutiveDashboard() {
   console.log('📊 ExecutiveDashboard - error:', error);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Cargando estadísticas ejecutivas...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoader message="Cargando estadísticas ejecutivas" />;
   }
 
   if (error) {
@@ -38,7 +32,7 @@ export default function ExecutiveDashboard() {
     );
   }
 
-  const conversionRate = stats?.activeLeads && stats?.salesThisMonth 
+  const conversionRate = stats?.activeLeads && stats?.salesThisMonth
     ? ((stats.salesThisMonth / stats.activeLeads) * 100).toFixed(1)
     : '0';
 
@@ -61,7 +55,7 @@ export default function ExecutiveDashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard Ejecutivo</h1>
         <p className="text-muted-foreground mt-2">
@@ -142,19 +136,19 @@ export default function ExecutiveDashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={{ stroke: 'hsl(var(--border))' }}
                   />
-                  <YAxis 
+                  <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -167,20 +161,20 @@ export default function ExecutiveDashboard() {
                     }}
                     labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sales" 
-                    stroke="#3b82f6" 
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#3b82f6"
                     strokeWidth={3}
                     dot={{ fill: '#3b82f6', r: 4, strokeWidth: 3, stroke: '#fff' }}
                     activeDot={{ r: 6, strokeWidth: 3, stroke: '#fff' }}
                     fill="url(#colorSalesExec)"
                     name="Ventas"
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="revenue" 
-                    stroke="#10b981" 
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#10b981"
                     strokeWidth={2}
                     dot={{ fill: '#10b981', r: 3, strokeWidth: 2, stroke: '#fff' }}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
@@ -229,11 +223,11 @@ export default function ExecutiveDashboard() {
                       const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
                       const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
                       return (
-                        <text 
-                          x={x} 
-                          y={y} 
-                          fill="white" 
-                          textAnchor={x > cx ? 'start' : 'end'} 
+                        <text
+                          x={x}
+                          y={y}
+                          fill="white"
+                          textAnchor={x > cx ? 'start' : 'end'}
                           dominantBaseline="central"
                           className="text-xs font-bold"
                         >
@@ -247,16 +241,16 @@ export default function ExecutiveDashboard() {
                     paddingAngle={3}
                   >
                     {stats.vehiclesByCategory.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
+                      <Cell
+                        key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
                         stroke="hsl(var(--background))"
                         strokeWidth={3}
                       />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -264,7 +258,7 @@ export default function ExecutiveDashboard() {
                       padding: '12px'
                     }}
                   />
-                  <Legend 
+                  <Legend
                     verticalAlign="bottom"
                     height={36}
                     iconType="circle"
@@ -302,7 +296,7 @@ export default function ExecutiveDashboard() {
           <CardContent className="pt-6">
             {stats?.leadsByStatus && stats.leadsByStatus.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart 
+                <BarChart
                   data={stats.leadsByStatus.map(item => ({
                     ...item,
                     name: statusLabels[item.status] || item.status
@@ -316,8 +310,8 @@ export default function ExecutiveDashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
+                  <XAxis
+                    dataKey="name"
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 500 }}
                     angle={-45}
                     textAnchor="end"
@@ -325,13 +319,13 @@ export default function ExecutiveDashboard() {
                     tickLine={false}
                     axisLine={{ stroke: 'hsl(var(--border))' }}
                   />
-                  <YAxis 
+                  <YAxis
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
+                  <Tooltip
+                    contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
@@ -342,9 +336,9 @@ export default function ExecutiveDashboard() {
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.1 }}
                     labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
-                  <Bar 
-                    dataKey="count" 
-                    fill="url(#colorBarExec)" 
+                  <Bar
+                    dataKey="count"
+                    fill="url(#colorBarExec)"
                     radius={[8, 8, 0, 0]}
                     maxBarSize={50}
                   />
@@ -378,8 +372,8 @@ export default function ExecutiveDashboard() {
             {stats?.recentSales && stats.recentSales.length > 0 ? (
               <div className="space-y-3 max-h-[320px] overflow-y-auto">
                 {stats.recentSales.map((sale, index) => (
-                  <div 
-                    key={sale.id} 
+                  <div
+                    key={sale.id}
                     className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-green-500/30 hover:bg-green-50/30 dark:hover:bg-green-950/10 transition-all duration-200"
                   >
                     <div className="flex items-center gap-4">

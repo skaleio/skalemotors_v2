@@ -1,25 +1,25 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Bot, 
-  Save, 
-  Plus, 
-  Trash2, 
-  Clock,
-  MessageSquare,
-  AlertTriangle,
-  BookOpen,
-  Sparkles
-} from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { sanitizeIntegerInput } from '@/lib/format';
 import type { AIAgentConfig } from '@/lib/services/n8n';
+import {
+    AlertTriangle,
+    BookOpen,
+    Bot,
+    Clock,
+    MessageSquare,
+    Plus,
+    Save,
+    Trash2
+} from 'lucide-react';
+import { useState } from 'react';
 
 interface AIAgentBuilderProps {
   config: AIAgentConfig;
@@ -43,7 +43,7 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
 
   const addFAQ = () => {
     if (!newFAQ.question || !newFAQ.answer) return;
-    
+
     const faqs = [...(config.knowledge_base?.faqs || []), newFAQ];
     updateConfig({
       knowledge_base: {
@@ -66,7 +66,7 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
 
   const addAutoResponse = () => {
     if (!newAutoResponse.trigger || !newAutoResponse.response_template) return;
-    
+
     const rules = [...(config.auto_response_rules || []), newAutoResponse];
     updateConfig({ auto_response_rules: rules });
     setNewAutoResponse({ trigger: '', response_template: '', requires_human: false });
@@ -79,7 +79,7 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
 
   const addEscalationKeyword = () => {
     if (!newEscalationKeyword) return;
-    
+
     const keywords = [...(config.escalation_rules?.keywords || []), newEscalationKeyword];
     updateConfig({
       escalation_rules: {
@@ -284,7 +284,7 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
           {/* FAQs */}
           <div className="space-y-3">
             <Label>Preguntas Frecuentes (FAQs)</Label>
-            
+
             {config.knowledge_base?.faqs && config.knowledge_base.faqs.length > 0 && (
               <div className="space-y-2">
                 {config.knowledge_base.faqs.map((faq, index) => (
@@ -418,7 +418,7 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
             <p className="text-xs text-muted-foreground">
               Si el cliente menciona estas palabras, se notificará a un asesor
             </p>
-            
+
             {config.escalation_rules?.keywords && config.escalation_rules.keywords.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {config.escalation_rules.keywords.map((keyword, index) => (
@@ -454,14 +454,18 @@ export default function AIAgentBuilder({ config, onChange, onSave, saving }: AIA
             <Label htmlFor="inactive-hours">Tiempo de inactividad (horas)</Label>
             <Input
               id="inactive-hours"
-              type="number"
+              type="text"
+              inputMode="numeric"
               min="1"
               max="168"
-              value={config.escalation_rules?.inactive_hours || 24}
+              value={config.escalation_rules?.inactive_hours ?? ''}
               onChange={(e) => updateConfig({
                 escalation_rules: {
                   ...config.escalation_rules,
-                  inactive_hours: parseInt(e.target.value)
+                  inactive_hours: (() => {
+                    const cleaned = sanitizeIntegerInput(e.target.value);
+                    return cleaned ? parseInt(cleaned, 10) : undefined;
+                  })()
                 }
               })}
             />

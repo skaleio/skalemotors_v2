@@ -1,20 +1,46 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Users, Phone, Mail, Calendar } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLeads } from "@/hooks/useLeads";
+import type { Database } from "@/lib/types/database";
+import { memo, useMemo } from "react";
+
+type Lead = Database["public"]["Tables"]["leads"]["Row"];
+
+const LeadCard = memo(({ lead }: { lead: Lead }) => (
+  <div className="rounded-md border px-3 py-2 text-sm">
+    <div className="font-medium">
+      {lead.full_name || "Sin nombre"}
+    </div>
+    <div className="text-muted-foreground">
+      {lead.phone || "Sin telefono"}
+    </div>
+  </div>
+));
 
 export default function CRM() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
+  const { leads, loading } = useLeads({
+    branchId: user?.branch_id ?? undefined,
+    enabled: !!user,
+  });
+
+  const stages = useMemo(
+    () => [
+      { key: "nuevo", label: "Nuevo", statuses: ["nuevo"] },
+      { key: "contactado", label: "Contactado", statuses: ["contactado"] },
+      { key: "interesado", label: "Interesado", statuses: ["interesado"] },
+      { key: "cerrado", label: "Cerrado", statuses: ["vendido", "perdido"] },
+    ],
+    [],
+  );
+
+  const leadsByStage = useMemo(() => {
+    return stages.map((stage) => ({
+      ...stage,
+      leads: leads.filter((lead) => stage.statuses.includes(lead.status)),
+    }));
+  }, [leads, stages]);
 
   return (
     <div className="space-y-6">
@@ -25,61 +51,37 @@ export default function CRM() {
             Gestión de clientes y relaciones
           </p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Cliente
-        </Button>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar clientes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Clients Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Clientes
-          </CardTitle>
-          <CardDescription>
-            Lista de todos tus clientes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Última Interacción</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                  No hay clientes registrados
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-4">
+        {leadsByStage.map((stage) => (
+          <Card key={stage.key}>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="text-sm">{stage.label}</span>
+                <Badge variant="secondary">{stage.leads.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 min-h-[180px]">
+                {loading ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    Cargando leads...
+                  </p>
+                ) : stage.leads.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    No hay leads en esta etapa
+                  </p>
+                ) : (
+                  stage.leads.map((lead) => (
+                    <LeadCard key={lead.id} lead={lead} />
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

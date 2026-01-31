@@ -1,26 +1,27 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Workflow, 
-  Save, 
-  Plus, 
-  Trash2, 
-  Edit,
-  ArrowRight,
-  Zap,
-  MessageSquare,
-  UserPlus,
-  TrendingUp,
-  CheckCircle2
-} from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { sanitizeIntegerInput } from '@/lib/format';
 import type { AutomationRule } from '@/lib/services/n8n';
+import {
+    ArrowRight,
+    CheckCircle2,
+    Edit,
+    MessageSquare,
+    Plus,
+    Save,
+    Trash2,
+    TrendingUp,
+    UserPlus,
+    Workflow,
+    Zap
+} from 'lucide-react';
+import { useState } from 'react';
 
 interface AutomationRulesBuilderProps {
   rules: AutomationRule[];
@@ -29,11 +30,11 @@ interface AutomationRulesBuilderProps {
   saving: boolean;
 }
 
-export default function AutomationRulesBuilder({ 
-  rules, 
-  onChange, 
-  onSave, 
-  saving 
+export default function AutomationRulesBuilder({
+  rules,
+  onChange,
+  onSave,
+  saving
 }: AutomationRulesBuilderProps) {
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -72,7 +73,7 @@ export default function AutomationRulesBuilder({
   };
 
   const handleToggleRule = (ruleId: string) => {
-    onChange(rules.map(r => 
+    onChange(rules.map(r =>
       r.id === ruleId ? { ...r, enabled: !r.enabled } : r
     ));
   };
@@ -116,7 +117,7 @@ export default function AutomationRulesBuilder({
 
     setEditingRule({
       ...editingRule,
-      actions: editingRule.actions.map((action, i) => 
+      actions: editingRule.actions.map((action, i) =>
         i === index ? { ...action, ...updates } : action
       )
     });
@@ -219,15 +220,19 @@ export default function AutomationRulesBuilder({
                 <Label htmlFor="inactive-days">Días de inactividad</Label>
                 <Input
                   id="inactive-days"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   min="1"
                   placeholder="3"
-                  value={editingRule.trigger.conditions?.days || ''}
+                  value={editingRule.trigger.conditions?.days ?? ''}
                   onChange={(e) => setEditingRule({
                     ...editingRule,
                     trigger: {
                       ...editingRule.trigger,
-                      conditions: { days: parseInt(e.target.value) }
+                      conditions: (() => {
+                        const cleaned = sanitizeIntegerInput(e.target.value);
+                        return cleaned ? { days: parseInt(cleaned, 10) } : undefined;
+                      })()
                     }
                   })}
                 />
@@ -376,7 +381,7 @@ export default function AutomationRulesBuilder({
             <Button variant="outline" onClick={handleCancelEdit}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleSaveRule}
               disabled={!editingRule.name || editingRule.actions.length === 0}
             >
