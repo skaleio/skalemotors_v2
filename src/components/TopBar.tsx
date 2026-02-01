@@ -186,12 +186,18 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-16 flex items-center justify-between border-b bg-background px-6">
-      <div className="flex items-center gap-4">
-        <SidebarTrigger />
+    <header className="relative h-16 flex items-center justify-between border-b bg-background px-3 md:px-6">
+      <div className="flex items-center gap-2 md:gap-4 min-w-0">
+        <SidebarTrigger className="h-8 w-8 relative z-10" />
+        <button
+          onClick={() => navigate('/app')}
+          className="skale-logo text-sm md:hidden"
+        >
+          SKALEMOTORS
+        </button>
         
         {/* Search Bar */}
-        <div ref={searchRef} className="relative max-w-md w-full">
+        <div ref={searchRef} className="relative w-full max-w-[200px] md:max-w-md">
           <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${
             theme === 'dark' ? 'text-slate-400' : 'text-muted-foreground'
           }`} />
@@ -269,7 +275,7 @@ export function TopBar() {
       </div>
 
       {/* Logo centrado */}
-      <div className="absolute left-1/2 transform -translate-x-1/2">
+      <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
         <button 
           onClick={() => navigate('/app')}
           className="skale-logo animate-pulse cursor-pointer hover:opacity-80 transition-opacity"
@@ -278,18 +284,19 @@ export function TopBar() {
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
 
         {/* Quick Actions Menu - Oculto en Dashboard Principal */}
         {!isDashboardPrincipal && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0">
-                <Command className="h-4 w-4 mr-2" />
-                Acción Rápida
-              </Button>
-            </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80 p-0 border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
+          <div className="hidden md:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0">
+                  <Command className="h-4 w-4 mr-2" />
+                  Acción Rápida
+                </Button>
+              </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80 p-0 border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
             <div className="p-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 text-sm">Acciones Rápidas</h3>
               <p className="text-xs text-gray-500 mt-1">Accede rápidamente a las funciones más utilizadas</p>
@@ -432,8 +439,9 @@ export function TopBar() {
                 </button>
               </div>
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          </div>
         )}
 
 
