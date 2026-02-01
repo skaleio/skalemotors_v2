@@ -38,14 +38,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const AUTH_LOADING_TIMEOUT_MS = 12 * 1000; // evita loading infinito
   const SESSION_STORAGE_KEY = "skale.session_start";
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    let timeoutId: number | null = null;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        reject(new Error("Timeout al obtener el perfil"));
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  };
+
+  const buildFallbackUserFromSession = (sessionUser: Session["user"]): User => {
+    const metadata = sessionUser.user_metadata || {};
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email || "",
+      full_name: metadata.full_name || sessionUser.email?.split("@")[0] || "Usuario",
+      phone: metadata.phone || undefined,
+      role: (metadata.role as User["role"]) || "vendedor",
+      branch_id: metadata.branch_id || undefined,
+      is_active: true,
+      avatar_url: metadata.avatar_url || undefined,
+      onboarding_completed: metadata.onboarding_completed || false,
+      created_at: sessionUser.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  };
+
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
     try {
       console.log("🔍 Fetching user profile for userId:", userId);
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+      const { data, error } = await withTimeout(
+        supabase
+          .from("users")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle(),
+        15000,
+      );
 
       if (error && error.code !== 'PGRST116') {
         console.error("❌ Error fetching user profile:", error);
@@ -148,11 +184,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     console.log("🔧 Inicializando AuthProvider...");
     
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("📍 Sesión actual:", session ? "existe" : "no existe");
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        const ok = await fetchUserProfile(session.user.id);
+        if (!ok) {
+          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
+          setUser(buildFallbackUserFromSession(session.user));
+          setLoading(false);
+        }
       } else {
         setLoading(false);
       }
@@ -164,7 +205,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("🔄 Auth state changed:", event, session ? "con sesión" : "sin sesión");
       setSession(session);
       if (session?.user) {
-        await fetchUserProfile(session.user.id);
+        const ok = await fetchUserProfile(session.user.id);
+        if (!ok) {
+          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
+          setUser(buildFallbackUserFromSession(session.user));
+          setLoading(false);
+        }
       } else {
         setUser(null);
         setNeedsOnboarding(false);
@@ -292,7 +338,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log("Session user ID:", data.session.user.id);
         
         // Intentar obtener el perfil del usuario
-        await fetchUserProfile(data.session.user.id);
+        const ok = await fetchUserProfile(data.session.user.id);
+        if (!ok) {
+          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
+          setUser(buildFallbackUserFromSession(data.session.user));
+          setLoading(false);
+        }
       } else {
         console.warn("⚠️ No session or user in sign in response");
         setLoading(false);
