@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, type User } from "@/lib/supabase";
 
@@ -31,6 +31,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const sessionTimeoutRef = useRef<number | null>(null);
+  const loadingTimeoutRef = useRef<number | null>(null);
+
+  const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+  const AUTH_LOADING_TIMEOUT_MS = 12 * 1000; // evita loading infinito
+  const SESSION_STORAGE_KEY = "skale.session_start";
 
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
     try {
@@ -169,6 +175,103 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      if (loadingTimeoutRef.current) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (loadingTimeoutRef.current) {
+      window.clearTimeout(loadingTimeoutRef.current);
+    }
+
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      console.warn("⏱️ Loading auth timeout: liberando loading para evitar bloqueo");
+      setLoading(false);
+    }, AUTH_LOADING_TIMEOUT_MS);
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
+  }, [loading]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
+      if (sessionTimeoutRef.current) {
+        window.clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    const now = Date.now();
+    let sessionStart = now;
+    let storedUserId: string | null = null;
+
+    try {
+      const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { userId?: string; startedAt?: number };
+        if (parsed?.userId) storedUserId = parsed.userId;
+        if (parsed?.startedAt) sessionStart = parsed.startedAt;
+      }
+    } catch (error) {
+      console.warn("⚠️ Error leyendo SESSION_STORAGE_KEY:", error);
+    }
+
+    if (storedUserId !== session.user.id) {
+      sessionStart = now;
+    }
+
+    const elapsed = now - sessionStart;
+    if (elapsed >= SESSION_TIMEOUT_MS) {
+      console.log("⏱️ Sesión expirada por tiempo, cerrando sesión...");
+      supabase.auth.signOut().finally(() => {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      });
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ userId: session.user.id, startedAt: sessionStart }),
+      );
+    } catch (error) {
+      console.warn("⚠️ Error guardando SESSION_STORAGE_KEY:", error);
+    }
+
+    if (sessionTimeoutRef.current) {
+      window.clearTimeout(sessionTimeoutRef.current);
+    }
+
+    const remaining = SESSION_TIMEOUT_MS - elapsed;
+    sessionTimeoutRef.current = window.setTimeout(() => {
+      console.log("⏱️ Sesión expirada por tiempo, cerrando sesión...");
+      supabase.auth.signOut().finally(() => {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      });
+    }, remaining);
+
+    return () => {
+      if (sessionTimeoutRef.current) {
+        window.clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
+    };
+  }, [session]);
+
   const signIn: AuthContextType["signIn"] = async (email, password) => {
     try {
       console.log("🔐 Attempting to sign in with email:", email);
@@ -297,6 +400,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setSession(null);
       setNeedsOnboarding(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
+      if (sessionTimeoutRef.current) {
+        window.clearTimeout(sessionTimeoutRef.current);
+        sessionTimeoutRef.current = null;
+      }
     } catch (error) {
       console.error("Error signing out:", error);
     } finally {
