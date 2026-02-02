@@ -174,6 +174,13 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/appointments" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Appointments />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app/quotes" element={
                 <ProtectedRoute>
                   <Layout>

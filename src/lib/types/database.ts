@@ -13,6 +13,53 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          type: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
+          status: 'programada' | 'completada' | 'cancelada'
+          scheduled_at: string
+          end_at: string
+          lead_id: string | null
+          vehicle_id: string | null
+          user_id: string | null
+          branch_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          type?: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
+          status?: 'programada' | 'completada' | 'cancelada'
+          scheduled_at: string
+          end_at: string
+          lead_id?: string | null
+          vehicle_id?: string | null
+          user_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          type?: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
+          status?: 'programada' | 'completada' | 'cancelada'
+          scheduled_at?: string
+          end_at?: string
+          lead_id?: string | null
+          vehicle_id?: string | null
+          user_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       branches: {
         Row: {
           id: string

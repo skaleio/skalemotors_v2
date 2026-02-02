@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
 import { supabase, type User } from "@/lib/supabase";
+import type { Session } from "@supabase/supabase-js";
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isSigningOut: boolean;
   needsOnboarding: boolean;
   signIn: (email: string, password: string) => Promise<{ error: unknown }>;
   signUp: (
@@ -30,13 +31,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const sessionTimeoutRef = useRef<number | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+  const lastStorageWriteRef = useRef<number>(0);
   const loadingTimeoutRef = useRef<number | null>(null);
 
   const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
   const AUTH_LOADING_TIMEOUT_MS = 12 * 1000; // evita loading infinito
-  const SESSION_STORAGE_KEY = "skale.session_start";
+  const SESSION_STORAGE_KEY = "skale.session_activity";
+  const ACTIVITY_STORAGE_THROTTLE_MS = 5 * 1000;
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     let timeoutId: number | null = null;
@@ -89,7 +94,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false);
         return false;
       }
-      
+
       if (data) {
         console.log("✅ User profile fetched successfully:", data);
         // Crear un nuevo objeto para asegurar que React detecte el cambio
@@ -114,7 +119,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false);
         return true;
       }
-      
+
       // Usuario no existe en public.users, intentar crearlo
       console.log("⚠️ Usuario no existe en public.users, intentando crear...");
       return await createUserFromAuth(userId);
@@ -129,9 +134,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const createUserFromAuth = async (userId: string): Promise<boolean> => {
     try {
       console.log("🔧 Creando usuario en public.users desde auth.users...");
-      
+
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      
+
       if (!authUser) {
         console.error("❌ No se pudo obtener el usuario de auth");
         setUser(null);
@@ -170,7 +175,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false);
         return true;
       }
-      
+
       setLoading(false);
       return false;
     } catch (error) {
@@ -183,7 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     console.log("🔧 Inicializando AuthProvider...");
-    
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("📍 Sesión actual:", session ? "existe" : "no existe");
       setSession(session);
@@ -262,55 +267,78 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (typeof window === "undefined") return;
 
     const now = Date.now();
-    let sessionStart = now;
+    let lastActivityAt = now;
     let storedUserId: string | null = null;
 
     try {
       const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as { userId?: string; startedAt?: number };
+        const parsed = JSON.parse(raw) as { userId?: string; lastActivityAt?: number };
         if (parsed?.userId) storedUserId = parsed.userId;
-        if (parsed?.startedAt) sessionStart = parsed.startedAt;
+        if (parsed?.lastActivityAt) lastActivityAt = parsed.lastActivityAt;
       }
     } catch (error) {
       console.warn("⚠️ Error leyendo SESSION_STORAGE_KEY:", error);
     }
 
     if (storedUserId !== session.user.id) {
-      sessionStart = now;
+      lastActivityAt = now;
     }
 
-    const elapsed = now - sessionStart;
+    lastActivityRef.current = lastActivityAt;
+
+    const elapsed = now - lastActivityAt;
     if (elapsed >= SESSION_TIMEOUT_MS) {
-      console.log("⏱️ Sesión expirada por tiempo, cerrando sesión...");
+      console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
       supabase.auth.signOut().finally(() => {
         window.localStorage.removeItem(SESSION_STORAGE_KEY);
       });
       return;
     }
 
-    try {
-      window.localStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify({ userId: session.user.id, startedAt: sessionStart }),
-      );
-    } catch (error) {
-      console.warn("⚠️ Error guardando SESSION_STORAGE_KEY:", error);
-    }
+    const persistActivity = (timestamp: number) => {
+      const shouldWrite = timestamp - lastStorageWriteRef.current >= ACTIVITY_STORAGE_THROTTLE_MS;
+      if (!shouldWrite) return;
 
-    if (sessionTimeoutRef.current) {
-      window.clearTimeout(sessionTimeoutRef.current);
-    }
+      lastStorageWriteRef.current = timestamp;
+      try {
+        window.localStorage.setItem(
+          SESSION_STORAGE_KEY,
+          JSON.stringify({ userId: session.user.id, lastActivityAt: timestamp }),
+        );
+      } catch (error) {
+        console.warn("⚠️ Error guardando SESSION_STORAGE_KEY:", error);
+      }
+    };
 
-    const remaining = SESSION_TIMEOUT_MS - elapsed;
-    sessionTimeoutRef.current = window.setTimeout(() => {
-      console.log("⏱️ Sesión expirada por tiempo, cerrando sesión...");
-      supabase.auth.signOut().finally(() => {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
-      });
-    }, remaining);
+    const scheduleTimeout = (timestamp: number) => {
+      if (sessionTimeoutRef.current) {
+        window.clearTimeout(sessionTimeoutRef.current);
+      }
+      const remaining = SESSION_TIMEOUT_MS - (Date.now() - timestamp);
+      sessionTimeoutRef.current = window.setTimeout(() => {
+        console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
+        supabase.auth.signOut().finally(() => {
+          window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        });
+      }, Math.max(remaining, 0));
+    };
+
+    const handleActivity = () => {
+      const timestamp = Date.now();
+      lastActivityRef.current = timestamp;
+      persistActivity(timestamp);
+      scheduleTimeout(timestamp);
+    };
+
+    persistActivity(lastActivityAt);
+    scheduleTimeout(lastActivityAt);
+
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }));
 
     return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
       if (sessionTimeoutRef.current) {
         window.clearTimeout(sessionTimeoutRef.current);
         sessionTimeoutRef.current = null;
@@ -336,7 +364,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (data.session?.user) {
         console.log("✅ Sign in successful, fetching user profile...");
         console.log("Session user ID:", data.session.user.id);
-        
+
         // Intentar obtener el perfil del usuario
         const ok = await fetchUserProfile(data.session.user.id);
         if (!ok) {
@@ -362,16 +390,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       console.log("🚀 Iniciando registro para:", email);
       setLoading(true);
-      
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: { 
-          data: { 
-            full_name: fullName, 
+        options: {
+          data: {
+            full_name: fullName,
             phone: phone || null,
             role: 'vendedor'
-          } 
+          }
         },
       });
 
@@ -383,11 +411,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (authData.user) {
         console.log("✅ Usuario creado en auth.users:", authData.user.id);
-        
+
         // El trigger debería crear el usuario automáticamente en public.users
         // Esperar un momento para que el trigger se ejecute
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Verificar si el usuario fue creado en public.users
         const { data: userCheck, error: checkError } = await supabase
           .from("users")
@@ -417,11 +445,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Si falla, el usuario existe en auth pero no en public.users
             // El administrador tendrá que arreglarlo
             setLoading(false);
-            return { 
-              error: new Error("Tu cuenta fue creada pero hay un problema de configuración. Por favor, contacta al administrador.") 
+            return {
+              error: new Error("Tu cuenta fue creada pero hay un problema de configuración. Por favor, contacta al administrador.")
             };
           }
-          
+
           console.log("✅ Usuario creado manualmente en public.users");
         } else {
           console.log("✅ Usuario creado automáticamente por trigger");
@@ -444,10 +472,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signOut = async () => {
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+    setLoading(true);
+    setIsSigningOut(true);
+
+    const clearState = () => {
       setUser(null);
       setSession(null);
       setNeedsOnboarding(false);
@@ -458,11 +486,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         window.clearTimeout(sessionTimeoutRef.current);
         sessionTimeoutRef.current = null;
       }
-    } catch (error) {
-      console.error("Error signing out:", error);
-    } finally {
       setLoading(false);
-    }
+      setIsSigningOut(false);
+    };
+
+    // Mostrar "Cerrando sesión..." brevemente y redirigir sin esperar al servidor (signOut en segundo plano)
+    supabase.auth.signOut().catch((err) => console.error("Error signing out:", err));
+    setTimeout(clearState, 400);
   };
 
   const resetPassword = async (email: string) => {
@@ -490,12 +520,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .eq("id", user.id)
         .select()
         .single();
-      
+
       if (error) {
         console.error("❌ Error actualizando onboarding:", error);
         throw error;
       }
-      
+
       if (data) {
         console.log("✅ Onboarding completado exitosamente:", data);
         const updatedUser = { ...user, onboarding_completed: true };
@@ -514,6 +544,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     session,
     loading,
+    isSigningOut,
     needsOnboarding,
     signIn,
     signUp,

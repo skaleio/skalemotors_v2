@@ -776,71 +776,73 @@ export default function Consignaciones() {
                 )}
               </div>
             </div>
-            <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:items-end">
-              <div className="flex-1">
-                <Label className="text-xs text-muted-foreground mb-1 block">Estado</Label>
-                <div className="flex items-center gap-2">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className={`w-full md:w-[200px] ${statusFilter !== "all" ? "border-blue-500 bg-blue-50" : ""}`}>
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Filtrar por estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los estados</SelectItem>
-                      {Object.entries(statusLabels).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {statusFilter !== "all" && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
-                      onClick={() => setStatusFilter("all")}
-                      title="Limpiar filtro de estado"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1">
-                <Label className="text-xs text-muted-foreground mb-1 block">Etiqueta</Label>
-                <div className="flex items-center gap-2">
-                  <Select value={labelFilter} onValueChange={setLabelFilter}>
-                    <SelectTrigger className={`w-full md:w-[200px] ${labelFilter !== "all" ? "border-blue-500 bg-blue-50" : ""}`}>
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Filtrar por etiqueta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las etiquetas</SelectItem>
-                      {labelOptions.map((option) => {
-                        const optionMeta = getLabelMeta(option.value);
-                        return (
-                          <SelectItem key={option.value} value={option.value}>
-                            <span className="flex items-center gap-2">
-                              <span className={`h-2.5 w-2.5 rounded-full ${optionMeta.styles.dot}`} />
-                              <span className={optionMeta.styles.text}>{optionMeta.label}</span>
-                            </span>
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4 md:items-end">
+              <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+                <div className="w-full sm:w-auto min-w-[180px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Estado</Label>
+                  <div className="flex items-center gap-2">
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className={`w-full min-w-[180px] md:w-[200px] ${statusFilter !== "all" ? "border-blue-500 bg-blue-50" : ""}`}>
+                        <Filter className="h-4 w-4 mr-2" />
+                        <SelectValue placeholder="Filtrar por estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los estados</SelectItem>
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
                           </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  {labelFilter !== "all" && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
-                      onClick={() => setLabelFilter("all")}
-                      title="Limpiar filtro de etiqueta"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {statusFilter !== "all" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 flex-shrink-0"
+                        onClick={() => setStatusFilter("all")}
+                        title="Limpiar filtro de estado"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="w-full sm:w-auto min-w-[180px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Etiqueta</Label>
+                  <div className="flex items-center gap-2">
+                    <Select value={labelFilter} onValueChange={setLabelFilter}>
+                      <SelectTrigger className={`w-full min-w-[180px] md:w-[200px] ${labelFilter !== "all" ? "border-blue-500 bg-blue-50" : ""}`}>
+                        <Filter className="h-4 w-4 mr-2" />
+                        <SelectValue placeholder="Filtrar por etiqueta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las etiquetas</SelectItem>
+                        {labelOptions.map((option) => {
+                          const optionMeta = getLabelMeta(option.value);
+                          return (
+                            <SelectItem key={option.value} value={option.value}>
+                              <span className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 rounded-full ${optionMeta.styles.dot}`} />
+                                <span className={optionMeta.styles.text}>{optionMeta.label}</span>
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    {labelFilter !== "all" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 flex-shrink-0"
+                        onClick={() => setLabelFilter("all")}
+                        title="Limpiar filtro de etiqueta"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
               {isFilterActive && (

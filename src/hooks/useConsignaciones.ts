@@ -69,8 +69,8 @@ export function useConsignaciones(options: UseConsignacionesOptions = {}) {
     enabled,
     staleTime,
     gcTime,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 2,
   });
 

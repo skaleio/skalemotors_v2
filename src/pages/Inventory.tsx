@@ -133,6 +133,48 @@ const generateVin = () => {
 
 const allowedImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
+const optimizeVehicleImage = async (file: File) => {
+  try {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+      image.src = objectUrl;
+    });
+
+    const maxSize = 1600;
+    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+    const targetWidth = Math.max(1, Math.round(image.width * scale));
+    const targetHeight = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      URL.revokeObjectURL(objectUrl);
+      return file;
+    }
+
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+    URL.revokeObjectURL(objectUrl);
+
+    const blob: Blob = await new Promise((resolve) => {
+      canvas.toBlob(
+        (result) => resolve(result || file),
+        "image/webp",
+        0.82,
+      );
+    });
+
+    return new File([blob], file.name.replace(/\.\w+$/, ".webp"), { type: "image/webp" });
+  } catch (error) {
+    console.warn("⚠️ No se pudo optimizar la imagen, usando original:", error);
+    return file;
+  }
+};
+
 const uploadVehicleImage = async (
   file: File,
   fileName: string,
@@ -146,15 +188,16 @@ const uploadVehicleImage = async (
     throw new Error(`Formato no permitido: ${file.type || "desconocido"}`);
   }
 
+  const optimizedFile = await optimizeVehicleImage(file);
   const response = await fetch(`${supabaseUrl}/storage/v1/object/vehicles/${fileName}`, {
     method: "PUT",
     headers: {
       apikey: supabaseAnonKey,
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": file.type,
+      "Content-Type": optimizedFile.type,
       "x-upsert": "false",
     },
-    body: file,
+    body: optimizedFile,
   });
 
   if (!response.ok) {
@@ -193,7 +236,7 @@ export default function Inventory() {
   const { user, session } = useAuth();
   const { vehicles, loading, refetch } = useVehicles({
     branchId: user?.branch_id ?? undefined,
-    enabled: !!user,
+    enabled: !!user?.branch_id,
   });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -207,6 +250,7 @@ export default function Inventory() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasRetriedEmpty, setHasRetriedEmpty] = useState(false);
   const [saleData, setSaleData] = useState({
     salePrice: 0,
     downPayment: 0,
@@ -231,6 +275,12 @@ export default function Inventory() {
     images: [] as File[],
   });
 
+  const isFilterActive =
+    searchQuery.trim() !== "" ||
+    selectedStatus !== "all" ||
+    selectedType !== "all" ||
+    selectedMake !== "all";
+
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((vehicle) => {
       const matchesSearch =
@@ -245,6 +295,20 @@ export default function Inventory() {
       return matchesSearch && matchesStatus && matchesType && matchesMake;
     });
   }, [vehicles, searchQuery, selectedMake, selectedStatus, selectedType]);
+
+  useEffect(() => {
+    if (!user?.branch_id) return;
+    refetch();
+    setHasRetriedEmpty(false);
+  }, [user?.branch_id, refetch]);
+
+  useEffect(() => {
+    if (!user?.branch_id || loading) return;
+    if (vehicles.length > 0) return;
+    if (hasRetriedEmpty) return;
+    setHasRetriedEmpty(true);
+    refetch();
+  }, [user?.branch_id, loading, vehicles.length, hasRetriedEmpty, refetch]);
 
   const uniqueMakes = useMemo(() => {
     return Array.from(new Set(vehicles.map((v) => v.make))).sort();
@@ -468,9 +532,6 @@ export default function Inventory() {
 
         await Promise.race([refetchPromise, timeoutPromise]);
         console.log("✅ Lista actualizada correctamente");
-        setTimeout(() => {
-          window.location.reload();
-        }, 200);
       } catch (refetchError: any) {
         console.warn("⚠️ Error o timeout en refetch, pero el vehículo fue creado:", refetchError);
         // Intentar refetch en segundo plano sin bloquear
@@ -566,11 +627,13 @@ export default function Inventory() {
             const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
             console.log(`📤 Subiendo imagen: ${fileName}`);
+            const optimizedFile = await optimizeVehicleImage(file);
             const { error: uploadError } = await supabase.storage
               .from('vehicles')
-              .upload(fileName, file, {
+              .upload(fileName, optimizedFile, {
                 cacheControl: '3600',
-                upsert: false
+                upsert: false,
+                contentType: optimizedFile.type,
               });
 
             if (uploadError) {
@@ -1108,7 +1171,11 @@ export default function Inventory() {
 
           {!loading && filteredVehicles.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No se encontraron vehículos con los filtros aplicados.</p>
+              <p className="text-muted-foreground">
+                {isFilterActive
+                  ? "No se encontraron vehículos con los filtros aplicados."
+                  : "Aún no hay vehículos en inventario."}
+              </p>
             </div>
           )}
         </CardContent>

@@ -1,38 +1,37 @@
-import { useMemo, lazy, Suspense } from "react";
-import {
-  Car,
-  DollarSign,
-  TrendingUp,
-  Clock,
-  Package,
-  BarChart3,
-  PieChart,
-  Calendar,
-  AlertCircle
-} from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVehicles } from "@/hooks/useVehicles";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
+import { useVehicles } from "@/hooks/useVehicles";
 import { formatCLP } from "@/lib/format";
 import {
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
+    AlertCircle,
+    BarChart3,
+    Car,
+    Clock,
+    DollarSign,
+    Package,
+    PieChart,
+    RefreshCcw,
+    TrendingUp
+} from "lucide-react";
+import { useEffect, useMemo } from "react";
+import {
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Pie,
+    PieChart as RechartsPieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
 } from "recharts";
 
 // Paleta de colores mejorada
@@ -73,15 +72,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function AdvancedInventory() {
   const { user } = useAuth();
-  const { vehicles, loading } = useVehicles({
+  const { vehicles, loading, refetch: refetchVehicles } = useVehicles({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
 
-  const { consignaciones, loading: loadingConsignaciones } = useConsignaciones({
+  const { consignaciones, loading: loadingConsignaciones, refetch: refetchConsignaciones } = useConsignaciones({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
+
+  useEffect(() => {
+    if (!user?.branch_id) return;
+    refetchVehicles();
+    refetchConsignaciones();
+  }, [user?.branch_id, refetchVehicles, refetchConsignaciones]);
 
   // Calcular métricas
   const metrics = useMemo(() => {
@@ -346,11 +351,25 @@ export default function AdvancedInventory() {
   return (
     <div className="space-y-6 pb-10">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Inventario Avanzado</h1>
-        <p className="text-muted-foreground">
-          Análisis detallado y métricas clave de tu inventario
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inventario Avanzado</h1>
+          <p className="text-muted-foreground">
+            Análisis detallado y métricas clave de tu inventario
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            refetchVehicles();
+            refetchConsignaciones();
+          }}
+          aria-label="Recargar métricas"
+          title="Recargar métricas"
+        >
+          <RefreshCcw className={`h-5 w-5 ${loading || loadingConsignaciones ? "animate-spin" : ""}`} />
+        </Button>
       </div>
 
       {/* KPI Cards */}

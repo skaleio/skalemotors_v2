@@ -1,71 +1,66 @@
-import { useState, useEffect } from "react";
-import {
-  LayoutDashboard,
-  Users,
-  Car,
-  Calendar,
-  FileText,
-  CreditCard,
-  RefreshCw,
-  Package,
-  Globe,
-  MessageCircle,
-  Settings,
-  ChevronRight,
-  ChevronDown,
-  Target,
-  Monitor,
-  TrendingUp,
-  BarChart3,
-  AlertTriangle,
-  UserCheck,
-  DollarSign,
-  PieChart,
-  Activity,
-  Bell,
-  Brain,
-  Award,
-  ClipboardList,
-  Building2,
-  Receipt,
-  FileBarChart,
-  Calculator,
-  Plug,
-  UserCog,
-  Phone,
-  Heart,
-  MoreVertical,
-  LogOut,
-  UserCircle,
-  CreditCard as BillingIcon,
-  Keyboard,
-  Plus,
-  ArrowRight,
-  User,
-  Rocket
-} from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useTheme } from "@/contexts/ThemeContext";
-
+import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
+import { leadService } from "@/lib/services/leads";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarTrigger,
-  useSidebar,
-  SidebarHeader,
-  SidebarFooter,
-} from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+    Activity,
+    ArrowRight,
+    Award,
+    BarChart3,
+    Bell,
+    CreditCard as BillingIcon,
+    Brain,
+    Calculator,
+    Calendar,
+    Car,
+    ChevronDown,
+    ChevronRight,
+    ClipboardList,
+    CreditCard,
+    DollarSign,
+    FileText,
+    Globe,
+    Heart,
+    Keyboard,
+    LayoutDashboard,
+    LogOut,
+    MessageCircle,
+    MoreVertical,
+    Package,
+    Phone,
+    PieChart,
+    Plug,
+    Plus,
+    Receipt,
+    RefreshCw,
+    Settings,
+    Target,
+    TrendingUp,
+    UserCheck,
+    UserCircle,
+    UserCog,
+    Users
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    useSidebar
+} from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -157,6 +152,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
   const { theme } = useTheme();
+  const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
@@ -286,6 +282,16 @@ export function AppSidebar() {
     navigateWithLoading(url);
   };
 
+  const prefetchLeads = useCallback(() => {
+    import("@/pages/Leads");
+    if (!user?.branch_id) return;
+    queryClient.prefetchQuery({
+      queryKey: ["leads", user.branch_id, undefined, undefined, undefined, undefined],
+      queryFn: () => leadService.getAll({ branchId: user.branch_id }),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient, user?.branch_id]);
+
   return (
     <TooltipProvider delayDuration={300}>
       <Sidebar
@@ -359,7 +365,9 @@ export function AppSidebar() {
                 <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {category.items.map((item, index) => (
+                      {category.items.map((item, index) => {
+                        const isLeadsItem = item.url === "/app/leads";
+                        return (
                         <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
                           <SidebarMenuButton asChild>
                             {item.url.includes('?') ? (
@@ -380,6 +388,9 @@ export function AppSidebar() {
                               <NavLink
                                 to={item.url}
                                 end={item.url === "/"}
+                                onMouseEnter={isLeadsItem ? prefetchLeads : undefined}
+                                onFocus={isLeadsItem ? prefetchLeads : undefined}
+                                onTouchStart={isLeadsItem ? prefetchLeads : undefined}
                                 className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                               >
                                 <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${
@@ -394,7 +405,7 @@ export function AppSidebar() {
                             )}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                      ))}
+                      )})}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </CollapsibleContent>

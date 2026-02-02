@@ -2,37 +2,47 @@ import { useEffect, useState } from "react";
 
 interface DashboardLoaderProps {
   message?: string;
+  barLabel?: string;
 }
 
-export default function DashboardLoader({ message = "Cargando estadísticas" }: DashboardLoaderProps) {
+export default function DashboardLoader({ message = "Cargando...", barLabel }: DashboardLoaderProps) {
+  const label = barLabel ?? (message.startsWith("Cerrando") ? "Cerrando sesión" : "Cargando");
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    // Progreso suave y continuo
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 90) return 90;
-        return prev + 10;
+        if (prev >= 95) return 95;
+        return prev + Math.random() * 8 + 4;
       });
-    }, 200);
+    }, 180);
 
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-      <div className="w-full max-w-sm space-y-4 px-4">
-        {/* Texto */}
+    <div className="flex min-h-[calc(100vh-120px)] flex-col items-center justify-center px-4">
+      <div className="w-full max-w-md space-y-8">
+        {/* Marca SKALEMOTORS */}
         <div className="text-center">
-          <p className="text-sm font-medium text-muted-foreground">{message}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+            SKALEMOTORS
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         </div>
 
-        {/* Barra de progreso simple */}
-        <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
-          <div
-            className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-200 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+        {/* Barra de progreso con porcentaje */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{label}</span>
+            <span>{Math.round(progress)}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     </div>
