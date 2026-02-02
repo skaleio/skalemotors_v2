@@ -6,22 +6,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import { Filter, Mail, Pencil, Phone, Plus, Search, Target, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
+const REGION_TAG_PREFIX = "region:";
+const NEW_LEAD_PATH = "/leads?new=true";
 
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
@@ -44,6 +47,17 @@ const buildTagsWithVehicle = (tags: unknown, vehicle: string) => {
   if (!nextVehicle) return current;
   return [...current, `${VEHICULO_TAG_PREFIX}${nextVehicle}`];
 };
+
+const normalizePhoneWithChilePrefix = (value: string) => {
+  const raw = value.trim();
+  if (!raw) return "";
+  if (raw.startsWith("+56")) {
+    const normalized = raw.replace(/^(\+56\s*)/g, "+56 ").trim();
+    return normalized === "+56" ? "" : normalized;
+  }
+  return `+56 ${raw}`;
+};
+
 
 type ConsignacionItem = {
   id: string;
@@ -98,6 +112,8 @@ const getStatusMeta = (value: string) => {
 
 export default function Leads() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { leads, loading, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
@@ -115,6 +131,9 @@ export default function Leads() {
     phone: "",
     status: "nuevo",
     vehicle: "",
+    region: "",
+    payment_type: "",
+    budget: "",
   });
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -127,7 +146,53 @@ export default function Leads() {
     email: "",
     status: "nuevo",
     vehicle: "",
+    region: "",
+    payment_type: "",
+    budget: "",
   });
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const isShortcut = (event.ctrlKey || event.metaKey) && key === "l";
+
+      if (key === "escape") {
+        if (showCreateDialog) {
+          event.preventDefault();
+          setShowCreateDialog(false);
+        }
+        return;
+      }
+
+      if (!isShortcut) return;
+
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        !!target
+        && (target.tagName === "INPUT"
+          || target.tagName === "TEXTAREA"
+          || target.tagName === "SELECT"
+          || target.isContentEditable);
+
+      if (isTyping) return;
+
+      event.preventDefault();
+      if (location.pathname.endsWith("/leads") || location.pathname.endsWith("/app/leads")) {
+        setShowCreateDialog(true);
+      }
+      navigate(NEW_LEAD_PATH);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") === "true") {
+      setShowCreateDialog(true);
+    }
+  }, [location.search]);
 
   const filteredLeads = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -174,7 +239,6 @@ export default function Leads() {
     formState.full_name.trim()
       && formState.phone.trim()
       && formState.status
-      && formState.vehicle.trim()
   );
 
   const resetForm = () => {
@@ -183,6 +247,9 @@ export default function Leads() {
       phone: "",
       status: "nuevo",
       vehicle: "",
+      region: "",
+      payment_type: "",
+      budget: "",
     });
   };
 
@@ -198,11 +265,14 @@ export default function Leads() {
 
       await leadService.create({
         full_name: formState.full_name.trim(),
-        phone: formState.phone.trim(),
+        phone: normalizePhoneWithChilePrefix(formState.phone),
         status: formState.status as any,
         source: formState.phone.trim() ? "telefono" : "otro",
         priority: "media",
         branch_id: user.branch_id,
+        region: formState.region.trim() ? formState.region.trim() : null,
+        payment_type: formState.payment_type ? formState.payment_type : null,
+        budget: formState.budget.trim() ? formState.budget.trim() : null,
         tags: buildTags(tags) as any,
       });
 
@@ -225,12 +295,15 @@ export default function Leads() {
     setEditingLead(lead);
     setEditForm({
       full_name: lead.full_name || "",
-      phone: lead.phone || "",
+      phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
       status: lead.status || "nuevo",
       vehicle: isConsignacion
         ? consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX)
         : getTagValue(tags, VEHICULO_TAG_PREFIX),
+      region: lead.region || getTagValue(tags, REGION_TAG_PREFIX),
+      payment_type: lead.payment_type || "",
+      budget: lead.budget || "",
     });
     setShowEditDialog(true);
   };
@@ -247,14 +320,15 @@ export default function Leads() {
     try {
       const updates: Record<string, any> = {
         full_name: editForm.full_name.trim() || "Sin nombre",
-        phone: editForm.phone.trim() || "sin_telefono",
+        phone: normalizePhoneWithChilePrefix(editForm.phone) || "sin_telefono",
         email: editForm.email.trim() ? editForm.email.trim() : null,
         status: editForm.status as any,
+        region: editForm.region.trim() ? editForm.region.trim() : null,
+        payment_type: editForm.payment_type ? editForm.payment_type : null,
+        budget: editForm.budget.trim() ? editForm.budget.trim() : null,
       };
 
-      if (editForm.vehicle.trim()) {
-        updates.tags = buildTagsWithVehicle(editingLead.tags, editForm.vehicle) as any;
-      }
+      updates.tags = buildTagsWithVehicle(editingLead.tags, editForm.vehicle) as any;
 
       await leadService.update(editingLead.id, updates);
       await refetch();
@@ -366,6 +440,9 @@ export default function Leads() {
                 <TableHead>Contacto</TableHead>
                 <TableHead>Origen</TableHead>
                 <TableHead>Vehiculo</TableHead>
+                <TableHead>Región</TableHead>
+                <TableHead>Financiamiento/Contado</TableHead>
+                <TableHead>Presupuesto</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -374,13 +451,13 @@ export default function Leads() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     Cargando leads...
                   </TableCell>
                 </TableRow>
               ) : filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No hay leads registrados
                   </TableCell>
                 </TableRow>
@@ -422,6 +499,19 @@ export default function Leads() {
                         return getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
                       })()}
                     </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const region = lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX);
+                        return region ? <Badge variant="secondary">{region}</Badge> : "—";
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const label = lead.payment_type?.trim();
+                        return label ? <Badge variant="secondary">{label}</Badge> : "—";
+                      })()}
+                    </TableCell>
+                    <TableCell>{lead.budget || "—"}</TableCell>
                     <TableCell>
                       {(() => {
                         const meta = getStatusMeta(lead.status);
@@ -505,12 +595,18 @@ export default function Leads() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="lead_phone">Telefono</Label>
-              <Input
-                id="lead_phone"
-                value={formState.phone}
-                onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
-                placeholder="+56 9 ..."
-              />
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  +56
+                </span>
+                <Input
+                  id="lead_phone"
+                  value={formState.phone}
+                  onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
+                  placeholder="9 ..."
+                  className="pl-12"
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="lead_vehicle">Vehiculo</Label>
@@ -519,6 +615,30 @@ export default function Leads() {
                 value={formState.vehicle}
                 onChange={(e) => setFormState({ ...formState, vehicle: e.target.value })}
                 placeholder="Ej: Toyota Corolla 2020"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Región</Label>
+              <Input
+                value={formState.region}
+                onChange={(e) => setFormState({ ...formState, region: e.target.value })}
+                placeholder="Ej: Metropolitana de Santiago"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Financiamiento/Contado</Label>
+              <Input
+                value={formState.payment_type}
+                onChange={(e) => setFormState({ ...formState, payment_type: e.target.value })}
+                placeholder="Ej: Financiamiento o Contado"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Presupuesto</Label>
+              <Input
+                value={formState.budget}
+                onChange={(e) => setFormState({ ...formState, budget: e.target.value })}
+                placeholder="Ej: 10-12 millones"
               />
             </div>
             <div className="grid gap-2">
@@ -568,12 +688,18 @@ export default function Leads() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_phone">Telefono</Label>
-              <Input
-                id="edit_lead_phone"
-                value={editForm.phone}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                placeholder="+56 9 ..."
-              />
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  +56
+                </span>
+                <Input
+                  id="edit_lead_phone"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="9 ..."
+                  className="pl-12"
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_email">Correo</Label>
@@ -591,6 +717,30 @@ export default function Leads() {
                 value={editVehicleValue}
                 onChange={(e) => setEditForm({ ...editForm, vehicle: e.target.value })}
                 placeholder="Ej: Toyota Corolla 2020"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Región</Label>
+              <Input
+                value={editForm.region}
+                onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                placeholder="Ej: Metropolitana de Santiago"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Financiamiento/Contado</Label>
+              <Input
+                value={editForm.payment_type}
+                onChange={(e) => setEditForm({ ...editForm, payment_type: e.target.value })}
+                placeholder="Ej: Financiamiento o Contado"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Presupuesto</Label>
+              <Input
+                value={editForm.budget}
+                onChange={(e) => setEditForm({ ...editForm, budget: e.target.value })}
+                placeholder="Ej: 10-12 millones"
               />
             </div>
             <div className="grid gap-2">

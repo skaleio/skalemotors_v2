@@ -125,6 +125,13 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/leads" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Leads />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app/leads/board" element={
                 <ProtectedRoute>
                   <Layout>

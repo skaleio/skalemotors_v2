@@ -38,17 +38,17 @@ export function TopBar() {
   const { user, signOut } = useAuth();
   const { vehicles } = useVehicles({ branchId: user?.branch_id ?? undefined, enabled: !!user });
   const { leads } = useLeads({ branchId: user?.branch_id ?? undefined, enabled: !!user });
-  
+
   // Verificar si estamos en Dashboard Principal
   const isDashboardPrincipal = location.pathname === '/';
-  
+
   // Estados para búsqueda
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  
+
   // Función de búsqueda
   const performSearch = (query: string) => {
     if (!query.trim()) {
@@ -151,9 +151,9 @@ export function TopBar() {
   const unreadCount = notifications.filter(n => n.unread).length;
 
   const markAsRead = (id: number) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === id
           ? { ...notification, unread: false }
           : notification
       )
@@ -165,7 +165,7 @@ export function TopBar() {
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => 
+    setNotifications(prev =>
       prev.map(notification => ({ ...notification, unread: false }))
     );
   };
@@ -195,7 +195,7 @@ export function TopBar() {
         >
           SKALEMOTORS
         </button>
-        
+
         {/* Search Bar */}
         <div ref={searchRef} className="relative w-full max-w-[200px] md:max-w-md">
           <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${
@@ -206,17 +206,17 @@ export function TopBar() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={`pl-10 ${
-              theme === 'dark' 
-                ? 'bg-slate-700 border-slate-600 text-white placeholder:text-slate-400' 
+              theme === 'dark'
+                ? 'bg-slate-700 border-slate-600 text-white placeholder:text-slate-400'
                 : 'bg-background border-input'
             }`}
           />
-          
+
           {/* Search Results Dropdown */}
           {isSearchOpen && (
             <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg shadow-lg border z-50 max-h-80 overflow-y-auto ${
-              theme === 'dark' 
-                ? 'bg-slate-800 border-slate-700' 
+              theme === 'dark'
+                ? 'bg-slate-800 border-slate-700'
                 : 'bg-white border-gray-200'
             }`}>
               {isSearching ? (
@@ -237,14 +237,14 @@ export function TopBar() {
                       key={result.id}
                       onClick={() => navigateToSearchResult(result)}
                       className={`w-full flex items-center gap-3 p-3 text-left hover:bg-opacity-80 transition-colors ${
-                        theme === 'dark' 
-                          ? 'hover:bg-slate-700 text-white' 
+                        theme === 'dark'
+                          ? 'hover:bg-slate-700 text-white'
                           : 'hover:bg-gray-50 text-gray-900'
                       }`}
                     >
                       <div className={`w-8 h-8 rounded-md flex items-center justify-center ${
                         theme === 'dark'
-                          ? result.type === 'vehicle' 
+                          ? result.type === 'vehicle'
                             ? 'bg-emerald-900/20 text-emerald-300'
                             : 'bg-blue-900/20 text-blue-300'
                           : result.type === 'vehicle'
@@ -276,7 +276,7 @@ export function TopBar() {
 
       {/* Logo centrado */}
       <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
-        <button 
+        <button
           onClick={() => navigate('/app')}
           className="skale-logo animate-pulse cursor-pointer hover:opacity-80 transition-opacity"
         >
@@ -301,13 +301,13 @@ export function TopBar() {
               <h3 className="font-semibold text-gray-900 text-sm">Acciones Rápidas</h3>
               <p className="text-xs text-gray-500 mt-1">Accede rápidamente a las funciones más utilizadas</p>
             </div>
-            
+
             <div className="p-2">
               {/* Ventas & CRM */}
               <div className="mb-3">
                 <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Ventas & CRM</div>
                 <div className="space-y-1">
-                  <button 
+                  <button
                     onClick={() => navigateWithLoading('/leads')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -320,8 +320,8 @@ export function TopBar() {
                     </div>
                     <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+L</div>
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => navigateWithLoading('/crm')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -334,8 +334,8 @@ export function TopBar() {
                     </div>
                     <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+P</div>
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => navigateWithLoading('/quotes')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -355,7 +355,7 @@ export function TopBar() {
               <div className="mb-3">
                 <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Operaciones</div>
                 <div className="space-y-1">
-                  <button 
+                  <button
                     onClick={() => navigateWithLoading('/appointments')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -368,8 +368,8 @@ export function TopBar() {
                     </div>
                     <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+A</div>
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => navigateWithLoading('/finance')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -389,7 +389,7 @@ export function TopBar() {
               <div className="mb-3">
                 <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Inventario</div>
                 <div className="space-y-1">
-                  <button 
+                  <button
                     onClick={() => navigateWithLoading('/inventory')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -409,7 +409,7 @@ export function TopBar() {
               <div className="mb-3">
                 <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Finanzas</div>
                 <div className="space-y-1">
-                  <button 
+                  <button
                     onClick={() => navigateWithLoading('/billing')}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
                   >
@@ -425,13 +425,13 @@ export function TopBar() {
                 </div>
               </div>
             </div>
-            
+
             <div className="p-3 border-t border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-500">
                   Usa <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">K</kbd> para buscar
                 </div>
-                <button 
+                <button
                   onClick={() => navigateWithLoading('/settings')}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
@@ -451,8 +451,8 @@ export function TopBar() {
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
-                <Badge 
-                  variant="destructive" 
+                <Badge
+                  variant="destructive"
                   className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
                 >
                   {unreadCount}
@@ -472,11 +472,11 @@ export function TopBar() {
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>Notificaciones</h3>
               {unreadCount > 0 && (
-                <button 
+                <button
                   onClick={markAllAsRead}
                   className={`text-sm font-medium ${
-                    theme === 'dark' 
-                      ? 'text-blue-400 hover:text-blue-300' 
+                    theme === 'dark'
+                      ? 'text-blue-400 hover:text-blue-300'
                       : 'text-blue-600 hover:text-blue-800'
                   }`}
                 >
@@ -495,8 +495,8 @@ export function TopBar() {
                 </div>
               ) : (
                 notifications.map((notification) => (
-                  <div 
-                    key={notification.id} 
+                  <div
+                    key={notification.id}
                     className={`p-4 border-b transition-colors ${
                       theme === 'dark'
                         ? `border-slate-600 hover:bg-slate-700 ${
@@ -512,7 +512,7 @@ export function TopBar() {
                       <div className="flex-shrink-0 mt-0.5">
                         {getNotificationIcon(notification.type)}
                       </div>
-                      
+
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between">
@@ -535,23 +535,23 @@ export function TopBar() {
                                 <span>{notification.time}</span>
                               </div>
                               <button className={`text-xs font-medium ${
-                                theme === 'dark' 
-                                  ? 'text-blue-400 hover:text-blue-300' 
+                                theme === 'dark'
+                                  ? 'text-blue-400 hover:text-blue-300'
                                   : 'text-blue-600 hover:text-blue-800'
                               }`}>
                                 {notification.action}
                               </button>
                             </div>
                           </div>
-                          
+
                           {/* Action buttons */}
                           <div className="flex items-center space-x-1 ml-2">
                             {notification.unread && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
                                 className={`p-1 rounded-full transition-colors ${
-                                  theme === 'dark' 
-                                    ? 'hover:bg-slate-600' 
+                                  theme === 'dark'
+                                    ? 'hover:bg-slate-600'
                                     : 'hover:bg-gray-200'
                                 }`}
                                 title="Marcar como leída"
@@ -564,8 +564,8 @@ export function TopBar() {
                             <button
                               onClick={() => dismissNotification(notification.id)}
                               className={`p-1 rounded-full transition-colors ${
-                                theme === 'dark' 
-                                  ? 'hover:bg-slate-600' 
+                                theme === 'dark'
+                                  ? 'hover:bg-slate-600'
                                   : 'hover:bg-gray-200'
                               }`}
                               title="Descartar"
@@ -586,13 +586,13 @@ export function TopBar() {
             {/* Footer */}
             {notifications.length > 0 && (
               <div className={`p-3 border-t ${
-                theme === 'dark' 
-                  ? 'border-slate-600 bg-slate-700/50' 
+                theme === 'dark'
+                  ? 'border-slate-600 bg-slate-700/50'
                   : 'border-gray-200 bg-gray-50'
               }`}>
                 <button className={`w-full text-center text-sm font-medium ${
-                  theme === 'dark' 
-                    ? 'text-blue-400 hover:text-blue-300' 
+                  theme === 'dark'
+                    ? 'text-blue-400 hover:text-blue-300'
                     : 'text-blue-600 hover:text-blue-800'
                 }`}>
                   Ver todas las notificaciones

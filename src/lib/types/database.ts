@@ -268,6 +268,9 @@ export interface Database {
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
           branch_id: string | null
+          region: string | null
+          payment_type: string | null
+          budget: string | null
           budget_min: number | null
           budget_max: number | null
           preferred_vehicle_id: string | null
@@ -288,6 +291,9 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null
+          region?: string | null
+          payment_type?: string | null
+          budget?: string | null
           budget_min?: number | null
           budget_max?: number | null
           preferred_vehicle_id?: string | null
@@ -308,6 +314,9 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null
+          region?: string | null
+          payment_type?: string | null
+          budget?: string | null
           budget_min?: number | null
           budget_max?: number | null
           preferred_vehicle_id?: string | null
