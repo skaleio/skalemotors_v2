@@ -11,10 +11,21 @@ interface UseLeadsOptions {
   source?: string
   search?: string
   enabled?: boolean
+  refetchOnWindowFocus?: boolean
+  refetchOnMount?: boolean
 }
 
 export function useLeads(options: UseLeadsOptions = {}) {
-  const { assignedTo, branchId, status, source, search, enabled = true } = options
+  const {
+    assignedTo,
+    branchId,
+    status,
+    source,
+    search,
+    enabled = true,
+    refetchOnWindowFocus = true,
+    refetchOnMount = true,
+  } = options
 
   const queryKey = ['leads', branchId, assignedTo, status, source, search]
 
@@ -31,8 +42,8 @@ export function useLeads(options: UseLeadsOptions = {}) {
     enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnWindowFocus,
+    refetchOnMount,
     retry: 2,
   })
 

@@ -1,5 +1,6 @@
-import { Edit, Eye, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { Download, Edit, Eye, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
     Select,
     SelectContent,
@@ -250,6 +252,14 @@ export default function Inventory() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportScope, setExportScope] = useState<"all" | "filtered">("all");
+  const [exportDetail, setExportDetail] = useState<"basic" | "full">("full");
+  const [exportFileName, setExportFileName] = useState(() => {
+    const fileDate = new Date().toISOString().split("T")[0];
+    return `inventario_${fileDate}`;
+  });
   const [hasRetriedEmpty, setHasRetriedEmpty] = useState(false);
   const [saleData, setSaleData] = useState({
     salePrice: 0,
@@ -811,6 +821,103 @@ export default function Inventory() {
     }
   };
 
+  const buildExportRows = (vehiclesToExport: Vehicle[], detail: "basic" | "full") => {
+    if (detail === "basic") {
+      return vehiclesToExport.map((vehicle) => ({
+        VIN: vehicle.vin || "",
+        Marca: vehicle.make || "",
+        Modelo: vehicle.model || "",
+        Año: vehicle.year || "",
+        Estado: statusLabels[vehicle.status] || vehicle.status || "",
+        Tipo: typeLabels[vehicle.category] || vehicle.category || "",
+        Precio: Number(vehicle.price || 0),
+      }));
+    }
+
+    return vehiclesToExport.map((vehicle) => ({
+      ID: vehicle.id,
+      VIN: vehicle.vin || "",
+      Marca: vehicle.make || "",
+      Modelo: vehicle.model || "",
+      Año: vehicle.year || "",
+      Color: vehicle.color || "",
+      Kilometraje: vehicle.mileage ?? "",
+      Tipo: typeLabels[vehicle.category] || vehicle.category || "",
+      Estado: statusLabels[vehicle.status] || vehicle.status || "",
+      Precio: Number(vehicle.price || 0),
+      Costo: Number(vehicle.cost || 0),
+      Margen: Number(vehicle.margin || 0),
+      Combustible: vehicle.fuel_type || "",
+      Transmisión: vehicle.transmission || "",
+      Motor: vehicle.engine_size || "",
+      Ubicación: vehicle.location || "",
+      Sucursal: (vehicle as any)?.branches?.name || "",
+      "Fecha llegada": vehicle.arrival_date
+        ? new Date(vehicle.arrival_date).toLocaleDateString("es-CL")
+        : "",
+      Creado: vehicle.created_at ? new Date(vehicle.created_at).toLocaleDateString("es-CL") : "",
+      Actualizado: vehicle.updated_at ? new Date(vehicle.updated_at).toLocaleDateString("es-CL") : "",
+    }));
+  };
+
+  const handleExportInventory = async () => {
+    if (!user?.branch_id) {
+      alert("Error: No hay sucursal asignada. Por favor contacta al administrador.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const vehiclesToExport =
+        exportScope === "filtered"
+          ? filteredVehicles
+          : await vehicleService.getAll({ branchId: user.branch_id });
+
+      if (vehiclesToExport.length === 0) {
+        alert("No hay vehículos para exportar.");
+        return;
+      }
+
+      const rows = buildExportRows(vehiclesToExport, exportDetail);
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
+
+      const sanitizedName = exportFileName
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, " ")
+        .trim() || "inventario";
+      const workbookArray = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+        compression: true,
+      });
+      const blob = new Blob([workbookArray], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      if (blob.size === 0) {
+        throw new Error("El archivo XLSX quedó vacío.");
+      }
+      const fileName = `${sanitizedName}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setShowExportDialog(false);
+    } catch (error) {
+      console.error("Error exportando inventario:", error);
+      alert("No se pudo exportar el inventario. Revisa la consola para más detalles.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -822,6 +929,14 @@ export default function Inventory() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowExportDialog(true)}
+            disabled={isExporting || !user?.branch_id}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {isExporting ? "Exportando..." : "Exportar inventario"}
+          </Button>
           <Button
             onClick={() => {
               // Resetear formulario antes de abrir
@@ -1180,6 +1295,74 @@ export default function Inventory() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de exportación */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Exportar inventario</DialogTitle>
+            <DialogDescription>
+              Elige el alcance y el nivel de detalle del archivo XLSX.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="export-file-name">Nombre del archivo</Label>
+              <Input
+                id="export-file-name"
+                value={exportFileName}
+                onChange={(e) => setExportFileName(e.target.value)}
+                placeholder="Ej: inventario_febrero"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Alcance</div>
+              <RadioGroup
+                value={exportScope}
+                onValueChange={(value) => setExportScope(value as "all" | "filtered")}
+                className="gap-3"
+              >
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="all" />
+                  Todo el inventario
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="filtered" />
+                  Solo con filtros actuales
+                </label>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Nivel de detalle</div>
+              <RadioGroup
+                value={exportDetail}
+                onValueChange={(value) => setExportDetail(value as "basic" | "full")}
+                className="gap-3"
+              >
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="basic" />
+                  Básico (marca, modelo, año, estado, tipo, precio)
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem value="full" />
+                  Completo (incluye costos, margen, fechas y ubicación)
+                </label>
+              </RadioGroup>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowExportDialog(false)} disabled={isExporting}>
+              Cancelar
+            </Button>
+            <Button onClick={handleExportInventory} disabled={isExporting}>
+              {isExporting ? "Exportando..." : "Exportar XLSX"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Detalle Vehículo */}
       <Dialog open={!!selectedVehicle} onOpenChange={(open) => !open && setSelectedVehicle(null)}>
