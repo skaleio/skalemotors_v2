@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
@@ -178,8 +178,27 @@ const statusStyles: Record<string, { dot: string; text: string }> = {
   perdido: { dot: "bg-red-500", text: "text-red-600" },
 };
 
-const getStatusMeta = (value: string) => {
-  const normalized = value || "nuevo";
+const normalizeStatusKey = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const statusKeyByNormalized = new Map(
+  Object.keys(statusLabels).map((key) => [normalizeStatusKey(key), key]),
+);
+
+const isValidStatusKey = (value: string) => statusKeyByNormalized.has(normalizeStatusKey(value));
+
+const getNormalizedStatusKey = (value?: string | null) => {
+  if (!value) return "nuevo";
+  const normalized = normalizeStatusKey(value);
+  return statusKeyByNormalized.get(normalized) ?? "nuevo";
+};
+
+const getStatusMeta = (value?: string | null) => {
+  const normalized = getNormalizedStatusKey(value);
   return {
     label: statusLabels[normalized] || normalized,
     styles: statusStyles[normalized] || statusStyles.nuevo,
@@ -324,10 +343,11 @@ const LeadsTable = memo(function LeadsTable({
                   <TableCell>{lead.budget || "—"}</TableCell>
                   <TableCell>
                     {(() => {
-                      const meta = getStatusMeta(lead.status);
+                      const normalizedStatus = getNormalizedStatusKey(lead.status);
+                      const meta = getStatusMeta(normalizedStatus);
                       return (
                         <Select
-                          value={lead.status}
+                          value={normalizedStatus}
                           onValueChange={(value) => handleStatusChange(lead.id, value)}
                         >
                           <SelectTrigger
@@ -493,6 +513,11 @@ export default function Leads() {
     }
   }, [location.search]);
 
+  const resolvedStatusFilter = useMemo(() => {
+    if (statusFilter === "all") return "all";
+    return isValidStatusKey(statusFilter) ? getNormalizedStatusKey(statusFilter) : "all";
+  }, [statusFilter]);
+
   const filteredLeads = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase();
     return leads.filter((lead) => {
@@ -501,20 +526,21 @@ export default function Leads() {
         || (lead.email || "").toLowerCase().includes(query)
         || (lead.phone || "").toLowerCase().includes(query);
 
+      const leadStatusKey = getNormalizedStatusKey(lead.status);
       const matchesStatus =
-        statusFilter === "all"
+        resolvedStatusFilter === "all"
           ? true
-          : lead.status === statusFilter;
+          : leadStatusKey === resolvedStatusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [leads, deferredSearchQuery, statusFilter]);
+  }, [leads, deferredSearchQuery, resolvedStatusFilter]);
 
   const leadStats = useMemo(() => {
     const total = leads.length;
-    const interesados = leads.filter((lead) => lead.status === "interesado").length;
-    const contactados = leads.filter((lead) => lead.status === "contactado").length;
-    const negociando = leads.filter((lead) => lead.status === "negociando").length;
+    const interesados = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "interesado").length;
+    const contactados = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "contactado").length;
+    const negociando = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "negociando").length;
     return { total, interesados, contactados, negociando };
   }, [leads]);
 
@@ -926,7 +952,7 @@ export default function Leads() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={resolvedStatusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[180px]">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Filtrar por estado" />

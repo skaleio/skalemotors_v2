@@ -278,9 +278,9 @@ Responde de manera natural y útil:
    - ON INSERT leads
    ↓
 2. Get Available Salespeople (Supabase Node)
-   - SELECT * FROM users 
-   - WHERE branch_id = {{branch_id}} 
-   - AND role = 'vendedor' 
+   - SELECT * FROM users
+   - WHERE branch_id = {{branch_id}}
+   - AND role = 'vendedor'
    - AND is_active = true
    ↓
 3. Get Current Workload (Supabase Node)
@@ -305,6 +305,49 @@ Responde de manera natural y útil:
    - Email, SMS, o notificación in-app
    - "Nuevo lead asignado: {{lead_name}}"
 ```
+
+---
+
+## Workflow 6: Clasificación de Estado (IA → CRM)
+
+**Nombre:** `lead-state-classifier`
+
+**Trigger:** Webhook - Recibe evento `message.received` desde `ycloud-webhook`
+
+**Flujo:**
+
+```
+1. Webhook Trigger
+   - Payload: { event, contact_phone, content, lead_id, branch_id, ... }
+   ↓
+2. Get Lead + Historial (Supabase Node)
+   - SELECT * FROM leads WHERE id = {{lead_id}}  (si existe)
+   - SELECT * FROM messages WHERE lead_id = {{lead_id}} ORDER BY sent_at DESC LIMIT 20
+   ↓
+3. AI Agent / OpenAI Node
+   - Structured Output Parser para obtener:
+     lead_state, state_confidence, state_reason, priority, next_action
+   ↓
+4. Switch Node (por lead_state)
+   - nuevo | contactado | interesado | cotizando | negociando | vendido | perdido
+   ↓
+5. Update Lead State (HTTP Request)
+   - POST https://<PROJECT>.supabase.co/functions/v1/lead-state-update
+   - Body:
+     {
+       "lead_id": "{{lead_id}}",
+       "state": "{{lead_state}}",
+       "state_confidence": "{{state_confidence}}",
+       "state_reason": "{{state_reason}}"
+     }
+   ↓
+6. Respond to Webhook
+   - OK
+```
+
+**Notas:**
+- Usa `lead_id` del webhook si viene disponible. Si es null, primero busca el lead por `contact_phone`.
+- El endpoint `lead-state-update` requiere `LEAD_STATE_API_KEY` en el header `x-api-key`.
 
 ---
 
