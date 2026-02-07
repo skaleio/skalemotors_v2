@@ -9,16 +9,46 @@ import { memo, useMemo } from "react";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
-const LeadCard = memo(({ lead }: { lead: Lead }) => (
-  <div className="rounded-md border px-3 py-2 text-sm">
-    <div className="font-medium">
-      {lead.full_name || "Sin nombre"}
+function formatStateUpdatedAt(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-CL", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+const LeadCard = memo(({ lead }: { lead: Lead }) => {
+  const hasAiState = lead.state != null && lead.state !== "";
+
+  return (
+    <div className="rounded-md border px-3 py-2 text-sm">
+      <div className="font-medium">
+        {lead.full_name || "Sin nombre"}
+      </div>
+      <div className="text-muted-foreground">
+        {lead.phone || "Sin telefono"}
+      </div>
+      {hasAiState && (
+        <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="font-medium text-foreground/90">
+            Estado IA: {lead.state}
+            {lead.state_confidence != null && !Number.isNaN(Number(lead.state_confidence)) && (
+              <span> ({Math.round(Number(lead.state_confidence) * 100)}%)</span>
+            )}
+          </div>
+          {lead.state_reason && (
+            <div className="mt-0.5 truncate" title={lead.state_reason}>{lead.state_reason}</div>
+          )}
+          {lead.state_updated_at && (
+            <div className="mt-0.5 text-[10px] opacity-80">{formatStateUpdatedAt(lead.state_updated_at)}</div>
+          )}
+        </div>
+      )}
     </div>
-    <div className="text-muted-foreground">
-      {lead.phone || "Sin telefono"}
-    </div>
-  </div>
-));
+  );
+});
 
 export default function LeadsBoard() {
   const { user } = useAuth();

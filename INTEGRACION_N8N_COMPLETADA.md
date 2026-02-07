@@ -1,5 +1,7 @@
 # ✅ Integración n8n para SKALE Motors - COMPLETADA
 
+**Credencial n8n:** La credencial LEAD (Header Auth, header `x-api-key`) para el nodo LEAD STATE → `lead-state-update` está configurada en n8n. No requiere verificación adicional.
+
 ## 📋 Resumen de Implementación
 
 Se ha completado exitosamente la integración de n8n con SKALE Motors siguiendo el plan especificado. Esta implementación permite automatizar completamente el flujo de mensajería, CRM y respuestas con IA para cada sucursal de manera aislada (multi-tenant).

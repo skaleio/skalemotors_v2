@@ -84,17 +84,26 @@ export default async function handler(req: Request): Promise<Response> {
 
   const stateUpdatedAt = body.state_updated_at?.trim() || new Date().toISOString();
 
+  // Sincronizar pipeline: si state es un status válido del CRM, actualizar status para que el lead se mueva en el pipeline
+  const validPipelineStatuses = ["nuevo", "contactado", "interesado", "cotizando", "negociando", "vendido", "perdido"];
+  const syncStatus = validPipelineStatuses.includes(state) ? state : null;
+
+  const updatePayload: Record<string, unknown> = {
+    state,
+    state_confidence: Number.isNaN(stateConfidence) ? null : stateConfidence,
+    state_reason: body.state_reason ?? null,
+    state_updated_at: stateUpdatedAt,
+    updated_at: new Date().toISOString(),
+  };
+  if (syncStatus) {
+    updatePayload.status = syncStatus;
+  }
+
   const { data, error } = await supabase
     .from("leads")
-    .update({
-      state,
-      state_confidence: Number.isNaN(stateConfidence) ? null : stateConfidence,
-      state_reason: body.state_reason ?? null,
-      state_updated_at: stateUpdatedAt,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", leadId)
-    .select("id, state, state_confidence, state_reason, state_updated_at")
+    .select("id, state, state_confidence, state_reason, state_updated_at, status")
     .maybeSingle();
 
   if (error) {

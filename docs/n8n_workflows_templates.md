@@ -347,7 +347,7 @@ Responde de manera natural y útil:
 
 **Notas:**
 - Usa `lead_id` del webhook si viene disponible. Si es null, primero busca el lead por `contact_phone`.
-- El endpoint `lead-state-update` requiere `LEAD_STATE_API_KEY` en el header `x-api-key`.
+- El nodo HTTP que llama a `lead-state-update` debe usar Header Auth (credencial LEAD) con header `x-api-key`.
 
 ---
 
