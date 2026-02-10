@@ -6,6 +6,7 @@ import { PageLoader } from "@/components/PageLoader";
 import { GlobalQuickActions } from "@/components/GlobalQuickActions";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import SupportChat from "@/components/SupportChat";
+import { PrefetchLeads } from "@/components/PrefetchLeads";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useLocation } from "react-router-dom";
@@ -36,6 +37,7 @@ export function Layout({ children }: LayoutProps) {
   
   return (
     <SidebarProvider>
+      <PrefetchLeads />
       <div className="min-h-screen w-full flex">
         <AppSidebar />
         <div className="flex-1 flex flex-col">

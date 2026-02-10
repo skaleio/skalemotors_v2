@@ -29,7 +29,7 @@ export function useLeads(options: UseLeadsOptions = {}) {
 
   const queryKey = ['leads', branchId, assignedTo, status, source, search]
 
-  const { data: leads = [], isLoading: loading, error, refetch } = useQuery({
+  const { data: leads = [], isLoading: loading, isFetching, error, refetch } = useQuery({
     queryKey,
     queryFn: () =>
       leadService.getAll({
@@ -45,11 +45,14 @@ export function useLeads(options: UseLeadsOptions = {}) {
     refetchOnWindowFocus,
     refetchOnMount,
     retry: 2,
+    // Mostrar datos en caché mientras se actualiza (evita "Cargando leads" en cada entrada)
+    placeholderData: (previousData) => previousData,
   })
 
   return {
     leads: leads as Lead[],
     loading,
+    isFetching,
     error: error as Error | null,
     refetch,
   }
