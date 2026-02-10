@@ -11,6 +11,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Layout } from "@/components/Layout";
+import ReloadOnPopState from "@/components/ReloadOnPopState";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
@@ -86,6 +87,7 @@ const App = () => (
             <Toaster />
             <Sonner />
           <BrowserRouter>
+            <ReloadOnPopState />
             <Suspense fallback={<DashboardLoader message="Cargando..." />}>
             <Routes>
               {/* Rutas públicas */}

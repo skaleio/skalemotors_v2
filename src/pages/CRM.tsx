@@ -139,6 +139,14 @@ export default function CRM() {
     refetch();
   }, [user?.branch_id, refetch]);
 
+  // Cerrar diálogo al desmontar (evita error removeChild en producción)
+  useEffect(() => {
+    return () => {
+      setShowEditDialog(false);
+      setEditingLead(null);
+    };
+  }, []);
+
   const openEditDialog = useCallback((lead: Lead) => {
     setEditingLead(lead);
     setLeadStatus(lead.status || "nuevo");

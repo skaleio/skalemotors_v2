@@ -452,6 +452,8 @@ export default function Leads() {
   const [detailsLead, setDetailsLead] = useState<Lead | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLead, setDeletingLead] = useState<(typeof leads)[number] | null>(null);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: "",
     phone: "",
@@ -505,6 +507,17 @@ export default function Leads() {
       refetch();
     }
   }, [user?.branch_id, refetch]);
+
+  // Cerrar todos los diálogos al desmontar (evita error removeChild en producción)
+  useEffect(() => {
+    return () => {
+      setShowCreateDialog(false);
+      setShowEditDialog(false);
+      setShowDetailsDialog(false);
+      setShowDeleteDialog(false);
+      setShowBulkDeleteDialog(false);
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -871,6 +884,34 @@ export default function Leads() {
     }
   };
 
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedLeadIds);
+    if (ids.length === 0) return;
+    setIsDeletingBulk(true);
+    try {
+      for (const id of ids) {
+        await leadService.delete(id);
+      }
+      setSelectedLeadIds(new Set());
+      setShowBulkDeleteDialog(false);
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      await refetch();
+      toast({
+        title: "Leads eliminados",
+        description: `Se eliminaron ${ids.length} lead${ids.length === 1 ? "" : "s"} correctamente.`,
+      });
+    } catch (error: unknown) {
+      console.error("Error eliminando leads:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudieron eliminar algunos leads.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  }, [selectedLeadIds, queryClient, refetch]);
+
   const editTags = normalizeTags(editingLead?.tags);
   const editIsConsignacion = editTags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
   const editConsignacionVehicle = editingLead
@@ -975,6 +1016,31 @@ export default function Leads() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedLeadIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+          <span className="text-sm font-medium text-muted-foreground">
+            {selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? "" : "s"} seleccionado{selectedLeadIds.size === 1 ? "" : "s"}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedLeadIds(new Set())}
+            >
+              Deseleccionar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowBulkDeleteDialog(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Eliminar seleccionados
+            </Button>
+          </div>
+        </div>
+      )}
 
       <LeadsTable
         loading={loading}
@@ -1304,6 +1370,32 @@ export default function Leads() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteLead}>
               Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkDeleteDialog} onOpenChange={(open) => (open ? null : setShowBulkDeleteDialog(false))}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Eliminar leads seleccionados</DialogTitle>
+            <DialogDescription>
+              ¿Eliminar {selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? "" : "s"}? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} disabled={isDeletingBulk}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={isDeletingBulk}>
+              {isDeletingBulk ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

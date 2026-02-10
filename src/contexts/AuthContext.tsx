@@ -37,9 +37,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const lastActivityRef = useRef<number>(Date.now());
   const lastStorageWriteRef = useRef<number>(0);
   const loadingTimeoutRef = useRef<number | null>(null);
+  const pendingSessionRef = useRef<Session | null>(null);
 
   const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
-  const AUTH_LOADING_TIMEOUT_MS = 12 * 1000; // evita loading infinito
+  const AUTH_LOADING_TIMEOUT_MS = 20 * 1000; // margen por red lenta; si hay sesión usamos fallback
   const SESSION_STORAGE_KEY_PREFIX = "skale.session_activity";
   const ACTIVITY_STORAGE_THROTTLE_MS = 5 * 1000;
   const sessionStorageKeyRef = useRef<string | null>(null);
@@ -86,12 +87,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .select("*")
           .eq("id", userId)
           .maybeSingle(),
-        15000,
+        10000,
       );
 
       if (error && error.code !== 'PGRST116') {
         console.error("❌ Error fetching user profile:", error);
-        setUser(null);
         setLoading(false);
         return false;
       }
@@ -126,7 +126,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return await createUserFromAuth(userId);
     } catch (error) {
       console.error("❌ Error fetching user profile (catch):", error);
-      setUser(null);
       setLoading(false);
       return false;
     }
@@ -140,7 +139,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (!authUser) {
         console.error("❌ No se pudo obtener el usuario de auth");
-        setUser(null);
         setLoading(false);
         return false;
       }
@@ -162,7 +160,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         console.error("❌ Error creando usuario:", error);
-        setUser(null);
         setLoading(false);
         return false;
       }
@@ -181,7 +178,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return false;
     } catch (error) {
       console.error("❌ Error en createUserFromAuth:", error);
-      setUser(null);
       setLoading(false);
       return false;
     }
@@ -192,16 +188,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("📍 Sesión actual:", session ? "existe" : "no existe");
-      setSession(session);
-      if (session?.user) {
-        const ok = await fetchUserProfile(session.user.id);
-        if (!ok) {
-          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
-          setUser(buildFallbackUserFromSession(session.user));
-          setLoading(false);
-        }
-      } else {
+      if (!session?.user) {
+        pendingSessionRef.current = null;
+        setSession(null);
         setLoading(false);
+        return;
+      }
+      const currentSession = session;
+      pendingSessionRef.current = currentSession;
+      setSession(currentSession);
+      setUser(buildFallbackUserFromSession(currentSession.user));
+      setLoading(false);
+      // Refrescar sesión y perfil en segundo plano (no bloquean la primera pantalla)
+      try {
+        const { data } = await supabase.auth.refreshSession();
+        if (data?.session) {
+          setSession(data.session);
+          pendingSessionRef.current = data.session;
+        }
+      } catch (e) {
+        console.warn("⚠️ No se pudo refrescar sesión:", e);
+      }
+      const ok = await fetchUserProfile(currentSession.user.id);
+      if (ok) {
+        // user ya actualizado por fetchUserProfile
+      } else {
+        console.warn("⚠️ Perfil en segundo plano falló, se mantiene usuario fallback");
       }
     });
 
@@ -241,7 +253,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     loadingTimeoutRef.current = window.setTimeout(() => {
-      console.warn("⏱️ Loading auth timeout: liberando loading para evitar bloqueo");
+      const pending = pendingSessionRef.current;
+      if (pending?.user) {
+        setUser(buildFallbackUserFromSession(pending.user));
+        setSession(pending);
+      }
       setLoading(false);
     }, AUTH_LOADING_TIMEOUT_MS);
 
@@ -300,6 +316,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (storedUserId !== session.user.id) {
       lastActivityAt = now;
     }
+    // Tras recargar o volver atrás, no cerrar sesión por inactividad: contar como actividad reciente
+    try {
+      const navEntry = typeof window !== "undefined" && performance.getEntriesByType?.("navigation")?.[0] as { type?: string } | undefined;
+      if (navEntry && (navEntry.type === "reload" || navEntry.type === "back_forward")) {
+        lastActivityAt = now;
+      }
+    } catch {
+      // ignorar si no está disponible
+    }
 
     lastActivityRef.current = lastActivityAt;
 
@@ -353,8 +378,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }));
 
+    // Al volver a la pestaña o tras "atrás" en el navegador, contar como actividad para no cerrar sesión
+    const handlePageShow = () => {
+      handleActivity();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+
     return () => {
       events.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
+      window.removeEventListener("pageshow", handlePageShow);
       if (sessionTimeoutRef.current) {
         window.clearTimeout(sessionTimeoutRef.current);
         sessionTimeoutRef.current = null;
