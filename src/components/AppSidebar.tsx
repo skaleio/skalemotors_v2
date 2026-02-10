@@ -3,43 +3,43 @@ import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { leadService } from "@/lib/services/leads";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-    Activity,
-    ArrowRight,
-    Award,
-    BarChart3,
-    Bell,
-    CreditCard as BillingIcon,
-    Brain,
-    Calculator,
-    Calendar,
-    Car,
-    ChevronDown,
-    ChevronRight,
-    ClipboardList,
-    CreditCard,
-    DollarSign,
-    FileText,
-    Globe,
-    Heart,
-    Keyboard,
-    LayoutDashboard,
-    LogOut,
-    MessageCircle,
-    MoreVertical,
-    Package,
-    Phone,
-    PieChart,
-    Plug,
-    Plus,
-    Receipt,
-    RefreshCw,
-    Settings,
-    Target,
-    TrendingUp,
-    UserCheck,
-    UserCircle,
-    UserCog,
-    Users
+  Activity,
+  ArrowRight,
+  Award,
+  BarChart3,
+  Bell,
+  CreditCard as BillingIcon,
+  Brain,
+  Calculator,
+  Calendar,
+  Car,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Globe,
+  Heart,
+  Keyboard,
+  LayoutDashboard,
+  LogOut,
+  MessageCircle,
+  MoreVertical,
+  Package,
+  Phone,
+  PieChart,
+  Plug,
+  Plus,
+  Receipt,
+  RefreshCw,
+  Settings,
+  Target,
+  TrendingUp,
+  UserCheck,
+  UserCircle,
+  UserCog,
+  Users
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -48,17 +48,17 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarGroupLabel,
-    SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    useSidebar
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
@@ -146,8 +146,13 @@ const settingsCategory = {
   ]
 };
 
+const ALL_CATEGORY_KEYS = [
+  "Dashboard", "Ventas & CRM", "Inventario & Vehículos", "Operaciones",
+  "Finanzas & SII", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
+] as const;
+
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
@@ -278,6 +283,15 @@ export function AppSidebar() {
     }));
   };
 
+  /** Al hacer clic en un icono con el sidebar acoplado: expandir sidebar, abrir solo esa categoría y navegar a la primera herramienta */
+  const handleCollapsedCategoryClick = (category: { title: string; items: { url: string }[] }) => {
+    setOpen(true);
+    const next: Record<string, boolean> = {};
+    ALL_CATEGORY_KEYS.forEach(k => { next[k] = k === category.title; });
+    setExpandedCategories(next);
+    navigateWithLoading(category.items[0].url);
+  };
+
   const handleNavigation = (url: string) => {
     navigateWithLoading(url);
   };
@@ -298,60 +312,152 @@ export function AppSidebar() {
         className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg transition-all duration-300 ease-in-out`}
         collapsible="icon"
       >
-      <SidebarHeader className="border-b border-slate-200 p-4 bg-gradient-to-r from-slate-50 to-white transition-all duration-300">
-        {!isCollapsed ? (
-          <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
-            <div className="flex items-center gap-3">
+        <SidebarHeader className="border-b border-slate-200 p-4 bg-gradient-to-r from-slate-50 to-white transition-all duration-300">
+          {!isCollapsed ? (
+            <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
+                  <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                  </svg>
+                </div>
+                <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide animate-in fade-in-0 duration-300 delay-100">
+                  SKALEMOTORS
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
                 <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide animate-in fade-in-0 duration-300 delay-100">
-                SKALEMOTORS
-              </span>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
-            <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-          </div>
-        )}
-      </SidebarHeader>
+          )}
+        </SidebarHeader>
 
-      <SidebarContent>
-        {menuCategories.map((category) => (
+        <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
+          {menuCategories.map((category) => (
+            <Collapsible
+              key={category.title}
+              open={expandedCategories[category.title]}
+              onOpenChange={() => toggleCategory(category.title)}
+            >
+              <SidebarGroup>
+                <CollapsibleTrigger asChild>
+                  <SidebarGroupLabel
+                    className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
+                    onClick={isCollapsed ? () => handleCollapsedCategoryClick(category) : undefined}
+                  >
+                    <div className="flex items-center justify-between w-full min-w-0 group-data-[collapsible=icon]:justify-center">
+                      {isCollapsed ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
+                              <category.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110 shrink-0" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="bg-white text-slate-800 border-slate-200 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
+                            <p>{category.title}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <>
+                          <span className="font-bold text-xs tracking-wider uppercase text-slate-600 group-hover:text-slate-800 transition-colors duration-200">
+                            {category.title}
+                          </span>
+                          <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
+                            {expandedCategories[category.title] ?
+                              <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
+                              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
+                            }
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </SidebarGroupLabel>
+                </CollapsibleTrigger>
+                {!isCollapsed && (
+                  <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {category.items.map((item, index) => {
+                          const isLeadsItem = item.url === "/app/leads";
+                          return (
+                            <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                              <SidebarMenuButton asChild>
+                                {item.url.includes('?') ? (
+                                  <button
+                                    onClick={() => handleNavigation(item.url)}
+                                    className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
+                                  >
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
+                                      }`} />
+                                    <span className={`font-medium text-sm transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
+                                      }`}>
+                                      {item.title}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <NavLink
+                                    to={item.url}
+                                    end={item.url === "/"}
+                                    onMouseEnter={isLeadsItem ? prefetchLeads : undefined}
+                                    onFocus={isLeadsItem ? prefetchLeads : undefined}
+                                    onTouchStart={isLeadsItem ? prefetchLeads : undefined}
+                                    className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
+                                  >
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
+                                      }`} />
+                                    <span className={`font-medium text-sm transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
+                                      }`}>
+                                      {item.title}
+                                    </span>
+                                  </NavLink>
+                                )}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          )
+                        })}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                )}
+              </SidebarGroup>
+            </Collapsible>
+          ))}
+
+          {/* Apartado Sistema - Colapsible */}
           <Collapsible
-            key={category.title}
-            open={expandedCategories[category.title]}
-            onOpenChange={() => toggleCategory(category.title)}
+            open={expandedCategories["Sistema"]}
+            onOpenChange={() => toggleCategory("Sistema")}
           >
             <SidebarGroup>
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm">
-                  <div className="flex items-center justify-between w-full">
+                <SidebarGroupLabel
+                  className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
+                  onClick={isCollapsed ? () => handleCollapsedCategoryClick(settingsCategory) : undefined}
+                >
+                  <div className="flex items-center justify-between w-full min-w-0 group-data-[collapsible=icon]:justify-center">
                     {isCollapsed ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center w-full">
-                            <category.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110" />
+                          <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
+                            <settingsCategory.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110 shrink-0" />
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="bg-white text-slate-800 border-slate-200 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
-                          <p>{category.title}</p>
+                          <p>{settingsCategory.title}</p>
                         </TooltipContent>
                       </Tooltip>
                     ) : (
                       <>
                         <span className="font-bold text-xs tracking-wider uppercase text-slate-600 group-hover:text-slate-800 transition-colors duration-200">
-                          {category.title}
+                          {settingsCategory.title}
                         </span>
                         <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                          {expandedCategories[category.title] ?
+                          {expandedCategories["Sistema"] ?
                             <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
                             <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
                           }
@@ -365,297 +471,203 @@ export function AppSidebar() {
                 <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {category.items.map((item, index) => {
-                        const isLeadsItem = item.url === "/app/leads";
-                        return (
+                      {settingsCategory.items.map((item, index) => (
                         <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
                           <SidebarMenuButton asChild>
                             {item.url.includes('?') ? (
-                              <button
-                                onClick={() => handleNavigation(item.url)}
-                                className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
-                              >
-                                <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
-                                }`} />
-                                <span className={`font-medium text-sm transition-all duration-200 ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                }`}>
-                                  {item.title}
-                                </span>
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => handleNavigation(item.url)}
+                                    className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
+                                  >
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
+                                      }`} />
+                                    {!isCollapsed && (
+                                      <span className={`font-medium text-sm transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
+                                        }`}>
+                                        {item.title}
+                                      </span>
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                {isCollapsed && (
+                                  <TooltipContent side="right" className="bg-slate-800 text-white border-slate-600">
+                                    <p>{item.title}</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
                             ) : (
-                              <NavLink
-                                to={item.url}
-                                end={item.url === "/"}
-                                onMouseEnter={isLeadsItem ? prefetchLeads : undefined}
-                                onFocus={isLeadsItem ? prefetchLeads : undefined}
-                                onTouchStart={isLeadsItem ? prefetchLeads : undefined}
-                                className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
-                              >
-                                <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
-                                }`} />
-                                <span className={`font-medium text-sm transition-all duration-200 ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                }`}>
-                                  {item.title}
-                                </span>
-                              </NavLink>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <NavLink
+                                    to={item.url}
+                                    className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
+                                  >
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
+                                      }`} />
+                                    {!isCollapsed && (
+                                      <span className={`font-medium text-sm transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
+                                        }`}>
+                                        {item.title}
+                                      </span>
+                                    )}
+                                  </NavLink>
+                                </TooltipTrigger>
+                                {isCollapsed && (
+                                  <TooltipContent side="right" className="bg-slate-800 text-white border-slate-600">
+                                    <p>{item.title}</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
                             )}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                      )})}
+                      ))}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </CollapsibleContent>
               )}
             </SidebarGroup>
           </Collapsible>
-        ))}
+        </SidebarContent>
 
-        {/* Apartado Sistema - Colapsible */}
-        <Collapsible
-          open={expandedCategories["Sistema"]}
-          onOpenChange={() => toggleCategory("Sistema")}
-        >
-          <SidebarGroup>
-            <CollapsibleTrigger asChild>
-              <SidebarGroupLabel className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm">
-                <div className="flex items-center justify-between w-full">
-                  {isCollapsed ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center justify-center w-full">
-                          <settingsCategory.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="bg-white text-slate-800 border-slate-200 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
-                        <p>{settingsCategory.title}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <>
-                      <span className="font-bold text-xs tracking-wider uppercase text-slate-600 group-hover:text-slate-800 transition-colors duration-200">
-                        {settingsCategory.title}
-                      </span>
-                      <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-                        {expandedCategories["Sistema"] ?
-                          <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
-                          <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
-                        }
-                      </div>
-                    </>
-                  )}
-                </div>
-              </SidebarGroupLabel>
-            </CollapsibleTrigger>
-            {!isCollapsed && (
-              <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {settingsCategory.items.map((item, index) => (
-                    <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
-                      <SidebarMenuButton asChild>
-                        {item.url.includes('?') ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleNavigation(item.url)}
-                                className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
-                              >
-                                <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
-                                }`} />
-                                {!isCollapsed && (
-                                  <span className={`font-medium text-sm transition-colors ${
-                                    isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                  }`}>
-                                    {item.title}
-                                  </span>
-                                )}
-                              </button>
-                            </TooltipTrigger>
-                            {isCollapsed && (
-                              <TooltipContent side="right" className="bg-slate-800 text-white border-slate-600">
-                                <p>{item.title}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <NavLink
-                                to={item.url}
-                                className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
-                              >
-                                <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${
-                                  isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
-                                }`} />
-                                {!isCollapsed && (
-                                  <span className={`font-medium text-sm transition-colors ${
-                                    isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                  }`}>
-                                    {item.title}
-                                  </span>
-                                )}
-                              </NavLink>
-                            </TooltipTrigger>
-                            {isCollapsed && (
-                              <TooltipContent side="right" className="bg-slate-800 text-white border-slate-600">
-                                <p>{item.title}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            )}
-          </SidebarGroup>
-        </Collapsible>
-      </SidebarContent>
-
-      {/* Footer con información del usuario */}
-      <SidebarFooter className="border-t border-slate-200 p-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 transition-colors group">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
-                  {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                </AvatarFallback>
-              </Avatar>
-              {!isCollapsed && (
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-slate-800">
-                    {user?.full_name || 'Usuario'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {user?.email || 'usuario@ejemplo.com'}
-                  </p>
-                </div>
-              )}
-              <MoreVertical className="h-4 w-4 text-slate-500 group-hover:text-slate-700" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 bg-white border border-slate-200 shadow-lg">
-            {/* Mi Cuenta */}
-            <div className="px-3 py-2">
-              <p className="text-sm font-semibold text-slate-800">Mi Cuenta</p>
-            </div>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => navigate('/app/profile')}
-            >
-              <UserCircle className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Perfil</span>
-              <div className="ml-auto text-xs text-slate-400">⇧⌘P</div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => navigate('/app/billing')}
-            >
-              <BillingIcon className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Facturación</span>
-              <div className="ml-auto text-xs text-slate-400">⌘B</div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => navigate('/app/settings')}
-            >
-              <Settings className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Configuración</span>
-              <div className="ml-auto text-xs text-slate-400">⌘S</div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => {
-                // Aquí podrías abrir un modal con atajos de teclado
-                toast({
-                  title: "Atajos de teclado",
-                  description: "Funcionalidad en desarrollo",
-                });
-              }}
-            >
-              <Keyboard className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Atajos de teclado</span>
-              <div className="ml-auto text-xs text-slate-400">⌘K</div>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Equipo */}
-            <div className="px-3 py-2">
-              <p className="text-sm font-semibold text-slate-800">Equipo</p>
-            </div>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => navigate('/app/users')}
-            >
-              <Users className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Invitar usuarios</span>
-              <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-              onClick={() => {
-                toast({
-                  title: "Nuevo Equipo",
-                  description: "Funcionalidad en desarrollo",
-                });
-              }}
-            >
-              <Plus className="h-4 w-4 text-slate-600" />
-              <span className="text-sm text-slate-700">Nuevo Equipo</span>
-              <div className="ml-auto text-xs text-slate-400">⌘+T</div>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Cerrar Sesión */}
-            <DropdownMenuItem
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-50 text-red-600"
-              onClick={() => {
-                if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-                  signOut();
-                  navigate('/login');
-                }
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="text-sm">Cerrar Sesión</span>
-              <div className="ml-auto text-xs text-red-400">⇧⌘Q</div>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Información del usuario */}
-            <div className="px-3 py-3">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
+        {/* Footer con información del usuario */}
+        <SidebarFooter className="border-t border-slate-200 p-4 group-data-[collapsible=icon]:p-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
+                <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
                     {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-800">
-                    {user?.full_name || 'Usuario'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {user?.email || 'usuario@ejemplo.com'}
-                  </p>
-                </div>
-                <MoreVertical className="h-4 w-4 text-slate-400" />
+                {!isCollapsed && (
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">
+                      {user?.full_name || 'Usuario'}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {user?.email || 'usuario@ejemplo.com'}
+                    </p>
+                  </div>
+                )}
+                <MoreVertical className="h-4 w-4 text-slate-500 group-hover:text-slate-700 shrink-0 group-data-[collapsible=icon]:hidden" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 bg-white border border-slate-200 shadow-lg">
+              {/* Mi Cuenta */}
+              <div className="px-3 py-2">
+                <p className="text-sm font-semibold text-slate-800">Mi Cuenta</p>
               </div>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarFooter>
-    </Sidebar>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => navigate('/app/profile')}
+              >
+                <UserCircle className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Perfil</span>
+                <div className="ml-auto text-xs text-slate-400">⇧⌘P</div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => navigate('/app/billing')}
+              >
+                <BillingIcon className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Facturación</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => navigate('/app/settings')}
+              >
+                <Settings className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Configuración</span>
+                <div className="ml-auto text-xs text-slate-400">⌘S</div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => {
+                  // Aquí podrías abrir un modal con atajos de teclado
+                  toast({
+                    title: "Atajos de teclado",
+                    description: "Funcionalidad en desarrollo",
+                  });
+                }}
+              >
+                <Keyboard className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Atajos de teclado</span>
+                <div className="ml-auto text-xs text-slate-400">⌘K</div>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Equipo */}
+              <div className="px-3 py-2">
+                <p className="text-sm font-semibold text-slate-800">Equipo</p>
+              </div>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => navigate('/app/users')}
+              >
+                <Users className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Invitar usuarios</span>
+                <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                onClick={() => {
+                  toast({
+                    title: "Nuevo Equipo",
+                    description: "Funcionalidad en desarrollo",
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4 text-slate-600" />
+                <span className="text-sm text-slate-700">Nuevo Equipo</span>
+                <div className="ml-auto text-xs text-slate-400">⌘+T</div>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Cerrar Sesión */}
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-50 text-red-600"
+                onClick={() => {
+                  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                    signOut();
+                    navigate('/login');
+                  }
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="text-sm">Cerrar Sesión</span>
+                <div className="ml-auto text-xs text-red-400">⇧⌘Q</div>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Información del usuario */}
+              <div className="px-3 py-3">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
+                      {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-800">
+                      {user?.full_name || 'Usuario'}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {user?.email || 'usuario@ejemplo.com'}
+                    </p>
+                  </div>
+                  <MoreVertical className="h-4 w-4 text-slate-400" />
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarFooter>
+      </Sidebar>
     </TooltipProvider>
   );
 }

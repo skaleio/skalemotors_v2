@@ -513,6 +513,12 @@ export default function Leads() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    const handleOpenNewLeadForm = () => setShowCreateDialog(true);
+    window.addEventListener("openNewLeadForm", handleOpenNewLeadForm);
+    return () => window.removeEventListener("openNewLeadForm", handleOpenNewLeadForm);
+  }, []);
+
   const resolvedStatusFilter = useMemo(() => {
     if (statusFilter === "all") return "all";
     return isValidStatusKey(statusFilter) ? getNormalizedStatusKey(statusFilter) : "all";
@@ -984,7 +990,15 @@ export default function Leads() {
         openDetailsDialog={openDetailsDialog}
       />
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog
+        open={showCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open && location.search) {
+            navigate(location.pathname, { replace: true });
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle>Nuevo lead</DialogTitle>

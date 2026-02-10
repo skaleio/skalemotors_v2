@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { generateReelScript as generateReelScriptApi } from "@/lib/services/studioIaApi";
 import { Video, Sparkles, Copy, Download, RefreshCw, CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,16 +47,17 @@ export default function GeneradorGuiones() {
 
     setLoading(true);
     try {
-      // Simulación de generación de guión
-      // En producción, aquí se conectaría con un proveedor de IA real
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const script = generateReelScript(formData);
-      setGeneratedScript(script);
-
-      toast.success("Tu guión para reel está listo.");
-    } catch (error) {
-      toast.error("No se pudo generar el guión. Por favor, intenta nuevamente.");
+      const result = await generateReelScriptApi(formData);
+      if (result.ok) {
+        setGeneratedScript(result.text);
+        toast.success("Tu guión para reel está listo.");
+      } else {
+        toast.warning(result.error + " Usando plantilla.");
+        setGeneratedScript(generateReelScript(formData));
+      }
+    } catch {
+      toast.warning("No se pudo conectar con la IA. Usando plantilla.");
+      setGeneratedScript(generateReelScript(formData));
     } finally {
       setLoading(false);
     }

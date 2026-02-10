@@ -96,18 +96,18 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/onboarding" element={<Onboarding />} />
 
-              {/* Rutas protegidas */}
+              {/* Rutas protegidas: rutas más específicas primero para que /app/executive no sea capturada por /app */}
+              <Route path="/app/executive" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ExecutiveDashboard />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app" element={
                 <ProtectedRoute>
                   <Layout>
                     <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/executive" element={
-                <ProtectedRoute requiredRole={['admin', 'gerente']}>
-                  <Layout>
-                    <ExecutiveDashboard />
                   </Layout>
                 </ProtectedRoute>
               } />

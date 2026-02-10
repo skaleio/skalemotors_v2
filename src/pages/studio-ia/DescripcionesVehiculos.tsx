@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { sanitizeIntegerInput } from "@/lib/format";
+import { generateVehicleDescription } from "@/lib/services/studioIaApi";
 import { Car, CheckCircle2, Copy, Download, FileText, RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -51,14 +52,17 @@ export default function DescripcionesVehiculos() {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const description = generateDescriptionMock(formData);
-      setGeneratedDescription(description);
-
-      toast.success("Tu descripción está lista para usar.");
-    } catch (error) {
-      toast.error("No se pudo generar la descripción. Por favor, intenta nuevamente.");
+      const result = await generateVehicleDescription(formData);
+      if (result.ok) {
+        setGeneratedDescription(result.text);
+        toast.success("Tu descripción está lista para usar.");
+      } else {
+        toast.warning(result.error + " Usando plantilla.");
+        setGeneratedDescription(generateDescriptionMock(formData));
+      }
+    } catch {
+      toast.warning("No se pudo conectar con la IA. Usando plantilla.");
+      setGeneratedDescription(generateDescriptionMock(formData));
     } finally {
       setLoading(false);
     }

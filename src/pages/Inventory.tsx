@@ -1,5 +1,6 @@
-import { Download, Edit, Eye, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 
 import { Badge } from "@/components/ui/badge";
@@ -47,10 +48,18 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatCLP } from "@/lib/format";
 import { vehicleService } from "@/lib/services/vehicles";
+import {
+  listListingsForBranch,
+  listConnections,
+  publishVehicle,
+  type MarketplacePlatform,
+  type VehicleListingRow,
+} from "@/lib/services/marketplaceApi";
 import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 
@@ -261,6 +270,8 @@ export default function Inventory() {
     return `inventario_${fileDate}`;
   });
   const [hasRetriedEmpty, setHasRetriedEmpty] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [saleData, setSaleData] = useState({
     salePrice: 0,
     downPayment: 0,
@@ -284,6 +295,58 @@ export default function Inventory() {
     drivetrain: "",
     images: [] as File[],
   });
+
+  const [listingsByVehicle, setListingsByVehicle] = useState<Record<string, VehicleListingRow[]>>({});
+  const [marketplaceConnections, setMarketplaceConnections] = useState<{ platform: MarketplacePlatform }[]>([]);
+  const [publishingKey, setPublishingKey] = useState<string | null>(null);
+
+  const branchId = user?.branch_id ?? null;
+
+  useEffect(() => {
+    if (!branchId || !vehicles.length) {
+      setListingsByVehicle({});
+      setMarketplaceConnections([]);
+      return;
+    }
+    const vehicleIds = vehicles.map((v) => v.id);
+    listListingsForBranch(vehicleIds)
+      .then((listings) => {
+        const byVehicle: Record<string, VehicleListingRow[]> = {};
+        for (const l of listings) {
+          if (!byVehicle[l.vehicle_id]) byVehicle[l.vehicle_id] = [];
+          byVehicle[l.vehicle_id].push(l);
+        }
+        setListingsByVehicle(byVehicle);
+      })
+      .catch(() => setListingsByVehicle({}));
+    listConnections(branchId)
+      .then((conns) => setMarketplaceConnections(conns.filter((c) => c.status === "active").map((c) => ({ platform: c.platform }))))
+      .catch(() => setMarketplaceConnections([]));
+  }, [branchId, vehicles]);
+
+  const handlePublishToPlatform = async (vehicleId: string, platform: MarketplacePlatform) => {
+    const key = `${vehicleId}:${platform}`;
+    setPublishingKey(key);
+    try {
+      await publishVehicle(vehicleId, platform);
+      const name = platform === "mercadolibre" ? "Mercado Libre" : platform === "facebook" ? "Facebook" : "Chile Autos";
+      toast({ title: "Publicado", description: `Vehículo publicado en ${name}.` });
+      const listings = await listListingsForBranch([vehicleId]);
+      setListingsByVehicle((prev) => {
+        const byVehicle = { ...prev };
+        byVehicle[vehicleId] = listings;
+        return byVehicle;
+      });
+    } catch (e) {
+      toast({
+        title: "Error al publicar",
+        description: e instanceof Error ? e.message : "No se pudo publicar en la plataforma.",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingKey(null);
+    }
+  };
 
   const isFilterActive =
     searchQuery.trim() !== "" ||
@@ -319,6 +382,19 @@ export default function Inventory() {
     setHasRetriedEmpty(true);
     refetch();
   }, [user?.branch_id, loading, vehicles.length, hasRetriedEmpty, refetch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") === "true") {
+      setShowAddDialog(true);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const handleOpenNewVehicleForm = () => setShowAddDialog(true);
+    window.addEventListener("openNewVehicleForm", handleOpenNewVehicleForm);
+    return () => window.removeEventListener("openNewVehicleForm", handleOpenNewVehicleForm);
+  }, []);
 
   const uniqueMakes = useMemo(() => {
     return Array.from(new Set(vehicles.map((v) => v.make))).sort();
@@ -1087,13 +1163,14 @@ export default function Inventory() {
                 <TableHead>Margen</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead className="w-[140px]">Portales</TableHead>
                 <TableHead className="w-[100px]">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Cargando vehículos...
                   </TableCell>
                 </TableRow>
@@ -1179,6 +1256,20 @@ export default function Inventory() {
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(listingsByVehicle[vehicle.id] ?? []).map((l) => (
+                        <Badge
+                          key={l.id}
+                          variant={l.status === "published" ? "default" : l.status === "error" ? "destructive" : "secondary"}
+                          className="text-xs"
+                        >
+                          {l.platform === "mercadolibre" ? "ML" : l.platform === "facebook" ? "FB" : "Chile"}
+                          {l.status === "published" ? " ✓" : l.status === "error" ? " ✗" : ""}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
@@ -1241,6 +1332,57 @@ export default function Inventory() {
                           {vehicle.status === 'disponible' && (
                             <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                               Pausar publicación
+                            </DropdownMenuItem>
+                          )}
+                          {marketplaceConnections.some((c) => c.platform === "mercadolibre") && vehicle.status === "disponible" && (
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePublishToPlatform(vehicle.id, "mercadolibre");
+                              }}
+                              disabled={publishingKey === `${vehicle.id}:mercadolibre`}
+                            >
+                              {publishingKey === `${vehicle.id}:mercadolibre` ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Globe className="h-4 w-4 mr-2" />
+                              )}
+                              Publicar en Mercado Libre
+                            </DropdownMenuItem>
+                          )}
+                          {marketplaceConnections.some((c) => c.platform === "facebook") && vehicle.status === "disponible" && (
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePublishToPlatform(vehicle.id, "facebook");
+                              }}
+                              disabled={publishingKey === `${vehicle.id}:facebook`}
+                            >
+                              {publishingKey === `${vehicle.id}:facebook` ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Globe className="h-4 w-4 mr-2" />
+                              )}
+                              Publicar en Facebook
+                            </DropdownMenuItem>
+                          )}
+                          {marketplaceConnections.some((c) => c.platform === "chileautos") && vehicle.status === "disponible" && (
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePublishToPlatform(vehicle.id, "chileautos");
+                              }}
+                              disabled={publishingKey === `${vehicle.id}:chileautos`}
+                            >
+                              {publishingKey === `${vehicle.id}:chileautos` ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Globe className="h-4 w-4 mr-2" />
+                              )}
+                              Publicar en Chile Autos
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
@@ -1524,7 +1666,9 @@ export default function Inventory() {
         onOpenChange={(open) => {
           setShowAddDialog(open);
           if (!open) {
-            // Resetear formulario al cerrar
+            if (location.search) {
+              navigate(location.pathname, { replace: true });
+            }
             setNewVehicle({
               make: "",
               model: "",

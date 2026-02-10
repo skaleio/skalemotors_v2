@@ -416,6 +416,138 @@ export interface Database {
           created_at?: string
         }
       }
+      pending_tasks: {
+        Row: {
+          id: string
+          branch_id: string
+          assigned_to: string | null
+          priority: 'urgent' | 'today' | 'later'
+          title: string
+          description: string | null
+          action_type: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
+          action_label: string
+          entity_type: 'lead' | 'appointment' | 'custom'
+          entity_id: string | null
+          metadata: Json
+          source: 'rule' | 'llm' | 'whatsapp'
+          due_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id: string
+          assigned_to?: string | null
+          priority?: 'urgent' | 'today' | 'later'
+          title: string
+          description?: string | null
+          action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
+          action_label?: string
+          entity_type?: 'lead' | 'appointment' | 'custom'
+          entity_id?: string | null
+          metadata?: Json
+          source?: 'rule' | 'llm' | 'whatsapp'
+          due_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string
+          assigned_to?: string | null
+          priority?: 'urgent' | 'today' | 'later'
+          title?: string
+          description?: string | null
+          action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
+          action_label?: string
+          entity_type?: 'lead' | 'appointment' | 'custom'
+          entity_id?: string | null
+          metadata?: Json
+          source?: 'rule' | 'llm' | 'whatsapp'
+          due_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      marketplace_connections: {
+        Row: {
+          id: string
+          branch_id: string
+          platform: 'mercadolibre' | 'facebook' | 'chileautos'
+          credentials: Json
+          status: 'active' | 'inactive' | 'error'
+          last_error: string | null
+          last_sync_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id: string
+          platform: 'mercadolibre' | 'facebook' | 'chileautos'
+          credentials?: Json
+          status?: 'active' | 'inactive' | 'error'
+          last_error?: string | null
+          last_sync_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string
+          platform?: 'mercadolibre' | 'facebook' | 'chileautos'
+          credentials?: Json
+          status?: 'active' | 'inactive' | 'error'
+          last_error?: string | null
+          last_sync_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      vehicle_listings: {
+        Row: {
+          id: string
+          vehicle_id: string
+          platform: 'mercadolibre' | 'facebook' | 'chileautos'
+          external_id: string | null
+          external_url: string | null
+          status: 'draft' | 'published' | 'paused' | 'error' | 'syncing'
+          last_synced_at: string | null
+          last_error: string | null
+          payload_sent: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          vehicle_id: string
+          platform: 'mercadolibre' | 'facebook' | 'chileautos'
+          external_id?: string | null
+          external_url?: string | null
+          status?: 'draft' | 'published' | 'paused' | 'error' | 'syncing'
+          last_synced_at?: string | null
+          last_error?: string | null
+          payload_sent?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          vehicle_id?: string
+          platform?: 'mercadolibre' | 'facebook' | 'chileautos'
+          external_id?: string | null
+          external_url?: string | null
+          status?: 'draft' | 'published' | 'paused' | 'error' | 'syncing'
+          last_synced_at?: string | null
+          last_error?: string | null
+          payload_sent?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       messages: {
         Row: {
           id: string

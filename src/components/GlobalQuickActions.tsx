@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useDeferredValue, memo } from "react";
 import { 
   Car, 
   Users, 
@@ -22,7 +22,8 @@ import {
   CreditCard, 
   Search, 
   Activity, 
-  CheckCircle 
+  CheckCircle,
+  ClipboardList 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,20 +36,91 @@ import {
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useTheme } from "@/contexts/ThemeContext";
 
+type QuickActionOption = {
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  category: string;
+  keywords: string[];
+  shortcut?: string;
+  action: () => void;
+};
+
+const QuickActionRow = memo(function QuickActionRow({
+  option,
+  theme,
+  onSelect,
+}: {
+  option: QuickActionOption;
+  theme: string;
+  onSelect: () => void;
+}) {
+  const Icon = option.icon;
+  const iconBgClass = theme === "dark" ? option.color.replace("600", "800") : option.color.replace("600", "100");
+  const iconTextClass = theme === "dark" ? option.color.replace("bg-", "text-").replace("600", "300") : option.color.replace("bg-", "text-");
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`group flex items-center gap-3 p-3 rounded-xl transition-colors duration-100 cursor-pointer border border-transparent ${
+        theme === "dark"
+          ? "hover:bg-slate-700/80 hover:border-slate-600/50"
+          : "hover:bg-gray-50/80 hover:border-gray-200/50"
+      }`}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+    >
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconBgClass}`}>
+        <Icon className={`h-4 w-4 ${iconTextClass}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`font-medium text-sm ${theme === "dark" ? "text-white group-hover:text-slate-200" : "text-gray-900 group-hover:text-gray-700"}`}>
+          {option.label}
+        </div>
+        <div className={`text-xs truncate ${theme === "dark" ? "text-slate-400" : "text-gray-500"}`}>
+          {option.description}
+        </div>
+      </div>
+      {option.shortcut && (
+        <div className={`flex-shrink-0 text-xs ${theme === "dark" ? "text-slate-400" : "text-gray-400"}`}>
+          {option.shortcut.split("+").map((key, i) => (
+            <span key={i} className="inline-flex items-center gap-0.5">
+              {i > 0 && <span className="mx-0.5">+</span>}
+              <kbd className={`px-1.5 py-0.5 border rounded font-mono ${theme === "dark" ? "bg-slate-600 border-slate-500 text-slate-300" : "bg-white border-gray-200"}`}>
+                {key.trim()}
+              </kbd>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export function GlobalQuickActions() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const { theme } = useTheme();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const createOptions = [
+  const createOptions = useMemo(() => [
   // Ventas & CRM
   { 
     label: "Nuevo Lead", 
     description: "Agregar un nuevo prospecto al sistema",
     icon: UserPlus,
-    action: () => navigateWithLoading('/crm'),
+    shortcut: "Ctrl+L",
+    action: () => {
+      const onLeadsPage = window.location.pathname === "/app/leads" || window.location.pathname === "/leads";
+      if (onLeadsPage) {
+        window.dispatchEvent(new CustomEvent("openNewLeadForm"));
+      } else {
+        navigateWithLoading("/app/leads?new=true");
+      }
+    },
     color: "bg-blue-600",
     category: "Ventas & CRM",
     keywords: ["lead", "prospecto", "cliente", "venta", "crm"]
@@ -57,7 +129,8 @@ export function GlobalQuickActions() {
     label: "CRM Pipeline", 
     description: "Gestionar el proceso de ventas",
     icon: Target,
-    action: () => navigateWithLoading('/crm'),
+    shortcut: "Ctrl+P",
+    action: () => navigateWithLoading('/app/crm'),
     color: "bg-green-600",
     category: "Ventas & CRM",
     keywords: ["pipeline", "ventas", "proceso", "crm", "seguimiento"]
@@ -66,7 +139,8 @@ export function GlobalQuickActions() {
     label: "Nueva Cotización", 
     description: "Crear propuesta comercial",
     icon: FileText,
-    action: () => navigateWithLoading('/crm'),
+    shortcut: "Ctrl+Q",
+    action: () => navigateWithLoading('/app/quotes'),
     color: "bg-purple-600",
     category: "Ventas & CRM",
     keywords: ["cotización", "propuesta", "precio", "oferta", "comercial"]
@@ -75,7 +149,7 @@ export function GlobalQuickActions() {
     label: "Seguimiento de Ventas", 
     description: "Revisar estado de negociaciones",
     icon: TrendingUp,
-    action: () => navigateWithLoading('/crm'),
+    action: () => navigateWithLoading('/app/crm'),
     color: "bg-indigo-600",
     category: "Ventas & CRM",
     keywords: ["seguimiento", "ventas", "negociación", "estado", "progreso"]
@@ -86,7 +160,7 @@ export function GlobalQuickActions() {
     label: "Llamada", 
     description: "Realizar llamada telefónica",
     icon: Phone,
-    action: () => navigateWithLoading('/calls'),
+    action: () => navigateWithLoading('/app/calls'),
     color: "bg-red-600",
     category: "Operaciones",
     keywords: ["llamada", "teléfono", "contacto", "comunicación", "call"]
@@ -95,7 +169,8 @@ export function GlobalQuickActions() {
     label: "Agendar Cita", 
     description: "Programar test drive o reunión",
     icon: CalendarPlus,
-    action: () => navigateWithLoading('/appointments'),
+    shortcut: "Ctrl+A",
+    action: () => navigateWithLoading('/app/appointments'),
     color: "bg-orange-600",
     category: "Operaciones",
     keywords: ["cita", "agendar", "test drive", "reunión", "calendario"]
@@ -104,7 +179,8 @@ export function GlobalQuickActions() {
     label: "Financiamiento", 
     description: "Calcular opciones de financiamiento",
     icon: CreditCard,
-    action: () => navigateWithLoading('/financial-calculator'),
+    shortcut: "Ctrl+F",
+    action: () => navigateWithLoading('/app/financial-calculator'),
     color: "bg-green-600",
     category: "Operaciones",
     keywords: ["financiamiento", "crédito", "cuotas", "calcular", "préstamo"]
@@ -113,7 +189,8 @@ export function GlobalQuickActions() {
     label: "Gestión de Citas", 
     description: "Ver y administrar citas programadas",
     icon: Calendar,
-    action: () => navigateWithLoading('/appointments'),
+    shortcut: "Ctrl+A",
+    action: () => navigateWithLoading('/app/appointments'),
     color: "bg-blue-600",
     category: "Operaciones",
     keywords: ["citas", "calendario", "agenda", "programar", "administrar"]
@@ -122,7 +199,7 @@ export function GlobalQuickActions() {
     label: "Reportes de Actividad", 
     description: "Ver resumen de actividades diarias",
     icon: Activity,
-    action: () => navigateWithLoading('/reports'),
+    action: () => navigateWithLoading('/app/reports'),
     color: "bg-purple-600",
     category: "Operaciones",
     keywords: ["reportes", "actividad", "resumen", "estadísticas", "métricas"]
@@ -133,16 +210,39 @@ export function GlobalQuickActions() {
     label: "Agregar Vehículo", 
     description: "Registrar un nuevo vehículo en inventario",
     icon: CarIcon,
-    action: () => navigateWithLoading('/inventory'),
+    shortcut: "Ctrl+V",
+    action: () => {
+      if (window.location.pathname === "/app/inventory") {
+        window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
+      } else {
+        navigateWithLoading("/app/inventory?new=true");
+      }
+    },
     color: "bg-emerald-600",
     category: "Inventario",
     keywords: ["vehículo", "auto", "inventario", "stock", "agregar"]
   },
   { 
+    label: "Agregar Consignación", 
+    description: "Nuevo vehículo en consignación",
+    icon: ClipboardList,
+    shortcut: "Ctrl+C",
+    action: () => {
+      if (window.location.pathname === "/app/consignaciones") {
+        window.dispatchEvent(new CustomEvent("openNewConsignacionForm"));
+      } else {
+        navigateWithLoading("/app/consignaciones?new=true");
+      }
+    },
+    color: "bg-teal-600",
+    category: "Inventario",
+    keywords: ["consignación", "consignar", "vehículo", "inventario"]
+  },
+  { 
     label: "Gestión de Inventario", 
     description: "Administrar stock de vehículos",
     icon: Car,
-    action: () => navigateWithLoading('/inventory'),
+    action: () => navigateWithLoading('/app/inventory'),
     color: "bg-blue-600",
     category: "Inventario",
     keywords: ["inventario", "stock", "vehículos", "administrar", "gestión"]
@@ -151,7 +251,7 @@ export function GlobalQuickActions() {
     label: "Actualizar Precios", 
     description: "Modificar precios de vehículos",
     icon: DollarSign,
-    action: () => navigateWithLoading('/inventory'),
+    action: () => navigateWithLoading('/app/inventory'),
     color: "bg-yellow-600",
     category: "Inventario",
     keywords: ["precios", "actualizar", "modificar", "vehículos", "costos"]
@@ -160,7 +260,7 @@ export function GlobalQuickActions() {
     label: "Estados de Vehículos", 
     description: "Cambiar estado de vehículos",
     icon: CheckCircle,
-    action: () => navigateWithLoading('/inventory'),
+    action: () => navigateWithLoading('/app/inventory'),
     color: "bg-green-600",
     category: "Inventario",
     keywords: ["estado", "vehículos", "disponible", "vendido", "reservado"]
@@ -171,7 +271,8 @@ export function GlobalQuickActions() {
     label: "Nueva Factura", 
     description: "Emitir una factura electrónica",
     icon: Receipt,
-    action: () => navigateWithLoading('/billing'),
+    shortcut: "Ctrl+I",
+    action: () => navigateWithLoading('/app/billing'),
     color: "bg-red-600",
     category: "Finanzas",
     keywords: ["factura", "emitir", "electrónica", "documento", "cobro"]
@@ -180,7 +281,8 @@ export function GlobalQuickActions() {
     label: "Calculadora Financiera", 
     description: "Calcular financiamiento y cuotas",
     icon: CreditCard,
-    action: () => navigateWithLoading('/financial-calculator'),
+    shortcut: "Ctrl+F",
+    action: () => navigateWithLoading('/app/financial-calculator'),
     color: "bg-indigo-600",
     category: "Finanzas",
     keywords: ["calculadora", "financiera", "cuotas", "crédito", "calcular"]
@@ -189,7 +291,7 @@ export function GlobalQuickActions() {
     label: "Reportes Financieros", 
     description: "Ver reportes de ingresos y gastos",
     icon: TrendingUp,
-    action: () => navigateWithLoading('/finance'),
+    action: () => navigateWithLoading('/app/finance'),
     color: "bg-green-600",
     category: "Finanzas",
     keywords: ["reportes", "financieros", "ingresos", "gastos", "estadísticas"]
@@ -198,7 +300,7 @@ export function GlobalQuickActions() {
     label: "Gestión de Pagos", 
     description: "Administrar pagos y cobros",
     icon: DollarSign,
-    action: () => navigateWithLoading('/finance'),
+    action: () => navigateWithLoading('/app/finance'),
     color: "bg-yellow-600",
     category: "Finanzas",
     keywords: ["pagos", "cobros", "administrar", "finanzas", "dinero"]
@@ -209,7 +311,7 @@ export function GlobalQuickActions() {
     label: "CRM Post Venta", 
     description: "Gestionar clientes post venta",
     icon: Users,
-    action: () => navigateWithLoading('/post-sale-crm'),
+    action: () => navigateWithLoading('/app/post-sale'),
     color: "bg-purple-600",
     category: "Post Venta",
     keywords: ["post venta", "clientes", "servicio", "mantenimiento", "garantía"]
@@ -218,7 +320,7 @@ export function GlobalQuickActions() {
     label: "Servicios Programados", 
     description: "Ver servicios de mantenimiento",
     icon: Calendar,
-    action: () => navigateWithLoading('/post-sale-crm'),
+    action: () => navigateWithLoading('/app/post-sale'),
     color: "bg-blue-600",
     category: "Post Venta",
     keywords: ["servicios", "mantenimiento", "programados", "citas", "taller"]
@@ -227,7 +329,7 @@ export function GlobalQuickActions() {
     label: "Garantías", 
     description: "Administrar garantías de vehículos",
     icon: CheckCircle,
-    action: () => navigateWithLoading('/post-sale-crm'),
+    action: () => navigateWithLoading('/app/post-sale'),
     color: "bg-green-600",
     category: "Post Venta",
     keywords: ["garantías", "administrar", "vehículos", "cobertura", "seguro"]
@@ -238,7 +340,7 @@ export function GlobalQuickActions() {
     label: "Configuración", 
     description: "Ajustar configuración del sistema",
     icon: Star,
-    action: () => navigateWithLoading('/settings'),
+    action: () => navigateWithLoading('/app/settings'),
     color: "bg-gray-600",
     category: "Configuración",
     keywords: ["configuración", "ajustes", "sistema", "preferencias", "opciones"]
@@ -247,22 +349,20 @@ export function GlobalQuickActions() {
     label: "Usuarios", 
     description: "Gestionar usuarios del sistema",
     icon: Users,
-    action: () => navigateWithLoading('/settings'),
+    action: () => navigateWithLoading('/app/settings'),
     color: "bg-indigo-600",
     category: "Configuración",
     keywords: ["usuarios", "gestionar", "permisos", "acceso", "equipo"]
   }
-];
+], [navigateWithLoading]);
 
   // Escuchar el evento personalizado para abrir el modal
   useEffect(() => {
     const handleOpenQuickActions = () => {
       setShowCreateDialog(true);
-      setTimeout(() => {
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
-      }, 100);
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
     };
 
     window.addEventListener('openQuickActions', handleOpenQuickActions);
@@ -271,18 +371,18 @@ export function GlobalQuickActions() {
     };
   }, []);
 
-  // Filtrar opciones basado en la búsqueda
+  // Filtrar opciones basado en la búsqueda (deferido para no bloquear al escribir)
   const filteredOptions = useMemo(() => {
-    if (!searchQuery.trim()) return createOptions;
-    
-    const query = searchQuery.toLowerCase();
-    return createOptions.filter(option => 
+    if (!deferredSearchQuery.trim()) return createOptions;
+
+    const query = deferredSearchQuery.toLowerCase();
+    return createOptions.filter(option =>
       option.label.toLowerCase().includes(query) ||
       option.description.toLowerCase().includes(query) ||
       option.category.toLowerCase().includes(query) ||
       option.keywords.some(keyword => keyword.toLowerCase().includes(query))
     );
-  }, [searchQuery]);
+  }, [createOptions, deferredSearchQuery]);
 
   // Agrupar opciones filtradas por categoría
   const groupedOptions = useMemo(() => {
@@ -298,7 +398,7 @@ export function GlobalQuickActions() {
 
   return (
     <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-      <DialogContent className={`max-w-4xl max-h-[85vh] border-0 backdrop-blur-xl shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
+      <DialogContent className={`max-w-4xl max-h-[85vh] border-0 backdrop-blur-sm shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
         theme === 'dark' 
           ? 'bg-slate-800/95 border-slate-700' 
           : 'bg-white/95'
@@ -345,7 +445,7 @@ export function GlobalQuickActions() {
               }`}
             />
           </div>
-          {searchQuery && (
+          {deferredSearchQuery && (
             <div className={`mt-3 text-xs font-medium ${
               theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
             }`}>
@@ -355,7 +455,7 @@ export function GlobalQuickActions() {
         </div>
 
         {/* Content Scrolleable */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-6 min-h-0">
           {Object.keys(groupedOptions).length === 0 ? (
             <div className="text-center py-16">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
@@ -398,7 +498,7 @@ export function GlobalQuickActions() {
                     {options.map((option, index) => (
                       <div
                         key={`${option.label}-${index}`}
-                        className={`group flex items-center gap-3 p-3 rounded-xl transition-all duration-150 cursor-pointer border border-transparent ${
+                        className={`group flex items-center gap-3 p-3 rounded-xl transition-colors duration-100 cursor-pointer border border-transparent ${
                           theme === 'dark'
                             ? 'hover:bg-slate-700/80 hover:border-slate-600/50'
                             : 'hover:bg-gray-50/80 hover:border-gray-200/50'
@@ -407,8 +507,17 @@ export function GlobalQuickActions() {
                           option.action();
                           setShowCreateDialog(false);
                         }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            option.action();
+                            setShowCreateDialog(false);
+                          }
+                        }}
                       >
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform duration-150 ${
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                           theme === 'dark'
                             ? option.color.replace('600', '800')
                             : option.color.replace('600', '100')
@@ -433,6 +542,22 @@ export function GlobalQuickActions() {
                                 {option.description}
                               </div>
                             </div>
+                            {option.shortcut && (
+                              <div className={`flex-shrink-0 text-xs ${
+                                theme === 'dark' ? 'text-slate-400' : 'text-gray-400'
+                              }`}>
+                                {option.shortcut.split('+').map((key, i) => (
+                                  <span key={i} className="inline-flex items-center gap-0.5">
+                                    {i > 0 && <span className="mx-0.5">+</span>}
+                                    <kbd className={`px-1.5 py-0.5 border rounded font-mono ${
+                                      theme === 'dark'
+                                        ? 'bg-slate-600 border-slate-500 text-slate-300'
+                                        : 'bg-white border-gray-200'
+                                    }`}>{key.trim()}</kbd>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                       </div>
                     ))}
                   </div>
@@ -467,7 +592,14 @@ export function GlobalQuickActions() {
               <span className={`ml-2 ${
                 theme === 'dark' ? 'text-slate-500' : 'text-gray-400'
               }`}>•</span>
-              <span className="ml-2">Escape para cerrar</span>
+              <span className="ml-2">
+                <kbd className={`px-1.5 py-0.5 border rounded text-xs font-mono ${
+                  theme === 'dark'
+                    ? 'bg-slate-600 border-slate-500 text-slate-300'
+                    : 'bg-white border-gray-200'
+                }`}>Esc</kbd>
+                <span className="ml-1">para cerrar</span>
+              </span>
             </div>
             <button 
               className={`font-medium transition-colors ${
@@ -476,7 +608,7 @@ export function GlobalQuickActions() {
                   : 'text-blue-600 hover:text-blue-700'
               }`}
               onClick={() => {
-                navigateWithLoading('/settings');
+                navigateWithLoading('/app/settings');
                 setShowCreateDialog(false);
               }}
             >

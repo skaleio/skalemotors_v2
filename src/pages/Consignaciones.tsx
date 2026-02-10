@@ -25,7 +25,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { AlertTriangle, Calendar, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -321,6 +322,8 @@ const MeetingDateInput = ({
 export default function Consignaciones() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [labelFilter, setLabelFilter] = useState<string>("all");
@@ -361,6 +364,19 @@ export default function Consignaciones() {
     consignacion_price: "",
     sale_price: "",
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") === "true") {
+      setShowCreateDialog(true);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const handleOpenNewConsignacionForm = () => setShowCreateDialog(true);
+    window.addEventListener("openNewConsignacionForm", handleOpenNewConsignacionForm);
+    return () => window.removeEventListener("openNewConsignacionForm", handleOpenNewConsignacionForm);
+  }, []);
 
   const filteredConsignaciones = useMemo(() => {
     let filtered = (consignaciones as ConsignacionWithRelations[]).map((item) => item);
@@ -1235,6 +1251,9 @@ export default function Consignaciones() {
         onOpenChange={(open) => {
           setShowCreateDialog(open);
           if (!open) {
+            if (location.search) {
+              navigate(location.pathname, { replace: true });
+            }
             resetForm();
           }
         }}

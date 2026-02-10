@@ -1,9 +1,22 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
+import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
-import { memo, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -17,6 +30,13 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
   "Listo para publicar": { dot: "bg-emerald-500", text: "text-emerald-600" },
   Publicado: { dot: "bg-purple-500", text: "text-purple-600" },
   "Seguimiento semanal": { dot: "bg-blue-500", text: "text-blue-600" },
+};
+
+const statusLabels: Record<string, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  interesado: "Interesado",
+  negociando: "Negociando",
 };
 
 const stageStyles: Record<
@@ -54,13 +74,19 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   }
 }
 
-const LeadCard = memo(({ lead }: { lead: Lead }) => {
+const LeadCard = memo(({ lead, onClick }: { lead: Lead; onClick: () => void }) => {
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
 
   return (
-    <div className="rounded-md border px-3 py-2 text-sm">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
+      className="rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+    >
       <div className="font-medium">
         {lead.full_name || "Sin nombre"}
       </div>
@@ -97,15 +123,53 @@ const LeadCard = memo(({ lead }: { lead: Lead }) => {
 
 export default function CRM() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { leads, loading, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user?.branch_id,
   });
 
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [leadStatus, setLeadStatus] = useState<string>("nuevo");
+  const [isUpdating, setIsUpdating] = useState(false);
+
   useEffect(() => {
     if (!user?.branch_id) return;
     refetch();
   }, [user?.branch_id, refetch]);
+
+  const openEditDialog = useCallback((lead: Lead) => {
+    setEditingLead(lead);
+    setLeadStatus(lead.status || "nuevo");
+    setShowEditDialog(true);
+  }, []);
+
+  const closeEditDialog = useCallback(() => {
+    setShowEditDialog(false);
+    setEditingLead(null);
+  }, []);
+
+  const handleUpdateLead = useCallback(async () => {
+    if (!editingLead) return;
+    setIsUpdating(true);
+    try {
+      const updated = await leadService.update(editingLead.id, {
+        status: leadStatus as any,
+      });
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
+      });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      closeEditDialog();
+    } catch (error: unknown) {
+      console.error("Error actualizando lead:", error);
+      alert(error instanceof Error ? error.message : "No se pudo actualizar el lead.");
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [editingLead, leadStatus, queryClient, closeEditDialog]);
 
   const stages = useMemo(
     () => [
@@ -164,14 +228,56 @@ export default function CRM() {
                   </p>
                 ) : (
                   stage.leads.map((lead) => (
-                    <LeadCard key={lead.id} lead={lead} />
+                    <LeadCard key={lead.id} lead={lead} onClick={() => openEditDialog(lead)} />
                   ))
                 )}
               </div>
             </CardContent>
           </Card>
-        )})}
+        )        })}
       </div>
+
+      <Dialog open={showEditDialog} onOpenChange={(open) => (open ? null : closeEditDialog())}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Editar lead</DialogTitle>
+            <DialogDescription>
+              Cambia el estado del lead para moverlo en el pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          {editingLead && (
+            <div className="grid gap-4 py-2">
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium">{editingLead.full_name || "Sin nombre"}</p>
+                <p className="text-muted-foreground">{editingLead.phone || "Sin teléfono"}</p>
+              </div>
+              <div className="grid gap-2">
+                <Label>Estado del lead</Label>
+                <Select value={leadStatus} onValueChange={setLeadStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(statusLabels).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditDialog}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdateLead} disabled={isUpdating}>
+              {isUpdating ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

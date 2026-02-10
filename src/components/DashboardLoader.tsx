@@ -23,11 +23,11 @@ export default function DashboardLoader({ message = "Cargando...", barLabel }: D
   return (
     <div className="flex min-h-[calc(100vh-120px)] flex-col items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Marca SKALEMOTORS */}
+        {/* Marca SKALEMOTORS - mismo estilo y efectos que en TopBar */}
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+          <span className="skale-logo inline-block text-2xl sm:text-3xl animate-pulse cursor-default hover:opacity-80 transition-opacity">
             SKALEMOTORS
-          </h1>
+          </span>
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         </div>
 

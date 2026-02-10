@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Globe, Plus, Search, RefreshCw, CheckCircle, XCircle, ExternalLink, Loader2, Facebook, MessageCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  listConnections,
+  listListingsWithVehicles,
+  connectPlatform,
+  syncAll,
+  type MarketplaceConnectionRow,
+  type MarketplacePlatform,
+} from "@/lib/services/marketplaceApi";
 
 // Logo de Facebook como componente SVG
 const FacebookLogo = ({ className }: { className?: string }) => (
@@ -50,27 +59,69 @@ import { toast } from "@/hooks/use-toast";
 
 type Platform = "chileautos" | "mercadolibre" | "facebook" | null;
 
+type ListingWithVehicle = {
+  id: string;
+  vehicle_id: string;
+  platform: string;
+  external_id: string | null;
+  external_url: string | null;
+  status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  vehicles: { id: string; make: string; model: string; year: number; vin: string; price: number; status: string } | null;
+};
+
 export default function Listings() {
+  const { user } = useAuth();
+  const branchId = user?.branch_id ?? null;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  
-  // Estados para credenciales
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [connections, setConnections] = useState<MarketplaceConnectionRow[]>([]);
+  const [listings, setListings] = useState<ListingWithVehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [chileautosConfig, setChileautosConfig] = useState({
     clientId: "",
     clientSecret: "",
     sellerIdentifier: "",
   });
-  
-  const [mercadolibreConfig, setMercadolibreConfig] = useState({
-    accessToken: "",
-  });
-  
-  const [facebookConfig, setFacebookConfig] = useState({
-    productCatalogId: "",
-    accessToken: "",
-  });
+  const [mercadolibreConfig, setMercadolibreConfig] = useState({ accessToken: "" });
+  const [facebookConfig, setFacebookConfig] = useState({ productCatalogId: "", accessToken: "" });
+
+  const fetchData = useCallback(async () => {
+    if (!branchId) {
+      setConnections([]);
+      setListings([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [conns, list] = await Promise.all([
+        listConnections(branchId),
+        listListingsWithVehicles(branchId),
+      ]);
+      setConnections(conns);
+      setListings(list as ListingWithVehicle[]);
+    } catch (e) {
+      toast({
+        title: "Error al cargar",
+        description: e instanceof Error ? e.message : "No se pudieron cargar conexiones o publicaciones.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleOpenPlatform = (platform: Platform) => {
     setSelectedPlatform(platform);
@@ -78,35 +129,70 @@ export default function Listings() {
   };
 
   const handleConnect = async () => {
-    if (!selectedPlatform) return;
-
+    if (!selectedPlatform || !branchId) return;
     setIsConnecting(true);
-    
     try {
-      // Simular conexión
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Aquí iría la lógica real de conexión
-      const platformName = 
-        selectedPlatform === "chileautos" ? "Chileautos" : 
-        selectedPlatform === "mercadolibre" ? "Mercado Libre" : 
-        "Facebook Marketplace";
-      
-      toast({
-        title: "Conexión exitosa",
-        description: `Tu cuenta de ${platformName} ha sido conectada correctamente.`,
-      });
-      
+      let credentials: Record<string, string> = {};
+      if (selectedPlatform === "chileautos") {
+        credentials = {
+          client_id: chileautosConfig.clientId,
+          client_secret: chileautosConfig.clientSecret,
+          seller_identifier: chileautosConfig.sellerIdentifier,
+        };
+      } else if (selectedPlatform === "mercadolibre") {
+        credentials = { access_token: mercadolibreConfig.accessToken };
+      } else {
+        credentials = {
+          access_token: facebookConfig.accessToken,
+          catalog_id: facebookConfig.productCatalogId,
+        };
+      }
+      await connectPlatform(selectedPlatform as MarketplacePlatform, branchId, credentials);
+      const platformName =
+        selectedPlatform === "chileautos" ? "Chileautos" : selectedPlatform === "mercadolibre" ? "Mercado Libre" : "Facebook Marketplace";
+      toast({ title: "Conexión exitosa", description: `${platformName} conectado correctamente.` });
       setIsDialogOpen(false);
       setSelectedPlatform(null);
+      setChileautosConfig({ clientId: "", clientSecret: "", sellerIdentifier: "" });
+      setMercadolibreConfig({ accessToken: "" });
+      setFacebookConfig({ productCatalogId: "", accessToken: "" });
+      await fetchData();
     } catch (error) {
       toast({
         title: "Error de conexión",
-        description: "No se pudo conectar con la plataforma. Verifica tus credenciales.",
+        description: error instanceof Error ? error.message : "Verifica tus credenciales.",
         variant: "destructive",
       });
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    if (!branchId) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncAll(branchId);
+      toast({
+        title: "Sincronización completada",
+        description: `Se publicaron ${result.synced} vehículo(s) en las plataformas conectadas.`,
+      });
+      if (result.errors?.length) {
+        toast({
+          title: "Algunos errores",
+          description: `${result.errors.length} publicación(es) fallaron. Revisa la tabla.`,
+          variant: "destructive",
+        });
+      }
+      await fetchData();
+    } catch (error) {
+      toast({
+        title: "Error al sincronizar",
+        description: error instanceof Error ? error.message : "No se pudo sincronizar.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -120,6 +206,14 @@ export default function Listings() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={handleSyncAll}
+            disabled={!branchId || isSyncing || connections.length === 0}
+          >
+            {isSyncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Sincronizar todo
+          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -538,19 +632,25 @@ export default function Listings() {
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
-            <p className="text-xs text-muted-foreground">Cargando datos...</p>
+            <div className="text-2xl font-bold">
+              {loading ? "-" : listings.filter((l) => l.status === "published").length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {loading ? "Cargando..." : "En portales activas"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <RefreshCw className="h-4 w-4 text-yellow-500" />
+            <CardTitle className="text-sm font-medium">Conexiones</CardTitle>
+            <Globe className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
-            <p className="text-xs text-muted-foreground">Cargando datos...</p>
+            <div className="text-2xl font-bold">{loading ? "-" : connections.filter((c) => c.status === "active").length}</div>
+            <p className="text-xs text-muted-foreground">
+              {loading ? "Cargando..." : "Plataformas conectadas"}
+            </p>
           </CardContent>
         </Card>
 
@@ -560,8 +660,12 @@ export default function Listings() {
             <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
-            <p className="text-xs text-muted-foreground">Cargando datos...</p>
+            <div className="text-2xl font-bold">
+              {loading ? "-" : listings.filter((l) => l.status === "error").length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {loading ? "Cargando..." : "Publicaciones fallidas"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -591,7 +695,7 @@ export default function Listings() {
             Publicaciones
           </CardTitle>
           <CardDescription>
-            Lista de todas las publicaciones en portales
+            Lista de publicaciones en Mercado Libre, Facebook y Chile Autos
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -600,18 +704,78 @@ export default function Listings() {
               <TableRow>
                 <TableHead>Vehículo</TableHead>
                 <TableHead>Portal</TableHead>
-                <TableHead>Fecha Publicación</TableHead>
-                <TableHead>Vistas</TableHead>
+                <TableHead>Fecha publicación</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No hay publicaciones registradas
-                </TableCell>
-              </TableRow>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Cargando...
+                  </TableCell>
+                </TableRow>
+              ) : !branchId ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No tienes sucursal asignada
+                  </TableCell>
+                </TableRow>
+              ) : listings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No hay publicaciones. Conecta una plataforma y usa &quot;Sincronizar todo&quot; o publica desde Inventario.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                listings
+                  .filter((l) => !searchQuery || `${(l.vehicles?.make ?? "")} ${l.vehicles?.model ?? ""} ${l.vehicles?.year ?? ""}`.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        {row.vehicles
+                          ? `${row.vehicles.make} ${row.vehicles.model} ${row.vehicles.year}`
+                          : row.vehicle_id}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {row.platform === "mercadolibre" ? "Mercado Libre" : row.platform === "facebook" ? "Facebook" : "Chile Autos"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {row.last_synced_at
+                          ? new Date(row.last_synced_at).toLocaleDateString("es-CL", { dateStyle: "short" })
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={row.status === "published" ? "default" : row.status === "error" ? "destructive" : "secondary"}
+                        >
+                          {row.status === "published" ? "Publicado" : row.status === "error" ? "Error" : row.status}
+                        </Badge>
+                        {row.last_error && (
+                          <p className="text-xs text-muted-foreground mt-1 max-w-[200px] truncate" title={row.last_error}>
+                            {row.last_error}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.external_url && (
+                          <a
+                            href={row.external_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Ver
+                          </a>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

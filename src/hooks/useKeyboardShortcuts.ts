@@ -1,6 +1,6 @@
+import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
@@ -26,10 +26,6 @@ export function useKeyboardShortcuts() {
               event.preventDefault();
               navigate('/app/profile');
             }
-            break;
-          case 'b':
-            event.preventDefault();
-            navigate('/app/billing');
             break;
           case 's':
             event.preventDefault();

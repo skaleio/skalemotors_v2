@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Users } from "lucide-react";
+import type { PendingTask } from "@/hooks/usePendingTasks";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -34,11 +36,73 @@ const statusLabels: Record<string, string> = {
   perdido: 'Perdidos'
 };
 
+function TaskIcon({ actionType, urgent }: { actionType: PendingTask['action_type']; urgent: boolean }) {
+  const className = urgent ? "h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" : "h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0";
+  switch (actionType) {
+    case 'contactar':
+      return <AlertCircle className={className} />;
+    case 'llamar':
+      return <Clock className={className} />;
+    case 'confirmar':
+      return <Calendar className={className} />;
+    case 'enviar_cotizacion':
+      return <FileText className={className} />;
+    default:
+      return <FileText className={className} />;
+  }
+}
+
+function PendingTaskRow({
+  task,
+  variant,
+  onAction,
+  onComplete,
+  isCompleting,
+}: {
+  task: PendingTask;
+  variant: 'urgent' | 'today' | 'later';
+  onAction: () => void;
+  onComplete: () => void;
+  isCompleting: boolean;
+}) {
+  const isUrgent = variant === 'urgent';
+  const cardClass = isUrgent
+    ? "flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20"
+    : "flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors";
+  const btnVariant = isUrgent ? "destructive" : "outline";
+  return (
+    <div className={cardClass}>
+      <TaskIcon actionType={task.action_type} urgent={isUrgent} />
+      <div className="flex-1 space-y-1 min-w-0">
+        <p className="text-sm font-medium">{task.title}</p>
+        {task.description && <p className="text-xs text-muted-foreground">{task.description}</p>}
+      </div>
+      <div className="flex flex-shrink-0 gap-1">
+        <Button size="sm" variant={btnVariant} onClick={onAction}>
+          {task.action_label}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={onComplete}
+          disabled={isCompleting}
+          title="Marcar como hecha"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id);
+  const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
+  const completeTaskMutation = useCompletePendingTask();
 
   // Estados para los diálogos
   const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
@@ -79,6 +143,33 @@ export default function Dashboard() {
   console.log('📊 Dashboard - stats:', stats);
   console.log('📊 Dashboard - isLoading:', isLoading);
   console.log('📊 Dashboard - error:', error);
+
+  const handleTaskAction = (task: PendingTask) => {
+    if (task.entity_type === 'lead' && task.entity_id) {
+      if (task.action_type === 'contactar') {
+        setContactData({ ...contactData, leadName: task.title.replace(/^Contactar a\s+/i, '').trim() || task.title });
+        setShowContactLeadDialog(true);
+      } else if (task.action_type === 'llamar') {
+        setContactData({ ...contactData, leadName: task.title.replace(/^Llamar a\s+|^Seguimiento[^:]*:\s*/i, '').trim() || task.title });
+        setShowCallLeadDialog(true);
+      } else {
+        navigate(`/leads?id=${task.entity_id}`);
+      }
+    } else if (task.entity_type === 'appointment' && task.entity_id) {
+      navigate(`/appointments?id=${task.entity_id}`);
+    } else if (task.action_type === 'enviar_cotizacion') {
+      setQuoteData({
+        ...quoteData,
+        clientName: task.title.replace(/^Enviar cotización a\s+/i, '').trim() || task.title,
+        vehicle: (task.metadata as { vehicle_name?: string })?.vehicle_name ?? '',
+        price: '',
+        notes: task.description ?? '',
+      });
+      setShowQuoteDialog(true);
+    } else {
+      navigate('/leads');
+    }
+  };
 
   // Funciones para manejar las acciones
   const handleCreateAppointment = () => {
@@ -346,125 +437,93 @@ export default function Dashboard() {
                 </CardTitle>
                 <CardDescription className="text-xs">Acciones que requieren tu atención</CardDescription>
               </div>
-              <Badge variant="destructive" className="text-sm">3 urgentes</Badge>
+              {urgentCount > 0 && (
+                <Badge variant="destructive" className="text-sm">{urgentCount} urgente{urgentCount !== 1 ? 's' : ''}</Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4 max-h-[400px] overflow-y-auto">
-              {/* Tareas Urgentes */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="destructive" className="text-xs">URGENTE</Badge>
-                  <span className="text-sm font-semibold">Requieren atención inmediata</span>
+              {tasksLoading ? (
+                <p className="text-sm text-muted-foreground py-4">Cargando tareas...</p>
+              ) : urgentTasks.length === 0 && todayTasks.length === 0 && laterTasks.length === 0 ? (
+                <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground">
+                  <CheckCircle2 className="h-12 w-12 mb-3 opacity-20" />
+                  <p className="text-sm font-medium">No hay tareas pendientes</p>
+                  <p className="text-xs mt-1">Las alertas aparecerán aquí (leads sin contactar, seguimientos, citas por confirmar, recordatorios WhatsApp).</p>
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate('/leads')}>
+                    Ver leads
+                  </Button>
                 </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20">
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium">Contactar a Juan Pérez</p>
-                      <p className="text-xs text-muted-foreground">Lead nuevo sin contactar - Hace 2 horas</p>
+              ) : (
+                <>
+                  {urgentTasks.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-xs">URGENTE</Badge>
+                        <span className="text-sm font-semibold">Requieren atención inmediata</span>
+                      </div>
+                      <div className="space-y-2">
+                        {urgentTasks.map((task) => (
+                          <PendingTaskRow
+                            key={task.id}
+                            task={task}
+                            variant="urgent"
+                            onAction={() => handleTaskAction(task)}
+                            onComplete={() => completeTaskMutation.mutate(task.id)}
+                            isCompleting={completeTaskMutation.isPending}
+                          />
+                        ))}
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex-shrink-0"
-                      onClick={() => {
-                        setContactData({ ...contactData, leadName: 'Juan Pérez' });
-                        setShowContactLeadDialog(true);
-                      }}
-                    >
-                      Contactar
+                  )}
+                  {todayTasks.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">HOY</Badge>
+                        <span className="text-sm font-semibold">Para completar hoy</span>
+                      </div>
+                      <div className="space-y-2">
+                        {todayTasks.map((task) => (
+                          <PendingTaskRow
+                            key={task.id}
+                            task={task}
+                            variant="today"
+                            onAction={() => handleTaskAction(task)}
+                            onComplete={() => completeTaskMutation.mutate(task.id)}
+                            isCompleting={completeTaskMutation.isPending}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {laterTasks.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">DESPUÉS</Badge>
+                        <span className="text-sm font-semibold">Otras tareas</span>
+                      </div>
+                      <div className="space-y-2">
+                        {laterTasks.slice(0, 3).map((task) => (
+                          <PendingTaskRow
+                            key={task.id}
+                            task={task}
+                            variant="later"
+                            onAction={() => handleTaskAction(task)}
+                            onComplete={() => completeTaskMutation.mutate(task.id)}
+                            isCompleting={completeTaskMutation.isPending}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-center pt-4 border-t">
+                    <Button variant="link" onClick={() => navigate('/leads')}>
+                      Ver leads →
                     </Button>
                   </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20">
-                    <Clock className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium">Seguimiento vencido: María González</p>
-                      <p className="text-xs text-muted-foreground">Último contacto hace 8 días</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex-shrink-0"
-                      onClick={() => {
-                        setContactData({ ...contactData, leadName: 'María González' });
-                        setShowCallLeadDialog(true);
-                      }}
-                    >
-                      Llamar
-                    </Button>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20">
-                    <Calendar className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium">Confirmar test drive Carlos López</p>
-                      <p className="text-xs text-muted-foreground">Programado para mañana - Sin confirmar</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex-shrink-0"
-                      onClick={() => setShowConfirmTestDriveDialog(true)}
-                    >
-                      Confirmar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tareas de Hoy */}
-              <div className="space-y-3 pt-4 border-t">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">HOY</Badge>
-                  <span className="text-sm font-semibold">Para completar hoy</span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                    <FileText className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium">Enviar cotización a Ana Martínez</p>
-                      <p className="text-xs text-muted-foreground">Mazda CX-5 2023 - Solicitada ayer</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-shrink-0"
-                      onClick={() => setShowQuoteDialog(true)}
-                    >
-                      Enviar
-                    </Button>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                    <Users className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <p className="text-sm font-medium">Llamar a Pedro Sánchez</p>
-                      <p className="text-xs text-muted-foreground">Seguimiento programado para hoy</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-shrink-0"
-                      onClick={() => {
-                        setContactData({ ...contactData, leadName: 'Pedro Sánchez' });
-                        setShowCallLeadDialog(true);
-                      }}
-                    >
-                      Llamar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-center pt-4 border-t">
-                <Button variant="link" onClick={() => navigate('/leads')}>
-                  Ver todas las tareas →
-                </Button>
-              </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
