@@ -116,6 +116,31 @@ export const saleService = {
     return data as Sale
   },
 
+  // Eliminar una venta y revertir datos relacionados (lead y vehículo)
+  async delete(id: string) {
+    const { data: sale, error: fetchError } = await supabase
+      .from('sales')
+      .select('id, lead_id, vehicle_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) throw fetchError
+    if (!sale) throw new Error('Venta no encontrada')
+
+    const { error: deleteError } = await supabase.from('sales').delete().eq('id', id)
+    if (deleteError) throw deleteError
+
+    // Revertir estado del lead (ya no vendido por esta venta)
+    if (sale.lead_id) {
+      await supabase.from('leads').update({ status: 'negociando' }).eq('id', sale.lead_id)
+    }
+
+    // Revertir estado del vehículo a disponible
+    if (sale.vehicle_id) {
+      await supabase.from('vehicles').update({ status: 'disponible' }).eq('id', sale.vehicle_id)
+    }
+  },
+
   // Obtener estadísticas de ventas
   async getStats(userId?: string, branchId?: string, days: number = 30) {
     const dateFrom = new Date()

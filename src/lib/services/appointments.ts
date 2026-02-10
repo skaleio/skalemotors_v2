@@ -5,6 +5,19 @@ type Appointment = Database['public']['Tables']['appointments']['Row']
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert']
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update']
 
+// Mapeo tipo frontend (inglés) -> DB (español)
+const TYPE_TO_DB: Record<string, Appointment['type']> = {
+  test_drive: 'test_drive',
+  meeting: 'reunion',
+  delivery: 'entrega',
+  service: 'servicio',
+  other: 'otro',
+}
+
+function toDbType(type: string): Appointment['type'] {
+  return TYPE_TO_DB[type] ?? 'reunion'
+}
+
 export const appointmentService = {
   // Obtener todas las citas
   async getAll(filters?: {
@@ -74,11 +87,16 @@ export const appointmentService = {
     return data as Appointment
   },
 
-  // Crear una nueva cita
-  async create(appointment: AppointmentInsert) {
+  // Crear una nueva cita (acepta type en inglés y lo mapea a DB)
+  async create(appointment: Omit<AppointmentInsert, 'type'> & { type?: string }) {
+    const insert: AppointmentInsert = {
+      ...appointment,
+      type: appointment.type ? toDbType(appointment.type) : 'reunion',
+      title: appointment.title ?? 'Cita',
+    }
     const { data, error } = await supabase
       .from('appointments')
-      .insert(appointment)
+      .insert(insert)
       .select(`
         *,
         lead:leads(id, full_name, phone),
@@ -91,11 +109,16 @@ export const appointmentService = {
     return data as Appointment
   },
 
-  // Actualizar una cita
-  async update(id: string, updates: AppointmentUpdate) {
+  // Actualizar una cita (acepta type en inglés y lo mapea a DB)
+  async update(
+    id: string,
+    updates: Omit<AppointmentUpdate, 'type'> & { type?: string }
+  ) {
+    const payload: AppointmentUpdate = { ...updates }
+    if (updates.type) payload.type = toDbType(updates.type)
     const { data, error } = await supabase
       .from('appointments')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
       .select()
       .single()

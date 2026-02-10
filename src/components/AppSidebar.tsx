@@ -81,7 +81,7 @@ const menuCategories = [
       { title: "CRM", url: "/app/crm", icon: Target },
       { title: "Mensajes", url: "/app/messages", icon: MessageCircle },
       { title: "Leads", url: "/app/leads", icon: Users },
-      { title: "Gestión de Ventas", url: "/app/sales", icon: TrendingUp },
+      { title: "Ventas", url: "/app/sales", icon: TrendingUp },
       { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
     ]
   },
@@ -312,23 +312,21 @@ export function AppSidebar() {
         className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg transition-all duration-300 ease-in-out`}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-slate-200 p-4 bg-gradient-to-r from-slate-50 to-white transition-all duration-300">
+        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-300 min-w-0 overflow-hidden">
           {!isCollapsed ? (
-            <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                  <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                  </svg>
-                </div>
-                <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide animate-in fade-in-0 duration-300 delay-100">
-                  SKALEMOTORS
-                </span>
+            <div className="flex items-center gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-300">
+              <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
+                <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
               </div>
+              <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide truncate min-w-0 animate-in fade-in-0 duration-300 delay-100">
+                SKALEMOTORS
+              </span>
             </div>
           ) : (
-            <div className="flex items-center justify-center animate-in slide-in-from-left-2 duration-300">
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
+            <div className="flex items-center justify-center w-full animate-in slide-in-from-left-2 duration-300">
+              <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
                 <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>

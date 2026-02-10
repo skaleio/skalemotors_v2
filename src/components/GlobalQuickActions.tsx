@@ -23,7 +23,8 @@ import {
   Search, 
   Activity, 
   CheckCircle,
-  ClipboardList 
+  ClipboardList,
+  CircleDollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +64,7 @@ const QuickActionRow = memo(function QuickActionRow({
     <div
       role="button"
       tabIndex={0}
-      className={`group flex items-center gap-3 p-3 rounded-xl transition-colors duration-100 cursor-pointer border border-transparent ${
+      className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer border border-transparent ${
         theme === "dark"
           ? "hover:bg-slate-700/80 hover:border-slate-600/50"
           : "hover:bg-gray-50/80 hover:border-gray-200/50"
@@ -94,6 +95,37 @@ const QuickActionRow = memo(function QuickActionRow({
           ))}
         </div>
       )}
+    </div>
+  );
+});
+
+const QuickActionCategory = memo(function QuickActionCategory({
+  category,
+  options,
+  theme,
+  onSelect,
+}: {
+  category: string;
+  options: QuickActionOption[];
+  theme: string;
+  onSelect: (action: () => void) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className={`text-sm font-semibold uppercase tracking-wide ${theme === "dark" ? "text-slate-300" : "text-gray-700"}`}>
+          {category}
+        </h3>
+        <div className={`h-px flex-1 ${theme === "dark" ? "bg-slate-600" : "bg-gray-200"}`} />
+        <Badge variant="outline" className={`text-xs px-2 py-0.5 ${theme === "dark" ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
+          {options.length}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-1 gap-1">
+        {options.map((option, index) => (
+          <QuickActionRow key={`${option.label}-${index}`} option={option} theme={theme} onSelect={() => onSelect(option.action)} />
+        ))}
+      </div>
     </div>
   );
 });
@@ -144,6 +176,23 @@ export function GlobalQuickActions() {
     color: "bg-purple-600",
     category: "Ventas & CRM",
     keywords: ["cotización", "propuesta", "precio", "oferta", "comercial"]
+  },
+  { 
+    label: "Nueva Venta", 
+    description: "Registrar una venta de vehículo",
+    icon: CircleDollarSign,
+    shortcut: "Ctrl+E",
+    action: () => {
+      const onSalesPage = window.location.pathname === "/app/sales";
+      if (onSalesPage) {
+        window.dispatchEvent(new CustomEvent("openNewSaleForm"));
+      } else {
+        navigateWithLoading("/app/sales?new=true");
+      }
+    },
+    color: "bg-emerald-600",
+    category: "Ventas & CRM",
+    keywords: ["venta", "vender", "registrar", "ventas", "vehículo"]
   },
   { 
     label: "Seguimiento de Ventas", 
@@ -454,8 +503,8 @@ export function GlobalQuickActions() {
           )}
         </div>
 
-        {/* Content Scrolleable */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-6 min-h-0">
+        {/* Content Scrolleable - contain para reducir repintado al navegar */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-6 min-h-0 [contain:strict]">
           {Object.keys(groupedOptions).length === 0 ? (
             <div className="text-center py-16">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
@@ -475,93 +524,16 @@ export function GlobalQuickActions() {
           ) : (
             <div className="space-y-6">
               {Object.entries(groupedOptions).map(([category, options]) => (
-                <div key={category} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className={`text-sm font-semibold uppercase tracking-wide ${
-                      theme === 'dark' ? 'text-slate-300' : 'text-gray-700'
-                    }`}>
-                      {category}
-                    </h3>
-                    <div className={`h-px flex-1 ${
-                      theme === 'dark' ? 'bg-slate-600' : 'bg-gray-200'
-                    }`}></div>
-                    <Badge variant="outline" className={`text-xs px-2 py-0.5 ${
-                      theme === 'dark' 
-                        ? 'bg-slate-700 text-slate-300 border-slate-600' 
-                        : 'bg-gray-50 text-gray-600 border-gray-200'
-                    }`}>
-                      {options.length}
-                    </Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-2">
-                    {options.map((option, index) => (
-                      <div
-                        key={`${option.label}-${index}`}
-                        className={`group flex items-center gap-3 p-3 rounded-xl transition-colors duration-100 cursor-pointer border border-transparent ${
-                          theme === 'dark'
-                            ? 'hover:bg-slate-700/80 hover:border-slate-600/50'
-                            : 'hover:bg-gray-50/80 hover:border-gray-200/50'
-                        }`}
-                        onClick={() => {
-                          option.action();
-                          setShowCreateDialog(false);
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            option.action();
-                            setShowCreateDialog(false);
-                          }
-                        }}
-                      >
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          theme === 'dark'
-                            ? option.color.replace('600', '800')
-                            : option.color.replace('600', '100')
-                        }`}>
-                          <option.icon className={`h-4 w-4 ${
-                            theme === 'dark'
-                              ? option.color.replace('bg-', 'text-').replace('600', '300')
-                              : option.color.replace('bg-', 'text-')
-                          }`} />
-                        </div>
-                            <div className="flex-1 min-w-0">
-                              <div className={`font-medium text-sm transition-colors ${
-                                theme === 'dark'
-                                  ? 'text-white group-hover:text-slate-200'
-                                  : 'text-gray-900 group-hover:text-gray-700'
-                              }`}>
-                                {option.label}
-                              </div>
-                              <div className={`text-xs truncate ${
-                                theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
-                              }`}>
-                                {option.description}
-                              </div>
-                            </div>
-                            {option.shortcut && (
-                              <div className={`flex-shrink-0 text-xs ${
-                                theme === 'dark' ? 'text-slate-400' : 'text-gray-400'
-                              }`}>
-                                {option.shortcut.split('+').map((key, i) => (
-                                  <span key={i} className="inline-flex items-center gap-0.5">
-                                    {i > 0 && <span className="mx-0.5">+</span>}
-                                    <kbd className={`px-1.5 py-0.5 border rounded font-mono ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-600 border-slate-500 text-slate-300'
-                                        : 'bg-white border-gray-200'
-                                    }`}>{key.trim()}</kbd>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <QuickActionCategory
+                  key={category}
+                  category={category}
+                  options={options}
+                  theme={theme}
+                  onSelect={(action) => {
+                    action();
+                    setShowCreateDialog(false);
+                  }}
+                />
               ))}
             </div>
           )}

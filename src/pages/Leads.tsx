@@ -54,6 +54,22 @@ const buildTagsWithVehicle = (tags: unknown, vehicle: string) => {
   return [...current, `${VEHICULO_TAG_PREFIX}${nextVehicle}`];
 };
 
+/** Tags aplicando vehículo y origen (solo para edición de lead) */
+const buildTagsWithVehicleAndOrigin = (
+  tags: unknown,
+  vehicle: string,
+  origen: "lead" | "consignacion"
+) => {
+  let next = buildTagsWithVehicle(tags, vehicle);
+  next = next.filter((tag) => !tag.startsWith(CONSIGNACION_TAG_PREFIX));
+  if (origen === "consignacion") {
+    const existing = normalizeTags(tags).find((t) => t.startsWith(CONSIGNACION_TAG_PREFIX));
+    const label = existing ? existing.slice(CONSIGNACION_TAG_PREFIX.length) : "sin_etiqueta";
+    next = [...next, `${CONSIGNACION_TAG_PREFIX}${label}`];
+  }
+  return next;
+};
+
 const normalizePhoneWithChilePrefix = (value: string) => {
   const raw = value.trim();
   if (!raw) return "";
@@ -233,7 +249,7 @@ const LeadsTable = memo(function LeadsTable({
   openDetailsDialog,
 }: LeadsTableProps) {
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Target className="h-5 w-5" />
@@ -243,29 +259,30 @@ const LeadsTable = memo(function LeadsTable({
           Gestiona y sigue el progreso de tus leads
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={() => onToggleSelectAll()}
-                  aria-label="Seleccionar todos los leads"
-                />
-              </TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Contacto</TableHead>
-              <TableHead>Origen</TableHead>
-              <TableHead>Vehiculo</TableHead>
-              <TableHead>Región</TableHead>
-              <TableHead>Financiamiento/Contado</TableHead>
-              <TableHead>Presupuesto</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
+      <CardContent className="overflow-x-hidden overflow-y-visible p-0">
+        <div className="min-w-0 w-full">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10 shrink-0">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={() => onToggleSelectAll()}
+                    aria-label="Seleccionar todos los leads"
+                  />
+                </TableHead>
+                <TableHead className="min-w-[120px]">Nombre</TableHead>
+                <TableHead className="min-w-[130px]">Contacto</TableHead>
+                <TableHead className="hidden min-w-[90px] sm:table-cell">Origen</TableHead>
+                <TableHead className="hidden min-w-[100px] md:table-cell">Vehiculo</TableHead>
+                <TableHead className="hidden min-w-[100px] lg:table-cell">Región</TableHead>
+                <TableHead className="hidden min-w-[100px] xl:table-cell">Financ./Contado</TableHead>
+                <TableHead className="hidden min-w-[90px] xl:table-cell">Presupuesto</TableHead>
+                <TableHead className="min-w-[120px]">Estado</TableHead>
+                <TableHead className="hidden min-w-[80px] sm:table-cell">Fecha</TableHead>
+                <TableHead className="text-right w-[90px] shrink-0">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
@@ -297,18 +314,18 @@ const LeadsTable = memo(function LeadsTable({
                   <TableCell>
                     <div className="space-y-1 text-sm">
                       <div className="flex items-center gap-2">
-                        <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}</span>
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}</span>
                       </div>
                       {lead.email ? (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{lead.email}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{lead.email}</span>
                         </div>
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     {(() => {
                       const tags = normalizeTags(lead.tags);
                       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
@@ -316,7 +333,7 @@ const LeadsTable = memo(function LeadsTable({
                       return <Badge variant="secondary">{label}</Badge>;
                     })()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell max-w-[140px] truncate">
                     {(() => {
                       const tags = normalizeTags(lead.tags);
                       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
@@ -328,19 +345,19 @@ const LeadsTable = memo(function LeadsTable({
                       return getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
                     })()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {(() => {
                       const region = lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX);
                       return region ? <Badge variant="secondary">{region}</Badge> : "—";
                     })()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden xl:table-cell">
                     {(() => {
                       const label = lead.payment_type?.trim();
                       return label ? <Badge variant="secondary">{label}</Badge> : "—";
                     })()}
                   </TableCell>
-                  <TableCell>{lead.budget || "—"}</TableCell>
+                  <TableCell className="hidden xl:table-cell">{lead.budget || "—"}</TableCell>
                   <TableCell>
                     {(() => {
                       const normalizedStatus = getNormalizedStatusKey(lead.status);
@@ -375,10 +392,10 @@ const LeadsTable = memo(function LeadsTable({
                       );
                     })()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     {new Date(lead.created_at).toLocaleDateString("es-CL")}
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="text-right text-muted-foreground shrink-0">
                     <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="ghost"
@@ -409,6 +426,7 @@ const LeadsTable = memo(function LeadsTable({
             )}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -464,6 +482,7 @@ export default function Leads() {
     payment_type: "",
     budget: "",
     notes: "",
+    origen: "lead" as "lead" | "consignacion",
   });
 
   useEffect(() => {
@@ -810,6 +829,7 @@ export default function Leads() {
       payment_type: lead.payment_type || "",
       budget: lead.budget || "",
       notes: lead.notes || "",
+      origen: isConsignacion ? "consignacion" : "lead",
     });
     setShowEditDialog(true);
   }, [consignacionByLeadId]);
@@ -835,7 +855,11 @@ export default function Leads() {
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
       };
 
-      updates.tags = buildTagsWithVehicle(editingLead.tags, editForm.vehicle) as any;
+      updates.tags = buildTagsWithVehicleAndOrigin(
+        editingLead.tags,
+        editForm.vehicle,
+        editForm.origen
+      ) as any;
 
       const updated = await leadService.update(editingLead.id, updates);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
@@ -925,7 +949,7 @@ export default function Leads() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 w-full overflow-x-hidden">
       {isImporting ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-lg border bg-card px-6 py-5 shadow-lg">
@@ -1216,6 +1240,23 @@ export default function Leads() {
                 onChange={(e) => setEditForm({ ...editForm, vehicle: e.target.value })}
                 placeholder="Ej: Toyota Corolla 2020"
               />
+            </div>
+            <div className="grid gap-2">
+              <Label>Origen</Label>
+              <Select
+                value={editForm.origen}
+                onValueChange={(value: "lead" | "consignacion") =>
+                  setEditForm({ ...editForm, origen: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Origen del lead" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lead">Lead</SelectItem>
+                  <SelectItem value="consignacion">Consignación</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Región</Label>

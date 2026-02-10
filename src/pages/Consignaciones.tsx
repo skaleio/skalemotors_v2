@@ -96,6 +96,7 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
 };
 
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
+const VEHICULO_TAG_PREFIX = "vehiculo:";
 
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
@@ -108,6 +109,39 @@ const buildTagsWithLabel = (tags: unknown, label: string | null) => {
   );
   if (!label) return current;
   return [...current, `${CONSIGNACION_TAG_PREFIX}${label}`];
+};
+
+/** Construye el texto del vehículo a partir de los datos de la consignación */
+const buildVehicleLabel = (p: {
+  vehicle_year?: number | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+}) => {
+  const parts = [p.vehicle_year, p.vehicle_make, p.vehicle_model].filter(Boolean);
+  return parts.length ? parts.join(" ").trim() : "";
+};
+
+/**
+ * Tags para el lead cuando proviene de una consignación:
+ * - Siempre incluye etiqueta consignación (para que Origen = "Consignación" en Leads)
+ * - Incluye vehiculo: si hay datos del vehículo
+ */
+const buildLeadTagsForConsignacion = (
+  tags: unknown,
+  consignacionLabel: string | null,
+  vehicleLabel: string
+) => {
+  const current = normalizeTags(tags).filter(
+    (tag) => !tag.startsWith(CONSIGNACION_TAG_PREFIX) && !tag.startsWith(VEHICULO_TAG_PREFIX)
+  );
+  const withConsignacion = [
+    ...current,
+    `${CONSIGNACION_TAG_PREFIX}${consignacionLabel || "sin_etiqueta"}`,
+  ];
+  if (vehicleLabel.trim()) {
+    withConsignacion.push(`${VEHICULO_TAG_PREFIX}${vehicleLabel.trim()}`);
+  }
+  return withConsignacion;
 };
 
 const removeConsignacionTags = (tags: unknown) => {
@@ -328,6 +362,7 @@ export default function Consignaciones() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [labelFilter, setLabelFilter] = useState<string>("all");
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -469,11 +504,11 @@ export default function Consignaciones() {
   const handleCreate = async () => {
     console.log("🟦 handleCreate: click", { user: user?.id, branch: user?.branch_id });
     if (!user?.branch_id || !user?.id) {
-      console.warn("❌ No hay usuario o sucursal en sesión.");
-      alert("No hay sesión activa o sucursal asignada. Vuelve a iniciar sesión.");
+      setCreateError("No hay sesión activa o sucursal asignada. Vuelve a iniciar sesión.");
       return;
     }
 
+    setCreateError(null);
     setIsCreating(true);
     try {
       const ownerName = formState.owner_name.trim() || "Sin nombre";
@@ -485,7 +520,11 @@ export default function Consignaciones() {
         vehicle_id: formState.vehicle_id || null,
         vehicle_make: formState.vehicle_make.trim() || null,
         vehicle_model: formState.vehicle_model.trim() || null,
-        vehicle_year: formState.vehicle_year ? Number(formState.vehicle_year) : null,
+        vehicle_year: (() => {
+          const raw = formState.vehicle_year ? Number(formState.vehicle_year) : null;
+          if (raw == null || !Number.isFinite(raw) || raw < 1900 || raw > 2100) return null;
+          return raw;
+        })(),
         vehicle_vin: formState.vehicle_vin.trim() || null,
         label: normalizeLabelValue(formState.label),
         status: formState.status,
@@ -502,6 +541,12 @@ export default function Consignaciones() {
 
       const leadLabel = toLeadTagLabel(payloadBase.label);
       const hasContact = Boolean(payloadBase.owner_phone || payloadBase.owner_email);
+      const vehicleLabel = buildVehicleLabel(payloadBase);
+      const leadTagsFromConsignacion = buildLeadTagsForConsignacion(
+        [],
+        leadLabel || "sin_etiqueta",
+        vehicleLabel
+      );
 
       const payload = {
         ...payloadBase,
@@ -515,7 +560,7 @@ export default function Consignaciones() {
       setConsignaciones((prev) => [created, ...prev]);
       console.log("✅ Consignacion creada", created?.id);
 
-      // Sincronizar lead en segundo plano (no bloquear guardado)
+      // Sincronizar lead en segundo plano: origen Consignación y vehículo
       if (hasContact || payloadBase.lead_id) {
         (async () => {
           try {
@@ -529,10 +574,12 @@ export default function Consignaciones() {
               });
 
               if (existingLead) {
-                if (leadLabel) {
-                  const nextTags = buildTagsWithLabel(existingLead.tags, leadLabel);
-                  await leadService.update(existingLead.id, { tags: nextTags as any });
-                }
+                const nextTags = buildLeadTagsForConsignacion(
+                  existingLead.tags,
+                  leadLabel || "sin_etiqueta",
+                  vehicleLabel
+                );
+                await leadService.update(existingLead.id, { tags: nextTags as any });
                 resolvedLeadId = existingLead.id;
               } else {
                 const createdLead = await leadService.create({
@@ -543,14 +590,22 @@ export default function Consignaciones() {
                   status: "nuevo",
                   priority: "media",
                   branch_id: user.branch_id,
-                  tags: leadLabel ? (buildTagsWithLabel([], leadLabel) as any) : ([] as any),
+                  tags: leadTagsFromConsignacion as any,
                 });
                 resolvedLeadId = createdLead.id;
               }
-            } else if (resolvedLeadId && leadLabel) {
+            } else if (resolvedLeadId) {
               const lead = leads.find((l) => l.id === resolvedLeadId) || (await leadService.getById(resolvedLeadId));
-              const nextTags = buildTagsWithLabel(lead?.tags, leadLabel);
+              const nextTags = buildLeadTagsForConsignacion(
+                lead?.tags ?? [],
+                leadLabel || "sin_etiqueta",
+                vehicleLabel
+              );
               await leadService.update(resolvedLeadId, { tags: nextTags as any });
+            }
+
+            if (resolvedLeadId) {
+              await consignacionesService.update(created.id, { lead_id: resolvedLeadId });
             }
           } catch (error) {
             console.error("Error sincronizando lead de consignacion:", error);
@@ -567,7 +622,8 @@ export default function Consignaciones() {
       setShowCreateDialog(false);
     } catch (error: any) {
       console.error("Error creando consignacion:", error);
-      alert(error?.message || "No se pudo crear la consignacion.");
+      const message = error?.message || error?.error_description || "No se pudo crear la consignación.";
+      setCreateError(message);
     } finally {
       console.log("🟩 handleCreate: fin");
       setIsCreating(false);
@@ -1250,6 +1306,7 @@ export default function Consignaciones() {
         open={showCreateDialog}
         onOpenChange={(open) => {
           setShowCreateDialog(open);
+          setCreateError(null);
           if (!open) {
             if (location.search) {
               navigate(location.pathname, { replace: true });
@@ -1266,6 +1323,13 @@ export default function Consignaciones() {
             </DialogDescription>
           </DialogHeader>
 
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreate();
+            }}
+            className="space-y-4"
+          >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="owner_name">Nombre</Label>
@@ -1302,6 +1366,18 @@ export default function Consignaciones() {
               />
             </div>
             <div>
+              <Label htmlFor="vehicle_year">Año</Label>
+              <Input
+                id="vehicle_year"
+                type="number"
+                min={1900}
+                max={2100}
+                value={formState.vehicle_year}
+                onChange={(e) => setFormState({ ...formState, vehicle_year: e.target.value })}
+                placeholder="Ej: 2024"
+              />
+            </div>
+            <div>
               <Label>Precio consignacion</Label>
               <Input
                 value={formState.consignacion_price}
@@ -1329,8 +1405,16 @@ export default function Consignaciones() {
             </div>
           </div>
 
+          {createError && (
+            <div className="flex items-center gap-2 rounded-md bg-destructive/10 text-destructive px-3 py-2 text-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{createError}</span>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-6">
             <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setShowCreateDialog(false);
@@ -1341,15 +1425,13 @@ export default function Consignaciones() {
               Cancelar
             </Button>
             <Button
-              onClick={() => {
-                console.log("🟦 Click botón Guardar consignacion");
-                handleCreate();
-              }}
+              type="submit"
               disabled={isCreating}
             >
               {isCreating ? "Guardando..." : "Guardar consignacion"}
             </Button>
           </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

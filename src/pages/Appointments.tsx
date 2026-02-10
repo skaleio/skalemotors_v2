@@ -30,8 +30,8 @@ import "@/styles/calendar.css";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, getDay, parse, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar, Clock, Loader2, Plus, Trash2, User } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Calendar, CheckCircle2, Clock, Loader2, Plus, Trash2, User } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as BigCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
@@ -46,6 +46,22 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+
+/** Formato 24h (16:00 en lugar de 4:00 PM) en todo el calendario */
+const calendarFormats24h = {
+  timeGutterFormat: "HH:mm",
+  agendaTimeFormat: "HH:mm",
+  eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm", { locale: es })} – ${format(end, "HH:mm", { locale: es })}`,
+  eventTimeRangeStartFormat: ({ start }: { start: Date }) =>
+    `${format(start, "HH:mm", { locale: es })} – `,
+  eventTimeRangeEndFormat: ({ end }: { end: Date }) =>
+    ` – ${format(end, "HH:mm", { locale: es })}`,
+  selectRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm", { locale: es })} – ${format(end, "HH:mm", { locale: es })}`,
+  agendaTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm", { locale: es })} – ${format(end, "HH:mm", { locale: es })}`,
+};
 
 type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 
@@ -87,6 +103,62 @@ const eventTypeLabels = {
   other: "Otro",
 };
 
+// Mapeo tipo DB (español) -> tipo Event (inglés)
+const DB_TYPE_TO_EVENT: Record<string, Event["type"]> = {
+  test_drive: "test_drive",
+  reunion: "meeting",
+  entrega: "delivery",
+  servicio: "service",
+  otro: "other",
+};
+
+function safeEventType(t: string | undefined): Event["type"] {
+  return (t && DB_TYPE_TO_EVENT[t]) || "meeting";
+}
+
+function safeEventStatus(s: string | undefined): Event["status"] {
+  if (s === "completada" || s === "cancelada") return s;
+  return "programada";
+}
+
+function safeDate(value: string | null | undefined): Date | null {
+  if (value == null) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function safeFormatDateTime(d: Date | undefined | null): string {
+  if (!d || isNaN(d.getTime())) return "";
+  return format(d, "yyyy-MM-dd'T'HH:mm", { locale: es });
+}
+
+/** Formato HH:mm para mostrar/editar hora (24h). */
+function safeFormatTime(d: Date | undefined | null): string {
+  if (!d || isNaN(d.getTime())) return "";
+  return format(d, "HH:mm");
+}
+
+/** Parsea texto escrito por el usuario a "HH:mm" (24h). Acepta "16", "16:00", "16:30", "1630". */
+function parseTimeInput(input: string): string | null {
+  const t = input.trim().replace(/,/, ".");
+  if (!t) return null;
+  const withColon = t.includes(":") ? t : t.replace(/(\d{1,2})(\d{2})?$/, (_, h, m) => (m ? `${h}:${m}` : `${h}:00`));
+  const [hStr, mStr] = withColon.split(":");
+  const h = parseInt(hStr ?? "0", 10);
+  const m = Math.min(59, parseInt(mStr ?? "0", 10) || 0);
+  if (h < 0 || h > 23 || Number.isNaN(h)) return null;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Actualiza solo la hora de una fecha (mantiene el día). timeStr en formato HH:mm. */
+function setTimeOnDate(date: Date, timeStr: string): Date {
+  const parsed = parseTimeInput(timeStr) ?? "00:00";
+  const [h = 0, m = 0] = parsed.split(":").map(Number);
+  const out = new Date(date);
+  out.setHours(h, m, 0, 0);
+  return out;
+}
+
 export default function Appointments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -105,6 +177,8 @@ export default function Appointments() {
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  /** true = abierto desde clic en slot del calendario (no pedir fecha). false = desde "Nueva Cita" o editar (sí pedir fecha) */
+  const [openedFromSlot, setOpenedFromSlot] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Partial<Event>>({
@@ -117,32 +191,56 @@ export default function Appointments() {
     vehicleId: "",
     description: "",
   });
+  /** Hora inicio/fin editables como texto (ej. "16:00") cuando se abre desde slot */
+  const [startTimeStr, setStartTimeStr] = useState("");
+  const [endTimeStr, setEndTimeStr] = useState("");
+  const formTimesRef = useRef({ start: null as Date | null, end: null as Date | null });
+  formTimesRef.current = { start: formData.start ?? null, end: formData.end ?? null };
+
+  // Sincronizar horas solo al abrir el diálogo (no en cada tecla, para no pisar lo que escribe el usuario)
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    const { start, end } = formTimesRef.current;
+    setStartTimeStr(safeFormatTime(start) ?? "");
+    setEndTimeStr(safeFormatTime(end) ?? "");
+  }, [isDialogOpen]);
 
   const events = useMemo(() => {
-    return (appointments as AppointmentWithRelations[]).map((appointment) => {
-      const vehicleInfo = appointment.vehicle
-        ? `${appointment.vehicle.make} ${appointment.vehicle.model}${appointment.vehicle.year ? ` ${appointment.vehicle.year}` : ""}`
-        : "";
+    return (appointments as AppointmentWithRelations[])
+      .map((appointment) => {
+        const start = safeDate(appointment.scheduled_at);
+        if (!start) return null;
+        const end =
+          safeDate(appointment.end_at) ??
+          (() => {
+            const mins = (appointment as { duration_minutes?: number | null }).duration_minutes ?? 60;
+            return new Date(start.getTime() + mins * 60 * 1000);
+          })();
+        const vehicleInfo = appointment.vehicle
+          ? `${appointment.vehicle.make} ${appointment.vehicle.model}${appointment.vehicle.year ? ` ${appointment.vehicle.year}` : ""}`
+          : "";
 
-      return {
-        id: appointment.id,
-        title: appointment.title,
-        start: new Date(appointment.scheduled_at),
-        end: new Date(appointment.end_at),
-        description: appointment.description || "",
-        type: appointment.type,
-        status: appointment.status,
-        leadId: appointment.lead_id,
-        vehicleId: appointment.vehicle_id,
-        clientName: appointment.lead?.full_name,
-        clientPhone: appointment.lead?.phone || undefined,
-        vehicleInfo,
-      } as Event;
-    });
+        return {
+          id: appointment.id,
+          title: appointment.title ?? "Cita",
+          start,
+          end,
+          description: appointment.description ?? (appointment as { notes?: string | null }).notes ?? "",
+          type: safeEventType(appointment.type),
+          status: safeEventStatus(appointment.status),
+          leadId: appointment.lead_id,
+          vehicleId: appointment.vehicle_id,
+          clientName: appointment.lead?.full_name,
+          clientPhone: appointment.lead?.phone || undefined,
+          vehicleInfo,
+        } as Event;
+      })
+      .filter((e): e is Event => e != null);
   }, [appointments]);
 
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
     setSelectedEvent(null);
+    setOpenedFromSlot(true); // fecha ya elegida en el calendario, no mostrar campos de fecha
     setFormData({
       title: "",
       start,
@@ -158,6 +256,7 @@ export default function Appointments() {
 
   const handleSelectEvent = (event: Event) => {
     setSelectedEvent(event);
+    setOpenedFromSlot(false); // editar: sí mostrar campos de fecha por si cambian
     setFormData({
       title: event.title,
       start: event.start,
@@ -172,10 +271,21 @@ export default function Appointments() {
   };
 
   const handleSaveEvent = async () => {
-    if (!formData.title || !formData.start || !formData.end) {
+    let startDate = formData.start && !isNaN(formData.start.getTime()) ? formData.start : null;
+    let endDate = formData.end && !isNaN(formData.end.getTime()) ? formData.end : null;
+    if (openedFromSlot && startDate) {
+      const startParsed = parseTimeInput(startTimeStr);
+      const endParsed = parseTimeInput(endTimeStr);
+      if (startParsed) startDate = setTimeOnDate(startDate, startParsed);
+      if (endParsed) endDate = setTimeOnDate(startDate, endParsed);
+      if (endDate && startDate && endDate.getTime() <= startDate.getTime()) {
+        endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      }
+    }
+    if (!formData.title?.trim() || !startDate || !endDate) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios",
+        description: "Por favor completa los campos obligatorios (título, fecha/hora inicio y fin)",
         variant: "destructive",
       });
       return;
@@ -184,29 +294,45 @@ export default function Appointments() {
     try {
       setIsSaving(true);
       const payload = {
-        title: formData.title,
-        description: formData.description?.trim() ? formData.description.trim() : null,
+        title: formData.title.trim(),
+        description: formData.description?.trim() || null,
         type: formData.type || "meeting",
         status: formData.status || "programada",
-        scheduled_at: formData.start.toISOString(),
-        end_at: formData.end.toISOString(),
+        scheduled_at: startDate.toISOString(),
+        end_at: endDate.toISOString(),
         lead_id: formData.leadId ? formData.leadId : null,
         vehicle_id: formData.vehicleId ? formData.vehicleId : null,
         user_id: user?.id ?? null,
         branch_id: user?.branch_id ?? null,
+      } as Parameters<typeof appointmentService.update>[1] & {
+        title: string;
+        scheduled_at: string;
+        end_at: string;
       };
 
       if (selectedEvent) {
         await appointmentService.update(selectedEvent.id, payload);
         toast({
-          title: "Evento actualizado",
-          description: "El evento ha sido actualizado correctamente",
+          variant: "success",
+          title: (
+            <span className="flex items-center gap-2 font-semibold">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              Evento actualizado con éxito
+            </span>
+          ),
+          description: "Los cambios se han guardado correctamente.",
         });
       } else {
         await appointmentService.create(payload);
         toast({
-          title: "Evento creado",
-          description: "El evento ha sido creado correctamente",
+          variant: "success",
+          title: (
+            <span className="flex items-center gap-2 font-semibold">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              Evento creado con éxito
+            </span>
+          ),
+          description: "La cita se ha guardado correctamente.",
         });
       }
 
@@ -240,8 +366,14 @@ export default function Appointments() {
         await appointmentService.delete(selectedEvent.id);
         await queryClient.invalidateQueries({ queryKey: ["appointments"] });
         toast({
-          title: "Evento eliminado",
-          description: "El evento ha sido eliminado correctamente",
+          variant: "success",
+          title: (
+            <span className="flex items-center gap-2 font-semibold">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              Evento eliminado
+            </span>
+          ),
+          description: "La cita se ha eliminado correctamente.",
         });
         setIsDialogOpen(false);
         setSelectedEvent(null);
@@ -282,6 +414,7 @@ export default function Appointments() {
         <div className="flex items-center gap-3">
           <Button onClick={() => {
             setSelectedEvent(null);
+            setOpenedFromSlot(false); // desde botón: sí pedir fecha en el formulario
             setFormData({
               title: "",
               start: new Date(),
@@ -327,6 +460,7 @@ export default function Appointments() {
                 onSelectEvent={handleSelectEvent}
                 selectable
                 culture="es"
+                formats={calendarFormats24h}
                 messages={{
                   next: "Siguiente",
                   previous: "Anterior",
@@ -376,7 +510,9 @@ export default function Appointments() {
                         <p className="font-medium truncate">{event.title}</p>
                         <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          {format(event.start, "dd MMM, HH:mm", { locale: es })}
+                          {event.start && !isNaN(event.start.getTime())
+                            ? format(event.start, "dd MMM, HH:mm", { locale: es })
+                            : "—"}
                         </div>
                         {event.clientName && (
                           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
@@ -425,31 +561,97 @@ export default function Appointments() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start">Fecha y Hora Inicio *</Label>
-                <Input
-                  id="start"
-                  type="datetime-local"
-                  value={formData.start ? format(formData.start, "yyyy-MM-dd'T'HH:mm") : ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, start: new Date(e.target.value) })
-                  }
-                />
+            {openedFromSlot ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Fecha: {formData.start && !isNaN(formData.start.getTime())
+                    ? format(formData.start, "EEEE d 'de' MMMM yyyy", { locale: es })
+                    : "—"}
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="start-time">Hora Inicio * (24h, ej. 16:00)</Label>
+                    <Input
+                      id="start-time"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="ej. 16:00"
+                      value={startTimeStr}
+                      onChange={(e) => setStartTimeStr(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseTimeInput(startTimeStr);
+                        const base = formData.start && !isNaN(formData.start.getTime()) ? formData.start : new Date();
+                        if (parsed != null) {
+                          setStartTimeStr(parsed);
+                          const start = setTimeOnDate(base, parsed);
+                          const end = formData.end && !isNaN(formData.end.getTime()) ? formData.end : new Date(start.getTime() + 60 * 60 * 1000);
+                          setFormData((prev) => ({
+                            ...prev,
+                            start,
+                            end: end.getTime() <= start.getTime() ? new Date(start.getTime() + 60 * 60 * 1000) : end,
+                          }));
+                        } else {
+                          setStartTimeStr(safeFormatTime(base) ?? "");
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="end-time">Hora Fin * (24h, ej. 17:30)</Label>
+                    <Input
+                      id="end-time"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="ej. 17:30"
+                      value={endTimeStr}
+                      onChange={(e) => setEndTimeStr(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseTimeInput(endTimeStr);
+                        const base = formData.start && !isNaN(formData.start.getTime()) ? formData.start : new Date();
+                        if (parsed != null) {
+                          setEndTimeStr(parsed);
+                          const end = setTimeOnDate(base, parsed);
+                          const start = formData.start && !isNaN(formData.start.getTime()) ? formData.start : new Date(end.getTime() - 60 * 60 * 1000);
+                          setFormData((prev) => ({
+                            ...prev,
+                            start,
+                            end: end.getTime() <= start.getTime() ? new Date(start.getTime() + 60 * 60 * 1000) : end,
+                          }));
+                        } else {
+                          setEndTimeStr(safeFormatTime(formData.end) ?? "");
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="start">Fecha y Hora Inicio *</Label>
+                  <Input
+                    id="start"
+                    type="datetime-local"
+                    value={safeFormatDateTime(formData.start)}
+                    onChange={(e) =>
+                      setFormData({ ...formData, start: new Date(e.target.value) })
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="end">Fecha y Hora Fin *</Label>
-                <Input
-                  id="end"
-                  type="datetime-local"
-                  value={formData.end ? format(formData.end, "yyyy-MM-dd'T'HH:mm") : ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, end: new Date(e.target.value) })
-                  }
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="end">Fecha y Hora Fin *</Label>
+                  <Input
+                    id="end"
+                    type="datetime-local"
+                    value={safeFormatDateTime(formData.end)}
+                    onChange={(e) =>
+                      setFormData({ ...formData, end: new Date(e.target.value) })
+                    }
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="type">Tipo de Evento *</Label>

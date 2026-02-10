@@ -3,7 +3,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLeads } from "@/hooks/useLeads";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useVehicles } from "@/hooks/useVehicles";
-import { Bell, Calendar, Car, Check, CheckCircle, ChevronDown, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
+import { Bell, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -187,15 +187,17 @@ export function TopBar() {
 
   return (
     <header className="relative h-16 flex items-center border-b bg-background px-3 md:px-6 gap-4">
-      {/* Izquierda: trigger + búsqueda */}
-      <div className="flex items-center gap-2 md:gap-4 min-w-0 shrink-0">
-        <SidebarTrigger className="h-8 w-8 relative z-10" />
+      {/* Izquierda: botón acoplar (lado izquierdo de la lupa) + búsqueda */}
+      <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1 md:flex-initial">
         <button
           onClick={() => navigate('/app')}
-          className="skale-logo text-sm md:hidden"
+          className="skale-logo text-sm md:hidden truncate min-w-0 max-w-[120px] sm:max-w-[180px]"
         >
           SKALEMOTORS
         </button>
+
+        {/* Botón acoplar/desacoplar: a la izquierda de la lupa */}
+        <SidebarTrigger className="h-8 w-8 shrink-0 relative z-10" />
 
         {/* Search Bar */}
         <div ref={searchRef} className="relative w-full max-w-[200px] md:max-w-md">
@@ -353,6 +355,27 @@ export function TopBar() {
                           <div className="text-xs text-gray-500">Crear propuesta</div>
                         </div>
                         <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+Q</div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const onSalesPage = location.pathname === "/app/sales";
+                          if (onSalesPage) {
+                            window.dispatchEvent(new CustomEvent("openNewSaleForm"));
+                          } else {
+                            navigateWithLoading("/app/sales?new=true");
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                      >
+                        <div className="p-1.5 bg-emerald-100 group-hover:bg-emerald-200 rounded-md transition-colors">
+                          <CircleDollarSign className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">Nueva Venta</div>
+                          <div className="text-xs text-gray-500">Registrar venta de vehículo</div>
+                        </div>
+                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+E</div>
                       </button>
                     </div>
                   </div>

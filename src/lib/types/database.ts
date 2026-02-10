@@ -16,48 +16,60 @@ export interface Database {
       appointments: {
         Row: {
           id: string
-          title: string
+          title: string | null
           description: string | null
-          type: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
-          status: 'programada' | 'completada' | 'cancelada'
+          type: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          status: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at: string
-          end_at: string
+          end_at: string | null
+          duration_minutes: number | null
           lead_id: string | null
           vehicle_id: string | null
           user_id: string | null
           branch_id: string | null
           created_at: string
           updated_at: string
+          notes: string | null
+          location: string | null
+          reminder_sent: boolean | null
         }
         Insert: {
           id?: string
-          title: string
+          title?: string | null
           description?: string | null
-          type?: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
-          status?: 'programada' | 'completada' | 'cancelada'
+          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          status?: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at: string
-          end_at: string
+          end_at?: string | null
+          duration_minutes?: number | null
           lead_id?: string | null
           vehicle_id?: string | null
           user_id?: string | null
           branch_id?: string | null
           created_at?: string
           updated_at?: string
+          notes?: string | null
+          location?: string | null
+          reminder_sent?: boolean | null
         }
         Update: {
           id?: string
-          title?: string
+          title?: string | null
           description?: string | null
-          type?: 'test_drive' | 'meeting' | 'delivery' | 'service' | 'other'
-          status?: 'programada' | 'completada' | 'cancelada'
+          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          status?: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at?: string
-          end_at?: string
+          end_at?: string | null
+          duration_minutes?: number | null
           lead_id?: string | null
           vehicle_id?: string | null
           user_id?: string | null
           branch_id?: string | null
           created_at?: string
           updated_at?: string
+          notes?: string | null
+          location?: string | null
+          reminder_sent?: boolean | null
         }
       }
       branches: {
@@ -276,6 +288,7 @@ export interface Database {
           meeting_at?: string | null
           consignacion_price?: number | null
           sale_price?: number | null
+          fecha?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -643,6 +656,74 @@ export interface Database {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      sales: {
+        Row: {
+          id: string
+          lead_id: string | null
+          vehicle_id: string | null
+          seller_id: string | null
+          seller_name: string | null
+          client_name: string | null
+          branch_id: string | null
+          sale_price: number
+          down_payment: number | null
+          financing_amount: number | null
+          installments: number | null
+          margin: number | null
+          commission: number | null
+          status: 'pendiente' | 'completada' | 'cancelada'
+          sale_date: string
+          delivery_date: string | null
+          payment_method: string | null
+          notes: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          lead_id?: string | null
+          vehicle_id?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          client_name?: string | null
+          branch_id?: string | null
+          sale_price?: number
+          down_payment?: number | null
+          financing_amount?: number | null
+          installments?: number | null
+          margin?: number | null
+          commission?: number | null
+          status?: 'pendiente' | 'completada' | 'cancelada'
+          sale_date?: string
+          delivery_date?: string | null
+          payment_method?: string | null
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          lead_id?: string | null
+          vehicle_id?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          client_name?: string | null
+          branch_id?: string | null
+          sale_price?: number
+          down_payment?: number | null
+          financing_amount?: number | null
+          installments?: number | null
+          margin?: number | null
+          commission?: number | null
+          status?: 'pendiente' | 'completada' | 'cancelada'
+          sale_date?: string
+          delivery_date?: string | null
+          payment_method?: string | null
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
       }
     }

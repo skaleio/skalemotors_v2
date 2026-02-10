@@ -113,6 +113,16 @@ export function useGlobalShortcuts() {
         event.preventDefault();
         navigateWithLoading('/app/billing');
       }
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+        event.preventDefault();
+        const onSalesPage = window.location.pathname === '/app/sales';
+        if (onSalesPage) {
+          window.dispatchEvent(new CustomEvent('openNewSaleForm'));
+        } else {
+          navigateWithLoading('/app/sales?new=true');
+        }
+      }
     };
 
     // Agregar el event listener
