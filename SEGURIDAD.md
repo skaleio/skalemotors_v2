@@ -14,6 +14,12 @@ Este documento describe las medidas de seguridad implementadas en SKALEMOTORS pa
 - **Password Hashing**: Bcrypt con salt automático
 - **Email Verification**: Opcional para producción
 
+#### Misma cuenta en varios dispositivos (2+ computadoras)
+Para que un usuario pueda tener la app abierta en **varias computadoras a la vez** sin que una sesión cierre o afecte a la otra:
+
+1. **Supabase Dashboard** → **Authentication** → **Settings** (o **Sessions** en proyectos recientes): desactivar **"Single session per user"**. Si está activada, solo se mantiene la sesión más reciente y el otro dispositivo pierde la sesión.
+2. La app ya guarda la **actividad de inactividad por sesión** (por `session_id` del JWT), así que el cierre por inactividad (30 min) es **por dispositivo**, no global.
+
 #### Roles y Permisos
 ```typescript
 'admin'      // Acceso completo

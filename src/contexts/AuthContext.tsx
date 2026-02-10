@@ -40,8 +40,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
   const AUTH_LOADING_TIMEOUT_MS = 12 * 1000; // evita loading infinito
-  const SESSION_STORAGE_KEY = "skale.session_activity";
+  const SESSION_STORAGE_KEY_PREFIX = "skale.session_activity";
   const ACTIVITY_STORAGE_THROTTLE_MS = 5 * 1000;
+  const sessionStorageKeyRef = useRef<string | null>(null);
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     let timeoutId: number | null = null;
@@ -254,8 +255,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (!session?.user) {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      if (typeof window !== "undefined" && sessionStorageKeyRef.current) {
+        window.localStorage.removeItem(sessionStorageKeyRef.current);
+        sessionStorageKeyRef.current = null;
       }
       if (sessionTimeoutRef.current) {
         window.clearTimeout(sessionTimeoutRef.current);
@@ -266,19 +268,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     if (typeof window === "undefined") return;
 
+    // Clave por sesión: cada dispositivo tiene su propia sesión (su propio session_id en el JWT).
+    // Así el timeout de inactividad es por dispositivo y no se pisan al usar la cuenta en 2 computadoras.
+    const sessionId =
+      (() => {
+        try {
+          const payload = JSON.parse(atob(session.access_token.split(".")[1] ?? "e30="));
+          return (payload as { session_id?: string }).session_id ?? null;
+        } catch {
+          return null;
+        }
+      })() ?? `${session.user.id}-${session.expires_at ?? 0}`;
+    const storageKey = `${SESSION_STORAGE_KEY_PREFIX}.${sessionId}`;
+    sessionStorageKeyRef.current = storageKey;
+
     const now = Date.now();
     let lastActivityAt = now;
     let storedUserId: string | null = null;
 
     try {
-      const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      const raw = window.localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw) as { userId?: string; lastActivityAt?: number };
         if (parsed?.userId) storedUserId = parsed.userId;
         if (parsed?.lastActivityAt) lastActivityAt = parsed.lastActivityAt;
       }
     } catch (error) {
-      console.warn("⚠️ Error leyendo SESSION_STORAGE_KEY:", error);
+      console.warn("⚠️ Error leyendo clave de actividad:", error);
     }
 
     if (storedUserId !== session.user.id) {
@@ -291,7 +307,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (elapsed >= SESSION_TIMEOUT_MS) {
       console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
       supabase.auth.signOut().finally(() => {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        window.localStorage.removeItem(storageKey);
       });
       return;
     }
@@ -303,11 +319,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       lastStorageWriteRef.current = timestamp;
       try {
         window.localStorage.setItem(
-          SESSION_STORAGE_KEY,
+          storageKey,
           JSON.stringify({ userId: session.user.id, lastActivityAt: timestamp }),
         );
       } catch (error) {
-        console.warn("⚠️ Error guardando SESSION_STORAGE_KEY:", error);
+        console.warn("⚠️ Error guardando actividad de sesión:", error);
       }
     };
 
@@ -319,7 +335,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       sessionTimeoutRef.current = window.setTimeout(() => {
         console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
         supabase.auth.signOut().finally(() => {
-          window.localStorage.removeItem(SESSION_STORAGE_KEY);
+          window.localStorage.removeItem(storageKey);
         });
       }, Math.max(remaining, 0));
     };
@@ -479,8 +495,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setSession(null);
       setNeedsOnboarding(false);
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      if (typeof window !== "undefined" && sessionStorageKeyRef.current) {
+        window.localStorage.removeItem(sessionStorageKeyRef.current);
+        sessionStorageKeyRef.current = null;
       }
       if (sessionTimeoutRef.current) {
         window.clearTimeout(sessionTimeoutRef.current);
