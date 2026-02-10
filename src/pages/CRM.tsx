@@ -18,8 +18,9 @@ import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "@/hooks/use-toast";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -229,6 +230,35 @@ export default function CRM() {
     setEditingLead(null);
     setIsEditingForm(false);
   }, []);
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  const handleDeleteLead = useCallback(async () => {
+    if (!editingLead) return;
+    if (!confirm("¿Eliminar este lead? Esta acción no se puede deshacer.")) return;
+    setIsDeleting(true);
+    try {
+      await leadService.delete(editingLead.id);
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.filter((lead: { id: string }) => lead.id !== editingLead.id);
+      });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      closeEditDialog();
+      toast({
+        title: "Lead eliminado",
+        description: "El lead se eliminó correctamente.",
+      });
+    } catch (error) {
+      console.error("Error eliminando lead:", error);
+      toast({
+        title: "Error al eliminar",
+        description: error instanceof Error ? error.message : "No se pudo eliminar el lead.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [editingLead, queryClient, closeEditDialog]);
 
   const startEditing = useCallback(() => {
     if (!editingLead) return;
@@ -569,26 +599,44 @@ export default function CRM() {
               )}
             </div>
           )}
-          <DialogFooter>
-            {isEditingForm ? (
-              <>
-                <Button variant="outline" onClick={() => setIsEditingForm(false)} disabled={isUpdating}>
-                  Cancelar edición
+          <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+            <div className="flex gap-2 order-2 sm:order-1">
+              {editingLead && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteLead}
+                  disabled={isUpdating || isDeleting}
+                  className="gap-2"
+                  aria-label="Eliminar lead"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {isDeleting ? "Eliminando..." : "Eliminar lead"}
                 </Button>
-                <Button onClick={handleUpdateLead} disabled={isUpdating || !editForm.full_name.trim() || !editForm.phone.trim()}>
-                  {isUpdating ? "Guardando..." : "Guardar cambios"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={closeEditDialog}>
-                  Cerrar
-                </Button>
-                <Button onClick={handleUpdateLead} disabled={isUpdating}>
-                  {isUpdating ? "Guardando..." : "Guardar cambios"}
-                </Button>
-              </>
-            )}
+              )}
+            </div>
+            <div className="flex gap-2 order-1 sm:order-2">
+              {isEditingForm ? (
+                <>
+                  <Button variant="outline" onClick={() => setIsEditingForm(false)} disabled={isUpdating}>
+                    Cancelar edición
+                  </Button>
+                  <Button onClick={handleUpdateLead} disabled={isUpdating || !editForm.full_name.trim() || !editForm.phone.trim()}>
+                    {isUpdating ? "Guardando..." : "Guardar cambios"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={closeEditDialog}>
+                    Cerrar
+                  </Button>
+                  <Button onClick={handleUpdateLead} disabled={isUpdating}>
+                    {isUpdating ? "Guardando..." : "Guardar cambios"}
+                  </Button>
+                </>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
