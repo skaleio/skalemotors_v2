@@ -9,18 +9,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
+const VEHICULO_TAG_PREFIX = "vehiculo:";
+const REGION_TAG_PREFIX = "region:";
+
+const getTagValue = (tags: unknown, prefix: string) => {
+  const match = normalizeTags(tags).find((tag) => tag.startsWith(prefix));
+  return match ? match.slice(prefix.length) : "";
+};
+
+function formatChilePhoneForDisplay(value?: string | null) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("+56")) {
+    const digits = trimmed.replace(/\D/g, "");
+    const number = digits.startsWith("56") ? digits.slice(2) : digits;
+    if (!number) return "+56";
+    if (number.startsWith("9")) {
+      const rest = number.slice(1);
+      return rest ? `+56 9 ${rest}` : "+56 9";
+    }
+    return `+56 ${number}`;
+  }
+  return trimmed;
+}
 
 const labelStyles: Record<string, { dot: string; text: string }> = {
   sin_etiqueta: { dot: "bg-slate-300", text: "text-slate-600" },
@@ -63,6 +90,37 @@ const getConsignacionLabel = (tags: unknown): string | null => {
   if (!label || label === "sin_etiqueta") return null;
   return label;
 };
+
+function buildTagsWithVehicle(tags: unknown, vehicle: string): string[] {
+  const current = normalizeTags(tags).filter((tag) => !tag.startsWith(VEHICULO_TAG_PREFIX));
+  const v = vehicle.trim();
+  if (!v) return current;
+  return [...current, `${VEHICULO_TAG_PREFIX}${v}`];
+}
+
+function normalizePhoneChile(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  if (raw.startsWith("+56")) {
+    const n = raw.replace(/^(\+56\s*)/g, "+56 ").trim();
+    return n === "+56" ? "" : n;
+  }
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("56") && digits.length >= 10) {
+    const rest = digits.slice(2);
+    return rest ? `+56 ${rest}` : "";
+  }
+  return `+56 ${raw}`;
+}
+
+function toTitleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 function formatStateUpdatedAt(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -133,6 +191,18 @@ export default function CRM() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [leadStatus, setLeadStatus] = useState<string>("nuevo");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isEditingForm, setIsEditingForm] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    region: "",
+    payment_type: "",
+    budget: "",
+    notes: "",
+    vehicle: "",
+    status: "nuevo",
+  });
 
   useEffect(() => {
     if (!user?.branch_id) return;
@@ -150,34 +220,70 @@ export default function CRM() {
   const openEditDialog = useCallback((lead: Lead) => {
     setEditingLead(lead);
     setLeadStatus(lead.status || "nuevo");
+    setIsEditingForm(false);
     setShowEditDialog(true);
   }, []);
 
   const closeEditDialog = useCallback(() => {
     setShowEditDialog(false);
     setEditingLead(null);
+    setIsEditingForm(false);
   }, []);
+
+  const startEditing = useCallback(() => {
+    if (!editingLead) return;
+    setEditForm({
+      full_name: editingLead.full_name || "",
+      phone: (editingLead.phone || "").replace(/^(\+56\s*)/g, ""),
+      email: editingLead.email || "",
+      region: editingLead.region || getTagValue(editingLead.tags, REGION_TAG_PREFIX) || "",
+      payment_type: editingLead.payment_type || "",
+      budget: editingLead.budget || "",
+      notes: editingLead.notes || "",
+      vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
+      status: editingLead.status || "nuevo",
+    });
+    setLeadStatus(editingLead.status || "nuevo");
+    setIsEditingForm(true);
+  }, [editingLead]);
 
   const handleUpdateLead = useCallback(async () => {
     if (!editingLead) return;
     setIsUpdating(true);
     try {
-      const updated = await leadService.update(editingLead.id, {
-        status: leadStatus as any,
-      });
+      const updates: Record<string, unknown> = isEditingForm
+        ? {
+            full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
+            phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
+            email: editForm.email.trim() || null,
+            status: editForm.status,
+            region: editForm.region.trim() || null,
+            payment_type: editForm.payment_type.trim() || null,
+            budget: editForm.budget.trim() || null,
+            notes: editForm.notes.trim() || null,
+            tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
+          }
+        : { status: leadStatus };
+
+      const updated = await leadService.update(editingLead.id, updates as any);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
       });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
-      closeEditDialog();
+      if (isEditingForm) {
+        setEditingLead(updated as Lead);
+        setIsEditingForm(false);
+      } else {
+        closeEditDialog();
+      }
     } catch (error: unknown) {
       console.error("Error actualizando lead:", error);
       alert(error instanceof Error ? error.message : "No se pudo actualizar el lead.");
     } finally {
       setIsUpdating(false);
     }
-  }, [editingLead, leadStatus, queryClient, closeEditDialog]);
+  }, [editingLead, leadStatus, isEditingForm, editForm, queryClient, closeEditDialog]);
 
   const stages = useMemo(
     () => [
@@ -246,43 +352,243 @@ export default function CRM() {
       </div>
 
       <Dialog open={showEditDialog} onOpenChange={(open) => (open ? null : closeEditDialog())}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Editar lead</DialogTitle>
-            <DialogDescription>
-              Cambia el estado del lead para moverlo en el pipeline.
-            </DialogDescription>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+            <div className="space-y-1.5">
+              <DialogTitle>Lead — Información y estado</DialogTitle>
+              <DialogDescription>
+                {isEditingForm ? "Edita los datos del lead." : "Datos del lead y cambio de estado en el pipeline."}
+              </DialogDescription>
+            </div>
+            {editingLead && !isEditingForm && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={startEditing}
+                className="shrink-0"
+                aria-label="Editar datos del lead"
+                title="Editar datos del lead"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
           </DialogHeader>
           {editingLead && (
-            <div className="grid gap-4 py-2">
-              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                <p className="font-medium">{editingLead.full_name || "Sin nombre"}</p>
-                <p className="text-muted-foreground">{editingLead.phone || "Sin teléfono"}</p>
-              </div>
-              <div className="grid gap-2">
-                <Label>Estado del lead</Label>
-                <Select value={leadStatus} onValueChange={setLeadStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(statusLabels).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-4 py-2">
+              {isEditingForm ? (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-name">Nombre</Label>
+                      <Input
+                        id="crm-edit-name"
+                        value={editForm.full_name}
+                        onChange={(e) => setEditForm((f) => ({ ...f, full_name: e.target.value }))}
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-phone">Teléfono</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">+56</span>
+                        <Input
+                          id="crm-edit-phone"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                          placeholder="9 ..."
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-email">Correo</Label>
+                      <Input
+                        id="crm-edit-email"
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                        placeholder="correo@ejemplo.com"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-region">Región</Label>
+                      <Input
+                        id="crm-edit-region"
+                        value={editForm.region}
+                        onChange={(e) => setEditForm((f) => ({ ...f, region: e.target.value }))}
+                        placeholder="Ej: Metropolitana"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-payment">Financiamiento / Contado</Label>
+                      <Input
+                        id="crm-edit-payment"
+                        value={editForm.payment_type}
+                        onChange={(e) => setEditForm((f) => ({ ...f, payment_type: e.target.value }))}
+                        placeholder="Ej: Contado"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-budget">Presupuesto</Label>
+                      <Input
+                        id="crm-edit-budget"
+                        value={editForm.budget}
+                        onChange={(e) => setEditForm((f) => ({ ...f, budget: e.target.value }))}
+                        placeholder="Ej: 10-12 millones"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="crm-edit-vehicle">Vehículo de interés</Label>
+                    <Input
+                      id="crm-edit-vehicle"
+                      value={editForm.vehicle}
+                      onChange={(e) => setEditForm((f) => ({ ...f, vehicle: e.target.value }))}
+                      placeholder="Ej: Toyota Corolla 2020"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="crm-edit-notes">Nota</Label>
+                    <Textarea
+                      id="crm-edit-notes"
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                      placeholder="Notas sobre el lead..."
+                      rows={3}
+                    />
+                  </div>
+                  <div className="grid gap-2 pt-2 border-t">
+                    <Label>Estado en el pipeline</Label>
+                    <Select
+                      value={editForm.status}
+                      onValueChange={(v) => {
+                        setEditForm((f) => ({ ...f, status: v }));
+                        setLeadStatus(v);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Nombre</p>
+                      <p className="text-base font-medium">{editingLead.full_name || "Sin nombre"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Teléfono</p>
+                      <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Correo</p>
+                      <p className="text-base">{editingLead.email || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Región</p>
+                      <p className="text-base">
+                        {editingLead.region || getTagValue(editingLead.tags, REGION_TAG_PREFIX) || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Financiamiento / Contado</p>
+                      <p className="text-base">{editingLead.payment_type || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Presupuesto</p>
+                      <p className="text-base">{editingLead.budget || "—"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vehículo de interés</p>
+                    <p className="text-base">
+                      {getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "—"}
+                    </p>
+                  </div>
+                  {getConsignacionLabel(editingLead.tags) && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Etiqueta consignación</p>
+                      <p className="text-base">{getConsignacionLabel(editingLead.tags)}</p>
+                    </div>
+                  )}
+                  {(editingLead.state != null && editingLead.state !== "") && (
+                    <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2">
+                      <p className="text-sm text-muted-foreground">Estado IA</p>
+                      <p className="text-base">
+                        {editingLead.state}
+                        {editingLead.state_confidence != null && !Number.isNaN(Number(editingLead.state_confidence)) && (
+                          <span className="text-muted-foreground"> ({Math.round(Number(editingLead.state_confidence) * 100)}%)</span>
+                        )}
+                      </p>
+                      {editingLead.state_reason && (
+                        <p className="text-sm text-muted-foreground mt-1">{editingLead.state_reason}</p>
+                      )}
+                    </div>
+                  )}
+                  {editingLead.notes && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Nota</p>
+                      <p className="text-base whitespace-pre-wrap">{editingLead.notes}</p>
+                    </div>
+                  )}
+                  <div className="grid gap-2 pt-2 border-t">
+                    <Label>Estado en el pipeline</Label>
+                    <Select value={leadStatus} onValueChange={setLeadStatus}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={closeEditDialog}>
-              Cancelar
-            </Button>
-            <Button onClick={handleUpdateLead} disabled={isUpdating}>
-              {isUpdating ? "Guardando..." : "Guardar cambios"}
-            </Button>
+            {isEditingForm ? (
+              <>
+                <Button variant="outline" onClick={() => setIsEditingForm(false)} disabled={isUpdating}>
+                  Cancelar edición
+                </Button>
+                <Button onClick={handleUpdateLead} disabled={isUpdating || !editForm.full_name.trim() || !editForm.phone.trim()}>
+                  {isUpdating ? "Guardando..." : "Guardar cambios"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeEditDialog}>
+                  Cerrar
+                </Button>
+                <Button onClick={handleUpdateLead} disabled={isUpdating}>
+                  {isUpdating ? "Guardando..." : "Guardar cambios"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
