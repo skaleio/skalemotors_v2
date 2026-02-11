@@ -22,7 +22,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Filter, Loader2, Mail, Pencil, Phone, Plus, Search, Target, Trash2 } from "lucide-react";
+import { Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, Search, Target, Trash2 } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -437,7 +437,7 @@ export default function Leads() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { leads, loading, refetch } = useLeads({
+  const { leads, loading, isFetching, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
@@ -786,7 +786,7 @@ export default function Leads() {
         tags.push(`${VEHICULO_TAG_PREFIX}${vehicleLabel}`);
       }
 
-      await leadService.create({
+      const created = await leadService.create({
         full_name: toTitleCase(formState.full_name.trim()),
         phone: normalizePhoneWithChilePrefix(formState.phone),
         status: formState.status as any,
@@ -800,7 +800,16 @@ export default function Leads() {
         tags: buildTags(tags) as any,
       });
 
+      // Actualizar caché al instante con el nuevo lead al inicio (mismo orden que el API: más recientes primero)
+      const queryKey = ["leads", user.branch_id, undefined, undefined, undefined, undefined];
+      queryClient.setQueryData(queryKey, (old: Lead[] | undefined) => {
+        if (!Array.isArray(old)) return [created as Lead];
+        return [created as Lead, ...old.filter((l) => l.id !== (created as Lead).id)];
+      });
+      // Marcar como obsoleta y volver a cargar desde el servidor para asegurar lista actualizada
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       await refetch();
+
       resetForm();
       setShowCreateDialog(false);
     } catch (error: any) {
@@ -1037,6 +1046,21 @@ export default function Leads() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="shrink-0"
+              title="Actualizar lista de leads"
+              aria-label="Actualizar lista de leads"
+            >
+              {isFetching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -1089,14 +1113,14 @@ export default function Leads() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Nuevo lead</DialogTitle>
             <DialogDescription>
               Completa los datos básicos para registrar un lead.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
+          <div className="flex-1 grid gap-4 overflow-y-auto min-h-0 py-1 -mx-1 px-1">
             <div className="grid gap-2">
               <Label htmlFor="lead_full_name">Nombre</Label>
               <Input
@@ -1179,7 +1203,7 @@ export default function Leads() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancelar
             </Button>
@@ -1191,14 +1215,14 @@ export default function Leads() {
       </Dialog>
 
       <Dialog open={showEditDialog} onOpenChange={(open) => (open ? null : closeEditDialog())}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Editar lead</DialogTitle>
             <DialogDescription>
               Actualiza los datos principales del lead.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
+          <div className="flex-1 grid gap-4 overflow-y-auto min-h-0 py-1 -mx-1 px-1">
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_full_name">Nombre</Label>
               <Input
@@ -1307,7 +1331,7 @@ export default function Leads() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={closeEditDialog}>
               Cancelar
             </Button>
@@ -1319,15 +1343,15 @@ export default function Leads() {
       </Dialog>
 
       <Dialog open={showDetailsDialog} onOpenChange={(open) => (open ? null : closeDetailsDialog())}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Detalle del lead</DialogTitle>
             <DialogDescription>
               Información y notas del lead.
             </DialogDescription>
           </DialogHeader>
           {detailsLead ? (
-            <div className="space-y-4">
+            <div className="flex-1 space-y-4 overflow-y-auto min-h-0 py-1 -mx-1 px-1">
               <div>
                 <p className="text-sm text-muted-foreground">Nombre</p>
                 <p className="text-base font-medium">{detailsLead.full_name || "Sin nombre"}</p>
@@ -1389,7 +1413,7 @@ export default function Leads() {
               </div>
             </div>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={closeDetailsDialog}>
               Cerrar
             </Button>
