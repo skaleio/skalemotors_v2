@@ -61,7 +61,8 @@ const Calls = lazy(() => import("./pages/Calls"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Loyalty = lazy(() => import("./pages/Loyalty"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const Landing = lazy(() => import("./pages/Landing"));
+// Landing se importa estático: es la ruta principal y evita errores de "Failed to fetch dynamically imported module"
+import Landing from "./pages/Landing";
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
