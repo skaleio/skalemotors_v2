@@ -18,7 +18,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 
@@ -188,6 +188,7 @@ export default function CRM() {
     enabled: !!user?.branch_id,
   });
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [leadStatus, setLeadStatus] = useState<string>("nuevo");
@@ -325,21 +326,44 @@ export default function CRM() {
     [],
   );
 
+  const filteredLeads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return leads;
+    return leads.filter((lead) => {
+      const name = (lead.full_name || "").toLowerCase();
+      const phone = (lead.phone || "").replace(/\D/g, "");
+      const phoneQuery = q.replace(/\D/g, "");
+      const email = (lead.email || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
+    });
+  }, [leads, searchQuery]);
+
   const leadsByStage = useMemo(() => {
     return stages.map((stage) => ({
       ...stage,
-      leads: leads.filter((lead) => stage.statuses.includes(lead.status)),
+      leads: filteredLeads.filter((lead) => stage.statuses.includes(lead.status)),
     }));
-  }, [leads, stages]);
+  }, [filteredLeads, stages]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
           <p className="text-muted-foreground mt-2">
             Gestión de clientes y relaciones
           </p>
+        </div>
+        <div className="relative w-full sm:w-72 shrink-0">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Buscar por nombre, teléfono o correo..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            aria-label="Buscar cliente en el CRM"
+          />
         </div>
       </div>
 
