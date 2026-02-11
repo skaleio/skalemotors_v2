@@ -1,6 +1,8 @@
 import { Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
 import { Badge } from "@/components/ui/badge";
@@ -265,6 +267,7 @@ export default function Inventory() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportScope, setExportScope] = useState<"all" | "filtered">("all");
   const [exportDetail, setExportDetail] = useState<"basic" | "full">("full");
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx" | "pdf">("xlsx");
   const [exportFileName, setExportFileName] = useState(() => {
     const fileDate = new Date().toISOString().split("T")[0];
     return `inventario_${fileDate}`;
@@ -900,7 +903,6 @@ export default function Inventory() {
   const buildExportRows = (vehiclesToExport: Vehicle[], detail: "basic" | "full") => {
     if (detail === "basic") {
       return vehiclesToExport.map((vehicle) => ({
-        VIN: vehicle.vin || "",
         Marca: vehicle.make || "",
         Modelo: vehicle.model || "",
         Año: vehicle.year || "",
@@ -912,7 +914,6 @@ export default function Inventory() {
 
     return vehiclesToExport.map((vehicle) => ({
       ID: vehicle.id,
-      VIN: vehicle.vin || "",
       Marca: vehicle.make || "",
       Modelo: vehicle.model || "",
       Año: vehicle.year || "",
@@ -936,6 +937,27 @@ export default function Inventory() {
     }));
   };
 
+  const getSanitizedFileName = () => {
+    const base = exportFileName
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, " ")
+      .trim() || "inventario";
+    const ext = exportFormat === "csv" ? "csv" : exportFormat === "pdf" ? "pdf" : "xlsx";
+    return `${base}.${ext}`;
+  };
+
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const handleExportInventory = async () => {
     if (!user?.branch_id) {
       alert("Error: No hay sucursal asignada. Por favor contacta al administrador.");
@@ -955,36 +977,47 @@ export default function Inventory() {
       }
 
       const rows = buildExportRows(vehiclesToExport, exportDetail);
+      const fileName = getSanitizedFileName();
 
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
-
-      const sanitizedName = exportFileName
-        .trim()
-        .replace(/[\\/:*?"<>|]+/g, "_")
-        .replace(/\s+/g, " ")
-        .trim() || "inventario";
-      const workbookArray = XLSX.write(workbook, {
-        bookType: "xlsx",
-        type: "array",
-        compression: true,
-      });
-      const blob = new Blob([workbookArray], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      if (blob.size === 0) {
-        throw new Error("El archivo XLSX quedó vacío.");
+      if (exportFormat === "csv") {
+        const headers = Object.keys(rows[0] || {});
+        const escapeCsv = (val: unknown): string => {
+          const s = String(val ?? "");
+          if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+          return s;
+        };
+        const headerLine = headers.map(escapeCsv).join(",");
+        const dataLines = rows.map((r) => headers.map((h) => escapeCsv((r as Record<string, unknown>)[h])).join(","));
+        const csv = [headerLine, ...dataLines].join("\r\n");
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+        downloadBlob(blob, fileName);
+      } else if (exportFormat === "pdf") {
+        const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        const headers = Object.keys(rows[0] || {});
+        const body = rows.map((r) => headers.map((h) => String((r as Record<string, unknown>)[h] ?? "")));
+        autoTable(doc, {
+          head: [headers],
+          body,
+          styles: { fontSize: 7 },
+          margin: { top: 10 },
+        });
+        doc.save(fileName);
+      } else {
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
+        const workbookArray = XLSX.write(workbook, {
+          bookType: "xlsx",
+          type: "array",
+          compression: true,
+        });
+        const blob = new Blob([workbookArray], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        if (blob.size === 0) throw new Error("El archivo XLSX quedó vacío.");
+        downloadBlob(blob, fileName);
       }
-      const fileName = `${sanitizedName}.xlsx`;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
       setShowExportDialog(false);
     } catch (error) {
       console.error("Error exportando inventario:", error);
@@ -1444,7 +1477,7 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle>Exportar inventario</DialogTitle>
             <DialogDescription>
-              Elige el alcance y el nivel de detalle del archivo XLSX.
+              Elige el formato, alcance y nivel de detalle del archivo a exportar.
             </DialogDescription>
           </DialogHeader>
 
@@ -1457,6 +1490,27 @@ export default function Inventory() {
                 onChange={(e) => setExportFileName(e.target.value)}
                 placeholder="Ej: inventario_febrero"
               />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Formato</div>
+              <RadioGroup
+                value={exportFormat}
+                onValueChange={(value) => setExportFormat(value as "csv" | "xlsx" | "pdf")}
+                className="flex flex-wrap gap-4"
+              >
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <RadioGroupItem value="csv" />
+                  CSV
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <RadioGroupItem value="xlsx" />
+                  XLSX (Excel)
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <RadioGroupItem value="pdf" />
+                  PDF
+                </label>
+              </RadioGroup>
             </div>
             <div className="space-y-2">
               <div className="text-sm font-medium">Alcance</div>
@@ -1500,7 +1554,7 @@ export default function Inventory() {
               Cancelar
             </Button>
             <Button onClick={handleExportInventory} disabled={isExporting}>
-              {isExporting ? "Exportando..." : "Exportar XLSX"}
+              {isExporting ? "Exportando..." : `Exportar ${exportFormat.toUpperCase()}`}
             </Button>
           </div>
         </DialogContent>

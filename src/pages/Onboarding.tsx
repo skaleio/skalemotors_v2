@@ -588,7 +588,7 @@ export default function Onboarding() {
           </div>
         );
 
-      case "integrations":
+      case "integrations": {
         const showChileautos = selectedIntegrations.includes("chileautos");
         const showMercadoLibre = selectedIntegrations.includes("mercadolibre");
 
@@ -884,6 +884,7 @@ export default function Onboarding() {
             )}
           </div>
         );
+      }
 
       case "team":
         return (

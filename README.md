@@ -207,6 +207,9 @@ Ver [docs/N8N_INTEGRATION_README.md](./docs/N8N_INTEGRATION_README.md) para work
 ### SimpleFACTURA
 Ver [SIMPLEFACTURA_SETUP.md](./SIMPLEFACTURA_SETUP.md) para integración de facturación.
 
+### Marketplaces (Mercado Libre, Facebook, Chile Autos)
+Ver [docs/MARKETPLACES_SETUP.md](./docs/MARKETPLACES_SETUP.md) para publicar vehículos en marketplaces.
+
 ## 🔒 Seguridad
 
 - ✅ Row Level Security (RLS) habilitado en todas las tablas
@@ -224,9 +227,11 @@ Ver [SEGURIDAD.md](./SEGURIDAD.md) para más detalles.
 - [MIGRACION_PRODUCCION.md](./MIGRACION_PRODUCCION.md) - Deploy a producción
 
 ### Documentación Técnica
+- [docs/README.md](./docs/README.md) - Índice de documentación y estado del proyecto
+- [docs/N8N_INTEGRATION_README.md](./docs/N8N_INTEGRATION_README.md) - Integración N8N y Studio IA
 - [docs/n8n_docker_setup.md](./docs/n8n_docker_setup.md) - Setup de N8N con Docker
 - [docs/n8n_usage_examples.md](./docs/n8n_usage_examples.md) - Ejemplos de uso
-- [REORGANIZACION_STUDIO_IA.md](./REORGANIZACION_STUDIO_IA.md) - Arquitectura del Studio IA
+- [docs/MARKETPLACES_SETUP.md](./docs/MARKETPLACES_SETUP.md) - Mercado Libre, Facebook Marketplace, Chile Autos
 
 ## 🚀 Deployment
 
