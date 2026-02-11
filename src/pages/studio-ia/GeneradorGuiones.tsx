@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
 import { generateReelScript as generateReelScriptApi } from "@/lib/services/studioIaApi";
 import { Video, Sparkles, Copy, Download, RefreshCw, CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ interface ScriptData {
 }
 
 export default function GeneradorGuiones() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [generatedScript, setGeneratedScript] = useState<string>("");
   const [formData, setFormData] = useState<ScriptData>({
@@ -47,7 +49,8 @@ export default function GeneradorGuiones() {
 
     setLoading(true);
     try {
-      const result = await generateReelScriptApi(formData);
+      const payload = { ...formData, ...(user?.branch_id && { branch_id: user.branch_id }) };
+      const result = await generateReelScriptApi(payload);
       if (result.ok) {
         setGeneratedScript(result.text);
         toast.success("Tu guión para reel está listo.");
