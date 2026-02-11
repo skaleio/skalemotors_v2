@@ -7,6 +7,12 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Changed
+- Limpieza de documentación: eliminados 6 archivos .md obsoletos o redundantes (README_MIGRACION, INTEGRACION_*_COMPLETADA, MEJORAS_DASHBOARD_INVENTARIO, REORGANIZACION_STUDIO_IA, SOLUCION_CARGA_INFINITA).
+- Nuevo `docs/README.md` como índice de documentación y visión del estado del proyecto (qué hay, cómo está organizado, qué falta).
+- README principal actualizado con enlaces a docs/README.md, N8N_INTEGRATION_README y MARKETPLACES_SETUP.
+- Pequeñas correcciones de lint sin cambiar comportamiento (BlurText, Iridescence, Onboarding case block, command/textarea types, tailwind import).
+
 ### Added
 - Sistema de gestión de inventario de vehículos
 - Dashboard ejecutivo con métricas en tiempo real
