@@ -18,11 +18,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
+import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, Search, Target, Trash2 } from "lucide-react";
+import { Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -472,6 +473,12 @@ export default function Leads() {
   const [deletingLead, setDeletingLead] = useState<(typeof leads)[number] | null>(null);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [showPapeleraDialog, setShowPapeleraDialog] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const { deletedLeads, loading: loadingPapelera, refetch: refetchPapelera } = useDeletedLeads(
+    user?.branch_id ?? undefined,
+    showPapeleraDialog,
+  );
   const [editForm, setEditForm] = useState({
     full_name: "",
     phone: "",
@@ -945,6 +952,32 @@ export default function Leads() {
     }
   }, [selectedLeadIds, queryClient, refetch]);
 
+  const handleRestoreLead = useCallback(
+    async (id: string) => {
+      setRestoringId(id);
+      try {
+        await leadService.restore(id);
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        await refetch();
+        await refetchPapelera();
+        toast({
+          title: "Lead restaurado",
+          description: "El lead volvió a la lista de leads.",
+        });
+      } catch (error: unknown) {
+        console.error("Error restaurando lead:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "No se pudo restaurar el lead.",
+          variant: "destructive",
+        });
+      } finally {
+        setRestoringId(null);
+      }
+    },
+    [queryClient, refetch, refetchPapelera],
+  );
+
   const editTags = normalizeTags(editingLead?.tags);
   const editIsConsignacion = editTags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
   const editConsignacionVehicle = editingLead
@@ -982,6 +1015,15 @@ export default function Leads() {
             onChange={handleImportFile}
             className="hidden"
           />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowPapeleraDialog(true)}
+            title="Ver papelera — clientes eliminados (no respondieron)"
+            aria-label="Ver papelera"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
           <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? "Importando..." : "Importar leads"}
           </Button>
@@ -1426,7 +1468,7 @@ export default function Leads() {
           <DialogHeader>
             <DialogTitle>Eliminar lead</DialogTitle>
             <DialogDescription>
-              ¿Seguro que quieres eliminar este lead? Esta acción no se puede deshacer.
+              El lead se moverá a la papelera (clientes que no respondieron). Podrás verlo y restaurarlo desde «Papelera».
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1445,7 +1487,7 @@ export default function Leads() {
           <DialogHeader>
             <DialogTitle>Eliminar leads seleccionados</DialogTitle>
             <DialogDescription>
-              ¿Eliminar {selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? "" : "s"}? Esta acción no se puede deshacer.
+              Los leads se moverán a la papelera (clientes que no respondieron). Podrás verlos y restaurarlos desde «Papelera».
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1461,6 +1503,78 @@ export default function Leads() {
               ) : (
                 "Eliminar"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPapeleraDialog} onOpenChange={setShowPapeleraDialog}>
+        <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-muted-foreground" />
+              Papelera
+            </DialogTitle>
+            <DialogDescription>
+              Clientes eliminados por no responder. Puedes restaurarlos para que vuelvan a la lista de leads.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 py-2 -mx-1 px-1">
+            {loadingPapelera ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                Cargando...
+              </div>
+            ) : deletedLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No hay leads en la papelera.</p>
+            ) : (
+              <ul className="space-y-2">
+                {deletedLeads.map((lead) => (
+                  <li
+                    key={lead.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{lead.full_name || "Sin nombre"}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 shrink-0" />
+                        {formatChilePhoneForDisplay(lead.phone) || "—"}
+                        {lead.email ? (
+                          <>
+                            <span className="mx-1">·</span>
+                            <Mail className="h-3.5 w-3.5 shrink-0 inline" />
+                            <span className="truncate">{lead.email}</span>
+                          </>
+                        ) : null}
+                      </p>
+                      {lead.deleted_at ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Eliminado {new Date(lead.deleted_at).toLocaleDateString("es-CL", { dateStyle: "medium" })}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRestoreLead(lead.id)}
+                      disabled={restoringId !== null}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {restoringId === lead.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-4 w-4" />
+                      )}
+                      Restaurar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter className="shrink-0 border-t pt-4">
+            <Button variant="outline" onClick={() => setShowPapeleraDialog(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

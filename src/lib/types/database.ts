@@ -317,6 +317,132 @@ export interface Database {
           updated_at?: string
         }
       }
+      tramite_tipos: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          description: string | null
+          requires_api: boolean
+          category: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          description?: string | null
+          requires_api?: boolean
+          category: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          code?: string
+          name?: string
+          description?: string | null
+          requires_api?: boolean
+          category?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      tramites: {
+        Row: {
+          id: string
+          branch_id: string | null
+          tramite_tipo_id: string | null
+          vehicle_id: string | null
+          lead_id: string | null
+          created_by: string | null
+          patente: string | null
+          vin: string | null
+          marca: string | null
+          modelo: string | null
+          anio: number | null
+          status: string
+          external_id: string | null
+          result_payload: Json | null
+          notes: string | null
+          cost: number | null
+          completed_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          tramite_tipo_id?: string | null
+          vehicle_id?: string | null
+          lead_id?: string | null
+          created_by?: string | null
+          patente?: string | null
+          vin?: string | null
+          marca?: string | null
+          modelo?: string | null
+          anio?: number | null
+          status?: string
+          external_id?: string | null
+          result_payload?: Json | null
+          notes?: string | null
+          cost?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          tramite_tipo_id?: string | null
+          vehicle_id?: string | null
+          lead_id?: string | null
+          created_by?: string | null
+          patente?: string | null
+          vin?: string | null
+          marca?: string | null
+          modelo?: string | null
+          anio?: number | null
+          status?: string
+          external_id?: string | null
+          result_payload?: Json | null
+          notes?: string | null
+          cost?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      autofact_config: {
+        Row: {
+          id: string
+          branch_id: string
+          api_key_encrypted: string | null
+          is_active: boolean
+          last_used_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          branch_id: string
+          api_key_encrypted?: string | null
+          is_active?: boolean
+          last_used_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          branch_id?: string
+          api_key_encrypted?: string | null
+          is_active?: boolean
+          last_used_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
       leads: {
         Row: {
           id: string
@@ -340,6 +466,7 @@ export interface Database {
           next_follow_up: string | null
           created_at: string
           updated_at: string
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -363,6 +490,7 @@ export interface Database {
           next_follow_up?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -386,6 +514,7 @@ export interface Database {
           next_follow_up?: string | null
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
       }
       lead_activities: {

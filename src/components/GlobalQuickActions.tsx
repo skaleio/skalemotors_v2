@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useTheme } from "@/contexts/ThemeContext";
+import { ShortcutsCustomizerModal } from "@/components/ShortcutsCustomizerModal";
 
 type QuickActionOption = {
   label: string;
@@ -64,7 +65,7 @@ const QuickActionRow = memo(function QuickActionRow({
     <div
       role="button"
       tabIndex={0}
-      className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer border border-transparent ${
+      className={`group flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border border-transparent ${
         theme === "dark"
           ? "hover:bg-slate-700/80 hover:border-slate-600/50"
           : "hover:bg-gray-50/80 hover:border-gray-200/50"
@@ -72,8 +73,8 @@ const QuickActionRow = memo(function QuickActionRow({
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconBgClass}`}>
-        <Icon className={`h-4 w-4 ${iconTextClass}`} />
+      <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${iconBgClass}`}>
+        <Icon className={`h-3.5 w-3.5 ${iconTextClass}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className={`font-medium text-sm ${theme === "dark" ? "text-white group-hover:text-slate-200" : "text-gray-900 group-hover:text-gray-700"}`}>
@@ -111,17 +112,17 @@ const QuickActionCategory = memo(function QuickActionCategory({
   onSelect: (action: () => void) => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <h3 className={`text-sm font-semibold uppercase tracking-wide ${theme === "dark" ? "text-slate-300" : "text-gray-700"}`}>
+        <h3 className={`text-xs font-semibold uppercase tracking-wide ${theme === "dark" ? "text-slate-300" : "text-gray-700"}`}>
           {category}
         </h3>
         <div className={`h-px flex-1 ${theme === "dark" ? "bg-slate-600" : "bg-gray-200"}`} />
-        <Badge variant="outline" className={`text-xs px-2 py-0.5 ${theme === "dark" ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
+        <Badge variant="outline" className={`text-xs px-1.5 py-0 ${theme === "dark" ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
           {options.length}
         </Badge>
       </div>
-      <div className="grid grid-cols-1 gap-1">
+      <div className="grid grid-cols-1 gap-0.5">
         {options.map((option, index) => (
           <QuickActionRow key={`${option.label}-${index}`} option={option} theme={theme} onSelect={() => onSelect(option.action)} />
         ))}
@@ -134,6 +135,7 @@ export function GlobalQuickActions() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const { theme } = useTheme();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -446,37 +448,34 @@ export function GlobalQuickActions() {
   }, [filteredOptions]);
 
   return (
+    <>
     <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-      <DialogContent className={`max-w-4xl max-h-[85vh] border-0 backdrop-blur-sm shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
+      <DialogContent className={`max-w-4xl min-h-[75vh] max-h-[90vh] border-0 backdrop-blur-sm shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
         theme === 'dark' 
           ? 'bg-slate-800/95 border-slate-700' 
           : 'bg-white/95'
       }`}>
-        {/* Header Minimalista */}
-        <div className={`p-6 flex-shrink-0 border-b ${
+        {/* Header + Buscador compactos en un solo bloque */}
+        <div className={`px-4 pt-4 pb-3 flex-shrink-0 border-b ${
           theme === 'dark' ? 'border-slate-600/50' : 'border-gray-100/50'
         }`}>
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Command className="h-5 w-5 text-white" />
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md shrink-0">
+              <Command className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <h2 className={`text-xl font-semibold ${
+            <div className="min-w-0">
+              <h2 className={`text-lg font-semibold leading-tight ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>Acciones Rápidas</h2>
-              <p className={`text-sm ${
+              <p className={`text-xs truncate ${
                 theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
               }`}>
                 Busca y ejecuta funciones rápidamente
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Buscador Moderno */}
-        <div className="p-6 flex-shrink-0">
           <div className="relative group">
-            <Search className={`absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 transition-colors ${
+            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${
               theme === 'dark' 
                 ? 'text-slate-400 group-focus-within:text-blue-400' 
                 : 'text-gray-400 group-focus-within:text-blue-500'
@@ -487,7 +486,7 @@ export function GlobalQuickActions() {
               placeholder="Buscar acciones... (ej: factura, vehículo, cita)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`pl-11 h-11 text-sm rounded-xl transition-all ${
+              className={`pl-9 h-9 text-sm rounded-lg ${
                 theme === 'dark'
                   ? 'border-slate-600 focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 bg-slate-700/50 focus:bg-slate-700 text-white placeholder:text-slate-400'
                   : 'border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 bg-gray-50/50 focus:bg-white'
@@ -495,7 +494,7 @@ export function GlobalQuickActions() {
             />
           </div>
           {deferredSearchQuery && (
-            <div className={`mt-3 text-xs font-medium ${
+            <div className={`mt-1.5 text-xs font-medium ${
               theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
             }`}>
               {filteredOptions.length} resultado{filteredOptions.length !== 1 ? 's' : ''} encontrado{filteredOptions.length !== 1 ? 's' : ''}
@@ -503,8 +502,8 @@ export function GlobalQuickActions() {
           )}
         </div>
 
-        {/* Content Scrolleable - contain para reducir repintado al navegar */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-6 min-h-0 [contain:strict]">
+        {/* Lista de opciones - altura mínima para que se vean varias opciones sin scroll */}
+        <div className="flex-1 min-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 py-3 [contain:strict]">
           {Object.keys(groupedOptions).length === 0 ? (
             <div className="text-center py-16">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
@@ -522,7 +521,7 @@ export function GlobalQuickActions() {
               }`}>Prueba con otros términos de búsqueda</p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {Object.entries(groupedOptions).map(([category, options]) => (
                 <QuickActionCategory
                   key={category}
@@ -539,8 +538,8 @@ export function GlobalQuickActions() {
           )}
         </div>
 
-        {/* Footer Minimalista */}
-        <div className={`px-6 py-4 border-t flex-shrink-0 ${
+        {/* Footer */}
+        <div className={`px-4 py-3 border-t flex-shrink-0 ${
           theme === 'dark' 
             ? 'border-slate-600/50 bg-slate-700/30' 
             : 'border-gray-100/50 bg-gray-50/30'
@@ -579,16 +578,15 @@ export function GlobalQuickActions() {
                   ? 'text-blue-400 hover:text-blue-300'
                   : 'text-blue-600 hover:text-blue-700'
               }`}
-              onClick={() => {
-                navigateWithLoading('/app/settings');
-                setShowCreateDialog(false);
-              }}
+              onClick={() => setShowShortcutsModal(true)}
             >
-              Configuración
+              Personalizar atajos
             </button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
+    <ShortcutsCustomizerModal open={showShortcutsModal} onOpenChange={setShowShortcutsModal} />
+  </>
   );
 }

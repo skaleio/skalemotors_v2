@@ -37,7 +37,7 @@ export const leadService = {
     if (error) throw error
     return (data?.[0] as Lead) || null
   },
-  // Obtener todos los leads
+  // Obtener todos los leads (excluye papelera: deleted_at IS NULL)
   async getAll(filters?: {
     assignedTo?: string
     branchId?: string
@@ -52,6 +52,7 @@ export const leadService = {
         assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
         branch:branches(id, name)
       `)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
     if (filters?.assignedTo) {
@@ -80,6 +81,40 @@ export const leadService = {
 
     if (error) throw error
     return data as Lead[]
+  },
+
+  // Leads en papelera (clientes "olvidados" / no respondieron)
+  async getDeleted(branchId: string) {
+    const { data, error } = await supabase
+      .from('leads')
+      .select(`
+        *,
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        branch:branches(id, name)
+      `)
+      .eq('branch_id', branchId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+
+    if (error) throw error
+    return data as Lead[]
+  },
+
+  // Restaurar un lead desde la papelera
+  async restore(id: string) {
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ deleted_at: null })
+      .eq('id', id)
+      .select(`
+        *,
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        branch:branches(id, name)
+      `)
+      .single()
+
+    if (error) throw error
+    return data as Lead
   },
 
   // Obtener un lead por ID
@@ -132,11 +167,11 @@ export const leadService = {
     return data as Lead
   },
 
-  // Eliminar un lead
+  // Eliminar un lead (soft delete: va a papelera; no se borra de la BD)
   async delete(id: string) {
     const { error } = await supabase
       .from('leads')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)
 
     if (error) throw error

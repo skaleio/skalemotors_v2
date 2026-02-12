@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ShortcutsPreferencesProvider } from "@/contexts/ShortcutsPreferencesContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Consignaciones = lazy(() => import("./pages/Consignaciones"));
+const Tramites = lazy(() => import("./pages/Tramites"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const Quotes = lazy(() => import("./pages/Quotes"));
 const Finance = lazy(() => import("./pages/Finance"));
@@ -83,6 +85,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
+        <ShortcutsPreferencesProvider>
         <ChatProvider>
           <TooltipProvider>
             <Toaster />
@@ -167,6 +170,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Consignaciones />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/tramites" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Tramites />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -448,6 +458,7 @@ const App = () => (
           </BrowserRouter>
           </TooltipProvider>
         </ChatProvider>
+        </ShortcutsPreferencesProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

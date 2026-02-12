@@ -20,6 +20,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -114,6 +127,7 @@ export default function SalesManagement() {
   const [formCommission, setFormCommission] = useState("");
   const [formClientName, setFormClientName] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [vehiclePopoverOpen, setVehiclePopoverOpen] = useState(false);
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ["vehicles-for-sale", branchId],
@@ -183,6 +197,7 @@ export default function SalesManagement() {
     setFormCommission("");
     setFormClientName("");
     setFormNotes("");
+    setVehiclePopoverOpen(false);
     setDialogOpen(true);
   };
 
@@ -279,6 +294,10 @@ export default function SalesManagement() {
       toast({ title: "Error", description: "Selecciona el vendedor.", variant: "destructive" });
       return;
     }
+    if (!formVehicleId.trim()) {
+      toast({ title: "Error", description: "Debes seleccionar el vehículo que se vendió.", variant: "destructive" });
+      return;
+    }
     if (formPaymentMethod === "financiamiento") {
       const downPaymentNum = parseFloat(formDownPayment.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
       const installmentsNum = parseInt(formInstallments, 10);
@@ -315,7 +334,7 @@ export default function SalesManagement() {
       await createSale({
         seller_name: formVendor,
         branch_id: branchId ?? undefined,
-        vehicle_id: formVehicleId.trim() || undefined,
+        vehicle_id: formVehicleId.trim(),
         client_name: formClientName.trim() || null,
         sale_price: salePrice,
         down_payment: downPaymentValue,
@@ -329,17 +348,13 @@ export default function SalesManagement() {
         notes: formNotes.trim() || null,
       });
       await refetch();
-      if (formVehicleId.trim()) {
-        queryClient.invalidateQueries({ queryKey: ["vehicles-for-sale"] });
-        queryClient.invalidateQueries({ queryKey: ["vehicles"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["vehicles-for-sale"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setDialogOpen(false);
       toast({
         variant: "success",
         title: "Venta registrada",
-        description: formVehicleId.trim()
-          ? "La venta se ha guardado correctamente. El vehículo pasó a estado vendido en inventario."
-          : "La venta se ha guardado correctamente. La lista se ha actualizado.",
+        description: "La venta se ha guardado correctamente. El vehículo pasó a estado vendido en el inventario.",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al guardar la venta.";
@@ -701,29 +716,51 @@ export default function SalesManagement() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="vehicle">Vehículo vendido</Label>
-              <Select
-                value={formVehicleId}
-                onValueChange={(id) => {
-                  setFormVehicleId(id);
-                  const v = vehicles.find((x) => x.id === id);
-                  if (v?.price != null) setFormSalePrice(String(v.price));
-                }}
-              >
-                <SelectTrigger id="vehicle">
-                  <SelectValue placeholder="Seleccionar vehículo (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicles.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.make} {v.model} {v.year} — {formatCurrency(v.price)}
-                    </SelectItem>
-                  ))}
-                  {vehicles.length === 0 && (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Sin vehículos disponibles</div>
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Solo se muestran vehículos disponibles. Al guardar la venta, el vehículo pasará a estado &quot;vendido&quot; en inventario.</p>
+              <Popover open={vehiclePopoverOpen} onOpenChange={setVehiclePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="vehicle"
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={vehiclePopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {formVehicleId
+                      ? (() => {
+                          const v = vehicles.find((x) => x.id === formVehicleId);
+                          return v ? `${v.make} ${v.model} ${v.year} — ${formatCurrency(v.price)}` : "Seleccionar vehículo";
+                        })()
+                      : "Seleccionar vehículo"}
+                    <span className="ml-2 shrink-0 opacity-50">▼</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command shouldFilter={true}>
+                    <CommandInput placeholder="Buscar por marca, modelo, año..." />
+                    <CommandList className="max-h-[280px] overflow-y-auto">
+                      <CommandEmpty>Ningún vehículo encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {vehicles.map((v) => (
+                          <CommandItem
+                            key={v.id}
+                            value={`${v.make} ${v.model} ${v.year} ${v.vin ?? ""} ${v.price}`}
+                            onSelect={() => {
+                              setFormVehicleId(v.id);
+                              if (v.price != null) setFormSalePrice(String(v.price));
+                              setVehiclePopoverOpen(false);
+                            }}
+                          >
+                            <Car className="mr-2 h-4 w-4 shrink-0 opacity-70" />
+                            <span className="truncate">{v.make} {v.model} {v.year} — {formatCurrency(v.price)}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">Escribe para filtrar. Solo vehículos disponibles. Al guardar la venta, el vehículo pasará a estado &quot;vendido&quot; en el inventario.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="client_name">Nombre del cliente</Label>

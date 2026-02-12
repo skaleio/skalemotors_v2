@@ -281,6 +281,7 @@ export default function Inventory() {
     paymentMethod: 'contado',
     notes: ''
   });
+  type VehicleStatus = "disponible" | "reservado" | "vendido" | "en_reparacion" | "fuera_de_servicio";
   const [newVehicle, setNewVehicle] = useState({
     make: "",
     model: "",
@@ -297,6 +298,7 @@ export default function Inventory() {
     location: "",
     drivetrain: "",
     images: [] as File[],
+    status: "disponible" as VehicleStatus,
   });
 
   const [listingsByVehicle, setListingsByVehicle] = useState<Record<string, VehicleListingRow[]>>({});
@@ -445,6 +447,7 @@ export default function Inventory() {
         location: vehicleToEdit.location || "",
         drivetrain: features.drivetrain || "",
         images: [], // Las imágenes existentes se mantienen en el vehículo, solo se pueden agregar nuevas
+        status: (vehicleToEdit.status || "disponible") as VehicleStatus,
       });
     }
   }, [vehicleToEdit]);
@@ -607,6 +610,7 @@ export default function Inventory() {
         location: "",
         drivetrain: "",
         images: [],
+        status: "disponible",
       });
 
       console.log("✅ Vehículo guardado exitosamente");
@@ -696,6 +700,7 @@ export default function Inventory() {
         margin: Number(margin),
         location: newVehicle.location?.trim() || null,
         features: features as any,
+        status: newVehicle.status,
       };
 
       console.log("📝 Datos del vehículo a actualizar:", updateData);
@@ -767,6 +772,7 @@ export default function Inventory() {
         location: "",
         drivetrain: "",
         images: [],
+        status: "disponible",
       });
 
       console.log("✅ Vehículo actualizado exitosamente");
@@ -1065,6 +1071,7 @@ export default function Inventory() {
                 location: "",
                 drivetrain: "",
                 images: [],
+                status: "disponible",
               });
               setShowAddDialog(true);
             }}
@@ -1739,6 +1746,7 @@ export default function Inventory() {
               location: "",
               drivetrain: "",
               images: [],
+              status: "disponible",
             });
           }
         }}
@@ -2126,6 +2134,7 @@ export default function Inventory() {
               location: "",
               drivetrain: "",
               images: [],
+              status: "disponible",
             });
           }
         }}
@@ -2256,6 +2265,31 @@ export default function Inventory() {
                 placeholder="Ej: Blanco"
                 required
               />
+            </div>
+
+            {/* Estado */}
+            <div>
+              <Label htmlFor="edit-status">Estado</Label>
+              <Select
+                value={newVehicle.status}
+                onValueChange={(value: VehicleStatus) =>
+                  setNewVehicle({ ...newVehicle, status: value })
+                }
+              >
+                <SelectTrigger id="edit-status">
+                  <SelectValue placeholder="Estado del vehículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(statusLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Disponible, Reservado, Vendido, etc.
+              </p>
             </div>
 
             {/* Kilometraje */}
