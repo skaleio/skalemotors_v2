@@ -7,6 +7,7 @@ import { Bell, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign,
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -645,6 +646,7 @@ export function TopBar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
+                <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
                 <AvatarFallback>
                   {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
                 </AvatarFallback>

@@ -6,11 +6,14 @@ export type SaleRow = Database["public"]["Tables"]["sales"]["Row"];
 export type SaleInsert = Database["public"]["Tables"]["sales"]["Insert"];
 export type SaleUpdate = Database["public"]["Tables"]["sales"]["Update"];
 
+export type SaleExpenseRow = Database["public"]["Tables"]["sale_expenses"]["Row"];
+
 export type SaleWithRelations = SaleRow & {
   lead?: { id: string; full_name: string | null; email: string | null; phone: string | null } | null;
   vehicle?: { id: string; make: string; model: string; year: number; vin: string } | null;
   seller?: { id: string; full_name: string; email: string | null } | null;
   branch?: { id: string; name: string } | null;
+  sale_expenses?: SaleExpenseRow[] | null;
 };
 
 interface UseSalesOptions {
@@ -49,7 +52,16 @@ export function useSales(options: UseSalesOptions = {}) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (sale: SaleInsert) => saleService.create(sale),
+    mutationFn: async (payload: {
+      sale: SaleInsert;
+      expenses?: { amount: number; description?: string | null }[];
+    }) => {
+      const created = await saleService.create(payload.sale);
+      if (payload.expenses?.length) {
+        await saleService.createExpenses(created.id, payload.expenses);
+      }
+      return created;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["sales-stats"] });

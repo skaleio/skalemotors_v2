@@ -419,7 +419,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/app/integrations" element={
-                <ProtectedRoute requiredRole={['admin', 'gerente']}>
+                <ProtectedRoute>
                   <Layout>
                     <Integrations />
                   </Layout>

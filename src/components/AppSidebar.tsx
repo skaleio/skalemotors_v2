@@ -45,6 +45,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
+import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -104,18 +105,18 @@ const menuCategories = [
       { title: "Citas", url: "/app/appointments", icon: Calendar },
       { title: "Cotizaciones", url: "/app/quotes", icon: FileText },
       { title: "Trámites", url: "/app/tramites", icon: ClipboardCheck },
-      { title: "Financiamiento", url: "/app/finance", icon: CreditCard },
       { title: "Permutas", url: "/app/tradein", icon: RefreshCw },
       { title: "Entregas", url: "/app/deliveries", icon: Package },
     ]
   },
   {
-    title: "Finanzas & SII",
+    title: "Finanzas",
     icon: DollarSign,
     items: [
+      { title: "Gastos Empresa", url: "/app/finance", icon: Receipt },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
       { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },
-      { title: "Facturación Electrónica", url: "/app/billing", icon: Receipt },
+      { title: "Facturación Electrónica", url: "/app/billing", icon: BillingIcon },
     ]
   },
   {
@@ -133,6 +134,7 @@ const menuCategories = [
     items: [
       { title: "Reportes", url: "/app/reports", icon: PieChart },
       { title: "Alertas", url: "/app/alerts", icon: Bell },
+      { title: "Métricas Meta Ads", url: "/app/studio-ia/marketing/facebook-ads", icon: BarChart3 },
       { title: "Studio IA", url: "/app/studio-ia", icon: Brain },
     ]
   }
@@ -150,7 +152,7 @@ const settingsCategory = {
 
 const ALL_CATEGORY_KEYS = [
   "Dashboard", "Ventas & CRM", "Inventario & Vehículos", "Operaciones",
-  "Finanzas & SII", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
+  "Finanzas", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
 ] as const;
 
 export function AppSidebar() {
@@ -210,7 +212,7 @@ export function AppSidebar() {
     "Ventas & CRM": false,
     "Inventario & Vehículos": false,
     "Operaciones": false,
-    "Finanzas & SII": false,
+    "Finanzas": false,
     "Post-Venta & Servicios": false,
     "Analytics & Herramientas": false,
     "Sistema": false,
@@ -233,7 +235,7 @@ export function AppSidebar() {
           "Ventas & CRM": false,
           "Inventario & Vehículos": false,
           "Operaciones": false,
-          "Finanzas & SII": false,
+          "Finanzas": false,
           "Post-Venta & Servicios": false,
           "Analytics & Herramientas": false,
           "Sistema": false,
@@ -538,6 +540,7 @@ export function AppSidebar() {
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
                 <Avatar className="h-8 w-8 shrink-0">
+                  <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
                     {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </AvatarFallback>
@@ -649,6 +652,7 @@ export function AppSidebar() {
               <div className="px-3 py-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
+                    <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
                       {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                     </AvatarFallback>

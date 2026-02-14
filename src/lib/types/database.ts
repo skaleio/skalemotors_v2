@@ -83,6 +83,7 @@ export interface Database {
           city: string
           region: string
           is_active: boolean
+          opening_hours: string | null
           created_at: string
           updated_at: string
         }
@@ -96,6 +97,7 @@ export interface Database {
           city: string
           region: string
           is_active?: boolean
+          opening_hours?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -109,6 +111,7 @@ export interface Database {
           city?: string
           region?: string
           is_active?: boolean
+          opening_hours?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -649,6 +652,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      meta_ads_connections: {
+        Row: {
+          id: string
+          branch_id: string
+          access_token: string
+          ad_account_id: string | null
+          token_expires_at: string | null
+          status: 'active' | 'inactive' | 'error'
+          last_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id: string
+          access_token: string
+          ad_account_id?: string | null
+          token_expires_at?: string | null
+          status?: 'active' | 'inactive' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string
+          access_token?: string
+          ad_account_id?: string | null
+          token_expires_at?: string | null
+          status?: 'active' | 'inactive' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       vehicle_listings: {
         Row: {
           id: string
@@ -792,6 +830,7 @@ export interface Database {
           id: string
           lead_id: string | null
           vehicle_id: string | null
+          vehicle_description: string | null
           seller_id: string | null
           seller_name: string | null
           client_name: string | null
@@ -806,7 +845,9 @@ export interface Database {
           sale_date: string
           delivery_date: string | null
           payment_method: string | null
+          payment_status: string | null
           notes: string | null
+          stock_origin: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -814,6 +855,7 @@ export interface Database {
           id?: string
           lead_id?: string | null
           vehicle_id?: string | null
+          vehicle_description?: string | null
           seller_id?: string | null
           seller_name?: string | null
           client_name?: string | null
@@ -828,7 +870,9 @@ export interface Database {
           sale_date?: string
           delivery_date?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           notes?: string | null
+          stock_origin?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -836,6 +880,7 @@ export interface Database {
           id?: string
           lead_id?: string | null
           vehicle_id?: string | null
+          vehicle_description?: string | null
           seller_id?: string | null
           seller_name?: string | null
           client_name?: string | null
@@ -850,9 +895,78 @@ export interface Database {
           sale_date?: string
           delivery_date?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           notes?: string | null
+          stock_origin?: string | null
           created_at?: string | null
           updated_at?: string | null
+        }
+      }
+      sale_expenses: {
+        Row: {
+          id: string
+          sale_id: string
+          amount: number
+          description: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          sale_id: string
+          amount?: number
+          description?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          sale_id?: string
+          amount?: number
+          description?: string | null
+          created_at?: string | null
+        }
+      }
+      gastos_empresa: {
+        Row: {
+          id: string
+          branch_id: string | null
+          amount: number
+          description: string | null
+          expense_type: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          inversor_id: string | null
+          inversor_name: string | null
+          expense_date: string
+          devolucion: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          amount: number
+          description?: string | null
+          expense_type: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          inversor_id?: string | null
+          inversor_name?: string | null
+          expense_date?: string
+          devolucion?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          amount?: number
+          description?: string | null
+          expense_type?: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          inversor_id?: string | null
+          inversor_name?: string | null
+          expense_date?: string
+          devolucion?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
     }

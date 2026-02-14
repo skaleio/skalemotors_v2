@@ -21,7 +21,8 @@ export const saleService = {
         lead:leads(id, full_name, email, phone),
         vehicle:vehicles(id, make, model, year, vin),
         seller:users!sales_seller_id_fkey(id, full_name, email),
-        branch:branches(id, name)
+        branch:branches(id, name),
+        sale_expenses(id, amount, description)
       `)
       .order('created_at', { ascending: false })
 
@@ -60,7 +61,8 @@ export const saleService = {
         lead:leads(*),
         vehicle:vehicles(*),
         seller:users!sales_seller_id_fkey(*),
-        branch:branches(*)
+        branch:branches(*),
+        sale_expenses(id, amount, description, created_at)
       `)
       .eq('id', id)
       .single()
@@ -141,14 +143,32 @@ export const saleService = {
     }
   },
 
-  // Obtener estadísticas de ventas
+  // Crear gastos asociados a una venta
+  async createExpenses(saleId: string, items: { amount: number; description?: string | null }[]) {
+    if (items.length === 0) return
+    const rows = items.map((item) => ({
+      sale_id: saleId,
+      amount: item.amount,
+      description: item.description?.trim() || null,
+    }))
+    const { error } = await supabase.from('sale_expenses').insert(rows)
+    if (error) throw error
+  },
+
+  // Eliminar todos los gastos de una venta (para reemplazar al editar)
+  async deleteExpensesBySaleId(saleId: string) {
+    const { error } = await supabase.from('sale_expenses').delete().eq('sale_id', saleId)
+    if (error) throw error
+  },
+
+  // Obtener estadísticas de ventas (incluye gastos y ganancia neta)
   async getStats(userId?: string, branchId?: string, days: number = 30) {
     const dateFrom = new Date()
     dateFrom.setDate(dateFrom.getDate() - days)
 
     let query = supabase
       .from('sales')
-      .select('sale_price, margin, commission, sale_date, status')
+      .select('id, sale_price, margin, commission, sale_date, status')
 
     if (userId) {
       query = query.eq('seller_id', userId)
@@ -164,20 +184,35 @@ export const saleService = {
 
     if (error) throw error
 
+    const saleIds = (data ?? []).map((s) => s.id)
+    let totalExpenses = 0
+    if (saleIds.length > 0) {
+      const { data: expensesData } = await supabase
+        .from('sale_expenses')
+        .select('amount')
+        .in('sale_id', saleIds)
+      totalExpenses = (expensesData ?? []).reduce((sum, e) => sum + Number(e.amount || 0), 0)
+    }
+
+    const totalMargin = (data ?? []).reduce((sum, s) => sum + Number(s.margin || 0), 0)
+    const netMargin = totalMargin - totalExpenses
+
     const stats = {
-      total: data.length,
-      totalRevenue: data.reduce((sum, s) => sum + Number(s.sale_price || 0), 0),
-      totalMargin: data.reduce((sum, s) => sum + Number(s.margin || 0), 0),
-      totalCommission: data.reduce((sum, s) => sum + Number(s.commission || 0), 0),
-      averageSalePrice: data.length > 0 
-        ? data.reduce((sum, s) => sum + Number(s.sale_price || 0), 0) / data.length 
+      total: (data ?? []).length,
+      totalRevenue: (data ?? []).reduce((sum, s) => sum + Number(s.sale_price || 0), 0),
+      totalMargin,
+      totalExpenses,
+      netMargin,
+      totalCommission: (data ?? []).reduce((sum, s) => sum + Number(s.commission || 0), 0),
+      averageSalePrice: (data ?? []).length > 0
+        ? (data ?? []).reduce((sum, s) => sum + Number(s.sale_price || 0), 0) / (data ?? []).length
         : 0,
-      completed: data.filter(s => s.status === 'completada').length,
-      pending: data.filter(s => s.status === 'pendiente').length
+      completed: (data ?? []).filter((s) => s.status === 'completada').length,
+      pending: (data ?? []).filter((s) => s.status === 'pendiente').length,
     }
 
     return stats
-  }
+  },
 }
 
 

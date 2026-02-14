@@ -42,13 +42,16 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSales, type SaleWithRelations } from "@/hooks/useSales";
+import { useVehicles } from "@/hooks/useVehicles";
 import { toast } from "@/hooks/use-toast";
+import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
 import {
   Calendar,
   Car,
   DollarSign,
   Loader2,
+  Minus,
   Pencil,
   Plus,
   Search,
@@ -59,7 +62,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const VENDOR_OPTIONS = [
@@ -67,9 +70,19 @@ const VENDOR_OPTIONS = [
   { value: "MIAMIMOTORS", label: "MIAMIMOTORS" },
 ] as const;
 
+const STOCK_ORIGIN_OPTIONS = [
+  { value: "HESSENMOTORS", label: "HessenMotors" },
+  { value: "MIAMIMOTORS", label: "Miami Motors" },
+] as const;
+
 const PAYMENT_OPTIONS = [
   { value: "contado", label: "Al contado" },
   { value: "financiamiento", label: "Con financiamiento" },
+] as const;
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "realizado", label: "Pago realizado" },
+  { value: "pendiente", label: "Pago pendiente" },
 ] as const;
 
 const statusLabels: Record<string, string> = {
@@ -117,23 +130,37 @@ export default function SalesManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formVendor, setFormVendor] = useState<string>("");
+  const [formStockOrigin, setFormStockOrigin] = useState<string>("");
   const [formVehicleId, setFormVehicleId] = useState<string>("");
+  const [formVehicleCustom, setFormVehicleCustom] = useState("");
   const [formSalePrice, setFormSalePrice] = useState("");
   const [formMargin, setFormMargin] = useState("");
   const [formSaleDate, setFormSaleDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [formPaymentMethod, setFormPaymentMethod] = useState<string>("contado");
+  const [formPaymentStatus, setFormPaymentStatus] = useState<string>("realizado");
   const [formDownPayment, setFormDownPayment] = useState("");
   const [formInstallments, setFormInstallments] = useState("");
   const [formCommission, setFormCommission] = useState("");
   const [formClientName, setFormClientName] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formExpenses, setFormExpenses] = useState<{ id: string; description: string; amount: string }[]>([]);
   const [vehiclePopoverOpen, setVehiclePopoverOpen] = useState(false);
+  const newSaleDialogRef = useRef<HTMLDivElement>(null);
+  const [newSaleDialogEl, setNewSaleDialogEl] = useState<HTMLDivElement | null>(null);
 
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ["vehicles-for-sale", branchId],
-    queryFn: () => vehicleService.getAll({ branchId: branchId ?? undefined, status: "disponible" }),
-    enabled: dialogOpen,
+  // Misma lista que inventario: todos los vehículos (disponible, reservado, vendido, etc.)
+  const { vehicles: vehiclesByBranch = [] } = useVehicles({
+    branchId: branchId ?? undefined,
+    enabled: !!branchId,
+    staleTime: 2 * 60 * 1000,
   });
+  const { data: vehiclesAllBranch = [] } = useQuery({
+    queryKey: ["vehicles", "all"],
+    queryFn: () => vehicleService.getAll({}),
+    enabled: !branchId,
+    staleTime: 2 * 60 * 1000,
+  });
+  const vehicles = branchId ? vehiclesByBranch : vehiclesAllBranch;
 
   const [selectedSale, setSelectedSale] = useState<SaleWithRelations | null>(null);
   const [detailEditMode, setDetailEditMode] = useState(false);
@@ -141,6 +168,12 @@ export default function SalesManagement() {
   const [editSalePrice, setEditSalePrice] = useState("");
   const [editMargin, setEditMargin] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editClientName, setEditClientName] = useState("");
+  const [editPaymentStatus, setEditPaymentStatus] = useState("");
+  const [editCommission, setEditCommission] = useState("");
+  const [editDownPayment, setEditDownPayment] = useState("");
+  const [editInstallments, setEditInstallments] = useState("");
+  const [editExpenses, setEditExpenses] = useState<{ id: string; description: string; amount: string }[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<SaleWithRelations | null>(null);
 
@@ -148,16 +181,20 @@ export default function SalesManagement() {
     const params = new URLSearchParams(location.search);
     if (params.get("new") !== "true") return;
     setFormVendor("");
+    setFormStockOrigin("");
     setFormVehicleId("");
+    setFormVehicleCustom("");
     setFormSalePrice("");
     setFormMargin("");
     setFormSaleDate(format(new Date(), "yyyy-MM-dd"));
     setFormPaymentMethod("contado");
+    setFormPaymentStatus("realizado");
     setFormDownPayment("");
     setFormInstallments("");
     setFormCommission("");
     setFormClientName("");
     setFormNotes("");
+    setFormExpenses([]);
     setDialogOpen(true);
   }, [location.search]);
 
@@ -175,7 +212,7 @@ export default function SalesManagement() {
       const clientName = (s.client_name ?? s.lead?.full_name ?? "").toString().toLowerCase();
       const vehicleInfo = s.vehicle
         ? `${s.vehicle.make} ${s.vehicle.model} ${s.vehicle.year}`.toLowerCase()
-        : "";
+        : (s.vehicle_description ?? "").toLowerCase();
       return (
         sellerName.includes(q) ||
         clientName.includes(q) ||
@@ -187,19 +224,38 @@ export default function SalesManagement() {
 
   const handleOpenDialog = () => {
     setFormVendor("");
+    setFormStockOrigin("");
     setFormVehicleId("");
+    setFormVehicleCustom("");
     setFormSalePrice("");
     setFormMargin("");
     setFormSaleDate(format(new Date(), "yyyy-MM-dd"));
     setFormPaymentMethod("contado");
+    setFormPaymentStatus("realizado");
     setFormDownPayment("");
     setFormInstallments("");
     setFormCommission("");
     setFormClientName("");
     setFormNotes("");
+    setFormExpenses([]);
     setVehiclePopoverOpen(false);
     setDialogOpen(true);
   };
+
+  const addFormExpense = () => {
+    setFormExpenses((prev) => [...prev, { id: crypto.randomUUID(), description: "", amount: "" }]);
+  };
+  const removeFormExpense = (id: string) => {
+    setFormExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+  const updateFormExpense = (id: string, field: "description" | "amount", value: string) => {
+    setFormExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
+  };
+  const parseAmount = (s: string) =>
+    parseFloat(s.replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) || 0;
+  const formExpensesTotal = formExpenses.reduce((sum, e) => sum + (Number.isNaN(parseAmount(e.amount)) ? 0 : parseAmount(e.amount)), 0);
+  const formMarginNum = Number.isNaN(parseAmount(formMargin)) ? 0 : parseAmount(formMargin);
+  const formNetMargin = formMarginNum - formExpensesTotal;
 
   const handleSelectSale = (sale: SaleWithRelations) => {
     setSelectedSale(sale);
@@ -208,12 +264,37 @@ export default function SalesManagement() {
     setEditSalePrice(String(sale.sale_price ?? ""));
     setEditMargin(String(sale.margin ?? ""));
     setEditNotes(sale.notes ?? "");
+    setEditClientName(sale.client_name ?? "");
+    setEditPaymentStatus(sale.payment_status ?? "");
+    setEditCommission(sale.commission != null ? String(sale.commission) : "");
+    setEditDownPayment(sale.down_payment != null ? String(sale.down_payment) : "");
+    setEditInstallments(sale.installments != null ? String(sale.installments) : "");
+    setEditExpenses(
+      (sale.sale_expenses ?? []).map((ex) => ({
+        id: ex.id,
+        description: ex.description ?? "",
+        amount: String(ex.amount),
+      }))
+    );
   };
 
   const handleCloseDetail = () => {
     setSelectedSale(null);
     setDetailEditMode(false);
   };
+
+  const addEditExpense = () => {
+    setEditExpenses((prev) => [...prev, { id: crypto.randomUUID(), description: "", amount: "" }]);
+  };
+  const removeEditExpense = (id: string) => {
+    setEditExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+  const updateEditExpense = (id: string, field: "description" | "amount", value: string) => {
+    setEditExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
+  };
+  const editExpensesTotal = editExpenses.reduce((sum, e) => sum + (Number.isNaN(parseAmount(e.amount)) ? 0 : parseAmount(e.amount)), 0);
+  const editMarginNum = Number.isNaN(parseAmount(editMargin)) ? 0 : parseAmount(editMargin);
+  const editNetMargin = editMarginNum - editExpensesTotal;
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,6 +314,13 @@ export default function SalesManagement() {
       return;
     }
     try {
+      const commissionNum = editCommission.trim()
+        ? parseFloat(editCommission.replace(/\s/g, "").replace(/\./g, "").replace(",", "."))
+        : null;
+      const downPaymentNum = editDownPayment.trim()
+        ? parseFloat(editDownPayment.replace(/\s/g, "").replace(/\./g, "").replace(",", "."))
+        : null;
+      const installmentsNum = editInstallments.trim() ? parseInt(editInstallments, 10) || null : null;
       await updateSale({
         id: selectedSale.id,
         updates: {
@@ -240,15 +328,29 @@ export default function SalesManagement() {
           sale_price: salePrice,
           margin,
           notes: editNotes.trim() || null,
+          client_name: editClientName.trim() || null,
+          payment_status: editPaymentStatus.trim() || null,
+          commission: commissionNum != null && !Number.isNaN(commissionNum) ? commissionNum : null,
+          down_payment: downPaymentNum != null && !Number.isNaN(downPaymentNum) ? downPaymentNum : null,
+          installments: installmentsNum,
         },
       });
+      const expensesPayload = editExpenses
+        .map((e) => ({ amount: parseAmount(e.amount), description: e.description.trim() || null }))
+        .filter((e) => e.amount > 0);
+      await saleService.deleteExpensesBySaleId(selectedSale.id);
+      if (expensesPayload.length > 0) {
+        await saleService.createExpenses(selectedSale.id, expensesPayload);
+      }
       await refetch();
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-stats"] });
       setDetailEditMode(false);
       setSelectedSale(null);
       toast({
         variant: "success",
         title: "Cambios guardados",
-        description: "La venta se ha actualizado correctamente. La lista se ha actualizado.",
+        description: "La venta y sus gastos se han actualizado correctamente.",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al actualizar.";
@@ -294,24 +396,29 @@ export default function SalesManagement() {
       toast({ title: "Error", description: "Selecciona el vendedor.", variant: "destructive" });
       return;
     }
-    if (!formVehicleId.trim()) {
-      toast({ title: "Error", description: "Debes seleccionar el vehículo que se vendió.", variant: "destructive" });
+    if (!formVehicleId.trim() && !formVehicleCustom.trim()) {
+      toast({ title: "Error", description: "Selecciona un vehículo de la lista o escribe el vehículo vendido.", variant: "destructive" });
       return;
     }
+    // Con financiamiento, pie/cuotas/saldoprecio son opcionales (ej. Miami Motors maneja eso aparte)
     if (formPaymentMethod === "financiamiento") {
-      const downPaymentNum = parseFloat(formDownPayment.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
-      const installmentsNum = parseInt(formInstallments, 10);
-      if (Number.isNaN(downPaymentNum) || downPaymentNum < 0) {
-        toast({ title: "Error", description: "Ingresa un pie válido.", variant: "destructive" });
-        return;
+      if (formDownPayment.trim()) {
+        const downPaymentNum = parseFloat(formDownPayment.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+        if (Number.isNaN(downPaymentNum) || downPaymentNum < 0) {
+          toast({ title: "Error", description: "Si ingresas pie, debe ser un número válido.", variant: "destructive" });
+          return;
+        }
+        if (downPaymentNum >= salePrice) {
+          toast({ title: "Error", description: "El pie debe ser menor al monto vendido.", variant: "destructive" });
+          return;
+        }
       }
-      if (Number.isNaN(installmentsNum) || installmentsNum < 1) {
-        toast({ title: "Error", description: "Ingresa la cantidad de cuotas (mínimo 1).", variant: "destructive" });
-        return;
-      }
-      if (downPaymentNum >= salePrice) {
-        toast({ title: "Error", description: "El pie debe ser menor al monto vendido.", variant: "destructive" });
-        return;
+      if (formInstallments.trim()) {
+        const installmentsNum = parseInt(formInstallments, 10);
+        if (Number.isNaN(installmentsNum) || installmentsNum < 1) {
+          toast({ title: "Error", description: "Si ingresas cuotas, debe ser al menos 1.", variant: "destructive" });
+          return;
+        }
       }
     }
     const downPaymentValue =
@@ -330,31 +437,42 @@ export default function SalesManagement() {
       formPaymentMethod === "financiamiento" && formCommission.trim()
         ? parseFloat(formCommission.replace(/\s/g, "").replace(/\./g, "").replace(",", "."))
         : null;
+    const useCustomVehicle = formVehicleCustom.trim() && !formVehicleId.trim();
+    const expensesPayload = formExpenses
+      .map((e) => ({ amount: parseAmount(e.amount), description: e.description.trim() || null }))
+      .filter((e) => e.amount > 0);
     try {
       await createSale({
-        seller_name: formVendor,
-        branch_id: branchId ?? undefined,
-        vehicle_id: formVehicleId.trim(),
-        client_name: formClientName.trim() || null,
-        sale_price: salePrice,
-        down_payment: downPaymentValue,
-        financing_amount: financingAmountValue,
-        installments: installmentsValue,
-        commission: Number.isNaN(commissionValue) ? null : commissionValue,
-        margin,
-        status: "completada",
-        sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
+        sale: {
+          seller_name: formVendor,
+          branch_id: branchId ?? undefined,
+          stock_origin: formStockOrigin.trim() || null,
+          vehicle_id: useCustomVehicle ? null : formVehicleId.trim() || null,
+          vehicle_description: useCustomVehicle ? formVehicleCustom.trim() : null,
+          client_name: formClientName.trim() || null,
+          sale_price: salePrice,
+          down_payment: downPaymentValue,
+          financing_amount: financingAmountValue,
+          installments: installmentsValue,
+          commission: Number.isNaN(commissionValue) ? null : commissionValue,
+          margin,
+          status: "completada",
+sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         payment_method: formPaymentMethod || "contado",
+        payment_status: formPaymentStatus || "realizado",
         notes: formNotes.trim() || null,
+        },
+        expenses: expensesPayload.length ? expensesPayload : undefined,
       });
       await refetch();
-      queryClient.invalidateQueries({ queryKey: ["vehicles-for-sale"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setDialogOpen(false);
       toast({
         variant: "success",
         title: "Venta registrada",
-        description: "La venta se ha guardado correctamente. El vehículo pasó a estado vendido en el inventario.",
+        description: useCustomVehicle
+          ? "La venta se ha guardado correctamente."
+          : "La venta se ha guardado correctamente. El vehículo pasó a estado vendido en el inventario.",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al guardar la venta.";
@@ -378,7 +496,7 @@ export default function SalesManagement() {
       </div>
 
       {/* Estadísticas */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total vendido (30 días)</CardTitle>
@@ -412,14 +530,33 @@ export default function SalesManagement() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats?.totalMargin)}</div>
-                <p className="text-xs text-muted-foreground">Margen total</p>
+                <p className="text-xs text-muted-foreground">Antes de gastos</p>
               </>
             )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ventas completadas</CardTitle>
+            <CardTitle className="text-sm font-medium">Gastos (30 días)</CardTitle>
+            <Minus className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Cargando...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats?.totalExpenses ?? 0)}</div>
+                <p className="text-xs text-muted-foreground">Bencina, arreglos, etc.</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ganancia neta (30 días)</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -430,8 +567,8 @@ export default function SalesManagement() {
               </div>
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.completed ?? 0}</div>
-                <p className="text-xs text-muted-foreground">Últimos 30 días</p>
+                <div className="text-2xl font-bold text-emerald-700">{formatCurrency(stats?.netMargin ?? 0)}</div>
+                <p className="text-xs text-muted-foreground">Después de gastos</p>
               </>
             )}
           </CardContent>
@@ -485,8 +622,8 @@ export default function SalesManagement() {
 
       {/* Dialog Detalle de venta (ver / editar) */}
       <Dialog open={!!selectedSale} onOpenChange={(open) => !open && handleCloseDetail()}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Detalle de la venta</DialogTitle>
             <DialogDescription>
               {detailEditMode ? "Edita los datos y guarda los cambios." : "Información de la venta. Puedes editar o eliminar."}
@@ -494,7 +631,8 @@ export default function SalesManagement() {
           </DialogHeader>
           {selectedSale && (
             detailEditMode ? (
-              <form onSubmit={handleSaveEdit} className="space-y-4">
+              <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 min-h-0 overflow-hidden flex gap-0">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                 <div className="space-y-2">
                   <Label>Vendedor</Label>
                   <Select value={editVendor} onValueChange={setEditVendor} required>
@@ -529,6 +667,97 @@ export default function SalesManagement() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Nombre del cliente</Label>
+                  <Input
+                    type="text"
+                    placeholder="Ej: Juan Pérez"
+                    value={editClientName}
+                    onChange={(e) => setEditClientName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado del pago</Label>
+                  <Select value={editPaymentStatus || "realizado"} onValueChange={setEditPaymentStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Saldoprecio / Comisión ($) (opcional)</Label>
+                  <Input
+                    type="text"
+                    placeholder="Ej: 150000 — anota cuando lo tengas"
+                    value={editCommission}
+                    onChange={(e) => setEditCommission(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pie ($) (opcional)</Label>
+                  <Input
+                    type="text"
+                    placeholder="Ej: 5000000"
+                    value={editDownPayment}
+                    onChange={(e) => setEditDownPayment(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cantidad de cuotas (opcional)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={84}
+                    placeholder="Ej: 12, 24..."
+                    value={editInstallments}
+                    onChange={(e) => setEditInstallments(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gastos</Label>
+                  <p className="text-xs text-muted-foreground">Agrega o edita gastos (bencina, arreglos, etc.). Se restan de la ganancia.</p>
+                  <div className="space-y-2">
+                    {editExpenses.map((exp) => (
+                      <div key={exp.id} className="flex gap-2 items-end">
+                        <Input
+                          placeholder="Ej: Bencina, arreglo..."
+                          value={exp.description}
+                          onChange={(e) => updateEditExpense(exp.id, "description", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Monto $"
+                          value={exp.amount}
+                          onChange={(e) => updateEditExpense(exp.id, "amount", e.target.value)}
+                          className="w-28"
+                        />
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeEditExpense(exp.id)} aria-label="Quitar gasto">
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" onClick={addEditExpense}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar gasto
+                    </Button>
+                  </div>
+                  {(editExpenses.length > 0 || editExpensesTotal > 0) && (
+                    <p className="text-sm pt-1">
+                      Total gastos: {formatCurrency(editExpensesTotal)}
+                      {editMarginNum > 0 && (
+                        <span className="text-muted-foreground ml-2">
+                          — Ganancia neta: {formatCurrency(editNetMargin)}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label>Notas (opcional)</Label>
                   <Textarea
                     placeholder="Detalles adicionales"
@@ -537,7 +766,8 @@ export default function SalesManagement() {
                     rows={2}
                   />
                 </div>
-                <DialogFooter>
+                </div>
+                <DialogFooter className="shrink-0 border-t pt-4 mt-4">
                   <Button type="button" variant="outline" onClick={() => setDetailEditMode(false)}>
                     Cancelar
                   </Button>
@@ -548,8 +778,8 @@ export default function SalesManagement() {
                 </DialogFooter>
               </form>
             ) : (
-              <>
-                <div className="space-y-4">
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground">Vendedor</p>
@@ -585,6 +815,24 @@ export default function SalesManagement() {
                             : selectedSale.payment_method ?? "—"}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-muted-foreground">Estado del pago</p>
+                      <span className={`inline-block text-sm font-semibold rounded-md border px-2 py-0.5 ${selectedSale.payment_status === "realizado" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : selectedSale.payment_status === "pendiente" ? "bg-red-100 text-red-800 border-red-200" : "bg-muted text-muted-foreground border-border"}`}>
+                        {selectedSale.payment_status === "realizado"
+                          ? "Pago realizado"
+                          : selectedSale.payment_status === "pendiente"
+                            ? "Pago pendiente"
+                            : selectedSale.payment_status ?? "—"}
+                      </span>
+                    </div>
+                    {selectedSale.stock_origin && (
+                      <div>
+                        <p className="text-muted-foreground">Origen Stock</p>
+                        <p className="font-medium">
+                          {selectedSale.stock_origin === "HESSENMOTORS" ? "HessenMotors" : selectedSale.stock_origin === "MIAMIMOTORS" ? "Miami Motors" : selectedSale.stock_origin}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   {selectedSale.payment_method === "financiamiento" && (selectedSale.down_payment != null || selectedSale.installments != null) && (
                     <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t">
@@ -621,10 +869,35 @@ export default function SalesManagement() {
                       {selectedSale.lead?.phone && <p className="text-sm text-muted-foreground">{selectedSale.lead.phone}</p>}
                     </div>
                   )}
-                  {selectedSale.vehicle && (
+                  {(selectedSale.vehicle || selectedSale.vehicle_description) && (
                     <div>
                       <p className="text-muted-foreground text-sm">Vehículo</p>
-                      <p className="font-medium">{selectedSale.vehicle.make} {selectedSale.vehicle.model} {selectedSale.vehicle.year}</p>
+                      <p className="font-medium">
+                        {selectedSale.vehicle
+                          ? `${selectedSale.vehicle.make} ${selectedSale.vehicle.model} ${selectedSale.vehicle.year}`
+                          : selectedSale.vehicle_description}
+                      </p>
+                    </div>
+                  )}
+                  {selectedSale.sale_expenses && selectedSale.sale_expenses.length > 0 && (
+                    <div>
+                      <p className="text-muted-foreground text-sm">Gastos</p>
+                      <ul className="text-sm space-y-1">
+                        {selectedSale.sale_expenses.map((ex) => (
+                          <li key={ex.id} className="flex justify-between gap-2">
+                            <span>{ex.description || "Sin descripción"}</span>
+                            <span>{formatCurrency(Number(ex.amount))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-sm font-medium mt-1">
+                        Total gastos: {formatCurrency(selectedSale.sale_expenses.reduce((s, e) => s + Number(e.amount), 0))}
+                        {selectedSale.margin != null && (
+                          <span className="text-muted-foreground ml-2">
+                            — Ganancia neta: {formatCurrency(Number(selectedSale.margin) - selectedSale.sale_expenses.reduce((s, e) => s + Number(e.amount), 0))}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   )}
                   {selectedSale.notes && (
@@ -634,7 +907,7 @@ export default function SalesManagement() {
                     </div>
                   )}
                 </div>
-                <DialogFooter className="gap-2 sm:gap-0">
+                <DialogFooter className="shrink-0 border-t pt-4 gap-2 sm:gap-0">
                   <Button type="button" variant="outline" onClick={() => handleCloseDetail()}>
                     Cerrar
                   </Button>
@@ -651,7 +924,7 @@ export default function SalesManagement() {
                     Eliminar
                   </Button>
                 </DialogFooter>
-              </>
+              </div>
             )
           )}
         </DialogContent>
@@ -690,7 +963,13 @@ export default function SalesManagement() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent
+          ref={(el) => {
+            newSaleDialogRef.current = el;
+            setNewSaleDialogEl(el ?? null);
+          }}
+          className={`sm:max-w-md max-h-[90vh] flex flex-col ${vehiclePopoverOpen ? "overflow-visible" : "overflow-hidden"}`}
+        >
           <DialogHeader className="shrink-0">
             <DialogTitle>Nueva venta</DialogTitle>
             <DialogDescription>
@@ -698,7 +977,9 @@ export default function SalesManagement() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitSale} className="flex flex-col min-h-0 flex-1 overflow-hidden flex gap-4">
-            <div className="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
+            <div
+              className={`min-h-0 flex-1 space-y-4 pr-1 ${vehiclePopoverOpen ? "overflow-hidden" : "overflow-y-auto"}`}
+            >
             <div className="space-y-2">
               <Label htmlFor="vendor">Vendedor</Label>
               <Select value={formVendor} onValueChange={setFormVendor} required>
@@ -715,8 +996,23 @@ export default function SalesManagement() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="stock_origin">Origen Stock</Label>
+              <Select value={formStockOrigin} onValueChange={setFormStockOrigin}>
+                <SelectTrigger id="stock_origin">
+                  <SelectValue placeholder="Seleccionar origen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STOCK_ORIGIN_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="vehicle">Vehículo vendido</Label>
-              <Popover open={vehiclePopoverOpen} onOpenChange={setVehiclePopoverOpen}>
+              <Popover open={vehiclePopoverOpen} onOpenChange={setVehiclePopoverOpen} modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     id="vehicle"
@@ -731,14 +1027,23 @@ export default function SalesManagement() {
                           const v = vehicles.find((x) => x.id === formVehicleId);
                           return v ? `${v.make} ${v.model} ${v.year} — ${formatCurrency(v.price)}` : "Seleccionar vehículo";
                         })()
-                      : "Seleccionar vehículo"}
+                      : formVehicleCustom.trim()
+                        ? formVehicleCustom.trim()
+                        : "Seleccionar vehículo"}
                     <span className="ml-2 shrink-0 opacity-50">▼</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  container={newSaleDialogEl}
+                >
                   <Command shouldFilter={true}>
                     <CommandInput placeholder="Buscar por marca, modelo, año..." />
-                    <CommandList className="max-h-[280px] overflow-y-auto">
+                    <CommandList
+                      className="vehicle-list-scroll max-h-[280px] overflow-y-auto overflow-x-hidden overscroll-contain pr-3"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
                       <CommandEmpty>Ningún vehículo encontrado.</CommandEmpty>
                       <CommandGroup>
                         {vehicles.map((v) => (
@@ -747,12 +1052,13 @@ export default function SalesManagement() {
                             value={`${v.make} ${v.model} ${v.year} ${v.vin ?? ""} ${v.price}`}
                             onSelect={() => {
                               setFormVehicleId(v.id);
+                              setFormVehicleCustom("");
                               if (v.price != null) setFormSalePrice(String(v.price));
                               setVehiclePopoverOpen(false);
                             }}
                           >
                             <Car className="mr-2 h-4 w-4 shrink-0 opacity-70" />
-                            <span className="truncate">{v.make} {v.model} {v.year} — {formatCurrency(v.price)}</span>
+                            <span className="min-w-0 flex-1 truncate pr-1">{v.make} {v.model} {v.year} — {formatCurrency(v.price)}</span>
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -760,7 +1066,20 @@ export default function SalesManagement() {
                   </Command>
                 </PopoverContent>
               </Popover>
-              <p className="text-xs text-muted-foreground">Escribe para filtrar. Solo vehículos disponibles. Al guardar la venta, el vehículo pasará a estado &quot;vendido&quot; en el inventario.</p>
+              <p className="text-xs text-muted-foreground">Escribe para filtrar. Aparecen todos los vehículos del inventario. Al guardar la venta, el vehículo seleccionado pasará a estado &quot;vendido&quot; automáticamente.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vehicle_custom">O escribe el vehículo (si no está en la lista)</Label>
+              <Input
+                id="vehicle_custom"
+                type="text"
+                placeholder="Ej: Toyota Corolla 2020, Nissan Kicks 2022..."
+                value={formVehicleCustom}
+                onChange={(e) => {
+                  setFormVehicleCustom(e.target.value);
+                  if (e.target.value.trim()) setFormVehicleId("");
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="client_name">Nombre del cliente</Label>
@@ -797,36 +1116,51 @@ export default function SalesManagement() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Estado del pago</Label>
+              <Select value={formPaymentStatus} onValueChange={setFormPaymentStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_STATUS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {formPaymentMethod === "financiamiento" && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="down_payment">Pie ($)</Label>
+                  <Label htmlFor="down_payment">Pie ($) (opcional)</Label>
                   <Input
                     id="down_payment"
                     type="text"
-                    placeholder="Ej: 5000000"
+                    placeholder="Ej: 5000000 — opcional"
                     value={formDownPayment}
                     onChange={(e) => setFormDownPayment(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="installments">Cantidad de cuotas</Label>
+                  <Label htmlFor="installments">Cantidad de cuotas (opcional)</Label>
                   <Input
                     id="installments"
                     type="number"
                     min={1}
                     max={84}
-                    placeholder="Ej: 12, 24, 36..."
+                    placeholder="Ej: 12, 24, 36... — opcional"
                     value={formInstallments}
                     onChange={(e) => setFormInstallments(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="commission">Saldoprecio / Comisión (venta a crédito) ($)</Label>
+                  <Label htmlFor="commission">Saldoprecio / Comisión (opcional)</Label>
                   <Input
                     id="commission"
                     type="text"
-                    placeholder="Ej: 150000"
+                    placeholder="Ej: 150000 — puedes anotarlo después"
                     value={formCommission}
                     onChange={(e) => setFormCommission(e.target.value)}
                   />
@@ -854,6 +1188,46 @@ export default function SalesManagement() {
                 onChange={(e) => setFormMargin(e.target.value)}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Gastos</Label>
+              <p className="text-xs text-muted-foreground">Bencina, arreglos u otros gastos de la venta. Se restan de la ganancia.</p>
+              <div className="space-y-2">
+                {formExpenses.map((exp) => (
+                  <div key={exp.id} className="flex gap-2 items-end">
+                    <Input
+                      placeholder="Ej: Bencina, arreglo..."
+                      value={exp.description}
+                      onChange={(e) => updateFormExpense(exp.id, "description", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="text"
+                      placeholder="Monto $"
+                      value={exp.amount}
+                      onChange={(e) => updateFormExpense(exp.id, "amount", e.target.value)}
+                      className="w-28"
+                    />
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeFormExpense(exp.id)} aria-label="Quitar gasto">
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addFormExpense}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar gasto
+                </Button>
+              </div>
+              {(formExpenses.length > 0 || formExpensesTotal > 0) && (
+                <p className="text-sm pt-1">
+                  Total gastos: {formatCurrency(formExpensesTotal)}
+                  {formMarginNum > 0 && (
+                    <span className="text-muted-foreground ml-2">
+                      — Ganancia neta: {formatCurrency(formNetMargin)}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notas (opcional)</Label>
@@ -893,6 +1267,9 @@ function SaleCard({ sale, onClick }: { sale: SaleWithRelations; onClick: () => v
   const saleDate = sale.sale_date
     ? format(new Date(sale.sale_date), "d MMM yyyy", { locale: es })
     : "";
+  const vehicleLabel = sale.vehicle
+    ? `${sale.vehicle.make} ${sale.vehicle.model} ${sale.vehicle.year}`
+    : sale.vehicle_description ?? "Sin vehículo";
 
   return (
     <Card
@@ -906,10 +1283,10 @@ function SaleCard({ sale, onClick }: { sale: SaleWithRelations; onClick: () => v
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <User className="h-4 w-4 text-primary" />
+              <Car className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <CardTitle className="text-base truncate">{sale.seller_name ?? sale.seller?.full_name ?? "Sin asignar"}</CardTitle>
+              <CardTitle className="text-base truncate">{vehicleLabel}</CardTitle>
               <CardDescription className="text-xs">{saleDate}</CardDescription>
             </div>
           </div>
@@ -923,17 +1300,37 @@ function SaleCard({ sale, onClick }: { sale: SaleWithRelations; onClick: () => v
           <span className="text-muted-foreground">Monto vendido</span>
           <span className="font-semibold">{formatCurrency(Number(sale.sale_price))}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Ganancia</span>
-          <span className="font-semibold text-emerald-600">{formatCurrency(Number(sale.margin))}</span>
-        </div>
-        {sale.vehicle && (
-          <p className="text-xs text-muted-foreground truncate">
-            {sale.vehicle.make} {sale.vehicle.model} {sale.vehicle.year}
-          </p>
+        {sale.sale_expenses && sale.sale_expenses.length > 0 ? (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Ganancia neta</span>
+            <span className="font-semibold text-emerald-600">
+              {formatCurrency(Number(sale.margin) - sale.sale_expenses.reduce((s, e) => s + Number(e.amount), 0))}
+            </span>
+          </div>
+        ) : (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Ganancia</span>
+            <span className="font-semibold text-emerald-600">{formatCurrency(Number(sale.margin))}</span>
+          </div>
         )}
+        {sale.sale_expenses && sale.sale_expenses.length > 0 && (
+          <p className="text-xs text-muted-foreground">Gastos: {formatCurrency(sale.sale_expenses.reduce((s, e) => s + Number(e.amount), 0))}</p>
+        )}
+        <p className="text-xs text-muted-foreground truncate">
+          Vendedor: {sale.seller_name ?? sale.seller?.full_name ?? "—"}
+        </p>
         {(sale.client_name || sale.lead?.full_name) && (
           <p className="text-xs text-muted-foreground truncate">Cliente: {sale.client_name || sale.lead?.full_name}</p>
+        )}
+        {sale.stock_origin && (
+          <p className="text-xs text-muted-foreground truncate">
+            Origen: {sale.stock_origin === "HESSENMOTORS" ? "HessenMotors" : sale.stock_origin === "MIAMIMOTORS" ? "Miami Motors" : sale.stock_origin}
+          </p>
+        )}
+        {sale.payment_status && (
+          <span className={`inline-block text-xs font-semibold rounded-md border px-2 py-0.5 ${sale.payment_status === "realizado" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : sale.payment_status === "pendiente" ? "bg-red-100 text-red-800 border-red-200" : "bg-muted text-muted-foreground border-border"}`}>
+            {sale.payment_status === "realizado" ? "Pago realizado" : sale.payment_status === "pendiente" ? "Pago pendiente" : sale.payment_status}
+          </span>
         )}
       </CardContent>
     </Card>
