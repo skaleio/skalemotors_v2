@@ -11,6 +11,7 @@ export const saleService = {
     sellerId?: string
     branchId?: string
     status?: string
+    paymentStatus?: string
     dateFrom?: string
     dateTo?: string
   }) {
@@ -24,7 +25,7 @@ export const saleService = {
         branch:branches(id, name),
         sale_expenses(id, amount, description)
       `)
-      .order('created_at', { ascending: false })
+      .order('sale_date', { ascending: false })
 
     if (filters?.sellerId) {
       query = query.eq('seller_id', filters.sellerId)
@@ -36,6 +37,10 @@ export const saleService = {
 
     if (filters?.status) {
       query = query.eq('status', filters.status)
+    }
+
+    if (filters?.paymentStatus) {
+      query = query.eq('payment_status', filters.paymentStatus)
     }
 
     if (filters?.dateFrom) {

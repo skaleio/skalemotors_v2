@@ -141,7 +141,7 @@ export function GlobalQuickActions() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const createOptions = useMemo(() => [
-  // Ventas & CRM
+  // CRM
   { 
     label: "Nuevo Lead", 
     description: "Agregar un nuevo prospecto al sistema",
@@ -156,7 +156,7 @@ export function GlobalQuickActions() {
       }
     },
     color: "bg-blue-600",
-    category: "Ventas & CRM",
+    category: "CRM",
     keywords: ["lead", "prospecto", "cliente", "venta", "crm"]
   },
   { 
@@ -166,7 +166,7 @@ export function GlobalQuickActions() {
     shortcut: "Ctrl+P",
     action: () => navigateWithLoading('/app/crm'),
     color: "bg-green-600",
-    category: "Ventas & CRM",
+    category: "CRM",
     keywords: ["pipeline", "ventas", "proceso", "crm", "seguimiento"]
   },
   { 
@@ -176,7 +176,7 @@ export function GlobalQuickActions() {
     shortcut: "Ctrl+Q",
     action: () => navigateWithLoading('/app/quotes'),
     color: "bg-purple-600",
-    category: "Ventas & CRM",
+    category: "CRM",
     keywords: ["cotización", "propuesta", "precio", "oferta", "comercial"]
   },
   { 
@@ -193,7 +193,7 @@ export function GlobalQuickActions() {
       }
     },
     color: "bg-emerald-600",
-    category: "Ventas & CRM",
+    category: "CRM",
     keywords: ["venta", "vender", "registrar", "ventas", "vehículo"]
   },
   { 
@@ -202,7 +202,7 @@ export function GlobalQuickActions() {
     icon: TrendingUp,
     action: () => navigateWithLoading('/app/crm'),
     color: "bg-indigo-600",
-    category: "Ventas & CRM",
+    category: "CRM",
     keywords: ["seguimiento", "ventas", "negociación", "estado", "progreso"]
   },
   

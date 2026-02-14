@@ -305,9 +305,9 @@ export function TopBar() {
                 </div>
 
                 <div className="p-2 overflow-y-auto min-h-0 flex-1">
-                  {/* Ventas & CRM */}
+                  {/* CRM */}
                   <div className="mb-3">
-                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Ventas & CRM</div>
+                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">CRM</div>
                     <div className="space-y-1">
                       <button
                         onClick={() => {

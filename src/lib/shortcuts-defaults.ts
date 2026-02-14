@@ -24,10 +24,10 @@ export interface ShortcutActionDef {
 }
 
 export const SHORTCUT_ACTIONS: ShortcutActionDef[] = [
-  { id: "new_lead", label: "Nuevo Lead", description: "Agregar prospecto", category: "Ventas & CRM" },
-  { id: "crm", label: "CRM Pipeline", description: "Gestionar ventas", category: "Ventas & CRM" },
-  { id: "quotes", label: "Nueva Cotización", description: "Crear propuesta", category: "Ventas & CRM" },
-  { id: "new_sale", label: "Nueva Venta", description: "Registrar venta", category: "Ventas & CRM" },
+  { id: "new_lead", label: "Nuevo Lead", description: "Agregar prospecto", category: "CRM" },
+  { id: "crm", label: "CRM Pipeline", description: "Gestionar ventas", category: "CRM" },
+  { id: "quotes", label: "Nueva Cotización", description: "Crear propuesta", category: "CRM" },
+  { id: "new_sale", label: "Nueva Venta", description: "Registrar venta", category: "CRM" },
   { id: "appointments", label: "Nueva Cita", description: "Programar reunión", category: "Operaciones" },
   { id: "financial_calculator", label: "Financiamiento", description: "Calcular cuotas", category: "Operaciones" },
   { id: "inventory", label: "Agregar Vehículo", description: "Nuevo stock", category: "Inventario" },

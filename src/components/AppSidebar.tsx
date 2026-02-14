@@ -77,14 +77,12 @@ const menuCategories = [
     ]
   },
   {
-    title: "Ventas & CRM",
+    title: "CRM",
     icon: Target,
     items: [
       { title: "CRM", url: "/app/crm", icon: Target },
       { title: "Mensajes", url: "/app/messages", icon: MessageCircle },
       { title: "Leads", url: "/app/leads", icon: Users },
-      { title: "Ventas", url: "/app/sales", icon: TrendingUp },
-      { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
     ]
   },
   {
@@ -113,7 +111,9 @@ const menuCategories = [
     title: "Finanzas",
     icon: DollarSign,
     items: [
-      { title: "Gastos Empresa", url: "/app/finance", icon: Receipt },
+      { title: "Gastos/Ingresos", url: "/app/finance", icon: Receipt },
+      { title: "Ventas", url: "/app/sales", icon: TrendingUp },
+      { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
       { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },
       { title: "Facturación Electrónica", url: "/app/billing", icon: BillingIcon },
@@ -134,7 +134,7 @@ const menuCategories = [
     items: [
       { title: "Reportes", url: "/app/reports", icon: PieChart },
       { title: "Alertas", url: "/app/alerts", icon: Bell },
-      { title: "Métricas Meta Ads", url: "/app/studio-ia/marketing/facebook-ads", icon: BarChart3 },
+      { title: "Meta ADS", url: "/app/studio-ia/marketing/facebook-ads", icon: BarChart3 },
       { title: "Studio IA", url: "/app/studio-ia", icon: Brain },
     ]
   }
@@ -151,7 +151,7 @@ const settingsCategory = {
 };
 
 const ALL_CATEGORY_KEYS = [
-  "Dashboard", "Ventas & CRM", "Inventario & Vehículos", "Operaciones",
+  "Dashboard", "CRM", "Inventario & Vehículos", "Operaciones",
   "Finanzas", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
 ] as const;
 
@@ -209,7 +209,7 @@ export function AppSidebar() {
   // Inicializar todas como false
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     "Dashboard": false,
-    "Ventas & CRM": false,
+    "CRM": false,
     "Inventario & Vehículos": false,
     "Operaciones": false,
     "Finanzas": false,
@@ -232,7 +232,7 @@ export function AppSidebar() {
         // Colapsar todas las categorías y expandir solo la actual
         const updated: Record<string, boolean> = {
           "Dashboard": false,
-          "Ventas & CRM": false,
+          "CRM": false,
           "Inventario & Vehículos": false,
           "Operaciones": false,
           "Finanzas": false,
@@ -313,23 +313,23 @@ export function AppSidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <Sidebar
-        className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg transition-all duration-300 ease-in-out`}
+        className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg transition-[width] duration-200 ease-sidebar`}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-300 min-w-0 overflow-hidden">
+        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-200 min-w-0 overflow-hidden">
           {!isCollapsed ? (
-            <div className="flex items-center gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-300">
+            <div className="flex items-center gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
               <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
                 <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide truncate min-w-0 animate-in fade-in-0 duration-300 delay-100">
+              <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide truncate min-w-0 animate-in fade-in-0 duration-150 delay-75">
                 SKALEMOTORS
               </span>
             </div>
           ) : (
-            <div className="flex items-center justify-center w-full animate-in slide-in-from-left-2 duration-300">
+            <div className="flex items-center justify-center w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
               <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
                 <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -381,13 +381,13 @@ export function AppSidebar() {
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
                 {!isCollapsed && (
-                  <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
+                  <CollapsibleContent className="animate-in slide-in-from-top-2 duration-150 fade-in-0">
                     <SidebarGroupContent>
                       <SidebarMenu>
                         {category.items.map((item, index) => {
                           const isLeadsItem = item.url === "/app/leads";
                           return (
-                            <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                            <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-150 fade-in-0" style={{ animationDelay: `${Math.min(index * 20, 120)}ms` }}>
                               <SidebarMenuButton asChild>
                                 {item.url.includes('?') ? (
                                   <button
@@ -470,11 +470,11 @@ export function AppSidebar() {
                 </SidebarGroupLabel>
               </CollapsibleTrigger>
               {!isCollapsed && (
-                <CollapsibleContent className="animate-in slide-in-from-top-2 duration-300">
+                <CollapsibleContent className="animate-in slide-in-from-top-2 duration-150 fade-in-0">
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {settingsCategory.items.map((item, index) => (
-                        <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                        <SidebarMenuItem key={item.title} className="animate-in slide-in-from-left-2 duration-150 fade-in-0" style={{ animationDelay: `${Math.min(index * 20, 120)}ms` }}>
                           <SidebarMenuButton asChild>
                             {item.url.includes('?') ? (
                               <Tooltip>

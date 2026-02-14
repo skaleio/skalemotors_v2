@@ -47,6 +47,7 @@ import {
   type ExpenseType,
   type GastoEmpresaWithInversor,
 } from "@/lib/services/gastosEmpresa";
+import { saleService } from "@/lib/services/sales";
 
 const EXPENSE_TYPES: ExpenseType[] = [
   "operacion",
@@ -92,15 +93,78 @@ function formatDate(dateStr: string) {
   });
 }
 
+/** Una fila de la lista unificada: gasto o ingreso (venta). */
+type MovimientoRow =
+  | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
+  | {
+      tipo: "ingreso";
+      id: string;
+      date: string;
+      data: {
+        id: string;
+        sale_price: number;
+        margin: number;
+        sale_date: string;
+        vehicle_description: string | null;
+        vehicle?: { make: string; model: string; year: number } | null;
+        seller?: { full_name: string | null } | null;
+      };
+    };
+
+type SaleForIngreso = {
+  id: string;
+  sale_price: number;
+  margin: number;
+  sale_date: string;
+  vehicle_description: string | null;
+  vehicle?: { make: string; model: string; year: number } | null;
+  seller?: { full_name: string | null } | null;
+};
+
+function buildMovimientos(
+  gastos: GastoEmpresaWithInversor[],
+  salesList: SaleForIngreso[]
+): MovimientoRow[] {
+  const gastosRows: MovimientoRow[] = gastos.map((g) => ({
+    tipo: "gasto" as const,
+    id: g.id,
+    date: g.expense_date,
+    data: g,
+  }));
+  const ingresosRows: MovimientoRow[] = salesList.map((s) => ({
+    tipo: "ingreso" as const,
+    id: `sale-${s.id}`,
+    date: s.sale_date,
+    data: s,
+  }));
+  const all = [...gastosRows, ...ingresosRows];
+  all.sort((a, b) => (b.date === a.date ? 0 : b.date > a.date ? 1 : -1));
+  return all;
+}
+
+function ingresoDescription(row: MovimientoRow): string {
+  if (row.tipo !== "ingreso") return "";
+  const d = row.data;
+  const vehicleText =
+    d.vehicle_description?.trim() ||
+    (d.vehicle
+      ? `${d.vehicle.make} ${d.vehicle.model} ${d.vehicle.year}`
+      : "Venta");
+  return `${vehicleText} · Ganancia ${formatCurrency(Number(d.margin))}`;
+}
+
 export default function Finance() {
   const { user } = useAuth();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
+  const [sales, setSales] = useState<SaleForIngreso[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<ExpenseType | "all">("all");
   const [filterInversor, setFilterInversor] = useState<string | "all">("all");
+  const [filterMovimiento, setFilterMovimiento] = useState<"all" | "gasto" | "ingreso">("all");
+  const [filterDevolucion, setFilterDevolucion] = useState<"all" | "pendiente" | "realizado">("all");
   const [form, setForm] = useState({
     amount: "",
     description: "",
@@ -115,16 +179,95 @@ export default function Finance() {
   const loadGastos = useCallback(async () => {
     setLoading(true);
     try {
-      const filters: Parameters<typeof gastosEmpresaService.getAll>[0] = {};
-      if (filterType !== "all") filters.expenseType = filterType;
-      const data = await gastosEmpresaService.getAll(filters);
-      setGastos(data);
+      const [gastosData, salesData] = await Promise.all([
+        gastosEmpresaService.getAll(filterType !== "all" ? { expenseType: filterType } : {}),
+        saleService
+          .getAll({ status: "completada", paymentStatus: "realizado" })
+          .then((data) => data ?? [])
+          .catch((err) => {
+            console.error("Error cargando ventas para ingresos:", err);
+            return [];
+          }),
+      ]);
+      setGastos(gastosData);
+      type SaleRaw = {
+        id: string;
+        sale_price: number | string;
+        margin: number | string | null;
+        sale_date: string;
+        payment_status?: string | null;
+        vehicle_description?: string | null;
+        vehicle?: { make: string; model: string; year: number } | null;
+        seller?: { full_name: string | null } | null;
+      };
+      const onlyPagoRealizado = (salesData as SaleRaw[]).filter(
+        (s) => s.payment_status === "realizado"
+      );
+      setSales(
+        onlyPagoRealizado.map((s) => ({
+          id: s.id,
+          sale_price: Number(s.sale_price),
+          margin: Number(s.margin ?? 0),
+          sale_date: s.sale_date,
+          vehicle_description: s.vehicle_description ?? null,
+          vehicle: s.vehicle ?? null,
+          seller: s.seller ?? null,
+        }))
+      );
     } catch (e) {
-      console.error(e);
+      console.error("Error cargando Gastos/Ingresos:", e);
     } finally {
       setLoading(false);
     }
   }, [filterType]);
+
+  // Realtime: cuando una venta pasa a "pago realizado", actualizar la lista de ingresos
+  useEffect(() => {
+    const channel = supabase
+      .channel("finance-sales-payment")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales" },
+        () => {
+          // Refrescar ventas para que la nueva ganancia aparezca en ingresos
+          saleService
+            .getAll({ status: "completada", paymentStatus: "realizado" })
+            .then((data) => {
+              if (data == null) return;
+              type SaleRaw = {
+                id: string;
+                sale_price: number | string;
+                margin: number | string | null;
+                sale_date: string;
+                payment_status?: string | null;
+                vehicle_description?: string | null;
+                vehicle?: { make: string; model: string; year: number } | null;
+                seller?: { full_name: string | null } | null;
+              };
+              const onlyPagoRealizado = (data as SaleRaw[]).filter(
+                (s) => s.payment_status === "realizado"
+              );
+              setSales(
+                onlyPagoRealizado.map((s) => ({
+                  id: s.id,
+                  sale_price: Number(s.sale_price),
+                  margin: Number(s.margin ?? 0),
+                  sale_date: s.sale_date,
+                  vehicle_description: s.vehicle_description ?? null,
+                  vehicle: s.vehicle ?? null,
+                  seller: s.seller ?? null,
+                }))
+              );
+            })
+            .catch((err) => console.error("Error refrescando ingresos por realtime:", err));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const displayInversor = (g: GastoEmpresaWithInversor) =>
     g.inversor?.full_name || g.inversor_name || "—";
@@ -133,6 +276,25 @@ export default function Finance() {
     filterInversor === "all"
       ? gastos
       : gastos.filter((g) => displayInversor(g) === filterInversor);
+
+  const gastosPorDevolucion =
+    filterDevolucion === "all"
+      ? gastosFiltrados
+      : filterDevolucion === "pendiente"
+        ? gastosFiltrados.filter((g) => !(g.devolucion ?? false))
+        : gastosFiltrados.filter((g) => g.devolucion === true);
+
+  const movimientos = buildMovimientos(gastosPorDevolucion, sales);
+  const movimientosFiltrados =
+    filterMovimiento === "all"
+      ? movimientos
+      : movimientos.filter((m) => m.tipo === filterMovimiento);
+
+  const totalIngresos = sales.reduce((sum, s) => sum + Number(s.margin), 0);
+  const totalGastos = gastosFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
+  const gastosPendientes = gastosFiltrados.filter((g) => !(g.devolucion ?? false));
+  const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
+  const balance = totalIngresos - totalGastos;
 
   useEffect(() => {
     loadGastos();
@@ -150,8 +312,6 @@ export default function Finance() {
     loadBranches();
   }, []);
 
-  const totalGastos = gastosFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
-
   const hoy = new Date();
   const hace30Dias = new Date(hoy);
   hace30Dias.setDate(hace30Dias.getDate() - 30);
@@ -162,6 +322,8 @@ export default function Finance() {
     (sum, g) => sum + Number(g.amount),
     0
   );
+  const promedioGastoDiario30 =
+    totalUltimos30Dias > 0 ? Math.round(totalUltimos30Dias / 30) : 0;
 
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
@@ -257,7 +419,7 @@ export default function Finance() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Finanzas</h1>
           <p className="text-muted-foreground mt-2">
-            Gestión financiera y registro de gastos de la empresa
+            Control de ingresos (ventas) y gastos · Depuración y balance
           </p>
         </div>
         <Button
@@ -284,7 +446,21 @@ export default function Finance() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total gastos (lista)</CardTitle>
+            <CardTitle className="text-sm font-medium">Total ingresos</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {loading ? "…" : formatCurrency(totalIngresos)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pago realizado · {sales.length} venta{sales.length !== 1 ? "s" : ""}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total gastos</CardTitle>
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -292,49 +468,63 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastosFiltrados.length} registro{gastosFiltrados.length !== 1 ? "s" : ""}
+              {gastosFiltrados.length} gasto{gastosFiltrados.length !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resumen</CardTitle>
+            <CardTitle className="text-sm font-medium">Gastos pendientes</CardTitle>
+            <Receipt className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {loading ? "…" : formatCurrency(totalGastosPendientes)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sin devolver · {gastosPendientes.length} gasto{gastosPendientes.length !== 1 ? "s" : ""}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Balance</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+              {loading ? "…" : formatCurrency(balance)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ingresos − Gastos
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resumen 30 días</CardTitle>
+            <BarChart3 className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {loading ? "…" : formatCurrency(totalUltimos30Dias)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Últimos 30 días · {gastosUltimos30Dias.length} gasto{gastosUltimos30Dias.length !== 1 ? "s" : ""}
+              Gastos últimos 30 días
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gastos del mes</CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
+            <CardTitle className="text-sm font-medium">Promedio gasto diario</CardTitle>
+            <Calendar className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? "…" : formatCurrency(totalDelMes)}
+              {loading ? "…" : formatCurrency(promedioGastoDiario30)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Mes en curso · {gastosDelMes.length} gasto{gastosDelMes.length !== 1 ? "s" : ""}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Promedio por gasto</CardTitle>
-            <BarChart3 className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? "…" : formatCurrency(promedioPorGasto)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Últimos 30 días
+              Promedio diario en últimos 30 días
             </p>
           </CardContent>
         </Card>
@@ -344,10 +534,10 @@ export default function Finance() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5" />
-            Gastos de la empresa
+            Gastos / Ingresos
           </CardTitle>
           <CardDescription>
-            Lista de gastos con tipo e inversor para el control por parte de la empresa
+            Lista unificada: ingresos por ventas (tipo Vehículo) y gastos. Depuración y control de lo que entra y sale.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -356,6 +546,16 @@ export default function Finance() {
               <Filter className="h-4 w-4" />
               <span className="text-sm">Filtros:</span>
             </div>
+            <Select value={filterMovimiento} onValueChange={(v) => setFilterMovimiento(v as "all" | "gasto" | "ingreso")}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Movimiento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ingreso">Ingresos</SelectItem>
+                <SelectItem value="gasto">Gastos</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filterType} onValueChange={(v) => setFilterType(v as ExpenseType | "all")}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Tipo" />
@@ -369,10 +569,7 @@ export default function Finance() {
                 ))}
               </SelectContent>
             </Select>
-            <Select
-              value={filterInversor}
-              onValueChange={setFilterInversor}
-            >
+            <Select value={filterInversor} onValueChange={setFilterInversor}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Inversor" />
               </SelectTrigger>
@@ -385,14 +582,24 @@ export default function Finance() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filterDevolucion} onValueChange={(v) => setFilterDevolucion(v as "all" | "pendiente" | "realizado")}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Devolución" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pendiente">Pendiente</SelectItem>
+                <SelectItem value="realizado">Realizado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Cargando gastos…</div>
-          ) : gastosFiltrados.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">Cargando…</div>
+          ) : movimientosFiltrados.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No hay gastos registrados. Agrega uno con &quot;Nuevo Gasto&quot;</p>
+              <p>No hay movimientos. Agrega un gasto con &quot;Nuevo Gasto&quot; o registra ventas en Ventas.</p>
             </div>
           ) : (
             <div className="rounded-md border overflow-hidden">
@@ -400,6 +607,7 @@ export default function Finance() {
                 <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-24">Movimiento</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Descripción</TableHead>
@@ -410,70 +618,93 @@ export default function Finance() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {gastosFiltrados.map((g) => (
-                    <TableRow key={g.id}>
-                      <TableCell className="whitespace-nowrap">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {formatDate(g.expense_date)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{EXPENSE_TYPE_LABELS[g.expense_type]}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {g.description || "—"}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const name = displayInversor(g);
-                          const badgeClass = name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
-                            ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
-                            : null;
-                          return badgeClass ? (
-                            <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                              {name}
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <User className="h-3.5 w-3.5" />
-                              {name}
-                            </span>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={g.devolucion ? "default" : "outline"}>
-                          {g.devolucion ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(Number(g.amount))}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleEdit(g)}
-                            title="Editar gasto"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(g.id)}
-                            title="Eliminar gasto"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {movimientosFiltrados.map((row) =>
+                    row.tipo === "gasto" ? (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-muted/50">Gasto</Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                            {formatDate(row.data.expense_date)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{EXPENSE_TYPE_LABELS[row.data.expense_type]}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {row.data.description || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const name = displayInversor(row.data);
+                            const badgeClass = name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                              ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                              : null;
+                            return badgeClass ? (
+                              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                {name}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <User className="h-3.5 w-3.5" />
+                                {name}
+                              </span>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={row.data.devolucion ? "default" : "outline"}>
+                            {row.data.devolucion ? "Sí" : "No"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-red-600">
+                          -{formatCurrency(Number(row.data.amount))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row.data)} title="Editar gasto">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(row.id)} title="Eliminar gasto">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Ingreso</Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                            {formatDate(row.data.sale_date)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Vehículo</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[260px] truncate">
+                          {ingresoDescription(row)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">
+                            {row.data.seller?.full_name || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">—</span>
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-emerald-600">
+                          +{formatCurrency(Number(row.data.margin))}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    )
+                  )}
                 </TableBody>
               </Table>
               </div>
