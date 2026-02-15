@@ -11,6 +11,10 @@ export function usePendingTasks(branchId: string | undefined) {
     queryKey: ['pending-tasks', branchId],
     queryFn: async (): Promise<PendingTask[]> => {
       if (!branchId) return []
+      // Sincronizar recordatorios de leads: solo entran en Tareas pendientes cuando falta poco (24h)
+      await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 24 }).then(({ error }) => {
+        if (error) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
+      })
       const { data, error } = await supabase
         .from('pending_tasks')
         .select('*')

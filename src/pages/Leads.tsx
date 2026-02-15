@@ -21,9 +21,10 @@ import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
+import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
+import { Bell, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -454,6 +455,13 @@ export default function Leads() {
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const tomorrow = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
   const [formState, setFormState] = useState({
     full_name: "",
     phone: "",
@@ -463,6 +471,9 @@ export default function Leads() {
     payment_type: "",
     budget: "",
     notes: "",
+    reminderEnabled: false,
+    reminderDueDate: "",
+    reminderPriority: "today" as "urgent" | "today" | "later",
   });
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -665,6 +676,9 @@ export default function Leads() {
       payment_type: "",
       budget: "",
       notes: "",
+      reminderEnabled: false,
+      reminderDueDate: tomorrow,
+      reminderPriority: "today",
     });
   };
 
@@ -816,6 +830,29 @@ export default function Leads() {
       // Marcar como obsoleta y volver a cargar desde el servidor para asegurar lista actualizada
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       await refetch();
+
+      // Si el usuario activó recordatorio: guardar en lead_reminders (aparece en Tareas pendientes cuando falte poco)
+      if (formState.reminderEnabled && user?.branch_id) {
+        const dueDate = formState.reminderDueDate || tomorrow;
+        const dueAt = `${dueDate}T09:00:00.000Z`;
+        const { error: reminderError } = await supabase.from("lead_reminders").insert({
+          lead_id: (created as Lead).id,
+          branch_id: user.branch_id,
+          reminder_at: dueAt,
+          note: formState.notes.trim() ? formState.notes.trim() : null,
+          priority: formState.reminderPriority,
+        });
+        if (reminderError) {
+          console.error("Error creando recordatorio:", reminderError);
+          toast({ title: "Lead creado", description: "El recordatorio no pudo guardarse.", variant: "destructive" });
+        } else {
+          queryClient.invalidateQueries({ queryKey: ["pending-tasks"] });
+          toast({
+            title: "Lead creado",
+            description: "Se creó el lead y el recordatorio. Aparecerá en Tareas pendientes cuando falte poco para la fecha.",
+          });
+        }
+      }
 
       resetForm();
       setShowCreateDialog(false);
@@ -1243,6 +1280,58 @@ export default function Leads() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-3 rounded-lg border border-dashed p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="lead_reminder"
+                  checked={formState.reminderEnabled}
+                  onCheckedChange={(checked) =>
+                    setFormState({
+                      ...formState,
+                      reminderEnabled: !!checked,
+                      reminderDueDate: formState.reminderDueDate || tomorrow,
+                    })
+                  }
+                />
+                <Label htmlFor="lead_reminder" className="flex items-center gap-1.5 cursor-pointer font-normal">
+                  <Bell className="h-4 w-4 text-muted-foreground" />
+                  Crear recordatorio (aparece en Tareas pendientes del Dashboard)
+                </Label>
+              </div>
+              {formState.reminderEnabled && (
+                <div className="grid gap-2 sm:grid-cols-2 pl-6">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="lead_reminder_date" className="text-xs">Fecha recordatorio</Label>
+                    <Input
+                      id="lead_reminder_date"
+                      type="date"
+                      value={formState.reminderDueDate || tomorrow}
+                      min={today}
+                      onChange={(e) => setFormState({ ...formState, reminderDueDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="lead_reminder_priority" className="text-xs">Prioridad</Label>
+                    <Select
+                      value={formState.reminderPriority}
+                      onValueChange={(value: "urgent" | "today" | "later") =>
+                        setFormState({ ...formState, reminderPriority: value })
+                      }
+                    >
+                      <SelectTrigger id="lead_reminder_priority">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                        <SelectItem value="today">Hoy</SelectItem>
+                        <SelectItem value="later">Después</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter className="shrink-0">

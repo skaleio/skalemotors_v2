@@ -1,8 +1,15 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,40 +21,34 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+  EXPENSE_TYPE_LABELS,
+  gastosEmpresaService,
+  type ExpenseType,
+  type GastoEmpresaWithInversor,
+} from "@/lib/services/gastosEmpresa";
+import { saleService } from "@/lib/services/sales";
+import { supabase } from "@/lib/supabase";
 import {
   BarChart3,
+  Calendar,
   DollarSign,
+  Filter,
   Pencil,
   Plus,
   Receipt,
   Trash2,
   TrendingUp,
   User,
-  Calendar,
-  Filter,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-import {
-  gastosEmpresaService,
-  EXPENSE_TYPE_LABELS,
-  type ExpenseType,
-  type GastoEmpresaWithInversor,
-} from "@/lib/services/gastosEmpresa";
-import { saleService } from "@/lib/services/sales";
 
 const EXPENSE_TYPES: ExpenseType[] = [
   "operacion",
@@ -97,19 +98,19 @@ function formatDate(dateStr: string) {
 type MovimientoRow =
   | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
   | {
-      tipo: "ingreso";
+    tipo: "ingreso";
+    id: string;
+    date: string;
+    data: {
       id: string;
-      date: string;
-      data: {
-        id: string;
-        sale_price: number;
-        margin: number;
-        sale_date: string;
-        vehicle_description: string | null;
-        vehicle?: { make: string; model: string; year: number } | null;
-        seller?: { full_name: string | null } | null;
-      };
+      sale_price: number;
+      margin: number;
+      sale_date: string;
+      vehicle_description: string | null;
+      vehicle?: { make: string; model: string; year: number } | null;
+      seller?: { full_name: string | null } | null;
     };
+  };
 
 type SaleForIngreso = {
   id: string;
@@ -289,6 +290,23 @@ export default function Finance() {
     filterMovimiento === "all"
       ? movimientos
       : movimientos.filter((m) => m.tipo === filterMovimiento);
+
+  const balanceLista = movimientosFiltrados.reduce((acc, row) => {
+    if (row.tipo === "ingreso") return acc + Number(row.data.margin);
+    return acc - Number(row.data.amount);
+  }, 0);
+
+  // Orden cronológico: más antiguo arriba, más reciente abajo, para que el saldo “empiece” arriba y se vaya sumando/restando hacia abajo
+  const movimientosOrdenados = [...movimientosFiltrados].sort((a, b) =>
+    a.date === b.date ? 0 : a.date < b.date ? -1 : 1
+  );
+
+  const saldosAcumulados = movimientosOrdenados.map((_, i) =>
+    movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => {
+      if (row.tipo === "ingreso") return acc + Number(row.data.margin);
+      return acc - Number(row.data.amount);
+    }, 0)
+  );
 
   const totalIngresos = sales.reduce((sum, s) => sum + Number(s.margin), 0);
   const totalGastos = gastosFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
@@ -605,107 +623,136 @@ export default function Finance() {
             <div className="rounded-md border overflow-hidden">
               <div className="overflow-auto max-h-[min(70vh,600px)]">
                 <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-24">Movimiento</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Inversor</TableHead>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-24">Movimiento</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Inversor</TableHead>
                     <TableHead>Devolución</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Saldo</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {movimientosFiltrados.map((row) =>
-                    row.tipo === "gasto" ? (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-muted/50">Gasto</Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                            {formatDate(row.data.expense_date)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{EXPENSE_TYPE_LABELS[row.data.expense_type]}</Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {row.data.description || "—"}
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const name = displayInversor(row.data);
-                            const badgeClass = name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
-                              ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
-                              : null;
-                            return badgeClass ? (
-                              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                                {name}
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <User className="h-3.5 w-3.5" />
-                                {name}
-                              </span>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={row.data.devolucion ? "default" : "outline"}>
-                            {row.data.devolucion ? "Sí" : "No"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-red-600">
-                          -{formatCurrency(Number(row.data.amount))}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row.data)} title="Editar gasto">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(row.id)} title="Eliminar gasto">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                  <TableBody>
+                    {movimientosOrdenados.map((row, index) => {
+                      const saldo = saldosAcumulados[index];
+                      return row.tipo === "gasto" ? (
+                        <TableRow key={row.id}>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-muted/50">Gasto</Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              {formatDate(row.data.expense_date)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{EXPENSE_TYPE_LABELS[row.data.expense_type]}</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">
+                            {row.data.description || "—"}
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const name = displayInversor(row.data);
+                              const badgeClass = name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                                ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                                : null;
+                              return badgeClass ? (
+                                <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                  {name}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-muted-foreground">
+                                  <User className="h-3.5 w-3.5" />
+                                  {name}
+                                </span>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={row.data.devolucion ? "default" : "outline"}>
+                              {row.data.devolucion ? "Sí" : "No"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-red-600">
+                            -{formatCurrency(Number(row.data.amount))}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-medium ${saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                          >
+                            {saldo >= 0 ? "+" : ""}
+                            {formatCurrency(saldo)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row.data)} title="Editar gasto">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(row.id)} title="Eliminar gasto">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                     ) : (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Ingreso</Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                            {formatDate(row.data.sale_date)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">Vehículo</Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[260px] truncate">
-                          {ingresoDescription(row)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-muted-foreground">
-                            {row.data.seller?.full_name || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-muted-foreground">—</span>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-emerald-600">
-                          +{formatCurrency(Number(row.data.margin))}
-                        </TableCell>
-                        <TableCell />
-                      </TableRow>
-                    )
-                  )}
+                        <TableRow key={row.id}>
+                          <TableCell>
+                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Ingreso</Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              {formatDate(row.data.sale_date)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">Vehículo</Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[260px] truncate">
+                            {ingresoDescription(row)}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-muted-foreground">
+                              {row.data.seller?.full_name || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-emerald-600">
+                            +{formatCurrency(Number(row.data.margin))}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-medium ${saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                          >
+                            {saldo >= 0 ? "+" : ""}
+                            {formatCurrency(saldo)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                    );
+                  })}
                 </TableBody>
+                <TableFooter>
+                  <TableRow className="bg-muted/60 hover:bg-muted/60">
+                    <TableCell colSpan={6} className="text-right font-semibold text-muted-foreground">
+                      Total
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-muted-foreground">—</TableCell>
+                    <TableCell
+                      className={`text-right font-bold ${balanceLista >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                    >
+                      {balanceLista >= 0 ? "+" : ""}
+                      {formatCurrency(balanceLista)}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
               </Table>
               </div>
             </div>

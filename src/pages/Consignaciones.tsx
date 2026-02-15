@@ -502,9 +502,8 @@ export default function Consignaciones() {
   };
 
   const handleCreate = async () => {
-    console.log("🟦 handleCreate: click", { user: user?.id, branch: user?.branch_id });
-    if (!user?.branch_id || !user?.id) {
-      setCreateError("No hay sesión activa o sucursal asignada. Vuelve a iniciar sesión.");
+    if (!user?.id) {
+      setCreateError("No hay sesión activa. Inicia sesión para continuar.");
       return;
     }
 
@@ -535,7 +534,7 @@ export default function Consignaciones() {
         fecha: formState.fecha && formState.fecha.trim() ? formState.fecha.trim() : null,
         consignacion_price: parseCurrencyInput(formState.consignacion_price),
         sale_price: parseCurrencyInput(formState.sale_price),
-        branch_id: user.branch_id,
+        branch_id: user.branch_id ?? null,
         created_by: user.id,
       } satisfies Database["public"]["Tables"]["consignaciones"]["Insert"];
 
@@ -568,7 +567,7 @@ export default function Consignaciones() {
 
             if (!resolvedLeadId && hasContact) {
               const existingLead = await leadService.findByContact({
-                branchId: user.branch_id,
+                branchId: user?.branch_id ?? undefined,
                 phone: payloadBase.owner_phone,
                 email: payloadBase.owner_email,
               });
@@ -589,7 +588,7 @@ export default function Consignaciones() {
                   source: payloadBase.owner_phone ? "telefono" : "otro",
                   status: "nuevo",
                   priority: "media",
-                  branch_id: user.branch_id,
+                  branch_id: user?.branch_id ?? null,
                   tags: leadTagsFromConsignacion as any,
                 });
                 resolvedLeadId = createdLead.id;

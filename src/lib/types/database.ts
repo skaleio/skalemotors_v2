@@ -561,6 +561,35 @@ export interface Database {
           created_at?: string
         }
       }
+      lead_reminders: {
+        Row: {
+          id: string
+          lead_id: string
+          branch_id: string
+          reminder_at: string
+          note: string | null
+          priority: 'urgent' | 'today' | 'later'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          branch_id: string
+          reminder_at: string
+          note?: string | null
+          priority?: 'urgent' | 'today' | 'later'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          branch_id?: string
+          reminder_at?: string
+          note?: string | null
+          priority?: 'urgent' | 'today' | 'later'
+          created_at?: string
+        }
+      }
       pending_tasks: {
         Row: {
           id: string
