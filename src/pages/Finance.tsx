@@ -73,6 +73,8 @@ const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
   Antonio: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
+const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
@@ -314,6 +316,18 @@ export default function Finance() {
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const balance = totalIngresos - totalGastos;
 
+  const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
+    Jota: gastos
+      .filter((g) => displayInversor(g) === "Jota" && !(g.devolucion ?? false))
+      .reduce((sum, g) => sum + Number(g.amount), 0),
+    Mike: gastos
+      .filter((g) => displayInversor(g) === "Mike" && !(g.devolucion ?? false))
+      .reduce((sum, g) => sum + Number(g.amount), 0),
+    Ronald: gastos
+      .filter((g) => displayInversor(g) === "Ronald" && !(g.devolucion ?? false))
+      .reduce((sum, g) => sum + Number(g.amount), 0),
+  };
+
   useEffect(() => {
     loadGastos();
   }, [loadGastos]);
@@ -546,6 +560,38 @@ export default function Finance() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">A devolver por inversor</h2>
+        <p className="text-sm text-muted-foreground">
+          Monto a devolver según gastos no devueltos (devolución = No).
+        </p>
+        <div className="grid gap-4 md:grid-cols-3">
+          {INVERSORES_A_DEVOLVER.map((nombre) => {
+            const monto = aDevolverPorInversor[nombre];
+            const colorClass = INVERSOR_COLORS[nombre];
+            return (
+              <Card key={nombre}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
+                      {nombre}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">
+                    {loading ? "…" : formatCurrency(monto)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A devolver a {nombre}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       <Card>

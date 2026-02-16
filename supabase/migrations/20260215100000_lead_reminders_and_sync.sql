@@ -11,7 +11,7 @@ create table if not exists public.lead_reminders (
   created_at timestamptz not null default now()
 );
 
-comment on table public.lead_reminders is 'Recordatorios creados desde Leads; aparecen en Tareas pendientes solo cuando falta poco (ventana en horas)';
+comment on table public.lead_reminders is 'Recordatorios creados desde Leads; aparecen en Tareas pendientes 2 días antes de la fecha (ventana configurable en horas)';
 
 create index if not exists idx_lead_reminders_reminder_at on public.lead_reminders(reminder_at);
 create index if not exists idx_lead_reminders_branch on public.lead_reminders(branch_id);
@@ -34,10 +34,10 @@ create policy "Users can delete lead_reminders of their branch"
   on public.lead_reminders for delete
   using (branch_id in (select branch_id from public.users where id = auth.uid()));
 
--- Sincroniza recordatorios a pending_tasks: solo cuando falta poco (ventana_horas antes de reminder_at)
+-- Sincroniza recordatorios a pending_tasks: la tarea aparece cuando falta la ventana (ej. 2 días = 48h)
 -- Crea tarea si reminder_at está en [now(), now() + ventana] y aún no hay tarea para ese recordatorio
 -- Marca completada la tarea si reminder_at ya pasó
-create or replace function public.sync_lead_reminders_to_pending_tasks(ventana_horas int default 24)
+create or replace function public.sync_lead_reminders_to_pending_tasks(ventana_horas int default 48)
 returns void
 language plpgsql
 security definer
@@ -104,7 +104,7 @@ begin
 end;
 $$;
 
-comment on function public.sync_lead_reminders_to_pending_tasks(int) is 'Crea pending_tasks desde lead_reminders cuando reminder_at está dentro de la ventana (horas); marca completadas las ya pasadas';
+comment on function public.sync_lead_reminders_to_pending_tasks(int) is 'Crea pending_tasks desde lead_reminders cuando reminder_at está dentro de la ventana (ej. 48h = 2 días antes); marca completadas las ya pasadas';
 
 -- Permitir que la app llame la sync al cargar el Dashboard (y opcionalmente pg_cron)
 grant execute on function public.sync_lead_reminders_to_pending_tasks(int) to authenticated;
