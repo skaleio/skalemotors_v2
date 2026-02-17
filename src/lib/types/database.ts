@@ -954,13 +954,39 @@ export interface Database {
           created_at?: string | null
         }
       }
+      expense_types: {
+        Row: {
+          id: string
+          code: string
+          label: string
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          label: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          label?: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
       gastos_empresa: {
         Row: {
           id: string
           branch_id: string | null
           amount: number
           description: string | null
-          expense_type: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          expense_type: string
           inversor_id: string | null
           inversor_name: string | null
           expense_date: string
@@ -974,7 +1000,7 @@ export interface Database {
           branch_id?: string | null
           amount: number
           description?: string | null
-          expense_type: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          expense_type: string
           inversor_id?: string | null
           inversor_name?: string | null
           expense_date?: string
@@ -988,7 +1014,7 @@ export interface Database {
           branch_id?: string | null
           amount?: number
           description?: string | null
-          expense_type?: 'operacion' | 'marketing' | 'servicios' | 'mantenimiento' | 'combustible' | 'seguros' | 'impuestos' | 'personal' | 'vehiculos' | 'otros'
+          expense_type?: string
           inversor_id?: string | null
           inversor_name?: string | null
           expense_date?: string

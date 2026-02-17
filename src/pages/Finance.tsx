@@ -2,6 +2,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,12 +38,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  EXPENSE_TYPE_LABELS,
-  gastosEmpresaService,
-  type ExpenseType,
-  type GastoEmpresaWithInversor,
-} from "@/lib/services/gastosEmpresa";
+import { gastosEmpresaService, type ExpenseType, type GastoEmpresaWithInversor } from "@/lib/services/gastosEmpresa";
+import { expenseTypesService, type ExpenseTypeRow } from "@/lib/services/expenseTypes";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
 import {
@@ -41,27 +47,16 @@ import {
   Calendar,
   DollarSign,
   Filter,
+  LayoutList,
   Pencil,
   Plus,
   Receipt,
+  Settings2,
   Trash2,
   TrendingUp,
   User,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
-const EXPENSE_TYPES: ExpenseType[] = [
-  "operacion",
-  "marketing",
-  "servicios",
-  "mantenimiento",
-  "combustible",
-  "seguros",
-  "impuestos",
-  "personal",
-  "vehiculos",
-  "otros",
-];
 
 const INVERSOR_OPCIONES = ["Mike", "Jota", "Ronald", "HessenMotors", "Antonio"] as const;
 
@@ -74,6 +69,9 @@ const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
 };
 
 const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
+
+/** Inversor cuyos gastos son de la empresa: no se devuelven. */
+const INVERSOR_EMPRESA = "HessenMotors";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-CL", {
@@ -168,6 +166,15 @@ export default function Finance() {
   const [filterInversor, setFilterInversor] = useState<string | "all">("all");
   const [filterMovimiento, setFilterMovimiento] = useState<"all" | "gasto" | "ingreso">("all");
   const [filterDevolucion, setFilterDevolucion] = useState<"all" | "pendiente" | "realizado">("all");
+  const [filterOrdenFecha, setFilterOrdenFecha] = useState<"ascendente" | "descendente">("descendente");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [gastosModalOpen, setGastosModalOpen] = useState(false);
+  const [pendientesModalOpen, setPendientesModalOpen] = useState(false);
+  const [filterPendientesInversor, setFilterPendientesInversor] = useState<string>("all");
+  const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
+  const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
+  const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
+  const [formEtiqueta, setFormEtiqueta] = useState({ code: "", label: "" });
   const [form, setForm] = useState({
     amount: "",
     description: "",
@@ -183,7 +190,7 @@ export default function Finance() {
     setLoading(true);
     try {
       const [gastosData, salesData] = await Promise.all([
-        gastosEmpresaService.getAll(filterType !== "all" ? { expenseType: filterType } : {}),
+        gastosEmpresaService.getAll(),
         saleService
           .getAll({ status: "completada", paymentStatus: "realizado" })
           .then((data) => data ?? [])
@@ -222,7 +229,7 @@ export default function Finance() {
     } finally {
       setLoading(false);
     }
-  }, [filterType]);
+  }, []);
 
   // Realtime: cuando una venta pasa a "pago realizado", actualizar la lista de ingresos
   useEffect(() => {
@@ -275,6 +282,18 @@ export default function Finance() {
   const displayInversor = (g: GastoEmpresaWithInversor) =>
     g.inversor?.full_name || g.inversor_name || "—";
 
+  const getExpenseTypeLabel = (code: string) =>
+    expenseTypes.find((t) => t.code === code)?.label ?? code;
+
+  const loadExpenseTypes = useCallback(async () => {
+    try {
+      const data = await expenseTypesService.getAll();
+      setExpenseTypes(data);
+    } catch (e) {
+      console.error("Error cargando tipos de gasto:", e);
+    }
+  }, []);
+
   const gastosFiltrados =
     filterInversor === "all"
       ? gastos
@@ -287,7 +306,15 @@ export default function Finance() {
         ? gastosFiltrados.filter((g) => !(g.devolucion ?? false))
         : gastosFiltrados.filter((g) => g.devolucion === true);
 
-  const movimientos = buildMovimientos(gastosPorDevolucion, sales);
+  const gastosParaLista =
+    filterType === "all"
+      ? gastosPorDevolucion
+      : gastosPorDevolucion.filter((g) => g.expense_type === filterType);
+
+  const incluirIngresosVentas =
+    filterType === "all" && filterInversor === "all" && filterDevolucion === "all";
+
+  const movimientos = buildMovimientos(gastosParaLista, incluirIngresosVentas ? sales : []);
   const movimientosFiltrados =
     filterMovimiento === "all"
       ? movimientos
@@ -298,10 +325,12 @@ export default function Finance() {
     return acc - Number(row.data.amount);
   }, 0);
 
-  // Orden cronológico: más antiguo arriba, más reciente abajo, para que el saldo “empiece” arriba y se vaya sumando/restando hacia abajo
-  const movimientosOrdenados = [...movimientosFiltrados].sort((a, b) =>
-    a.date === b.date ? 0 : a.date < b.date ? -1 : 1
-  );
+  // Orden por fecha: ascendente = más antiguos primero, descendente = más recientes primero
+  const movimientosOrdenados = [...movimientosFiltrados].sort((a, b) => {
+    if (a.date === b.date) return 0;
+    if (filterOrdenFecha === "ascendente") return a.date < b.date ? -1 : 1;
+    return a.date > b.date ? -1 : 1;
+  });
 
   const saldosAcumulados = movimientosOrdenados.map((_, i) =>
     movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => {
@@ -311,8 +340,10 @@ export default function Finance() {
   );
 
   const totalIngresos = sales.reduce((sum, s) => sum + Number(s.margin), 0);
-  const totalGastos = gastosFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
-  const gastosPendientes = gastosFiltrados.filter((g) => !(g.devolucion ?? false));
+  const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
+  const gastosPendientes = gastos.filter(
+    (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
+  );
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const balance = totalIngresos - totalGastos;
 
@@ -328,9 +359,30 @@ export default function Finance() {
       .reduce((sum, g) => sum + Number(g.amount), 0),
   };
 
+  // Gastos ordenados por etiqueta (tipo) y fecha descendente (más reciente primero), misma depuración
+  const gastosPorEtiquetaYFecha = [...gastosPorDevolucion].sort((a, b) => {
+    const idxA = expenseTypes.findIndex((t) => t.code === a.expense_type);
+    const idxB = expenseTypes.findIndex((t) => t.code === b.expense_type);
+    const orderA = idxA >= 0 ? expenseTypes[idxA]?.sort_order ?? idxA : 999;
+    const orderB = idxB >= 0 ? expenseTypes[idxB]?.sort_order ?? idxB : 999;
+    if (orderA !== orderB) return orderA - orderB;
+    if (idxA !== idxB) return idxA - idxB;
+    return b.expense_date.localeCompare(a.expense_date);
+  });
+  const saldosGastosModal = gastosPorEtiquetaYFecha.map((_, i) =>
+    gastosPorEtiquetaYFecha
+      .slice(0, i + 1)
+      .reduce((acc, g) => acc - Number(g.amount), 0)
+  );
+  const totalGastosModal = gastosPorEtiquetaYFecha.reduce((sum, g) => sum + Number(g.amount), 0);
+
   useEffect(() => {
     loadGastos();
   }, [loadGastos]);
+
+  useEffect(() => {
+    loadExpenseTypes();
+  }, [loadExpenseTypes]);
 
   useEffect(() => {
     async function loadBranches() {
@@ -435,10 +487,47 @@ export default function Finance() {
     setDialogOpen(true);
   };
 
+  const handleSaveEtiqueta = async () => {
+    const label = formEtiqueta.label.trim();
+    if (!label) return;
+    try {
+      if (editEtiquetaId) {
+        await expenseTypesService.update(editEtiquetaId, { label });
+      } else {
+        await expenseTypesService.create({
+          label,
+          code: formEtiqueta.code.trim() || label.toLowerCase().replace(/\s+/g, "_"),
+          sort_order: expenseTypes.length,
+        });
+      }
+      setFormEtiqueta({ code: "", label: "" });
+      setEditEtiquetaId(null);
+      await loadExpenseTypes();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteEtiqueta = async (id: string, code: string) => {
+    try {
+      const count = await expenseTypesService.countGastosByCode(code);
+      if (count > 0) {
+        alert(`No se puede eliminar: hay ${count} gasto(s) con esta etiqueta. Cambia su tipo antes de eliminarla.`);
+        return;
+      }
+      if (!confirm("¿Eliminar esta etiqueta?")) return;
+      await expenseTypesService.remove(id);
+      if (editEtiquetaId === id) setEditEtiquetaId(null);
+      await loadExpenseTypes();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este gasto?")) return;
     try {
       await gastosEmpresaService.remove(id);
+      setDeleteConfirmId(null);
       loadGastos();
     } catch (err) {
       console.error(err);
@@ -454,25 +543,32 @@ export default function Finance() {
             Control de ingresos (ventas) y gastos · Depuración y balance
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingId(null);
-            setForm({
-              amount: "",
-              description: "",
-              expense_type: "otros",
-              inversor_id: null,
-              inversor_name: "",
-              expense_date: new Date().toISOString().slice(0, 10),
-              branch_id: null,
-              devolucion: false,
-            });
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Gasto
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setGastosModalOpen(true)}>
+            <LayoutList className="h-4 w-4 mr-2" />
+            Gastos por etiqueta
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingId(null);
+              const defaultType = expenseTypes.length ? expenseTypes[0].code : "otros";
+              setForm({
+                amount: "",
+                description: "",
+                expense_type: defaultType,
+                inversor_id: null,
+                inversor_name: "",
+                expense_date: new Date().toISOString().slice(0, 10),
+                branch_id: null,
+                devolucion: false,
+              });
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Gasto
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -500,11 +596,14 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastosFiltrados.length} gasto{gastosFiltrados.length !== 1 ? "s" : ""}
+              {gastos.length} gasto{gastos.length !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setPendientesModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Gastos pendientes</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
@@ -620,19 +719,31 @@ export default function Finance() {
                 <SelectItem value="gasto">Gastos</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterType} onValueChange={(v) => setFilterType(v as ExpenseType | "all")}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                {EXPENSE_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {EXPENSE_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Select value={filterType} onValueChange={(v) => setFilterType(v as ExpenseType | "all")}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tipos</SelectItem>
+                  {expenseTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.code}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => setEtiquetasModalOpen(true)}
+                title="Gestionar etiquetas de tipo"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </div>
             <Select value={filterInversor} onValueChange={setFilterInversor}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Inversor" />
@@ -654,6 +765,15 @@ export default function Finance() {
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="realizado">Realizado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterOrdenFecha} onValueChange={(v) => setFilterOrdenFecha(v as "ascendente" | "descendente")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Orden fecha" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ascendente">Más antiguos primero</SelectItem>
+                <SelectItem value="descendente">Más recientes primero</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -697,7 +817,7 @@ export default function Finance() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{EXPENSE_TYPE_LABELS[row.data.expense_type]}</Badge>
+                            <Badge variant="secondary">{getExpenseTypeLabel(row.data.expense_type)}</Badge>
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">
                             {row.data.description || "—"}
@@ -739,7 +859,7 @@ export default function Finance() {
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row.data)} title="Editar gasto">
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(row.id)} title="Eliminar gasto">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirmId(row.id)} title="Eliminar gasto">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -851,15 +971,15 @@ export default function Finance() {
               <Label>Tipo de gasto</Label>
               <Select
                 value={form.expense_type}
-                onValueChange={(v) => setForm((f) => ({ ...f, expense_type: v as ExpenseType }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, expense_type: v }))}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXPENSE_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {EXPENSE_TYPE_LABELS[t]}
+                  {expenseTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.code}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -964,6 +1084,342 @@ export default function Finance() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={gastosModalOpen} onOpenChange={setGastosModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LayoutList className="h-5 w-5" />
+              Gastos por etiqueta y fecha
+            </DialogTitle>
+            <DialogDescription>
+              Solo gastos, ordenados por categoría (etiqueta) y fecha descendente (más reciente primero). Misma depuración y saldo acumulado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : gastosPorEtiquetaYFecha.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay gastos con los filtros actuales.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {gastosPorEtiquetaYFecha.map((g, index) => {
+                    const name = displayInversor(g);
+                    const badgeClass =
+                      name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                        ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                        : null;
+                    return (
+                      <Card key={g.id} className="overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleEdit(g)}
+                              title="Editar gasto"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteConfirmId(g.id)}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                            {g.description || "—"}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                            {formatDate(g.expense_date)}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {badgeClass ? (
+                              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                {name}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                                <User className="h-3.5 w-3.5" />
+                                {name}
+                              </span>
+                            )}
+                            <Badge variant={g.devolucion ? "default" : "outline"} className="text-xs">
+                              {g.devolucion ? "Devolución Sí" : "Pendiente"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">Monto</span>
+                            <span className="font-medium text-red-600">
+                              -{formatCurrency(Number(g.amount))}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Saldo</span>
+                            <span
+                              className={`font-medium ${saldosGastosModal[index] >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                            >
+                              {saldosGastosModal[index] >= 0 ? "+" : ""}
+                              {formatCurrency(saldosGastosModal[index])}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+                <Card className="mt-4 bg-muted/60">
+                  <CardContent className="py-3 px-4 flex items-center justify-between">
+                    <span className="font-semibold text-muted-foreground">Total gastos</span>
+                    <span className="font-bold text-red-600">-{formatCurrency(totalGastosModal)}</span>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={etiquetasModalOpen}
+        onOpenChange={(open) => {
+          setEtiquetasModalOpen(open);
+          if (!open) {
+            setEditEtiquetaId(null);
+            setFormEtiqueta({ code: "", label: "" });
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              Gestionar etiquetas de tipo
+            </DialogTitle>
+            <DialogDescription>
+              Agrega, edita o elimina los tipos de gasto (etiquetas). El código se usa internamente; no elimines una etiqueta que tenga gastos asociados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nombre (ej. Operación)"
+                value={formEtiqueta.label}
+                onChange={(e) => setFormEtiqueta((f) => ({ ...f, label: e.target.value }))}
+              />
+              <Input
+                placeholder="Código (opcional)"
+                value={formEtiqueta.code}
+                onChange={(e) => setFormEtiqueta((f) => ({ ...f, code: e.target.value }))}
+                className="w-32"
+              />
+              <Button onClick={handleSaveEtiqueta} disabled={!formEtiqueta.label.trim()}>
+                {editEtiquetaId ? "Guardar" : "Agregar"}
+              </Button>
+            </div>
+            <div className="border rounded-md divide-y max-h-[280px] overflow-auto">
+              {expenseTypes.map((t) => (
+                <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium">{t.label}</span>
+                    <span className="text-muted-foreground text-sm ml-2">({t.code})</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setEditEtiquetaId(t.id);
+                        setFormEtiqueta({ code: t.code, label: t.label });
+                      }}
+                      title="Editar"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteEtiqueta(t.id, t.code)}
+                      title="Eliminar"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendientesModalOpen} onOpenChange={(open) => { setPendientesModalOpen(open); if (!open) setFilterPendientesInversor("all"); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-red-500" />
+              Gastos pendientes (sin devolver)
+            </DialogTitle>
+            <DialogDescription>
+              Gastos sin devolver (excluye HessenMotors: son gastos de la empresa y no se devuelven). Ordenados por fecha (más reciente primero).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 pb-3">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Inversor:</span>
+            <Select value={filterPendientesInversor} onValueChange={setFilterPendientesInversor}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos los inversores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los inversores</SelectItem>
+                {INVERSOR_OPCIONES.map((nombre) => (
+                  <SelectItem key={nombre} value={nombre}>
+                    {nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : gastosPendientes.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay gastos pendientes. Todos tienen devolución registrada.
+              </div>
+            ) : (() => {
+              const pendientesFiltrados =
+                filterPendientesInversor === "all"
+                  ? gastosPendientes
+                  : gastosPendientes.filter((g) => displayInversor(g) === filterPendientesInversor);
+              const totalFiltrado = pendientesFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
+              return pendientesFiltrados.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No hay gastos pendientes para este inversor.
+                </div>
+              ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[...pendientesFiltrados]
+                    .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+                    .map((g) => {
+                      const name = displayInversor(g);
+                      const badgeClass =
+                        name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                          ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                          : null;
+                      return (
+                        <Card key={g.id} className="overflow-hidden">
+                          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                            <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(g);
+                                }}
+                                title="Editar gasto"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmId(g.id);
+                                }}
+                                title="Eliminar gasto"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                            <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                              {g.description || "—"}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Calendar className="h-3.5 w-3.5 shrink-0" />
+                              {formatDate(g.expense_date)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {badgeClass ? (
+                                <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
+                                  {name}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                                  <User className="h-3.5 w-3.5" />
+                                  {name}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                              <span className="text-xs text-muted-foreground">Monto a devolver</span>
+                              <span className="font-medium text-red-600">
+                                -{formatCurrency(Number(g.amount))}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </div>
+                <Card className="mt-4 bg-muted/60">
+                  <CardContent className="py-3 px-4 flex items-center justify-between">
+                    <span className="font-semibold text-muted-foreground">
+                      Total pendiente{filterPendientesInversor !== "all" ? ` (${filterPendientesInversor})` : ""}
+                    </span>
+                    <span className="font-bold text-red-600">-{formatCurrency(totalFiltrado)}</span>
+                  </CardContent>
+                </Card>
+              </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar gasto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmId(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

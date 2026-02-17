@@ -313,10 +313,10 @@ export function AppSidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <Sidebar
-        className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg transition-[width] duration-200 ease-sidebar`}
+        className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg shadow-slate-200/50 transition-[width] duration-200 ease-sidebar [box-shadow:2px_0_12px_-4px_rgba(0,0,0,0.08)]`}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-200 min-w-0 overflow-hidden">
+        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-200 min-w-0 overflow-hidden shrink-0 flex-shrink-0">
           {!isCollapsed ? (
             <div className="flex items-center gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
               <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">

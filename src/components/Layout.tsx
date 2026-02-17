@@ -40,9 +40,9 @@ export function Layout({ children }: LayoutProps) {
       <PrefetchLeads />
       <div className="min-h-screen w-full flex">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col relative z-0 min-w-0">
           <TopBar />
-          <main className="flex-1 p-6 bg-muted/20">
+          <main className="flex-1 p-6 bg-muted/20 min-w-0">
             <PageRestore>
               {children}
             </PageRestore>

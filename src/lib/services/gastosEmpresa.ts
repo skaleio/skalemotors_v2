@@ -5,20 +5,7 @@ type GastoEmpresa = Database["public"]["Tables"]["gastos_empresa"]["Row"];
 type GastoEmpresaInsert = Database["public"]["Tables"]["gastos_empresa"]["Insert"];
 type GastoEmpresaUpdate = Database["public"]["Tables"]["gastos_empresa"]["Update"];
 
-export type ExpenseType = GastoEmpresa["expense_type"];
-
-export const EXPENSE_TYPE_LABELS: Record<ExpenseType, string> = {
-  operacion: "Operación",
-  marketing: "Marketing",
-  servicios: "Servicios",
-  mantenimiento: "Mantenimiento",
-  combustible: "Combustible",
-  seguros: "Seguros",
-  impuestos: "Impuestos",
-  personal: "Personal",
-  vehiculos: "Vehículos",
-  otros: "Otros",
-};
+export type ExpenseType = string;
 
 export type GastoEmpresaWithInversor = GastoEmpresa & {
   inversor?: { id: string; full_name: string | null } | null;
