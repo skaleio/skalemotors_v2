@@ -875,6 +875,7 @@ export interface Database {
           delivery_date: string | null
           payment_method: string | null
           payment_status: string | null
+          commission_credit_status: string | null
           notes: string | null
           stock_origin: string | null
           created_at: string | null
@@ -900,6 +901,7 @@ export interface Database {
           delivery_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
+          commission_credit_status?: string | null
           notes?: string | null
           stock_origin?: string | null
           created_at?: string | null
@@ -925,6 +927,7 @@ export interface Database {
           delivery_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
+          commission_credit_status?: string | null
           notes?: string | null
           stock_origin?: string | null
           created_at?: string | null
@@ -1022,6 +1025,41 @@ export interface Database {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      ingresos_empresa: {
+        Row: {
+          id: string
+          amount: number
+          description: string | null
+          etiqueta: string
+          income_date: string
+          sale_id: string | null
+          branch_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          amount: number
+          description?: string | null
+          etiqueta: string
+          income_date?: string
+          sale_id?: string | null
+          branch_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          amount?: number
+          description?: string | null
+          etiqueta?: string
+          income_date?: string
+          sale_id?: string | null
+          branch_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
       }
     }

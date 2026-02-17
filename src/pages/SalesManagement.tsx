@@ -44,6 +44,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSales, type SaleWithRelations } from "@/hooks/useSales";
 import { useVehicles } from "@/hooks/useVehicles";
 import { toast } from "@/hooks/use-toast";
+import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
 import {
@@ -83,6 +84,11 @@ const PAYMENT_OPTIONS = [
 const PAYMENT_STATUS_OPTIONS = [
   { value: "realizado", label: "Pago realizado" },
   { value: "pendiente", label: "Pago pendiente" },
+] as const;
+
+const COMMISSION_CREDIT_OPTIONS = [
+  { value: "pendiente", label: "Pendiente" },
+  { value: "pagada", label: "Pagada" },
 ] as const;
 
 const statusLabels: Record<string, string> = {
@@ -138,6 +144,7 @@ export default function SalesManagement() {
   const [formSaleDate, setFormSaleDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [formPaymentMethod, setFormPaymentMethod] = useState<string>("contado");
   const [formPaymentStatus, setFormPaymentStatus] = useState<string>("realizado");
+  const [formCommissionCredit, setFormCommissionCredit] = useState<string>("pendiente");
   const [formDownPayment, setFormDownPayment] = useState("");
   const [formInstallments, setFormInstallments] = useState("");
   const [formCommission, setFormCommission] = useState("");
@@ -170,6 +177,8 @@ export default function SalesManagement() {
   const [editNotes, setEditNotes] = useState("");
   const [editClientName, setEditClientName] = useState("");
   const [editPaymentStatus, setEditPaymentStatus] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editCommissionCredit, setEditCommissionCredit] = useState("");
   const [editCommission, setEditCommission] = useState("");
   const [editDownPayment, setEditDownPayment] = useState("");
   const [editInstallments, setEditInstallments] = useState("");
@@ -266,6 +275,8 @@ export default function SalesManagement() {
     setEditNotes(sale.notes ?? "");
     setEditClientName(sale.client_name ?? "");
     setEditPaymentStatus(sale.payment_status ?? "");
+    setEditPaymentMethod(sale.payment_method ?? "contado");
+    setEditCommissionCredit(sale.commission_credit_status ?? "");
     setEditCommission(sale.commission != null ? String(sale.commission) : "");
     setEditDownPayment(sale.down_payment != null ? String(sale.down_payment) : "");
     setEditInstallments(sale.installments != null ? String(sale.installments) : "");
@@ -330,9 +341,11 @@ export default function SalesManagement() {
           notes: editNotes.trim() || null,
           client_name: editClientName.trim() || null,
           payment_status: editPaymentStatus.trim() || null,
-          commission: commissionNum != null && !Number.isNaN(commissionNum) ? commissionNum : null,
-          down_payment: downPaymentNum != null && !Number.isNaN(downPaymentNum) ? downPaymentNum : null,
-          installments: installmentsNum,
+          payment_method: editPaymentMethod.trim() || "contado",
+          commission_credit_status: editPaymentMethod === "financiamiento" ? (editCommissionCredit.trim() || null) : null,
+          commission: editPaymentMethod === "financiamiento" && commissionNum != null && !Number.isNaN(commissionNum) ? commissionNum : null,
+          down_payment: editPaymentMethod === "financiamiento" && downPaymentNum != null && !Number.isNaN(downPaymentNum) ? downPaymentNum : null,
+          installments: editPaymentMethod === "financiamiento" ? installmentsNum : null,
         },
       });
       const expensesPayload = editExpenses
@@ -341,6 +354,26 @@ export default function SalesManagement() {
       await saleService.deleteExpensesBySaleId(selectedSale.id);
       if (expensesPayload.length > 0) {
         await saleService.createExpenses(selectedSale.id, expensesPayload);
+      }
+      // Si Comisión Crédito pasa a Pagada y hay monto, registrar ingreso (solo ventas con financiamiento)
+      const previousCommissionStatus = selectedSale.commission_credit_status ?? "";
+      if (
+        editPaymentMethod === "financiamiento" &&
+        editCommissionCredit.trim() === "pagada" &&
+        previousCommissionStatus !== "pagada" &&
+        commissionNum != null &&
+        !Number.isNaN(commissionNum) &&
+        commissionNum > 0
+      ) {
+        await ingresosEmpresaService.create({
+          amount: commissionNum,
+          description: "Comisión Crédito",
+          etiqueta: "Hessen Motors",
+          income_date: format(new Date(), "yyyy-MM-dd"),
+          sale_id: selectedSale.id,
+          branch_id: selectedSale.branch_id ?? null,
+        });
+        queryClient.invalidateQueries({ queryKey: ["ingresos-empresa"] });
       }
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -460,6 +493,7 @@ export default function SalesManagement() {
 sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         payment_method: formPaymentMethod || "contado",
         payment_status: formPaymentStatus || "realizado",
+        commission_credit_status: formPaymentMethod === "financiamiento" ? (formCommissionCredit || "pendiente") : null,
         notes: formNotes.trim() || null,
         },
         expenses: expensesPayload.length ? expensesPayload : undefined,
@@ -689,34 +723,68 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Saldoprecio / Comisión ($) (opcional)</Label>
-                  <Input
-                    type="text"
-                    placeholder="Ej: 150000 — anota cuando lo tengas"
-                    value={editCommission}
-                    onChange={(e) => setEditCommission(e.target.value)}
-                  />
+                  <Label>Forma de pago</Label>
+                  <Select value={editPaymentMethod || "contado"} onValueChange={(v) => setEditPaymentMethod(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Pie ($) (opcional)</Label>
-                  <Input
-                    type="text"
-                    placeholder="Ej: 5000000"
-                    value={editDownPayment}
-                    onChange={(e) => setEditDownPayment(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cantidad de cuotas (opcional)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={84}
-                    placeholder="Ej: 12, 24..."
-                    value={editInstallments}
-                    onChange={(e) => setEditInstallments(e.target.value)}
-                  />
-                </div>
+                {(editPaymentMethod || "contado") === "financiamiento" && (
+                  <div className="space-y-2">
+                    <Label>Comisión Crédito</Label>
+                    <Select value={editCommissionCredit || "pendiente"} onValueChange={setEditCommissionCredit}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMISSION_CREDIT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {(editPaymentMethod || "contado") === "financiamiento" && (
+                  <div className="space-y-2">
+                    <Label>Saldoprecio / Comisión ($) (opcional)</Label>
+                    <Input
+                      type="text"
+                      placeholder="Ej: 150000 — anota cuando lo tengas"
+                      value={editCommission}
+                      onChange={(e) => setEditCommission(e.target.value)}
+                    />
+                  </div>
+                )}
+                {(editPaymentMethod || "contado") === "financiamiento" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Pie ($) (opcional)</Label>
+                      <Input
+                        type="text"
+                        placeholder="Ej: 5000000"
+                        value={editDownPayment}
+                        onChange={(e) => setEditDownPayment(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cantidad de cuotas (opcional)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={84}
+                        placeholder="Ej: 12, 24..."
+                        value={editInstallments}
+                        onChange={(e) => setEditInstallments(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label>Gastos</Label>
                   <p className="text-xs text-muted-foreground">Agrega o edita gastos (bencina, arreglos, etc.). Se restan de la ganancia.</p>
@@ -825,6 +893,14 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                             : selectedSale.payment_status ?? "—"}
                       </span>
                     </div>
+                    {selectedSale.payment_method === "financiamiento" && (
+                      <div>
+                        <p className="text-muted-foreground">Comisión Crédito</p>
+                        <span className={`inline-block text-sm font-semibold rounded-md border px-2 py-0.5 ${(selectedSale.commission_credit_status ?? "pendiente") === "pagada" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : "bg-red-100 text-red-800 border-red-200"}`}>
+                          {(selectedSale.commission_credit_status ?? "pendiente") === "pagada" ? "Comisión Crédito: Pagada" : "Comisión Crédito: Pendiente"}
+                        </span>
+                      </div>
+                    )}
                     {selectedSale.stock_origin && (
                       <div>
                         <p className="text-muted-foreground">Origen Stock</p>
@@ -1134,6 +1210,21 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
             {formPaymentMethod === "financiamiento" && (
               <>
                 <div className="space-y-2">
+                  <Label>Comisión Crédito</Label>
+                  <Select value={formCommissionCredit} onValueChange={setFormCommissionCredit}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMMISSION_CREDIT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="down_payment">Pie ($) (opcional)</Label>
                   <Input
                     id="down_payment"
@@ -1327,11 +1418,18 @@ function SaleCard({ sale, onClick }: { sale: SaleWithRelations; onClick: () => v
             Origen: {sale.stock_origin === "HESSENMOTORS" ? "HessenMotors" : sale.stock_origin === "MIAMIMOTORS" ? "Miami Motors" : sale.stock_origin}
           </p>
         )}
+        <div className="flex flex-col gap-1">
         {sale.payment_status && (
-          <span className={`inline-block text-xs font-semibold rounded-md border px-2 py-0.5 ${sale.payment_status === "realizado" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : sale.payment_status === "pendiente" ? "bg-red-100 text-red-800 border-red-200" : "bg-muted text-muted-foreground border-border"}`}>
+          <span className={`inline-block w-fit text-xs font-semibold rounded-md border px-2 py-0.5 ${sale.payment_status === "realizado" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : sale.payment_status === "pendiente" ? "bg-red-100 text-red-800 border-red-200" : "bg-muted text-muted-foreground border-border"}`}>
             {sale.payment_status === "realizado" ? "Pago realizado" : sale.payment_status === "pendiente" ? "Pago pendiente" : sale.payment_status}
           </span>
         )}
+        {sale.payment_method === "financiamiento" && (
+          <span className={`inline-block w-fit text-xs font-semibold rounded-md border px-2 py-0.5 ${(sale.commission_credit_status ?? "pendiente") === "pagada" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : "bg-red-100 text-red-800 border-red-200"}`}>
+            {(sale.commission_credit_status ?? "pendiente") === "pagada" ? "Comisión Crédito: Pagada" : "Comisión Crédito: Pendiente"}
+          </span>
+        )}
+      </div>
       </CardContent>
     </Card>
   );

@@ -40,6 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { gastosEmpresaService, type ExpenseType, type GastoEmpresaWithInversor } from "@/lib/services/gastosEmpresa";
 import { expenseTypesService, type ExpenseTypeRow } from "@/lib/services/expenseTypes";
+import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
 import {
@@ -94,24 +95,6 @@ function formatDate(dateStr: string) {
   });
 }
 
-/** Una fila de la lista unificada: gasto o ingreso (venta). */
-type MovimientoRow =
-  | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
-  | {
-    tipo: "ingreso";
-    id: string;
-    date: string;
-    data: {
-      id: string;
-      sale_price: number;
-      margin: number;
-      sale_date: string;
-      vehicle_description: string | null;
-      vehicle?: { make: string; model: string; year: number } | null;
-      seller?: { full_name: string | null } | null;
-    };
-  };
-
 type SaleForIngreso = {
   id: string;
   sale_price: number;
@@ -122,9 +105,24 @@ type SaleForIngreso = {
   seller?: { full_name: string | null } | null;
 };
 
+/** Datos de ingreso desde tabla ingresos_empresa (ej. Comisión Crédito). */
+type IngresoEmpresaForList = {
+  margin: number;
+  income_date: string;
+  description: string | null;
+  etiqueta: string;
+  source: "ingreso_empresa";
+};
+
+/** Una fila de la lista unificada: gasto o ingreso (venta o ingreso empresa). */
+type MovimientoRow =
+  | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
+  | { tipo: "ingreso"; id: string; date: string; data: SaleForIngreso | IngresoEmpresaForList };
+
 function buildMovimientos(
   gastos: GastoEmpresaWithInversor[],
-  salesList: SaleForIngreso[]
+  salesList: SaleForIngreso[],
+  ingresosEmpresaList: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string }[]
 ): MovimientoRow[] {
   const gastosRows: MovimientoRow[] = gastos.map((g) => ({
     tipo: "gasto" as const,
@@ -132,13 +130,25 @@ function buildMovimientos(
     date: g.expense_date,
     data: g,
   }));
-  const ingresosRows: MovimientoRow[] = salesList.map((s) => ({
+  const ingresosVentasRows: MovimientoRow[] = salesList.map((s) => ({
     tipo: "ingreso" as const,
     id: `sale-${s.id}`,
     date: s.sale_date,
     data: s,
   }));
-  const all = [...gastosRows, ...ingresosRows];
+  const ingresosEmpresaRows: MovimientoRow[] = ingresosEmpresaList.map((i) => ({
+    tipo: "ingreso" as const,
+    id: `ingreso-empresa-${i.id}`,
+    date: i.income_date,
+    data: {
+      margin: i.amount,
+      income_date: i.income_date,
+      description: i.description,
+      etiqueta: i.etiqueta,
+      source: "ingreso_empresa" as const,
+    } as IngresoEmpresaForList,
+  }));
+  const all = [...gastosRows, ...ingresosVentasRows, ...ingresosEmpresaRows];
   all.sort((a, b) => (b.date === a.date ? 0 : b.date > a.date ? 1 : -1));
   return all;
 }
@@ -146,6 +156,9 @@ function buildMovimientos(
 function ingresoDescription(row: MovimientoRow): string {
   if (row.tipo !== "ingreso") return "";
   const d = row.data;
+  if ("source" in d && d.source === "ingreso_empresa") {
+    return `${d.description ?? "Ingreso"} · ${d.etiqueta} · ${formatCurrency(Number(d.margin))}`;
+  }
   const vehicleText =
     d.vehicle_description?.trim() ||
     (d.vehicle
@@ -158,6 +171,7 @@ export default function Finance() {
   const { user } = useAuth();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
   const [sales, setSales] = useState<SaleForIngreso[]>([]);
+  const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -169,8 +183,11 @@ export default function Finance() {
   const [filterOrdenFecha, setFilterOrdenFecha] = useState<"ascendente" | "descendente">("descendente");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [gastosModalOpen, setGastosModalOpen] = useState(false);
+  const [filterModalEtiqueta, setFilterModalEtiqueta] = useState<ExpenseType | "all">("all");
+  const [filterModalInversor, setFilterModalInversor] = useState<string>("all");
   const [pendientesModalOpen, setPendientesModalOpen] = useState(false);
   const [filterPendientesInversor, setFilterPendientesInversor] = useState<string>("all");
+  const [filterPendientesEtiqueta, setFilterPendientesEtiqueta] = useState<ExpenseType | "all">("all");
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
@@ -189,7 +206,7 @@ export default function Finance() {
   const loadGastos = useCallback(async () => {
     setLoading(true);
     try {
-      const [gastosData, salesData] = await Promise.all([
+      const [gastosData, salesData, ingresosEmpresaData] = await Promise.all([
         gastosEmpresaService.getAll(),
         saleService
           .getAll({ status: "completada", paymentStatus: "realizado" })
@@ -198,8 +215,21 @@ export default function Finance() {
             console.error("Error cargando ventas para ingresos:", err);
             return [];
           }),
+        ingresosEmpresaService.getAll().catch((err) => {
+          console.error("Error cargando ingresos empresa:", err);
+          return [];
+        }),
       ]);
       setGastos(gastosData);
+      setIngresosEmpresa(
+        ingresosEmpresaData.map((i) => ({
+          id: i.id,
+          amount: Number(i.amount),
+          description: i.description,
+          etiqueta: i.etiqueta,
+          income_date: i.income_date,
+        }))
+      );
       type SaleRaw = {
         id: string;
         sale_price: number | string;
@@ -314,7 +344,7 @@ export default function Finance() {
   const incluirIngresosVentas =
     filterType === "all" && filterInversor === "all" && filterDevolucion === "all";
 
-  const movimientos = buildMovimientos(gastosParaLista, incluirIngresosVentas ? sales : []);
+  const movimientos = buildMovimientos(gastosParaLista, incluirIngresosVentas ? sales : [], incluirIngresosVentas ? ingresosEmpresa : []);
   const movimientosFiltrados =
     filterMovimiento === "all"
       ? movimientos
@@ -339,7 +369,9 @@ export default function Finance() {
     }, 0)
   );
 
-  const totalIngresos = sales.reduce((sum, s) => sum + Number(s.margin), 0);
+  const totalIngresos =
+    sales.reduce((sum, s) => sum + Number(s.margin), 0) +
+    ingresosEmpresa.reduce((sum, i) => sum + Number(i.amount), 0);
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
@@ -359,22 +391,34 @@ export default function Finance() {
       .reduce((sum, g) => sum + Number(g.amount), 0),
   };
 
-  // Gastos ordenados por etiqueta (tipo) y fecha descendente (más reciente primero), misma depuración
-  const gastosPorEtiquetaYFecha = [...gastosPorDevolucion].sort((a, b) => {
-    const idxA = expenseTypes.findIndex((t) => t.code === a.expense_type);
-    const idxB = expenseTypes.findIndex((t) => t.code === b.expense_type);
-    const orderA = idxA >= 0 ? expenseTypes[idxA]?.sort_order ?? idxA : 999;
-    const orderB = idxB >= 0 ? expenseTypes[idxB]?.sort_order ?? idxB : 999;
-    if (orderA !== orderB) return orderA - orderB;
-    if (idxA !== idxB) return idxA - idxB;
-    return b.expense_date.localeCompare(a.expense_date);
-  });
-  const saldosGastosModal = gastosPorEtiquetaYFecha.map((_, i) =>
-    gastosPorEtiquetaYFecha
+  // Modal "Gastos por etiqueta y fecha": filtrado por etiqueta e inversor, orden por fecha (más reciente primero), agrupado por fecha
+  const gastosParaModal =
+    filterModalEtiqueta === "all"
+      ? gastos
+      : gastos.filter((g) => g.expense_type === filterModalEtiqueta);
+  const gastosParaModalPorInversor =
+    filterModalInversor === "all"
+      ? gastosParaModal
+      : gastosParaModal.filter((g) => displayInversor(g) === filterModalInversor);
+  const gastosModalOrdenados = [...gastosParaModalPorInversor].sort((a, b) =>
+    b.expense_date.localeCompare(a.expense_date)
+  );
+  const saldosGastosModal = gastosModalOrdenados.map((_, i) =>
+    gastosModalOrdenados
       .slice(0, i + 1)
       .reduce((acc, g) => acc - Number(g.amount), 0)
   );
-  const totalGastosModal = gastosPorEtiquetaYFecha.reduce((sum, g) => sum + Number(g.amount), 0);
+  const indexGastoParaSaldo = new Map(gastosModalOrdenados.map((g, i) => [g.id, i]));
+  const gastosAgrupadosPorFecha = gastosModalOrdenados.reduce(
+    (acc, g) => {
+      if (!acc[g.expense_date]) acc[g.expense_date] = [];
+      acc[g.expense_date].push(g);
+      return acc;
+    },
+    {} as Record<string, typeof gastosModalOrdenados>
+  );
+  const fechasOrdenadasModal = Object.keys(gastosAgrupadosPorFecha).sort((a, b) => b.localeCompare(a));
+  const totalGastosModal = gastosModalOrdenados.reduce((sum, g) => sum + Number(g.amount), 0);
 
   useEffect(() => {
     loadGastos();
@@ -873,18 +917,20 @@ export default function Finance() {
                           <TableCell className="whitespace-nowrap">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                              {formatDate(row.data.sale_date)}
+                              {formatDate(row.date)}
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">Vehículo</Badge>
+                            <Badge variant="secondary">
+                              {"source" in row.data && row.data.source === "ingreso_empresa" ? row.data.etiqueta : "Vehículo"}
+                            </Badge>
                           </TableCell>
                           <TableCell className="max-w-[260px] truncate">
                             {ingresoDescription(row)}
                           </TableCell>
                           <TableCell>
                             <span className="text-muted-foreground">
-                              {row.data.seller?.full_name || "—"}
+                              {"seller" in row.data && row.data.seller ? row.data.seller?.full_name || "—" : "—"}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -1093,92 +1139,121 @@ export default function Finance() {
               Gastos por etiqueta y fecha
             </DialogTitle>
             <DialogDescription>
-              Solo gastos, ordenados por categoría (etiqueta) y fecha descendente (más reciente primero). Misma depuración y saldo acumulado.
+              Filtra por etiqueta e inversor. Orden: fecha del más reciente al más viejo. Gastos del mismo día se muestran juntos.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap gap-2 shrink-0 pb-2">
+            <Select value={filterModalEtiqueta} onValueChange={(v) => setFilterModalEtiqueta(v as ExpenseType | "all")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Etiqueta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las etiquetas</SelectItem>
+                {expenseTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.code}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterModalInversor} onValueChange={setFilterModalInversor}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Inversor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los inversores</SelectItem>
+                {INVERSOR_OPCIONES.map((nombre) => (
+                  <SelectItem key={nombre} value={nombre}>
+                    {nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex-1 overflow-auto">
             {loading ? (
               <div className="py-12 text-center text-muted-foreground">Cargando…</div>
-            ) : gastosPorEtiquetaYFecha.length === 0 ? (
+            ) : gastosModalOrdenados.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
                 No hay gastos con los filtros actuales.
               </div>
             ) : (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {gastosPorEtiquetaYFecha.map((g, index) => {
-                    const name = displayInversor(g);
-                    const badgeClass =
-                      name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
-                        ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
-                        : null;
-                    return (
-                      <Card key={g.id} className="overflow-hidden">
-                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
-                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEdit(g)}
-                              title="Editar gasto"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteConfirmId(g.id)}
-                              title="Eliminar gasto"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
-                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
-                            {g.description || "—"}
-                          </p>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3.5 w-3.5 shrink-0" />
-                            {formatDate(g.expense_date)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {badgeClass ? (
-                              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                                {name}
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 text-muted-foreground text-xs">
-                                <User className="h-3.5 w-3.5" />
-                                {name}
-                              </span>
-                            )}
-                            <Badge variant={g.devolucion ? "default" : "outline"} className="text-xs">
-                              {g.devolucion ? "Devolución Sí" : "Pendiente"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between pt-2 border-t">
-                            <span className="text-xs text-muted-foreground">Monto</span>
-                            <span className="font-medium text-red-600">
-                              -{formatCurrency(Number(g.amount))}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">Saldo</span>
-                            <span
-                              className={`font-medium ${saldosGastosModal[index] >= 0 ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {saldosGastosModal[index] >= 0 ? "+" : ""}
-                              {formatCurrency(saldosGastosModal[index])}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                <div className="space-y-6">
+                  {fechasOrdenadasModal.map((fecha) => (
+                    <div key={fecha}>
+                      <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5 mb-3 sticky top-0 bg-background/95 backdrop-blur py-1 z-10">
+                        <Calendar className="h-4 w-4" />
+                        {formatDate(fecha)}
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {gastosAgrupadosPorFecha[fecha].map((g) => {
+                          const index = indexGastoParaSaldo.get(g.id) ?? 0;
+                          const name = displayInversor(g);
+                          const badgeClass =
+                            name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                              ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                              : null;
+                          return (
+                            <Card key={g.id} className="overflow-hidden">
+                              <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                                <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleEdit(g)}
+                                    title="Editar gasto"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                    onClick={() => setDeleteConfirmId(g.id)}
+                                    title="Eliminar gasto"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                                <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                                  {g.description || "—"}
+                                </p>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <User className="h-3.5 w-3.5 shrink-0" />
+                                  {name}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={g.devolucion ? "default" : "outline"} className="text-xs">
+                                    {g.devolucion ? "Devolución Sí" : "Pendiente"}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <span className="text-xs text-muted-foreground">Monto</span>
+                                  <span className="font-medium text-red-600">
+                                    -{formatCurrency(Number(g.amount))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-muted-foreground">Saldo</span>
+                                  <span
+                                    className={`font-medium ${saldosGastosModal[index] >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                                  >
+                                    {saldosGastosModal[index] >= 0 ? "+" : ""}
+                                    {formatCurrency(saldosGastosModal[index])}
+                                  </span>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <Card className="mt-4 bg-muted/60">
                   <CardContent className="py-3 px-4 flex items-center justify-between">
@@ -1266,7 +1341,7 @@ export default function Finance() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={pendientesModalOpen} onOpenChange={(open) => { setPendientesModalOpen(open); if (!open) setFilterPendientesInversor("all"); }}>
+      <Dialog open={pendientesModalOpen} onOpenChange={(open) => { setPendientesModalOpen(open); if (!open) { setFilterPendientesInversor("all"); setFilterPendientesEtiqueta("all"); } }}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1277,9 +1352,23 @@ export default function Finance() {
               Gastos sin devolver (excluye HessenMotors: son gastos de la empresa y no se devuelven). Ordenados por fecha (más reciente primero).
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2 pb-3">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Inversor:</span>
+          <div className="flex flex-wrap items-center gap-2 pb-3">
+            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground shrink-0">Etiqueta:</span>
+            <Select value={filterPendientesEtiqueta} onValueChange={(v) => setFilterPendientesEtiqueta(v as ExpenseType | "all")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todas las etiquetas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las etiquetas</SelectItem>
+                {expenseTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.code}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground shrink-0">Inversor:</span>
             <Select value={filterPendientesInversor} onValueChange={setFilterPendientesInversor}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Todos los inversores" />
@@ -1302,14 +1391,18 @@ export default function Finance() {
                 No hay gastos pendientes. Todos tienen devolución registrada.
               </div>
             ) : (() => {
-              const pendientesFiltrados =
+              const porInversor =
                 filterPendientesInversor === "all"
                   ? gastosPendientes
                   : gastosPendientes.filter((g) => displayInversor(g) === filterPendientesInversor);
+              const pendientesFiltrados =
+                filterPendientesEtiqueta === "all"
+                  ? porInversor
+                  : porInversor.filter((g) => g.expense_type === filterPendientesEtiqueta);
               const totalFiltrado = pendientesFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
               return pendientesFiltrados.length === 0 ? (
                 <div className="py-12 text-center text-muted-foreground">
-                  No hay gastos pendientes para este inversor.
+                  No hay gastos pendientes con los filtros seleccionados.
                 </div>
               ) : (
               <>
@@ -1387,7 +1480,10 @@ export default function Finance() {
                 <Card className="mt-4 bg-muted/60">
                   <CardContent className="py-3 px-4 flex items-center justify-between">
                     <span className="font-semibold text-muted-foreground">
-                      Total pendiente{filterPendientesInversor !== "all" ? ` (${filterPendientesInversor})` : ""}
+                      Total pendiente
+                      {filterPendientesInversor !== "all" || filterPendientesEtiqueta !== "all"
+                        ? ` (${[filterPendientesEtiqueta !== "all" ? getExpenseTypeLabel(filterPendientesEtiqueta) : null, filterPendientesInversor !== "all" ? filterPendientesInversor : null].filter(Boolean).join(" · ")})`
+                        : ""}
                     </span>
                     <span className="font-bold text-red-600">-{formatCurrency(totalFiltrado)}</span>
                   </CardContent>
