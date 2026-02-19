@@ -4,6 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 interface DashboardStats {
   salesThisMonth: number
   salesRevenue: number
+  totalIncome: number
+  totalExpenses: number
+  balance: number
   totalVehicles: number
   availableVehicles: number
   activeLeads: number
@@ -17,6 +20,12 @@ interface DashboardStats {
     amount: number
     date: string
     seller: string
+    clientName: string
+    margin: number
+    status: string
+    payment_status: string | null
+    commission_credit_status: string | null
+    stock_origin: string | null
   }>
 }
 
@@ -162,7 +171,52 @@ export function useDashboardStats(branchId?: string) {
 
         console.log('✅ Appointments data:', { scheduledAppointments })
 
-        // 5. Ventas por mes (últimos 6 meses) desde una sola consulta
+        // 5. Total ingresos y balance (ventas completadas con pago realizado + ingresos_empresa - gastos_empresa)
+        let incomeFromSalesQuery = supabase
+          .from('sales')
+          .select('margin')
+          .eq('status', 'completada')
+          .eq('payment_status', 'realizado')
+
+        if (branchId) {
+          incomeFromSalesQuery = incomeFromSalesQuery.eq('branch_id', branchId)
+        }
+
+        const { data: incomeSalesData } = await safeQuery(
+          incomeFromSalesQuery.then(res => res),
+          'incomeFromSalesQuery',
+          { data: null, error: null }
+        )
+
+        let ingresosEmpresaQuery = supabase.from('ingresos_empresa').select('amount')
+        if (branchId) {
+          ingresosEmpresaQuery = ingresosEmpresaQuery.eq('branch_id', branchId)
+        }
+        const { data: ingresosEmpresaData } = await safeQuery(
+          ingresosEmpresaQuery.then(res => res),
+          'ingresosEmpresaQuery',
+          { data: null, error: null }
+        )
+
+        let gastosEmpresaQuery = supabase.from('gastos_empresa').select('amount')
+        if (branchId) {
+          gastosEmpresaQuery = gastosEmpresaQuery.eq('branch_id', branchId)
+        }
+        const { data: gastosEmpresaData } = await safeQuery(
+          gastosEmpresaQuery.then(res => res),
+          'gastosEmpresaQuery',
+          { data: null, error: null }
+        )
+
+        const incomeFromSales = (incomeSalesData || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
+        const incomeFromEmpresa = (ingresosEmpresaData || []).reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+        const totalIncome = incomeFromSales + incomeFromEmpresa
+        const totalExpenses = (gastosEmpresaData || []).reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
+        const balance = totalIncome - totalExpenses
+
+        console.log('✅ Financial data:', { totalIncome, totalExpenses, balance })
+
+        // 7. Ventas por mes (últimos 6 meses) desde una sola consulta
         const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
         const monthBuckets = Array.from({ length: 6 }).map((_, idx) => {
           const date = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1)
@@ -189,7 +243,7 @@ export function useDashboardStats(branchId?: string) {
 
         console.log('✅ Sales by month:', salesByMonth)
 
-        // 6. Vehículos por categoría
+        // 8. Vehículos por categoría
         const vehiclesByCategory = vehiclesData?.reduce((acc: Array<{ category: string; count: number }>, v) => {
           const existing = acc.find(item => item.category === v.category)
           if (existing) {
@@ -202,10 +256,15 @@ export function useDashboardStats(branchId?: string) {
 
         console.log('✅ Vehicles by category:', vehiclesByCategory)
 
-        // 7. Ventas recientes (últimas 5) con joins
+        // 9. Ventas recientes (últimas 5) con joins
         let recentSalesQuery = supabase
           .from('sales')
-          .select('id, sale_price, sale_date, vehicle:vehicles (make, model), seller:users (full_name)')
+          .select(`
+            id, sale_price, sale_date, vehicle_description, client_name, margin, status,
+            payment_status, commission_credit_status, stock_origin,
+            vehicle:vehicles (make, model, year),
+            seller:users (full_name)
+          `)
           .order('sale_date', { ascending: false })
           .limit(5)
 
@@ -220,10 +279,12 @@ export function useDashboardStats(branchId?: string) {
         )
 
         const recentSales = (recentSalesData || []).map((sale: any) => {
-          const vehicleName = sale.vehicle
-            ? `${sale.vehicle.make} ${sale.vehicle.model}`
-            : 'Vehículo'
+          const vehicleName = sale.vehicle_description?.trim() ||
+            (sale.vehicle
+              ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim()
+              : 'Vehículo') || 'Vehículo'
           const sellerName = sale.seller?.full_name || 'N/A'
+          const clientName = sale.client_name?.trim() || sale.lead?.full_name || 'PENDIENTE'
 
           return {
             id: sale.id,
@@ -231,6 +292,12 @@ export function useDashboardStats(branchId?: string) {
             amount: Number(sale.sale_price || 0),
             date: sale.sale_date,
             seller: sellerName,
+            clientName,
+            margin: Number(sale.margin || 0),
+            status: sale.status ?? 'pendiente',
+            payment_status: sale.payment_status ?? null,
+            commission_credit_status: sale.commission_credit_status ?? null,
+            stock_origin: sale.stock_origin ?? null,
           }
         })
 
@@ -239,6 +306,9 @@ export function useDashboardStats(branchId?: string) {
         const result = {
           salesThisMonth,
           salesRevenue,
+          totalIncome,
+          totalExpenses,
+          balance,
           totalVehicles,
           availableVehicles,
           activeLeads,
@@ -258,6 +328,9 @@ export function useDashboardStats(branchId?: string) {
         return {
           salesThisMonth: 0,
           salesRevenue: 0,
+          totalIncome: 0,
+          totalExpenses: 0,
+          balance: 0,
           totalVehicles: 0,
           availableVehicles: 0,
           activeLeads: 0,

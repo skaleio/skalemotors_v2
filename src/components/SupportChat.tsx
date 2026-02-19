@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { X, MessageCircle, Send, Bot } from "lucide-react";
+import { X, Send, Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { sendSupportChatMessage } from "@/lib/services/supportChatApi";
 
 interface Message {
   id: string;
@@ -17,16 +19,20 @@ interface SupportChatProps {
   platform?: "chileautos" | "mercadolibre" | "facebook" | null;
 }
 
+const WELCOME_MESSAGE = "¡Hola! Soy el cerebro del negocio. Puedo responder preguntas sobre ventas, inventario, leads, finanzas y métricas de tu automotora. ¿Qué te gustaría saber?";
+
 export default function SupportChat({ isOpen, onClose, platform }: SupportChatProps) {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      text: "¡Hola! Soy tu asistente virtual. ¿En qué puedo ayudarte con la integración?",
+      text: WELCOME_MESSAGE,
       sender: "bot",
       timestamp: new Date(),
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const getPlatformName = () => {
     switch (platform) {
@@ -37,12 +43,21 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
       case "facebook":
         return "Facebook Marketplace";
       default:
-        return "la plataforma";
+        return "SKALEMOTORS";
     }
   };
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
+  const buildHistory = (): Array<{ role: "user" | "assistant"; content: string }> => {
+    const out: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (const m of messages) {
+      if (m.sender === "user") out.push({ role: "user", content: m.text });
+      if (m.sender === "bot") out.push({ role: "assistant", content: m.text });
+    }
+    return out;
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -51,48 +66,37 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
       timestamp: new Date(),
     };
 
-    setMessages([...messages, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
+    setIsLoading(true);
 
-    // Simular respuesta del bot
-    setTimeout(() => {
-      const botResponse = getBotResponse(inputMessage.toLowerCase());
+    const history = buildHistory();
+
+    const result = await sendSupportChatMessage(
+      inputMessage.trim(),
+      user?.branch_id ?? null,
+      history
+    );
+
+    setIsLoading(false);
+
+    if (result.ok) {
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: botResponse,
+        text: result.text,
         sender: "bot",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
-    }, 1000);
-  };
-
-  const getBotResponse = (userInput: string): string => {
-    const platformName = getPlatformName();
-
-    if (userInput.includes("token") || userInput.includes("api")) {
-      if (platform === "chileautos") {
-        return "Para obtener tus credenciales de Chileautos, necesitas:\n\n1. Client ID\n2. Client Secret\n3. Seller Identifier\n\nContacta a soporte@chileautos.cl para solicitarlas.";
-      } else if (platform === "mercadolibre") {
-        return "Para obtener tu Access Token de Mercado Libre:\n\n1. Crea una aplicación en developers.mercadolibre.cl\n2. Obtén tus credenciales\n3. Genera el token de acceso\n\n¿Necesitas ayuda con algún paso específico?";
-      } else if (platform === "facebook") {
-        return "Para obtener tus credenciales de Facebook:\n\n1. Ve a Meta for Developers\n2. Crea una app\n3. Obtén el Product Catalog ID\n4. Genera un Access Token\n\n¿Quieres que te envíe el enlace a la documentación?";
-      }
+    } else {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `No pude responder: ${result.error}`,
+        sender: "bot",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     }
-
-    if (userInput.includes("ayuda") || userInput.includes("problema")) {
-      return `Estoy aquí para ayudarte con la integración de ${platformName}. ¿Cuál es el problema específico que estás enfrentando?\n\n- ¿Error de conexión?\n- ¿Credenciales inválidas?\n- ¿Dudas sobre la API?`;
-    }
-
-    if (userInput.includes("hola") || userInput.includes("buenos")) {
-      return `¡Hola! Estoy aquí para ayudarte con la integración de ${platformName}. ¿En qué puedo asistirte?`;
-    }
-
-    if (userInput.includes("documentacion") || userInput.includes("guia")) {
-      return `Puedes encontrar la documentación completa en el enlace que aparece más arriba. ¿Hay algo específico de la documentación que no entiendas?`;
-    }
-
-    return `Entiendo que necesitas ayuda con ${platformName}. Para asistirte mejor, un agente humano se pondrá en contacto contigo pronto. Mientras tanto, ¿hay algo más en lo que pueda ayudarte?`;
   };
 
   if (!isOpen) return null;
@@ -104,7 +108,7 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
           <div className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
             <CardTitle className="text-lg font-semibold">
-              Soporte - {getPlatformName()}
+              Cerebro del negocio - {getPlatformName()}
             </CardTitle>
           </div>
           <Button
@@ -144,12 +148,20 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
                 </div>
               </div>
             ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-lg p-3 bg-muted flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Analizando...</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input Area */}
           <div className="flex gap-2 pt-2 border-t">
             <Input
-              placeholder="Escribe tu mensaje..."
+              placeholder="Pregunta por ventas, inventario, leads, finanzas..."
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={(e) => {
@@ -158,9 +170,14 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
                 }
               }}
               className="flex-1"
+              disabled={isLoading}
             />
-            <Button onClick={handleSendMessage} size="icon">
-              <Send className="h-4 w-4" />
+            <Button onClick={handleSendMessage} size="icon" disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </CardContent>

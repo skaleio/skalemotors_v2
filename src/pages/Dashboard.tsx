@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -103,6 +103,21 @@ export default function Dashboard() {
   const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id);
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
+
+  // Estado para modal de detalle de venta reciente
+  const [selectedRecentSale, setSelectedRecentSale] = useState<{
+    id: string
+    vehicle: string
+    amount: number
+    date: string
+    seller: string
+    clientName: string
+    margin: number
+    status: string
+    payment_status: string | null
+    commission_credit_status: string | null
+    stock_origin: string | null
+  } | null>(null);
 
   // Estados para los diálogos
   const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
@@ -263,7 +278,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-green-50/30 dark:from-gray-900 dark:to-green-950/20">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/10 to-transparent rounded-full -mr-16 -mt-16" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -285,6 +300,44 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-emerald-50/30 dark:from-gray-900 dark:to-emerald-950/20">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-16 -mt-16" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div className="space-y-1">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Ingresos</CardTitle>
+            </div>
+            <div className="p-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20">
+              <Banknote className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.totalIncome ?? 0)}</div>
+            <p className="text-xs text-muted-foreground font-medium">
+              Ganancia ventas + otros ingresos
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-white to-sky-50/30 dark:from-gray-900 dark:to-sky-950/20' : 'bg-gradient-to-br from-white to-red-50/30 dark:from-gray-900 dark:to-red-950/20'}`}>
+          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500/10 to-transparent' : 'bg-gradient-to-br from-red-500/10 to-transparent'}`} />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div className="space-y-1">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Balance</CardTitle>
+            </div>
+            <div className={`p-3 rounded-xl shadow-lg ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500 to-sky-600 shadow-sky-500/20' : 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/20'}`}>
+              <Wallet className="h-5 w-5 text-white" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
+              {formatCLP(stats?.balance ?? 0)}
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">
+              Ingresos − gastos
+            </p>
           </CardContent>
         </Card>
 
@@ -710,7 +763,11 @@ export default function Dashboard() {
                 {stats.recentSales.map((sale, index) => (
                   <div
                     key={sale.id}
-                    className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-green-500/30 hover:bg-green-50/30 dark:hover:bg-green-950/10 transition-all duration-200"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedRecentSale(sale)}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedRecentSale(sale)}
+                    className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-green-500/30 hover:bg-green-50/30 dark:hover:bg-green-950/10 transition-all duration-200 cursor-pointer"
                   >
                     <div className="flex items-center gap-4">
                       <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/20 text-white font-bold text-sm flex-shrink-0">
@@ -831,6 +888,80 @@ export default function Dashboard() {
       </div>
 
       {/* Diálogos */}
+      {/* Diálogo: Detalle de venta reciente */}
+      <Dialog open={!!selectedRecentSale} onOpenChange={(open) => !open && setSelectedRecentSale(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-green-500" />
+              Detalle de la venta
+            </DialogTitle>
+            <DialogDescription>
+              Información de la transacción
+            </DialogDescription>
+          </DialogHeader>
+          {selectedRecentSale && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-base">{selectedRecentSale.vehicle}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedRecentSale.date).toLocaleDateString('es-CL', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </p>
+                </div>
+                <Badge variant={selectedRecentSale.status === 'completada' ? 'default' : 'secondary'} className="bg-green-600 shrink-0">
+                  {selectedRecentSale.status === 'completada' ? 'Completada' : selectedRecentSale.status === 'cancelada' ? 'Cancelada' : 'Pendiente'}
+                </Badge>
+              </div>
+              <div className="grid gap-2 rounded-lg border bg-muted/30 p-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Monto vendido</span>
+                  <span className="font-semibold">{formatCLP(selectedRecentSale.amount)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Ganancia</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">{formatCLP(selectedRecentSale.margin)}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <p className="text-muted-foreground"><span className="font-medium text-foreground">Vendedor:</span> {selectedRecentSale.seller}</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground">Cliente:</span> {selectedRecentSale.clientName}</p>
+                {selectedRecentSale.stock_origin && (
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Origen:</span>{' '}
+                    {selectedRecentSale.stock_origin === 'HESSENMOTORS' ? 'HessenMotors' : selectedRecentSale.stock_origin === 'MIAMIMOTORS' ? 'Miami Motors' : selectedRecentSale.stock_origin}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 pt-2">
+                {selectedRecentSale.payment_status && (
+                  <Badge variant={selectedRecentSale.payment_status === 'realizado' ? 'default' : 'destructive'} className={selectedRecentSale.payment_status === 'realizado' ? 'bg-emerald-600' : ''}>
+                    {selectedRecentSale.payment_status === 'realizado' ? 'Pago realizado' : 'Pago pendiente'}
+                  </Badge>
+                )}
+                {selectedRecentSale.commission_credit_status != null && (
+                  <Badge variant={selectedRecentSale.commission_credit_status === 'pagada' ? 'default' : 'destructive'} className={selectedRecentSale.commission_credit_status === 'pagada' ? 'bg-emerald-600' : ''}>
+                    Comisión Crédito: {selectedRecentSale.commission_credit_status === 'pagada' ? 'Pagada' : 'Pendiente'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedRecentSale(null)}>
+              Cerrar
+            </Button>
+            <Button onClick={() => { if (selectedRecentSale) { setSelectedRecentSale(null); navigate(`/app/sales?id=${selectedRecentSale.id}`); } }}>
+              Ver en ventas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Diálogo: Agendar Nueva Cita */}
       <Dialog open={showNewAppointmentDialog} onOpenChange={setShowNewAppointmentDialog}>
         <DialogContent className="sm:max-w-[600px]">
