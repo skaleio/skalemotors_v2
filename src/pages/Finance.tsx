@@ -121,6 +121,7 @@ type MovimientoRow =
   | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
   | { tipo: "ingreso"; id: string; date: string; data: SaleForIngreso | IngresoEmpresaForList };
 
+/** Unifica gastos e ingresos en una lista. Fechas: gastos → expense_date, ingresos empresa → income_date, ventas → sale_date. No mezclar. */
 function buildMovimientos(
   gastos: GastoEmpresaWithInversor[],
   salesList: SaleForIngreso[],
@@ -174,7 +175,7 @@ export default function Finance() {
   const { user } = useAuth();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
   const [sales, setSales] = useState<SaleForIngreso[]>([]);
-  const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string }[]>([]);
+  const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -201,6 +202,8 @@ export default function Finance() {
   const [editingIngresoId, setEditingIngresoId] = useState<string | null>(null);
   const [deleteIngresoId, setDeleteIngresoId] = useState<string | null>(null);
   const [detailMovimiento, setDetailMovimiento] = useState<MovimientoRow | null>(null);
+
+  // Fechas independientes: ingresos usan solo income_date, gastos solo expense_date. No mezclar ni reutilizar.
   const [formIngreso, setFormIngreso] = useState({
     amount: "",
     description: "",
@@ -243,6 +246,7 @@ export default function Finance() {
           description: i.description,
           etiqueta: i.etiqueta,
           income_date: i.income_date,
+          payment_status: (i as { payment_status?: string }).payment_status,
         }))
       );
       type SaleRaw = {
@@ -400,6 +404,8 @@ export default function Finance() {
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosHessenMotors = gastos.filter((g) => displayInversor(g) === INVERSOR_EMPRESA);
   const totalGastosHessenMotors = gastosHessenMotors.reduce((sum, g) => sum + Number(g.amount), 0);
+  const ingresosPendientes = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "pendiente");
+  const totalIngresosPendientes = ingresosPendientes.reduce((sum, i) => sum + Number(i.amount), 0);
   const balance = totalIngresos - totalGastos;
 
   const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
@@ -494,6 +500,7 @@ export default function Finance() {
     const amount = parseFloat(form.amount.replace(/\D/g, "").replace(/^0+/, "") || "0");
     if (amount <= 0) return;
     try {
+      // Gastos: siempre enviar expense_date (nunca income_date)
       if (editingId) {
         await gastosEmpresaService.update(editingId, {
           amount,
@@ -547,7 +554,7 @@ export default function Finance() {
       expense_type: g.expense_type,
       inversor_id: null,
       inversor_name: g.inversor?.full_name ?? g.inversor_name ?? "",
-      expense_date: g.expense_date,
+      expense_date: g.expense_date, // Solo gastos: fecha del gasto, no modificar con income_date
       branch_id: g.branch_id ?? null,
       devolucion: g.devolucion ?? false,
     });
@@ -608,6 +615,7 @@ export default function Finance() {
       toast.error("Ingresa un monto mayor a 0.");
       return;
     }
+    // Ingresos: siempre enviar income_date (nunca expense_date)
     const payloadCreate = {
       amount,
       description: formIngreso.description.trim() || null,
@@ -662,7 +670,7 @@ export default function Finance() {
     setFormIngreso({
       amount: String(ingreso.amount),
       description: ingreso.description ?? "",
-      income_date: ingreso.income_date,
+      income_date: ingreso.income_date, // Solo ingresos: fecha del ingreso, no modificar con expense_date
       payment_status: (ingreso.payment_status === "realizado" ? "realizado" : "pendiente") as "pendiente" | "realizado",
     });
     setEditingIngresoId(id);
@@ -835,6 +843,32 @@ export default function Finance() {
             <p className="text-xs text-muted-foreground">
               Solo gastos de HessenMotors · {gastosHessenMotors.length} gasto{gastosHessenMotors.length !== 1 ? "s" : ""}
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <Receipt className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-xs text-muted-foreground">Devoluciones (sin devolver)</p>
+              <p className="text-lg font-bold text-red-600">
+                {loading ? "…" : formatCurrency(totalGastosPendientes)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {gastosPendientes.length} gasto{gastosPendientes.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="border-t pt-2">
+              <p className="text-xs text-muted-foreground">Ingresos por realizar</p>
+              <p className="text-lg font-bold text-amber-600">
+                {loading ? "…" : formatCurrency(totalIngresosPendientes)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {ingresosPendientes.length} ingreso{ingresosPendientes.length !== 1 ? "s" : ""}
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1179,10 +1213,11 @@ export default function Finance() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="expense_date">Fecha</Label>
+                <Label htmlFor="expense_date">Fecha del gasto</Label>
                 <Input
                   id="expense_date"
                   type="date"
+                  aria-label="Fecha del gasto"
                   value={form.expense_date}
                   onChange={(e) => setForm((f) => ({ ...f, expense_date: e.target.value }))}
                 />
@@ -1341,10 +1376,11 @@ export default function Finance() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ingreso_date">Fecha</Label>
+                <Label htmlFor="ingreso_date">Fecha del ingreso</Label>
                 <Input
                   id="ingreso_date"
                   type="date"
+                  aria-label="Fecha del ingreso"
                   value={formIngreso.income_date}
                   onChange={(e) => setFormIngreso((f) => ({ ...f, income_date: e.target.value }))}
                 />
