@@ -194,6 +194,7 @@ export default function Finance() {
   const [filterPendientesEtiqueta, setFilterPendientesEtiqueta] = useState<ExpenseType | "all">("all");
   const [hessenModalOpen, setHessenModalOpen] = useState(false);
   const [filterHessenEtiqueta, setFilterHessenEtiqueta] = useState<ExpenseType | "all">("all");
+  const [pendientesCardModalOpen, setPendientesCardModalOpen] = useState(false);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
@@ -845,7 +846,10 @@ export default function Finance() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setPendientesCardModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
             <Receipt className="h-4 w-4 text-amber-500" />
@@ -2019,6 +2023,133 @@ export default function Finance() {
               </>
               );
             })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendientesCardModalOpen} onOpenChange={setPendientesCardModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-amber-500" />
+              Pendientes
+            </DialogTitle>
+            <DialogDescription>
+              Devoluciones (gastos sin devolver) e ingresos por realizar (aún no suman al balance).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto space-y-6">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : (
+              <>
+                <section>
+                  <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1.5">
+                    <Receipt className="h-4 w-4" />
+                    Devoluciones pendientes ({gastosPendientes.length})
+                  </h3>
+                  {gastosPendientes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No hay gastos pendientes de devolver.</p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {[...gastosPendientes]
+                          .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+                          .map((g) => {
+                            const name = displayInversor(g);
+                            const badgeClass = name !== "—" && INVERSOR_OPCIONES.includes(name as (typeof INVERSOR_OPCIONES)[number])
+                              ? INVERSOR_COLORS[name as (typeof INVERSOR_OPCIONES)[number]]
+                              : null;
+                            return (
+                              <Card key={g.id} className="overflow-hidden">
+                                <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                                  <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { handleEdit(g); setPendientesCardModalOpen(false); setDialogOpen(true); }} title="Editar gasto">
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => { setDeleteConfirmId(g.id); setPendientesCardModalOpen(false); }} title="Eliminar gasto">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                                  <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">{g.description || "—"}</p>
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                    {formatDate(g.expense_date)}
+                                  </div>
+                                  {badgeClass && (
+                                    <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>{name}</span>
+                                  )}
+                                  <div className="flex items-center justify-between pt-2 border-t">
+                                    <span className="text-xs text-muted-foreground">Monto</span>
+                                    <span className="font-medium text-red-600">-{formatCurrency(Number(g.amount))}</span>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                      </div>
+                      <Card className="mt-3 bg-muted/60">
+                        <CardContent className="py-2 px-4 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-muted-foreground">Total devoluciones</span>
+                          <span className="font-bold text-red-600">-{formatCurrency(totalGastosPendientes)}</span>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </section>
+                <section className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4" />
+                    Ingresos por realizar ({ingresosPendientes.length})
+                  </h3>
+                  {ingresosPendientes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No hay ingresos pendientes.</p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {[...ingresosPendientes]
+                          .sort((a, b) => b.income_date.localeCompare(a.income_date))
+                          .map((i) => (
+                            <Card key={i.id} className="overflow-hidden">
+                              <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200">Pendiente</Badge>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { handleEditIngreso(i.id); setPendientesCardModalOpen(false); setDialogIngresoOpen(true); }} title="Editar ingreso">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => { setDeleteIngresoId(i.id); setPendientesCardModalOpen(false); }} title="Eliminar ingreso">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                                <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">{i.description || "Ingreso"}</p>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                  {formatDate(i.income_date)}
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <span className="text-xs text-muted-foreground">Monto</span>
+                                  <span className="font-medium text-emerald-600">+{formatCurrency(Number(i.amount))}</span>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                      </div>
+                      <Card className="mt-3 bg-muted/60">
+                        <CardContent className="py-2 px-4 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-muted-foreground">Total ingresos por realizar</span>
+                          <span className="font-bold text-amber-600">+{formatCurrency(totalIngresosPendientes)}</span>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </section>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
