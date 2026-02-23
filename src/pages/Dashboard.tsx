@@ -172,6 +172,8 @@ export default function Dashboard() {
       }
     } else if (task.entity_type === 'appointment' && task.entity_id) {
       navigate(`/appointments?id=${task.entity_id}`);
+    } else if (task.entity_type === 'vehicle' && task.entity_id) {
+      navigate(`/listings?vehicle=${task.entity_id}`);
     } else if (task.action_type === 'enviar_cotizacion') {
       setQuoteData({
         ...quoteData,

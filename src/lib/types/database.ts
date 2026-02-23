@@ -600,7 +600,7 @@ export interface Database {
           description: string | null
           action_type: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label: string
-          entity_type: 'lead' | 'appointment' | 'custom'
+          entity_type: 'lead' | 'appointment' | 'custom' | 'vehicle'
           entity_id: string | null
           metadata: Json
           source: 'rule' | 'llm' | 'whatsapp'
@@ -618,7 +618,7 @@ export interface Database {
           description?: string | null
           action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label?: string
-          entity_type?: 'lead' | 'appointment' | 'custom'
+          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle'
           entity_id?: string | null
           metadata?: Json
           source?: 'rule' | 'llm' | 'whatsapp'
@@ -636,7 +636,7 @@ export interface Database {
           description?: string | null
           action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label?: string
-          entity_type?: 'lead' | 'appointment' | 'custom'
+          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle'
           entity_id?: string | null
           metadata?: Json
           source?: 'rule' | 'llm' | 'whatsapp'

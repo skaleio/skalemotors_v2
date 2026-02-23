@@ -34,6 +34,7 @@ import {
   Plus,
   Receipt,
   RefreshCw,
+  Search,
   Settings,
   Target,
   TrendingUp,
@@ -93,6 +94,7 @@ const menuCategories = [
       { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
       { title: "Inventario Avanzado", url: "/app/inventory-advanced", icon: Activity },
       { title: "Publicaciones", url: "/app/listings", icon: Globe },
+      { title: "Scraper ChileAutos", url: "/app/chileautos-scraper", icon: Search },
     ]
   },
   {

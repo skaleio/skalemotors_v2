@@ -15,6 +15,10 @@ export function usePendingTasks(branchId: string | undefined) {
       await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
         if (error) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
       })
+      // Avisos: vehículos mucho tiempo en inventario sin modificar (45+ días, sin cambios 30+ días)
+      await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
+        if (error) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
+      })
       const { data, error } = await supabase
         .from('pending_tasks')
         .select('*')
