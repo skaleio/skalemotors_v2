@@ -188,6 +188,8 @@ export default function Finance() {
   const [pendientesModalOpen, setPendientesModalOpen] = useState(false);
   const [filterPendientesInversor, setFilterPendientesInversor] = useState<string>("all");
   const [filterPendientesEtiqueta, setFilterPendientesEtiqueta] = useState<ExpenseType | "all">("all");
+  const [hessenModalOpen, setHessenModalOpen] = useState(false);
+  const [filterHessenEtiqueta, setFilterHessenEtiqueta] = useState<ExpenseType | "all">("all");
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
@@ -783,7 +785,10 @@ export default function Finance() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setHessenModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Gasto Total HessenMotors</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
@@ -1793,6 +1798,115 @@ export default function Finance() {
                         : ""}
                     </span>
                     <span className="font-bold text-red-600">-{formatCurrency(totalFiltrado)}</span>
+                  </CardContent>
+                </Card>
+              </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={hessenModalOpen} onOpenChange={(open) => { setHessenModalOpen(open); if (!open) setFilterHessenEtiqueta("all"); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-red-500" />
+              Gastos HessenMotors
+            </DialogTitle>
+            <DialogDescription>
+              Lista de gastos de HessenMotors (empresa). Ordenados por fecha (más reciente primero).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2 pb-3">
+            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground shrink-0">Etiqueta:</span>
+            <Select value={filterHessenEtiqueta} onValueChange={(v) => setFilterHessenEtiqueta(v as ExpenseType | "all")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todas las etiquetas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las etiquetas</SelectItem>
+                {expenseTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.code}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : gastosHessenMotors.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay gastos de HessenMotors.
+              </div>
+            ) : (() => {
+              const hessenFiltrados =
+                filterHessenEtiqueta === "all"
+                  ? gastosHessenMotors
+                  : gastosHessenMotors.filter((g) => g.expense_type === filterHessenEtiqueta);
+              const totalHessenFiltrado = hessenFiltrados.reduce((sum, g) => sum + Number(g.amount), 0);
+              return hessenFiltrados.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No hay gastos con la etiqueta seleccionada.
+                </div>
+              ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[...hessenFiltrados]
+                    .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+                    .map((g) => (
+                      <Card key={g.id} className="overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => { handleEdit(g); setHessenModalOpen(false); setDialogOpen(true); }}
+                              title="Editar gasto"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => { setDeleteConfirmId(g.id); setHessenModalOpen(false); }}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                            {g.description || "—"}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                            {formatDate(g.expense_date)}
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">Monto</span>
+                            <span className="font-medium text-red-600">
+                              -{formatCurrency(Number(g.amount))}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                <Card className="mt-4 bg-muted/60">
+                  <CardContent className="py-3 px-4 flex items-center justify-between">
+                    <span className="font-semibold text-muted-foreground">
+                      Total HessenMotors
+                      {filterHessenEtiqueta !== "all" ? ` (${getExpenseTypeLabel(filterHessenEtiqueta)})` : ""}
+                    </span>
+                    <span className="font-bold text-red-600">-{formatCurrency(totalHessenFiltrado)}</span>
                   </CardContent>
                 </Card>
               </>
