@@ -47,18 +47,23 @@ export function Layout({ children }: LayoutProps) {
     );
   }
   
+  const isMobileLayout = isReady && isMobileDevice;
+
   return (
     <SidebarProvider>
       <PrefetchLeads />
       <div
-        className={isReady && isMobileDevice ? "h-dvh min-h-dvh w-full flex flex-col overflow-hidden" : "min-h-screen w-full flex"}
-        data-mobile-device={isReady && isMobileDevice ? "true" : undefined}
-        data-layout-version={isReady && isMobileDevice ? "mobile" : "desktop"}
+        className={isMobileLayout ? "fixed inset-0 z-0 w-full flex flex-col overflow-hidden bg-background" : "min-h-screen w-full flex"}
+        style={isMobileLayout ? { height: "100dvh", maxHeight: "100dvh" } : undefined}
+        data-mobile-device={isMobileLayout ? "true" : undefined}
+        data-layout-version={isMobileLayout ? "mobile" : "desktop"}
       >
         <AppSidebar />
-        <div className="flex-1 flex flex-col relative z-0 min-w-0 min-h-0 overflow-hidden">
-          <TopBar />
-          <main className={isReady && isMobileDevice ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-muted/20 min-w-0 overscroll-contain" : "flex-1 p-6 bg-muted/20 min-w-0"}>
+        <div className="flex-1 flex min-h-0 flex-col relative z-0 min-w-0 overflow-hidden">
+          <header className="shrink-0">
+            <TopBar />
+          </header>
+          <main className={isMobileLayout ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-muted/20 min-w-0 overscroll-contain" : "flex-1 min-h-0 p-6 bg-muted/20 min-w-0"}>
             <PageRestore>
               {children}
             </PageRestore>
