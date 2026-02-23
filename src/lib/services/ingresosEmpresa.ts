@@ -3,6 +3,7 @@ import type { Database } from "../types/database";
 
 type IngresoEmpresa = Database["public"]["Tables"]["ingresos_empresa"]["Row"];
 type IngresoEmpresaInsert = Database["public"]["Tables"]["ingresos_empresa"]["Insert"];
+type IngresoEmpresaUpdate = Database["public"]["Tables"]["ingresos_empresa"]["Update"];
 
 export const ingresosEmpresaService = {
   async getAll(filters?: { branchId?: string; fromDate?: string; toDate?: string }): Promise<IngresoEmpresa[]> {
@@ -36,5 +37,22 @@ export const ingresosEmpresaService = {
 
     if (error) throw error;
     return data as IngresoEmpresa;
+  },
+
+  async update(id: string, payload: IngresoEmpresaUpdate): Promise<IngresoEmpresa> {
+    const { data, error } = await supabase
+      .from("ingresos_empresa")
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as IngresoEmpresa;
+  },
+
+  async remove(id: string): Promise<void> {
+    const { error } = await supabase.from("ingresos_empresa").delete().eq("id", id);
+    if (error) throw error;
   },
 };

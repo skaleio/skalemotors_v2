@@ -192,6 +192,15 @@ export default function Finance() {
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
   const [formEtiqueta, setFormEtiqueta] = useState({ code: "", label: "" });
+  const [dialogIngresoOpen, setDialogIngresoOpen] = useState(false);
+  const [editingIngresoId, setEditingIngresoId] = useState<string | null>(null);
+  const [deleteIngresoId, setDeleteIngresoId] = useState<string | null>(null);
+  const [detailMovimiento, setDetailMovimiento] = useState<MovimientoRow | null>(null);
+  const [formIngreso, setFormIngreso] = useState({
+    amount: "",
+    description: "",
+    income_date: new Date().toISOString().slice(0, 10),
+  });
   const [form, setForm] = useState({
     amount: "",
     description: "",
@@ -377,6 +386,8 @@ export default function Finance() {
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
   );
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
+  const gastosHessenMotors = gastos.filter((g) => displayInversor(g) === INVERSOR_EMPRESA);
+  const totalGastosHessenMotors = gastosHessenMotors.reduce((sum, g) => sum + Number(g.amount), 0);
   const balance = totalIngresos - totalGastos;
 
   const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
@@ -578,6 +589,60 @@ export default function Finance() {
     }
   };
 
+  const handleSubmitIngreso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(formIngreso.amount.replace(/\D/g, "").replace(/^0+/, "") || "0");
+    if (amount <= 0) return;
+    try {
+      if (editingIngresoId) {
+        await ingresosEmpresaService.update(editingIngresoId, {
+          amount,
+          description: formIngreso.description.trim() || null,
+          income_date: formIngreso.income_date,
+        });
+      } else {
+        await ingresosEmpresaService.create({
+          amount,
+          description: formIngreso.description.trim() || null,
+          income_date: formIngreso.income_date,
+          etiqueta: "Hessen Motors",
+        });
+      }
+      setFormIngreso({
+        amount: "",
+        description: "",
+        income_date: new Date().toISOString().slice(0, 10),
+      });
+      setEditingIngresoId(null);
+      setDialogIngresoOpen(false);
+      loadGastos();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditIngreso = (id: string) => {
+    const ingreso = ingresosEmpresa.find((i) => i.id === id);
+    if (!ingreso) return;
+    setFormIngreso({
+      amount: String(ingreso.amount),
+      description: ingreso.description ?? "",
+      income_date: ingreso.income_date,
+    });
+    setEditingIngresoId(id);
+    setDialogIngresoOpen(true);
+  };
+
+  const handleDeleteIngreso = async (id: string) => {
+    try {
+      await ingresosEmpresaService.remove(id);
+      setDeleteIngresoId(null);
+      loadGastos();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -591,6 +656,21 @@ export default function Finance() {
           <Button variant="outline" onClick={() => setGastosModalOpen(true)}>
             <LayoutList className="h-4 w-4 mr-2" />
             Gastos por etiqueta
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setEditingIngresoId(null);
+              setFormIngreso({
+                amount: "",
+                description: "",
+                income_date: new Date().toISOString().slice(0, 10),
+              });
+              setDialogIngresoOpen(true);
+            }}
+          >
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Nuevo Ingreso
           </Button>
           <Button
             onClick={() => {
@@ -649,7 +729,7 @@ export default function Finance() {
           onClick={() => setPendientesModalOpen(true)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gastos pendientes</CardTitle>
+            <CardTitle className="text-sm font-medium">Devoluciones Pendientes</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -700,6 +780,20 @@ export default function Finance() {
             </div>
             <p className="text-xs text-muted-foreground">
               Promedio diario en últimos 30 días
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Gasto Total HessenMotors</CardTitle>
+            <Receipt className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {loading ? "…" : formatCurrency(totalGastosHessenMotors)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Solo gastos de HessenMotors · {gastosHessenMotors.length} gasto{gastosHessenMotors.length !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
@@ -827,7 +921,7 @@ export default function Finance() {
           ) : movimientosFiltrados.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No hay movimientos. Agrega un gasto con &quot;Nuevo Gasto&quot; o registra ventas en Ventas.</p>
+              <p>No hay movimientos. Agrega un ingreso con &quot;Nuevo Ingreso&quot;, un gasto con &quot;Nuevo Gasto&quot; o registra ventas en Ventas.</p>
             </div>
           ) : (
             <div className="rounded-md border overflow-hidden">
@@ -850,7 +944,11 @@ export default function Finance() {
                     {movimientosOrdenados.map((row, index) => {
                       const saldo = saldosAcumulados[index];
                       return row.tipo === "gasto" ? (
-                        <TableRow key={row.id}>
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setDetailMovimiento(row)}
+                        >
                           <TableCell>
                             <Badge variant="outline" className="bg-muted/50">Gasto</Badge>
                           </TableCell>
@@ -885,9 +983,13 @@ export default function Finance() {
                             })()}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={row.data.devolucion ? "default" : "outline"}>
-                              {row.data.devolucion ? "Sí" : "No"}
-                            </Badge>
+                            {displayInversor(row.data) === INVERSOR_EMPRESA ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <Badge variant={row.data.devolucion ? "default" : "outline"}>
+                                {row.data.devolucion ? "Sí" : "No"}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-medium text-red-600">
                             -{formatCurrency(Number(row.data.amount))}
@@ -898,19 +1000,23 @@ export default function Finance() {
                             {saldo >= 0 ? "+" : ""}
                             {formatCurrency(saldo)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(row.data)} title="Editar gasto">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleEdit(row.data); }} title="Editar gasto">
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirmId(row.id)} title="Eliminar gasto">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(row.id); }} title="Eliminar gasto">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
                         </TableRow>
                     ) : (
-                        <TableRow key={row.id}>
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setDetailMovimiento(row)}
+                        >
                           <TableCell>
                             <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Ingreso</Badge>
                           </TableCell>
@@ -945,7 +1051,30 @@ export default function Finance() {
                             {saldo >= 0 ? "+" : ""}
                             {formatCurrency(saldo)}
                           </TableCell>
-                          <TableCell />
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {"source" in row.data && row.data.source === "ingreso_empresa" ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => { e.stopPropagation(); handleEditIngreso(row.id.replace("ingreso-empresa-", "")); }}
+                                  title="Editar ingreso"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={(e) => { e.stopPropagation(); setDeleteIngresoId(row.id.replace("ingreso-empresa-", "")); }}
+                                  title="Eliminar ingreso"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : null}
+                          </TableCell>
                         </TableRow>
                     );
                   })}
@@ -1131,6 +1260,180 @@ export default function Finance() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={dialogIngresoOpen}
+        onOpenChange={(open) => {
+          setDialogIngresoOpen(open);
+          if (!open) setEditingIngresoId(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              {editingIngresoId ? "Editar ingreso" : "Nuevo ingreso"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingIngresoId
+                ? "Modifica el monto, descripción o fecha del ingreso."
+                : "Registra un ingreso de la empresa (siempre Hessen Motors). Se sumará a Total ingresos y aparecerá en la lista."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitIngreso} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ingreso_amount">Monto (CLP)</Label>
+                <Input
+                  id="ingreso_amount"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={formIngreso.amount}
+                  onChange={(e) =>
+                    setFormIngreso((f) => ({ ...f, amount: e.target.value.replace(/\D/g, "") }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ingreso_date">Fecha</Label>
+                <Input
+                  id="ingreso_date"
+                  type="date"
+                  value={formIngreso.income_date}
+                  onChange={(e) => setFormIngreso((f) => ({ ...f, income_date: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ingreso_description">Descripción (opcional)</Label>
+              <Textarea
+                id="ingreso_description"
+                placeholder="Ej. Comisión crédito, otro ingreso"
+                value={formIngreso.description}
+                onChange={(e) => setFormIngreso((f) => ({ ...f, description: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogIngresoOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={!formIngreso.amount || parseFloat(formIngreso.amount.replace(/\D/g, "")) <= 0}>
+                {editingIngresoId ? "Guardar cambios" : "Guardar ingreso"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailMovimiento !== null} onOpenChange={(open) => !open && setDetailMovimiento(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {detailMovimiento?.tipo === "gasto" ? (
+                <>
+                  <Receipt className="h-5 w-5 text-muted-foreground" />
+                  Detalle del gasto
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="h-5 w-5 text-emerald-500" />
+                  Detalle del ingreso
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {detailMovimiento && (
+            <div className="space-y-4">
+              {detailMovimiento.tipo === "gasto" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <span className="text-muted-foreground">Movimiento</span>
+                    <span><Badge variant="outline" className="bg-muted/50">Gasto</Badge></span>
+                    <span className="text-muted-foreground">Fecha</span>
+                    <span>{formatDate(detailMovimiento.data.expense_date)}</span>
+                    <span className="text-muted-foreground">Tipo</span>
+                    <span><Badge variant="secondary">{getExpenseTypeLabel(detailMovimiento.data.expense_type)}</Badge></span>
+                    <span className="text-muted-foreground">Descripción</span>
+                    <span className="break-words">{detailMovimiento.data.description || "—"}</span>
+                    <span className="text-muted-foreground">Inversor</span>
+                    <span>{displayInversor(detailMovimiento.data)}</span>
+                    <span className="text-muted-foreground">Devolución</span>
+                    <span>
+                      {displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA ? (
+                        "—"
+                      ) : (
+                        <Badge variant={detailMovimiento.data.devolucion ? "default" : "outline"}>{detailMovimiento.data.devolucion ? "Sí" : "No"}</Badge>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground">Monto</span>
+                    <span className="font-medium text-red-600">-{formatCurrency(Number(detailMovimiento.data.amount))}</span>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" size="sm" onClick={() => { handleEdit(detailMovimiento.data); setDetailMovimiento(null); setDialogOpen(true); }}>
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => { setDeleteConfirmId(detailMovimiento.id); setDetailMovimiento(null); }}>
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Eliminar
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <span className="text-muted-foreground">Movimiento</span>
+                    <span><Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Ingreso</Badge></span>
+                    <span className="text-muted-foreground">Fecha</span>
+                    <span>{formatDate(detailMovimiento.date)}</span>
+                    <span className="text-muted-foreground">Tipo</span>
+                    <span>
+                      <Badge variant="secondary">
+                        {"source" in detailMovimiento.data && detailMovimiento.data.source === "ingreso_empresa"
+                          ? detailMovimiento.data.etiqueta
+                          : "Vehículo"}
+                      </Badge>
+                    </span>
+                    <span className="text-muted-foreground">Descripción</span>
+                    <span className="break-words col-span-2">{ingresoDescription(detailMovimiento)}</span>
+                    {"seller" in detailMovimiento.data && detailMovimiento.data.seller && (
+                      <>
+                        <span className="text-muted-foreground">Vendedor</span>
+                        <span>{detailMovimiento.data.seller?.full_name || "—"}</span>
+                      </>
+                    )}
+                    <span className="text-muted-foreground">Monto</span>
+                    <span className="font-medium text-emerald-600">+{formatCurrency(Number(detailMovimiento.data.margin))}</span>
+                  </div>
+                  {"source" in detailMovimiento.data && detailMovimiento.data.source === "ingreso_empresa" && (
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="outline" size="sm" onClick={() => { handleEditIngreso(detailMovimiento.id.replace("ingreso-empresa-", "")); setDetailMovimiento(null); setDialogIngresoOpen(true); }}>
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Editar
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => { setDeleteIngresoId(detailMovimiento.id.replace("ingreso-empresa-", "")); setDetailMovimiento(null); }}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Eliminar
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="flex justify-end pt-2 border-t">
+                <Button variant="secondary" onClick={() => setDetailMovimiento(null)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={gastosModalOpen} onOpenChange={setGastosModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
@@ -1228,9 +1531,13 @@ export default function Finance() {
                                   {name}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant={g.devolucion ? "default" : "outline"} className="text-xs">
-                                    {g.devolucion ? "Devolución Sí" : "Pendiente"}
-                                  </Badge>
+                                  {name === INVERSOR_EMPRESA ? (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  ) : (
+                                    <Badge variant={g.devolucion ? "default" : "outline"} className="text-xs">
+                                      {g.devolucion ? "Devolución Sí" : "Pendiente"}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="flex items-center justify-between pt-2 border-t">
                                   <span className="text-xs text-muted-foreground">Monto</span>
@@ -1346,7 +1653,7 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5 text-red-500" />
-              Gastos pendientes (sin devolver)
+              Devoluciones pendientes (sin devolver)
             </DialogTitle>
             <DialogDescription>
               Gastos sin devolver (excluye HessenMotors: son gastos de la empresa y no se devuelven). Ordenados por fecha (más reciente primero).
@@ -1510,6 +1817,28 @@ export default function Finance() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteIngresoId !== null} onOpenChange={(open) => !open && setDeleteIngresoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar ingreso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que quieres eliminar este ingreso? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteIngresoId(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteIngresoId && handleDeleteIngreso(deleteIngresoId)}
             >
               Eliminar
             </AlertDialogAction>
