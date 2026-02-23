@@ -14,11 +14,11 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import ReloadOnPopState from "@/components/ReloadOnPopState";
 
-// Import estático para evitar "Failed to fetch dynamically imported module" en producción (chunk 404 tras deploy)
+// Imports estáticos para evitar "Failed to fetch dynamically imported module" en producción (chunk 404 tras deploy)
 import Dashboard from "./pages/Dashboard";
+import Leads from "./pages/Leads";
 const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
 const CRM = lazy(() => import("./pages/CRM"));
-const Leads = lazy(() => import("./pages/Leads"));
 const LeadsBoard = lazy(() => import("./pages/LeadsBoard"));
 const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
