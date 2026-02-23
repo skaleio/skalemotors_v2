@@ -1036,6 +1036,7 @@ export interface Database {
           income_date: string
           sale_id: string | null
           branch_id: string | null
+          payment_status: string
           created_at: string | null
           updated_at: string | null
         }
@@ -1047,6 +1048,7 @@ export interface Database {
           income_date?: string
           sale_id?: string | null
           branch_id?: string | null
+          payment_status?: string
           created_at?: string | null
           updated_at?: string | null
         }
@@ -1058,6 +1060,7 @@ export interface Database {
           income_date?: string
           sale_id?: string | null
           branch_id?: string | null
+          payment_status?: string
           created_at?: string | null
           updated_at?: string | null
         }

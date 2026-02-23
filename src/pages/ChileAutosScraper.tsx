@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
+import { supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import {
   scrapeChileAutosMultiplePages,
   type ChileAutosListing,
@@ -56,7 +57,9 @@ export default function ChileAutosScraper() {
   const [loading, setLoading] = useState(false);
   const [listings, setListings] = useState<ChileAutosListing[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [iframeHtml, setIframeHtml] = useState<string | null>(null);
+  const [iframeLoading, setIframeLoading] = useState(false);
+  const [iframeError, setIframeError] = useState<string | null>(null);
 
   const runScrape = useCallback(async () => {
     const q = keyword.trim();
@@ -127,6 +130,37 @@ export default function ChileAutosScraper() {
 
   const stat = listings.length ? stats() : null;
 
+  const loadChileAutosInFrame = useCallback(async () => {
+    const q = keyword.trim();
+    if (!q) {
+      toast({ title: "Escribe una búsqueda", variant: "destructive" });
+      return;
+    }
+    setIframeError(null);
+    setIframeLoading(true);
+    setIframeHtml(null);
+    try {
+      const proxyUrl = `${supabaseUrl}/functions/v1/chileautos-proxy?q=${encodeURIComponent(q)}&offset=0`;
+      const res = await fetch(proxyUrl, {
+        method: "GET",
+        headers: supabaseAnonKey ? { Authorization: `Bearer ${supabaseAnonKey}` } : {},
+      });
+      const html = await res.text();
+      if (!res.ok) {
+        setIframeError(html.includes("ChileAutos respondió") ? `ChileAutos respondió con ${res.status}. Configura SCRAPER_API_KEY en Supabase para evitar bloqueos.` : `Error ${res.status}`);
+        return;
+      }
+      setIframeHtml(html);
+      toast({ title: "Listado cargado", description: "Vista dentro de SkaleMotors." });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error al cargar";
+      setIframeError(msg);
+      toast({ title: "Error al cargar", description: msg, variant: "destructive" });
+    } finally {
+      setIframeLoading(false);
+    }
+  }, [keyword]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -149,15 +183,15 @@ export default function ChileAutosScraper() {
         </div>
       </div>
 
-      {/* Vista integrada: ChileAutos dentro de SkaleMotors */}
+      {/* Buscar y ver listado ChileAutos dentro de SkaleMotors (vía proxy) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <PanelTop className="h-5 w-5" />
-            Vista integrada ChileAutos
+            Ver listado ChileAutos
           </CardTitle>
           <CardDescription>
-            Es tu navegador el que carga ChileAutos (sin 403 del servidor). Si aparece &quot;Verifying the device...&quot; y no avanza, usa <strong>Abrir en pestaña</strong> para ver el listado en una ventana normal.
+            Busca y el listado se muestra aquí dentro de SkaleMotors. Si en producción ves error 403, configura <strong>SCRAPER_API_KEY</strong> en la Edge Function <code>chileautos-proxy</code> (Supabase).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -170,32 +204,30 @@ export default function ChileAutosScraper() {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const q = keyword.trim();
-                    if (q) setIframeUrl(buildChileAutosListUrl(q, 0));
-                  }
+                  if (e.key === "Enter") loadChileAutosInFrame();
                 }}
               />
             </div>
             <div className="space-y-2">
               <Label className="opacity-0 pointer-events-none">Acción</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={() => {
-                    const q = keyword.trim();
-                    if (!q) {
-                      toast({ title: "Escribe una búsqueda", variant: "destructive" });
-                      return;
-                    }
-                    setIframeUrl(buildChileAutosListUrl(q, 0));
-                  }}
+                  onClick={loadChileAutosInFrame}
+                  disabled={iframeLoading}
                 >
-                  <Globe className="mr-2 h-4 w-4" />
+                  {iframeLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Globe className="mr-2 h-4 w-4" />
+                  )}
                   Ver listado
                 </Button>
-                {iframeUrl && (
-                  <Button variant="outline" asChild>
-                    <a href={iframeUrl} target="_blank" rel="noopener noreferrer">
+                {keyword.trim() && (
+                  <Button
+                    variant="outline"
+                    asChild
+                  >
+                    <a href={buildChileAutosListUrl(keyword.trim(), 0)} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Abrir en pestaña
                     </a>
@@ -204,26 +236,34 @@ export default function ChileAutosScraper() {
               </div>
             </div>
           </div>
+          {iframeError && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {iframeError}
+            </div>
+          )}
           <div className="rounded-lg border bg-muted/30 overflow-hidden min-h-[420px] flex flex-col">
-            {iframeUrl ? (
+            {iframeLoading ? (
+              <div className="flex flex-1 min-h-[420px] flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
+                <Loader2 className="h-10 w-10 animate-spin" />
+                <p>Cargando listado desde ChileAutos…</p>
+              </div>
+            ) : iframeHtml ? (
               <>
                 <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                  <span>ChileAutos en iframe. Si se queda en &quot;Verifying the device...&quot;, haz clic en <strong>Abrir en pestaña</strong> arriba.</span>
+                  <span>Listado cargado dentro de SkaleMotors. Los enlaces abren en ChileAutos.cl.</span>
                 </div>
                 <iframe
                   title="ChileAutos listado"
-                  src={iframeUrl}
+                  srcDoc={iframeHtml}
                   className="w-full min-h-[380px] flex-1 border-0"
-                  referrerPolicy="no-referrer"
-                  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-                  allow="fullscreen"
+                  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
                 />
               </>
             ) : (
               <div className="flex flex-1 min-h-[420px] flex-col items-center justify-center gap-2 p-8 text-center text-muted-foreground">
                 <PanelTop className="h-12 w-12 opacity-50" />
-                <p>Escribe una palabra clave y haz clic en &quot;Ver listado&quot; para cargar ChileAutos aquí.</p>
-                <p className="text-sm">Si aparece verificación de dispositivo y no carga, usa &quot;Abrir en pestaña&quot;.</p>
+                <p>Escribe una palabra clave y haz clic en <strong>Ver listado</strong> para ver el listado aquí dentro.</p>
+                <p className="text-sm">Si aparece 403, añade SCRAPER_API_KEY en Supabase para la función chileautos-proxy.</p>
               </div>
             )}
           </div>

@@ -188,7 +188,7 @@ export function useDashboardStats(branchId?: string) {
           { data: null, error: null }
         )
 
-        let ingresosEmpresaQuery = supabase.from('ingresos_empresa').select('amount')
+        let ingresosEmpresaQuery = supabase.from('ingresos_empresa').select('amount, payment_status')
         if (branchId) {
           ingresosEmpresaQuery = ingresosEmpresaQuery.eq('branch_id', branchId)
         }
@@ -209,7 +209,10 @@ export function useDashboardStats(branchId?: string) {
         )
 
         const incomeFromSales = (incomeSalesData || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
-        const incomeFromEmpresa = (ingresosEmpresaData || []).reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+        const incomeFromEmpresa = (ingresosEmpresaData || []).reduce(
+          (sum: number, i: any) => sum + ((i.payment_status === 'realizado' ? Number(i.amount || 0) : 0)),
+          0
+        )
         const totalIncome = incomeFromSales + incomeFromEmpresa
         const totalExpenses = (gastosEmpresaData || []).reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
         const balance = totalIncome - totalExpenses

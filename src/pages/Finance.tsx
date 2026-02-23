@@ -111,6 +111,7 @@ type IngresoEmpresaForList = {
   income_date: string;
   description: string | null;
   etiqueta: string;
+  payment_status: "pendiente" | "realizado";
   source: "ingreso_empresa";
 };
 
@@ -122,7 +123,7 @@ type MovimientoRow =
 function buildMovimientos(
   gastos: GastoEmpresaWithInversor[],
   salesList: SaleForIngreso[],
-  ingresosEmpresaList: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string }[]
+  ingresosEmpresaList: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status: string }[]
 ): MovimientoRow[] {
   const gastosRows: MovimientoRow[] = gastos.map((g) => ({
     tipo: "gasto" as const,
@@ -145,6 +146,7 @@ function buildMovimientos(
       income_date: i.income_date,
       description: i.description,
       etiqueta: i.etiqueta,
+      payment_status: (i.payment_status === "realizado" ? "realizado" : "pendiente") as "pendiente" | "realizado",
       source: "ingreso_empresa" as const,
     } as IngresoEmpresaForList,
   }));
@@ -202,6 +204,7 @@ export default function Finance() {
     amount: "",
     description: "",
     income_date: new Date().toISOString().slice(0, 10),
+    payment_status: "pendiente" as "pendiente" | "realizado",
   });
   const [form, setForm] = useState({
     amount: "",
@@ -361,10 +364,17 @@ export default function Finance() {
       ? movimientos
       : movimientos.filter((m) => m.tipo === filterMovimiento);
 
-  const balanceLista = movimientosFiltrados.reduce((acc, row) => {
-    if (row.tipo === "ingreso") return acc + Number(row.data.margin);
-    return acc - Number(row.data.amount);
-  }, 0);
+  const montoParaBalance = (row: MovimientoRow): number => {
+    if (row.tipo === "gasto") return -Number(row.data.amount);
+    if (row.tipo === "ingreso") {
+      if ("source" in row.data && row.data.source === "ingreso_empresa" && row.data.payment_status !== "realizado")
+        return 0;
+      return Number(row.data.margin);
+    }
+    return 0;
+  };
+
+  const balanceLista = movimientosFiltrados.reduce((acc, row) => acc + montoParaBalance(row), 0);
 
   // Orden por fecha: ascendente = más antiguos primero, descendente = más recientes primero
   const movimientosOrdenados = [...movimientosFiltrados].sort((a, b) => {
@@ -374,15 +384,14 @@ export default function Finance() {
   });
 
   const saldosAcumulados = movimientosOrdenados.map((_, i) =>
-    movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => {
-      if (row.tipo === "ingreso") return acc + Number(row.data.margin);
-      return acc - Number(row.data.amount);
-    }, 0)
+    movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => acc + montoParaBalance(row), 0)
   );
 
   const totalIngresos =
     sales.reduce((sum, s) => sum + Number(s.margin), 0) +
-    ingresosEmpresa.reduce((sum, i) => sum + Number(i.amount), 0);
+    ingresosEmpresa
+      .filter((i) => (i.payment_status ?? "realizado") === "realizado")
+      .reduce((sum, i) => sum + Number(i.amount), 0);
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
@@ -601,6 +610,7 @@ export default function Finance() {
           amount,
           description: formIngreso.description.trim() || null,
           income_date: formIngreso.income_date,
+          payment_status: formIngreso.payment_status,
         });
       } else {
         await ingresosEmpresaService.create({
@@ -608,12 +618,14 @@ export default function Finance() {
           description: formIngreso.description.trim() || null,
           income_date: formIngreso.income_date,
           etiqueta: "Hessen Motors",
+          payment_status: formIngreso.payment_status,
         });
       }
       setFormIngreso({
         amount: "",
         description: "",
         income_date: new Date().toISOString().slice(0, 10),
+        payment_status: "pendiente",
       });
       setEditingIngresoId(null);
       setDialogIngresoOpen(false);
@@ -630,6 +642,7 @@ export default function Finance() {
       amount: String(ingreso.amount),
       description: ingreso.description ?? "",
       income_date: ingreso.income_date,
+      payment_status: (ingreso.payment_status === "realizado" ? "realizado" : "pendiente") as "pendiente" | "realizado",
     });
     setEditingIngresoId(id);
     setDialogIngresoOpen(true);
@@ -667,6 +680,7 @@ export default function Finance() {
                 amount: "",
                 description: "",
                 income_date: new Date().toISOString().slice(0, 10),
+                payment_status: "pendiente",
               });
               setDialogIngresoOpen(true);
             }}
@@ -1045,7 +1059,13 @@ export default function Finance() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className="text-muted-foreground">—</span>
+                            {"source" in row.data && row.data.source === "ingreso_empresa" ? (
+                              <Badge variant={row.data.payment_status === "realizado" ? "default" : "outline"}>
+                                {row.data.payment_status === "realizado" ? "Realizado" : "Pendiente"}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-medium text-emerald-600">
                             +{formatCurrency(Number(row.data.margin))}
@@ -1319,6 +1339,26 @@ export default function Finance() {
                 rows={2}
               />
             </div>
+            <div className="space-y-2">
+              <Label>Estado del pago</Label>
+              <Select
+                value={formIngreso.payment_status}
+                onValueChange={(v: "pendiente" | "realizado") =>
+                  setFormIngreso((f) => ({ ...f, payment_status: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pendiente">Pendiente (no suma al balance)</SelectItem>
+                  <SelectItem value="realizado">Realizado (suma al balance)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Solo los ingresos marcados como &quot;Realizado&quot; se suman al balance y total ingresos.
+              </p>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
@@ -1410,6 +1450,16 @@ export default function Finance() {
                       <>
                         <span className="text-muted-foreground">Vendedor</span>
                         <span>{detailMovimiento.data.seller?.full_name || "—"}</span>
+                      </>
+                    )}
+                    {"source" in detailMovimiento.data && detailMovimiento.data.source === "ingreso_empresa" && (
+                      <>
+                        <span className="text-muted-foreground">Estado del pago</span>
+                        <span>
+                          <Badge variant={detailMovimiento.data.payment_status === "realizado" ? "default" : "outline"}>
+                            {detailMovimiento.data.payment_status === "realizado" ? "Realizado" : "Pendiente"}
+                          </Badge>
+                        </span>
                       </>
                     )}
                     <span className="text-muted-foreground">Monto</span>
