@@ -13,6 +13,7 @@ interface DashboardStats {
   scheduledAppointments: number
   salesByMonth: Array<{ month: string; sales: number; revenue: number }>
   vehiclesByCategory: Array<{ category: string; count: number }>
+  expensesByType: Array<{ type: string; amount: number }>
   leadsByStatus: Array<{ status: string; count: number }>
   recentSales: Array<{
     id: string
@@ -198,7 +199,7 @@ export function useDashboardStats(branchId?: string) {
           { data: null, error: null }
         )
 
-        let gastosEmpresaQuery = supabase.from('gastos_empresa').select('amount')
+        let gastosEmpresaQuery = supabase.from('gastos_empresa').select('amount, expense_type')
         if (branchId) {
           gastosEmpresaQuery = gastosEmpresaQuery.eq('branch_id', branchId)
         }
@@ -215,6 +216,22 @@ export function useDashboardStats(branchId?: string) {
         )
         const totalIncome = incomeFromSales + incomeFromEmpresa
         const totalExpenses = (gastosEmpresaData || []).reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
+
+        // Gastos agrupados por tipo (para gráfico de distribución)
+        const expensesByType = (gastosEmpresaData || []).reduce(
+          (acc: Array<{ type: string; amount: number }>, g: any) => {
+            const type = g.expense_type || 'otros'
+            const amount = Number(g.amount || 0)
+            const existing = acc.find(item => item.type === type)
+            if (existing) {
+              existing.amount += amount
+            } else {
+              acc.push({ type, amount })
+            }
+            return acc
+          },
+          []
+        )
         const balance = totalIncome - totalExpenses
 
         console.log('✅ Financial data:', { totalIncome, totalExpenses, balance })
@@ -318,6 +335,7 @@ export function useDashboardStats(branchId?: string) {
           scheduledAppointments,
           salesByMonth,
           vehiclesByCategory,
+          expensesByType,
           leadsByStatus,
           recentSales
         }
@@ -340,6 +358,7 @@ export function useDashboardStats(branchId?: string) {
           scheduledAppointments: 0,
           salesByMonth: [],
           vehiclesByCategory: [],
+          expensesByType: [],
           leadsByStatus: [],
           recentSales: []
         }

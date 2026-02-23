@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
-import { ArrowUpRight, BarChart3, Calendar, Car, DollarSign, PieChart as PieChartIcon, TrendingUp, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, BarChart3, Calendar, Car, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function ExecutiveDashboard() {
@@ -42,6 +42,16 @@ export default function ExecutiveDashboard() {
     nuevo: 'Nuevos',
     usado: 'Usados',
     consignado: 'Consignados'
+  };
+
+  const expenseTypeLabels: Record<string, string> = {
+    operacion: 'Operación',
+    marketing: 'Marketing',
+    servicios: 'Servicios',
+    arriendo: 'Arriendo',
+    sueldos: 'Sueldos',
+    mantenimiento: 'Mantenimiento',
+    otros: 'Otros'
   };
 
   const statusLabels: Record<string, string> = {
@@ -109,7 +119,7 @@ export default function ExecutiveDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Análisis de Ventas */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
           <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
@@ -238,14 +248,13 @@ export default function ExecutiveDashboard() {
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="count"
-                    paddingAngle={3}
+                    paddingAngle={0}
+                    stroke="none"
                   >
                     {stats.vehiclesByCategory.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
-                        stroke="hsl(var(--background))"
-                        strokeWidth={3}
                       />
                     ))}
                   </Pie>
@@ -270,6 +279,90 @@ export default function ExecutiveDashboard() {
               <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
                 <Car className="h-12 w-12 mb-3 opacity-20" />
                 <p className="text-sm font-medium">No hay vehículos en inventario</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Distribución de Gastos */}
+        <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                  <div className="p-2 bg-rose-500 rounded-lg">
+                    <Receipt className="h-4 w-4 text-white" />
+                  </div>
+                  Distribución de Gastos
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Por tipo de gasto</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {stats?.expensesByType && stats.expensesByType.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                  <Pie
+                    data={stats.expensesByType.map(item => ({
+                      ...item,
+                      name: expenseTypeLabels[item.type] || item.type.charAt(0).toUpperCase() + item.type.slice(1).toLowerCase()
+                    }))}
+                    cx="50%"
+                    cy="45%"
+                    labelLine={false}
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                      const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+                      const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          fill="white"
+                          textAnchor={x > cx ? 'start' : 'end'}
+                          dominantBaseline="central"
+                          className="text-xs font-bold"
+                        >
+                          {`${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="amount"
+                    paddingAngle={0}
+                    stroke="none"
+                  >
+                    {stats.expensesByType.map((entry, index) => (
+                      <Cell
+                        key={`cell-exp-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                      padding: '12px'
+                    }}
+                    formatter={(value: number) => [formatCLP(value), 'Monto']}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="circle"
+                    formatter={(value) => <span className="text-xs font-medium">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
+                <Receipt className="h-12 w-12 mb-3 opacity-20" />
+                <p className="text-sm font-medium">No hay gastos registrados</p>
               </div>
             )}
           </CardContent>

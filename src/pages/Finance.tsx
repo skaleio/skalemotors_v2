@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -603,23 +604,41 @@ export default function Finance() {
   const handleSubmitIngreso = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(formIngreso.amount.replace(/\D/g, "").replace(/^0+/, "") || "0");
-    if (amount <= 0) return;
+    if (amount <= 0) {
+      toast.error("Ingresa un monto mayor a 0.");
+      return;
+    }
+    const payloadCreate = {
+      amount,
+      description: formIngreso.description.trim() || null,
+      income_date: formIngreso.income_date,
+      etiqueta: "Hessen Motors",
+      payment_status: formIngreso.payment_status,
+    };
+    const payloadUpdate = {
+      amount,
+      description: formIngreso.description.trim() || null,
+      income_date: formIngreso.income_date,
+      payment_status: formIngreso.payment_status,
+    };
     try {
       if (editingIngresoId) {
-        await ingresosEmpresaService.update(editingIngresoId, {
-          amount,
-          description: formIngreso.description.trim() || null,
-          income_date: formIngreso.income_date,
-          payment_status: formIngreso.payment_status,
-        });
+        await ingresosEmpresaService.update(editingIngresoId, payloadUpdate);
+        toast.success("Ingreso actualizado.");
       } else {
-        await ingresosEmpresaService.create({
-          amount,
-          description: formIngreso.description.trim() || null,
-          income_date: formIngreso.income_date,
-          etiqueta: "Hessen Motors",
-          payment_status: formIngreso.payment_status,
-        });
+        try {
+          await ingresosEmpresaService.create(payloadCreate);
+        } catch (createErr: unknown) {
+          const msg = createErr && typeof createErr === "object" && "message" in createErr ? String((createErr as { message: string }).message) : "";
+          const columnMissing = /payment_status|column.*does not exist|undefined_column/i.test(msg);
+          if (columnMissing) {
+            const { payment_status: _ps, ...payloadSinStatus } = payloadCreate;
+            await ingresosEmpresaService.create(payloadSinStatus);
+          } else {
+            throw createErr;
+          }
+        }
+        toast.success("Ingreso guardado.");
       }
       setFormIngreso({
         amount: "",
@@ -632,6 +651,8 @@ export default function Finance() {
       loadGastos();
     } catch (err) {
       console.error(err);
+      const message = err && typeof err === "object" && "message" in err ? String((err as { message: string }).message) : "No se pudo guardar el ingreso.";
+      toast.error(message);
     }
   };
 
