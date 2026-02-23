@@ -14,7 +14,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import ReloadOnPopState from "@/components/ReloadOnPopState";
 
-const Dashboard = lazy(() => import("./pages/Dashboard"));
+// Import estático para evitar "Failed to fetch dynamically imported module" en producción (chunk 404 tras deploy)
+import Dashboard from "./pages/Dashboard";
 const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Leads = lazy(() => import("./pages/Leads"));
