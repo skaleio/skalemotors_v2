@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DeviceProvider } from "@/contexts/DeviceContext";
 import { ShortcutsPreferencesProvider } from "@/contexts/ShortcutsPreferencesContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -84,8 +85,9 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <AuthProvider>
+<ThemeProvider>
+        <DeviceProvider>
+        <AuthProvider>
         <ShortcutsPreferencesProvider>
         <ChatProvider>
           <TooltipProvider>
@@ -461,6 +463,7 @@ const App = () => (
         </ChatProvider>
         </ShortcutsPreferencesProvider>
       </AuthProvider>
+        </DeviceProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
