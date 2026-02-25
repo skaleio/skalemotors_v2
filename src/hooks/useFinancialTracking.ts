@@ -111,10 +111,10 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
 
       const { data: salesData } = await salesQuery
 
-      // 2. Ingresos empresa (otros ingresos: comisión crédito, etc.)
+      // 2. Ingresos empresa (otros ingresos: comisión crédito, etc.) — solo cuentan los con payment_status realizado
       let ingresosQuery = supabase
         .from('ingresos_empresa')
-        .select('id, amount, income_date, description, etiqueta')
+        .select('id, amount, income_date, description, etiqueta, payment_status')
         .gte('income_date', from)
         .lte('income_date', to)
 
@@ -142,7 +142,8 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
       const gastos = gastosData ?? []
 
       const incomeFromSales = sales.reduce((sum: number, s: any) => sum + Number(s.margin ?? 0), 0)
-      const incomeFromOther = ingresos.reduce((sum: number, i: any) => sum + Number(i.amount ?? 0), 0)
+      const ingresosRealizados = ingresos.filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
+      const incomeFromOther = ingresosRealizados.reduce((sum: number, i: any) => sum + Number(i.amount ?? 0), 0)
       const totalIncome = incomeFromSales + incomeFromOther
       const totalExpenses = gastos.reduce((sum: number, g: any) => sum + Number(g.amount ?? 0), 0)
       const balance = totalIncome - totalExpenses
@@ -169,7 +170,7 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
         bucket.salesRevenue += Number(s.sale_price ?? 0)
       })
 
-      ingresos.forEach((i: any) => {
+      ingresosRealizados.forEach((i: any) => {
         const d = new Date(i.income_date)
         const key = `${d.getFullYear()}-${d.getMonth()}`
         addMonth(key)
@@ -245,7 +246,7 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
         description: (s.vehicle_description || 'Venta').toString().slice(0, 50),
         source: 'sale' as const
       }))
-      const incomeFromOtherList: RecentIncome[] = (ingresos as any[]).map((i: any) => ({
+      const incomeFromOtherList: RecentIncome[] = (ingresosRealizados as any[]).map((i: any) => ({
         date: i.income_date,
         amount: Number(i.amount ?? 0),
         description: (i.etiqueta || i.description || 'Otro ingreso').toString().slice(0, 50),

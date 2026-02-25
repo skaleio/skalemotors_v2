@@ -104,6 +104,11 @@ export default function Dashboard() {
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
 
+  // Modales de KPI: Ventas del mes, Total ingresos y Balance (gastos)
+  const [showVentasMesModal, setShowVentasMesModal] = useState(false);
+  const [showTotalIngresosModal, setShowTotalIngresosModal] = useState(false);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+
   // Estado para modal de detalle de venta reciente
   const [selectedRecentSale, setSelectedRecentSale] = useState<{
     id: string
@@ -281,7 +286,13 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-green-50/30 dark:from-gray-900 dark:to-green-950/20">
+        <Card
+          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-green-50/30 dark:from-gray-900 dark:to-green-950/20 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowVentasMesModal(true)}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowVentasMesModal(true)}
+        >
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/10 to-transparent rounded-full -mr-16 -mt-16" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div className="space-y-1">
@@ -305,7 +316,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-emerald-50/30 dark:from-gray-900 dark:to-emerald-950/20">
+        <Card
+          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-emerald-50/30 dark:from-gray-900 dark:to-emerald-950/20 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowTotalIngresosModal(true)}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowTotalIngresosModal(true)}
+        >
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-16 -mt-16" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div className="space-y-1">
@@ -323,7 +340,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-white to-sky-50/30 dark:from-gray-900 dark:to-sky-950/20' : 'bg-gradient-to-br from-white to-red-50/30 dark:from-gray-900 dark:to-red-950/20'}`}>
+        <Card
+          className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-white to-sky-50/30 dark:from-gray-900 dark:to-sky-950/20' : 'bg-gradient-to-br from-white to-red-50/30 dark:from-gray-900 dark:to-red-950/20'}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowBalanceModal(true)}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowBalanceModal(true)}
+        >
           <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500/10 to-transparent' : 'bg-gradient-to-br from-red-500/10 to-transparent'}`} />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div className="space-y-1">
@@ -890,6 +913,271 @@ export default function Dashboard() {
       </div>
 
       {/* Diálogos */}
+      {/* Modal: Ventas del mes */}
+      <Dialog open={showVentasMesModal} onOpenChange={setShowVentasMesModal}>
+        <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-500" />
+              Ventas del mes
+            </DialogTitle>
+            <DialogDescription>
+              Detalle de ventas completadas en el mes actual
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+            {stats?.salesThisMonthList && stats.salesThisMonthList.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  {stats.salesThisMonthList.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{sale.vehicle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(sale.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })} · {sale.seller}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-green-600 dark:text-green-400 shrink-0 ml-2">
+                        {formatCLP(sale.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t pt-3 flex justify-between items-center">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {stats.salesThisMonthList.length} venta{stats.salesThisMonthList.length !== 1 ? 's' : ''} · Total
+                  </span>
+                  <span className="text-lg font-bold">{formatCLP(stats?.salesRevenue ?? 0)}</span>
+                </div>
+              </>
+            ) : stats?.recentSales && stats.recentSales.length > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  No hay ventas completadas este mes. Últimas ventas registradas:
+                </p>
+                <div className="space-y-2">
+                  {stats.recentSales.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{sale.vehicle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(sale.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })} · {sale.seller}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-green-600 dark:text-green-400 shrink-0 ml-2">
+                        {formatCLP(sale.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="py-8 text-center text-muted-foreground">
+                <Car className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No hay ventas completadas este mes</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVentasMesModal(false)}>Cerrar</Button>
+            <Button onClick={() => { setShowVentasMesModal(false); navigate('/app/sales'); }}>
+              Ver todas las ventas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Total ingresos */}
+      <Dialog open={showTotalIngresosModal} onOpenChange={setShowTotalIngresosModal}>
+        <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-emerald-500" />
+              Total ingresos
+            </DialogTitle>
+            <DialogDescription>
+              Desglose de ingresos (ganancia por ventas y otros ingresos con pago realizado)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Ganancia por ventas</span>
+                <span className="font-semibold">{formatCLP(stats?.totalIncomeFromSales ?? 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Otros ingresos (ingresos empresa)</span>
+                <span className="font-semibold">{formatCLP(stats?.totalIncomeFromEmpresa ?? 0)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between items-center">
+                <span className="font-medium">Total ingresos</span>
+                <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatCLP(stats?.totalIncome ?? 0)}
+                </span>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold mb-2">Lista de ingresos</h4>
+              {stats?.allIncomeList && stats.allIncomeList.length > 0 ? (
+                <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                  {stats.allIncomeList.map((item) => (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      className="flex items-center justify-between gap-2 p-3 rounded-lg border bg-muted/30"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={item.type === 'sale' ? 'default' : 'secondary'} className="text-xs shrink-0">
+                            {item.type === 'sale' ? 'Venta' : 'Otro'}
+                          </Badge>
+                          <p className="text-sm font-medium truncate">{item.description}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(item.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                        {formatCLP(item.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">No hay ingresos registrados</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Solo suman al total las ventas con pago realizado y los ingresos empresa marcados como realizados.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTotalIngresosModal(false)}>Cerrar</Button>
+            <Button onClick={() => { setShowTotalIngresosModal(false); navigate('/app/finance'); }}>
+              Ver finanzas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Balance (ingresos, gastos y lista de gastos) */}
+      <Dialog open={showBalanceModal} onOpenChange={setShowBalanceModal}>
+        <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-sky-500" />
+              Balance
+            </DialogTitle>
+            <DialogDescription>
+              Resumen de ingresos, gastos, balance y pendientes
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Total ingresos</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCLP(stats?.totalIncome ?? 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Total gastos</span>
+                <span className="font-semibold text-red-600 dark:text-red-400">{formatCLP(stats?.totalExpenses ?? 0)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between items-center">
+                <span className="font-medium">Balance</span>
+                <span className={`text-lg font-bold ${(stats?.balance ?? 0) >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {formatCLP(stats?.balance ?? 0)}
+                </span>
+              </div>
+            </div>
+
+            {(stats?.totalIngresosPendientes ?? 0) > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Ingresos pendientes</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  No suman al balance hasta marcarlos como realizados. Total: {formatCLP(stats.totalIngresosPendientes)}
+                </p>
+                <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                  {stats.ingresosPendientesList?.map((i) => (
+                    <div key={i.id} className="flex items-center justify-between p-2 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{i.etiqueta}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(i.income_date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {i.description ? ` · ${i.description}` : ''}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-amber-700 dark:text-amber-300 shrink-0 ml-2">{formatCLP(i.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(stats?.totalGastosPendientesDevolucion ?? 0) > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Gastos pendientes por devolver</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Gastos de inversores sin devolución. Total: {formatCLP(stats.totalGastosPendientesDevolucion)}
+                </p>
+                <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                  {stats.gastosPendientesDevolucionList?.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between p-2 rounded-lg border bg-orange-50/50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium capitalize">{g.expense_type.replace(/_/g, ' ')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(g.expense_date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {g.inversor_name ? ` · ${g.inversor_name}` : ''}
+                          {g.description ? ` · ${g.description}` : ''}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-orange-700 dark:text-orange-300 shrink-0 ml-2">{formatCLP(g.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 className="text-sm font-semibold mb-2">Últimos gastos</h4>
+              {stats?.recentGastos && stats.recentGastos.length > 0 ? (
+                <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                  {stats.recentGastos.map((g) => (
+                    <div
+                      key={g.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium capitalize">{g.expense_type.replace(/_/g, ' ')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(g.expense_date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {g.description ? ` · ${g.description}` : ''}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-red-600 dark:text-red-400 shrink-0 ml-2">
+                        {formatCLP(g.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">No hay gastos registrados</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBalanceModal(false)}>Cerrar</Button>
+            <Button onClick={() => { setShowBalanceModal(false); navigate('/app/finance'); }}>
+              Ver gastos e ingresos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Diálogo: Detalle de venta reciente */}
       <Dialog open={!!selectedRecentSale} onOpenChange={(open) => !open && setSelectedRecentSale(null)}>
         <DialogContent className="sm:max-w-[440px]">

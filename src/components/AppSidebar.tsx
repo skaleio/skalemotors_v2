@@ -41,7 +41,8 @@ import {
   UserCheck,
   UserCircle,
   UserCog,
-  Users
+  Users,
+  Wallet
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -114,6 +115,7 @@ const menuCategories = [
     icon: DollarSign,
     items: [
       { title: "Gastos/Ingresos", url: "/app/finance", icon: Receipt },
+      { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
       { title: "Ventas", url: "/app/sales", icon: TrendingUp },
       { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },

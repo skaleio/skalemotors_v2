@@ -29,6 +29,7 @@ const Tramites = lazy(() => import("./pages/Tramites"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const Quotes = lazy(() => import("./pages/Quotes"));
 const Finance = lazy(() => import("./pages/Finance"));
+const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
 const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
 const Billing = lazy(() => import("./pages/Billing"));
@@ -209,6 +210,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Finance />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/fund-management" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <FundManagement />
                   </Layout>
                 </ProtectedRoute>
               } />

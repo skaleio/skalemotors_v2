@@ -378,6 +378,7 @@ export default function SalesManagement() {
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["sales-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["fund-management"] });
       setDetailEditMode(false);
       setSelectedSale(null);
       toast({
@@ -407,10 +408,12 @@ export default function SalesManagement() {
       title: "Venta eliminada correctamente",
       description: "La venta y sus datos asociados han sido eliminados. La lista se ha actualizado.",
     });
-    deleteSale(idToDelete).catch((err) => {
-      const message = err instanceof Error ? err.message : "Error al eliminar la venta.";
-      toast({ title: "Error al eliminar", description: message, variant: "destructive" });
-    });
+    deleteSale(idToDelete)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["fund-management"] }))
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "Error al eliminar la venta.";
+        toast({ title: "Error al eliminar", description: message, variant: "destructive" });
+      });
   };
 
   const handleSubmitSale = async (e: React.FormEvent) => {
@@ -500,6 +503,7 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
       });
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["fund-management"] });
       setDialogOpen(false);
       toast({
         variant: "success",

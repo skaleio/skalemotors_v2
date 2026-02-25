@@ -1,10 +1,43 @@
 import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
 
+type SaleListItem = {
+  id: string
+  vehicle: string
+  amount: number
+  date: string
+  seller: string
+  clientName: string
+  margin: number
+  status: string
+  payment_status: string | null
+  commission_credit_status: string | null
+  stock_origin: string | null
+}
+
 interface DashboardStats {
   salesThisMonth: number
   salesRevenue: number
+  salesThisMonthList: SaleListItem[]
   totalIncome: number
+  totalIncomeFromSales: number
+  totalIncomeFromEmpresa: number
+  recentIngresosEmpresa: Array<{
+    id: string
+    amount: number
+    income_date: string
+    description: string | null
+    etiqueta: string
+    payment_status: string
+  }>
+  /** Lista unificada de todos los ingresos (ventas + ingresos empresa), ordenada por fecha desc */
+  allIncomeList: Array<{
+    type: 'sale' | 'other'
+    id: string
+    date: string
+    description: string
+    amount: number
+  }>
   totalExpenses: number
   balance: number
   totalVehicles: number
@@ -27,6 +60,32 @@ interface DashboardStats {
     payment_status: string | null
     commission_credit_status: string | null
     stock_origin: string | null
+  }>
+  recentGastos: Array<{
+    id: string
+    amount: number
+    expense_date: string
+    expense_type: string
+    description: string | null
+  }>
+  /** Ingresos empresa con pago pendiente (no suman al balance hasta marcarlos realizados) */
+  totalIngresosPendientes: number
+  ingresosPendientesList: Array<{
+    id: string
+    amount: number
+    income_date: string
+    description: string | null
+    etiqueta: string
+  }>
+  /** Gastos sin devolver (inversores, no empresa) */
+  totalGastosPendientesDevolucion: number
+  gastosPendientesDevolucionList: Array<{
+    id: string
+    amount: number
+    expense_date: string
+    expense_type: string
+    description: string | null
+    inversor_name: string | null
   }>
 }
 
@@ -93,6 +152,55 @@ export function useDashboardStats(branchId?: string) {
           .reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
 
         console.log('✅ Sales data:', { salesThisMonth, salesRevenue })
+
+        // 1b. Ventas del mes con detalle (para modal)
+        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        const firstDayStr = firstDayOfMonth.toISOString().split('T')[0]
+        const lastDayStr = lastDayOfMonth.toISOString().split('T')[0]
+        let salesThisMonthQuery = supabase
+          .from('sales')
+          .select(`
+            id, sale_price, sale_date, vehicle_description, client_name, margin, status,
+            payment_status, commission_credit_status, stock_origin,
+            vehicle:vehicles (make, model, year),
+            seller:users (full_name)
+          `)
+          .gte('sale_date', firstDayStr)
+          .lte('sale_date', lastDayStr)
+          .eq('status', 'completada')
+          .order('sale_date', { ascending: false })
+
+        if (branchId) {
+          salesThisMonthQuery = salesThisMonthQuery.eq('branch_id', branchId)
+        }
+
+        const { data: salesThisMonthData } = await safeQuery(
+          salesThisMonthQuery.then(res => res),
+          'salesThisMonthQuery',
+          { data: null, error: null }
+        )
+
+        const salesThisMonthList: SaleListItem[] = (salesThisMonthData || []).map((sale: any) => {
+          const vehicleName = sale.vehicle_description?.trim() ||
+            (sale.vehicle
+              ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim()
+              : 'Vehículo') || 'Vehículo'
+          const sellerName = sale.seller?.full_name || 'N/A'
+          const clientName = sale.client_name?.trim() || sale.lead?.full_name || 'PENDIENTE'
+          return {
+            id: sale.id,
+            vehicle: vehicleName,
+            amount: Number(sale.sale_price || 0),
+            date: sale.sale_date,
+            seller: sellerName,
+            clientName,
+            margin: Number(sale.margin || 0),
+            status: sale.status ?? 'pendiente',
+            payment_status: sale.payment_status ?? null,
+            commission_credit_status: sale.commission_credit_status ?? null,
+            stock_origin: sale.stock_origin ?? null,
+          }
+        })
 
         // 2. Total de vehículos en inventario
         let vehiclesQueryBuilder = supabase
@@ -189,7 +297,41 @@ export function useDashboardStats(branchId?: string) {
           { data: null, error: null }
         )
 
-        let ingresosEmpresaQuery = supabase.from('ingresos_empresa').select('amount, payment_status')
+        // Lista de ventas que suman al ingreso (para mostrar en modal Total ingresos)
+        let incomeSalesListQuery = supabase
+          .from('sales')
+          .select(`
+            id, sale_date, margin, vehicle_description,
+            vehicle:vehicles (make, model, year)
+          `)
+          .eq('status', 'completada')
+          .eq('payment_status', 'realizado')
+          .order('sale_date', { ascending: false })
+          .limit(100)
+        if (branchId) {
+          incomeSalesListQuery = incomeSalesListQuery.eq('branch_id', branchId)
+        }
+        const { data: incomeSalesListData } = await safeQuery(
+          incomeSalesListQuery.then(res => res),
+          'incomeSalesListQuery',
+          { data: null, error: null }
+        )
+        const incomeFromSalesList = (incomeSalesListData || []).map((s: any) => {
+          const description = s.vehicle_description?.trim() ||
+            (s.vehicle ? [s.vehicle.make, s.vehicle.model, s.vehicle.year].filter(Boolean).join(' ').trim() : '') || 'Venta'
+          return {
+            type: 'sale' as const,
+            id: s.id,
+            date: s.sale_date,
+            description: description || 'Venta',
+            amount: Number(s.margin || 0),
+          }
+        })
+
+        let ingresosEmpresaQuery = supabase
+          .from('ingresos_empresa')
+          .select('id, amount, income_date, description, etiqueta, payment_status')
+          .order('income_date', { ascending: false })
         if (branchId) {
           ingresosEmpresaQuery = ingresosEmpresaQuery.eq('branch_id', branchId)
         }
@@ -199,7 +341,32 @@ export function useDashboardStats(branchId?: string) {
           { data: null, error: null }
         )
 
-        let gastosEmpresaQuery = supabase.from('gastos_empresa').select('amount, expense_type')
+        const ingresosEmpresaRealizados = (ingresosEmpresaData || [])
+          .filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
+        const recentIngresosEmpresa = ingresosEmpresaRealizados.slice(0, 50).map((i: any) => ({
+          id: i.id,
+          amount: Number(i.amount || 0),
+          income_date: i.income_date,
+          description: i.description ?? null,
+          etiqueta: i.etiqueta || 'Otro',
+          payment_status: i.payment_status || 'realizado',
+        }))
+
+        const otherIncomeList = ingresosEmpresaRealizados.slice(0, 100).map((i: any) => ({
+          type: 'other' as const,
+          id: i.id,
+          date: i.income_date,
+          description: [i.etiqueta, i.description].filter(Boolean).join(' · ') || 'Otro ingreso',
+          amount: Number(i.amount || 0),
+        }))
+        const allIncomeList = [...incomeFromSalesList, ...otherIncomeList]
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+          .slice(0, 150)
+
+        let gastosEmpresaQuery = supabase
+          .from('gastos_empresa')
+          .select('id, amount, expense_date, expense_type, description, devolucion, inversor_id, inversor_name')
+          .order('expense_date', { ascending: false })
         if (branchId) {
           gastosEmpresaQuery = gastosEmpresaQuery.eq('branch_id', branchId)
         }
@@ -208,6 +375,44 @@ export function useDashboardStats(branchId?: string) {
           'gastosEmpresaQuery',
           { data: null, error: null }
         )
+
+        const recentGastos = (gastosEmpresaData || []).slice(0, 15).map((g: any) => ({
+          id: g.id,
+          amount: Number(g.amount || 0),
+          expense_date: g.expense_date,
+          expense_type: g.expense_type || 'otros',
+          description: g.description ?? null,
+        }))
+
+        const ingresosPendientesFiltered = (ingresosEmpresaData || []).filter(
+          (i: any) => (i.payment_status ?? 'realizado') === 'pendiente'
+        )
+        const totalIngresosPendientes = ingresosPendientesFiltered.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+        const ingresosPendientesList = ingresosPendientesFiltered.slice(0, 20).map((i: any) => ({
+          id: i.id,
+          amount: Number(i.amount || 0),
+          income_date: i.income_date,
+          description: i.description ?? null,
+          etiqueta: i.etiqueta || 'Otro',
+        }))
+
+        const isGastoInversor = (g: any) =>
+          g.inversor_id != null || (g.inversor_name && String(g.inversor_name).trim() !== '')
+        const gastosPendientesDevolucionFiltered = (gastosEmpresaData || []).filter(
+          (g: any) => !(g.devolucion ?? false) && isGastoInversor(g)
+        )
+        const totalGastosPendientesDevolucion = gastosPendientesDevolucionFiltered.reduce(
+          (sum: number, g: any) => sum + Number(g.amount || 0),
+          0
+        )
+        const gastosPendientesDevolucionList = gastosPendientesDevolucionFiltered.slice(0, 15).map((g: any) => ({
+          id: g.id,
+          amount: Number(g.amount || 0),
+          expense_date: g.expense_date,
+          expense_type: g.expense_type || 'otros',
+          description: g.description ?? null,
+          inversor_name: g.inversor_name ?? null,
+        }))
 
         const incomeFromSales = (incomeSalesData || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
         const incomeFromEmpresa = (ingresosEmpresaData || []).reduce(
@@ -326,7 +531,12 @@ export function useDashboardStats(branchId?: string) {
         const result = {
           salesThisMonth,
           salesRevenue,
+          salesThisMonthList,
           totalIncome,
+          totalIncomeFromSales: incomeFromSales,
+          totalIncomeFromEmpresa: incomeFromEmpresa,
+          recentIngresosEmpresa,
+          allIncomeList,
           totalExpenses,
           balance,
           totalVehicles,
@@ -337,7 +547,12 @@ export function useDashboardStats(branchId?: string) {
           vehiclesByCategory,
           expensesByType,
           leadsByStatus,
-          recentSales
+          recentSales,
+          recentGastos,
+          totalIngresosPendientes,
+          ingresosPendientesList,
+          totalGastosPendientesDevolucion,
+          gastosPendientesDevolucionList
         }
 
         console.log('✅ Dashboard stats complete:', result)
@@ -349,7 +564,12 @@ export function useDashboardStats(branchId?: string) {
         return {
           salesThisMonth: 0,
           salesRevenue: 0,
+          salesThisMonthList: [],
           totalIncome: 0,
+          totalIncomeFromSales: 0,
+          totalIncomeFromEmpresa: 0,
+          recentIngresosEmpresa: [],
+          allIncomeList: [],
           totalExpenses: 0,
           balance: 0,
           totalVehicles: 0,
@@ -360,7 +580,12 @@ export function useDashboardStats(branchId?: string) {
           vehiclesByCategory: [],
           expensesByType: [],
           leadsByStatus: [],
-          recentSales: []
+          recentSales: [],
+          recentGastos: [],
+          totalIngresosPendientes: 0,
+          ingresosPendientesList: [],
+          totalGastosPendientesDevolucion: 0,
+          gastosPendientesDevolucionList: []
         }
       }
     },
