@@ -75,6 +75,12 @@ const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
 /** Inversor cuyos gastos son de la empresa: no se devuelven. */
 const INVERSOR_EMPRESA = "HessenMotors";
 
+/** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". */
+const ALLOWED_EXPENSE_TYPES = new Set([
+  "operacion", "marketing", "servicios", "mantenimiento", "combustible",
+  "seguros", "impuestos", "personal", "vehiculos", "otros",
+]);
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
@@ -96,11 +102,11 @@ function formatDate(dateStr: string) {
   });
 }
 
+/** Ventas con pago realizado: aparecen en Gastos/Ingresos como "Ganancia venta [vehículo]". margin = ganancia de la venta. */
 type SaleForIngreso = {
   id: string;
-  sale_price: number;
-  margin: number;
   sale_date: string;
+  margin: number; // ganancia de la venta (lo que ganamos por la venta)
   vehicle_description: string | null;
   vehicle?: { make: string; model: string; year: number } | null;
   seller?: { full_name: string | null } | null;
@@ -125,7 +131,7 @@ type MovimientoRow =
 function buildMovimientos(
   gastos: GastoEmpresaWithInversor[],
   salesList: SaleForIngreso[],
-  ingresosEmpresaList: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status: string }[]
+  ingresosEmpresaList: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string }[]
 ): MovimientoRow[] {
   const gastosRows: MovimientoRow[] = gastos.map((g) => ({
     tipo: "gasto" as const,
@@ -163,12 +169,13 @@ function ingresoDescription(row: MovimientoRow): string {
   if ("source" in d && d.source === "ingreso_empresa") {
     return `${d.description ?? "Ingreso"} · ${d.etiqueta} · ${formatCurrency(Number(d.margin))}`;
   }
+  const sale = d as SaleForIngreso;
   const vehicleText =
-    d.vehicle_description?.trim() ||
-    (d.vehicle
-      ? `${d.vehicle.make} ${d.vehicle.model} ${d.vehicle.year}`
-      : "Venta");
-  return `${vehicleText} · Ganancia ${formatCurrency(Number(d.margin))}`;
+    sale.vehicle_description?.trim() ||
+    (sale.vehicle
+      ? `${sale.vehicle.make} ${sale.vehicle.model} ${sale.vehicle.year}`
+      : "Vehículo");
+  return `Ganancia venta ${vehicleText} · ${formatCurrency(Number(sale.margin))}`;
 }
 
 export default function Finance() {
@@ -177,6 +184,7 @@ export default function Finance() {
   const [sales, setSales] = useState<SaleForIngreso[]>([]);
   const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -222,8 +230,10 @@ export default function Finance() {
     devolucion: false,
   });
 
+  // Ingresos = ganancias de ventas (margin, pago realizado) + ingresos manuales (ingresos_empresa realizados).
   const loadGastos = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [gastosData, salesData, ingresosEmpresaData] = await Promise.all([
         gastosEmpresaService.getAll(),
@@ -231,7 +241,7 @@ export default function Finance() {
           .getAll({ status: "completada", paymentStatus: "realizado" })
           .then((data) => data ?? [])
           .catch((err) => {
-            console.error("Error cargando ventas para ingresos:", err);
+            console.error("Error cargando ventas para ganancias:", err);
             return [];
           }),
         ingresosEmpresaService.getAll().catch((err) => {
@@ -252,23 +262,21 @@ export default function Finance() {
       );
       type SaleRaw = {
         id: string;
-        sale_price: number | string;
-        margin: number | string | null;
         sale_date: string;
+        margin: number | string | null;
         payment_status?: string | null;
         vehicle_description?: string | null;
         vehicle?: { make: string; model: string; year: number } | null;
         seller?: { full_name: string | null } | null;
       };
-      const onlyPagoRealizado = (salesData as SaleRaw[]).filter(
+      const ventasPagoRealizado = (salesData as SaleRaw[]).filter(
         (s) => s.payment_status === "realizado"
       );
       setSales(
-        onlyPagoRealizado.map((s) => ({
+        ventasPagoRealizado.map((s) => ({
           id: s.id,
-          sale_price: Number(s.sale_price),
-          margin: Number(s.margin ?? 0),
           sale_date: s.sale_date,
+          margin: Number(s.margin ?? 0),
           vehicle_description: s.vehicle_description ?? null,
           vehicle: s.vehicle ?? null,
           seller: s.seller ?? null,
@@ -276,58 +284,68 @@ export default function Finance() {
       );
     } catch (e) {
       console.error("Error cargando Gastos/Ingresos:", e);
+      const message = e instanceof Error ? e.message : "No se pudieron cargar los datos.";
+      setLoadError(message);
+      toast.error("Error al cargar finanzas. Revisa la conexión e intenta de nuevo.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Realtime: cuando una venta pasa a "pago realizado", actualizar la lista de ingresos
+  // Realtime: actualizar lista cuando cambien ventas, gastos o ingresos empresa
   useEffect(() => {
-    const channel = supabase
+    const refreshSales = () => {
+      saleService
+        .getAll({ status: "completada", paymentStatus: "realizado" })
+        .then((data) => {
+          if (data == null) return;
+          type SaleRaw = {
+            id: string;
+            sale_date: string;
+            margin: number | string | null;
+            payment_status?: string | null;
+            vehicle_description?: string | null;
+            vehicle?: { make: string; model: string; year: number } | null;
+            seller?: { full_name: string | null } | null;
+          };
+          const ventasPagoRealizado = (data as SaleRaw[]).filter(
+            (s) => s.payment_status === "realizado"
+          );
+          setSales(
+            ventasPagoRealizado.map((s) => ({
+              id: s.id,
+              sale_date: s.sale_date,
+              margin: Number(s.margin ?? 0),
+              vehicle_description: s.vehicle_description ?? null,
+              vehicle: s.vehicle ?? null,
+              seller: s.seller ?? null,
+            }))
+          );
+        })
+        .catch((err) => console.error("Error refrescando ganancias ventas:", err));
+    };
+
+    const channelSales = supabase
       .channel("finance-sales-payment")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "sales" },
-        () => {
-          // Refrescar ventas para que la nueva ganancia aparezca en ingresos
-          saleService
-            .getAll({ status: "completada", paymentStatus: "realizado" })
-            .then((data) => {
-              if (data == null) return;
-              type SaleRaw = {
-                id: string;
-                sale_price: number | string;
-                margin: number | string | null;
-                sale_date: string;
-                payment_status?: string | null;
-                vehicle_description?: string | null;
-                vehicle?: { make: string; model: string; year: number } | null;
-                seller?: { full_name: string | null } | null;
-              };
-              const onlyPagoRealizado = (data as SaleRaw[]).filter(
-                (s) => s.payment_status === "realizado"
-              );
-              setSales(
-                onlyPagoRealizado.map((s) => ({
-                  id: s.id,
-                  sale_price: Number(s.sale_price),
-                  margin: Number(s.margin ?? 0),
-                  sale_date: s.sale_date,
-                  vehicle_description: s.vehicle_description ?? null,
-                  vehicle: s.vehicle ?? null,
-                  seller: s.seller ?? null,
-                }))
-              );
-            })
-            .catch((err) => console.error("Error refrescando ingresos por realtime:", err));
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, refreshSales)
+      .subscribe();
+
+    const channelGastos = supabase
+      .channel("finance-gastos-empresa")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gastos_empresa" }, loadGastos)
+      .subscribe();
+
+    const channelIngresos = supabase
+      .channel("finance-ingresos-empresa")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ingresos_empresa" }, loadGastos)
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelSales);
+      supabase.removeChannel(channelGastos);
+      supabase.removeChannel(channelIngresos);
     };
-  }, []);
+  }, [loadGastos]);
 
   const displayInversor = (g: GastoEmpresaWithInversor) =>
     g.inversor?.full_name || g.inversor_name || "—";
@@ -335,12 +353,18 @@ export default function Finance() {
   const getExpenseTypeLabel = (code: string) =>
     expenseTypes.find((t) => t.code === code)?.label ?? code;
 
+  // Tipos de gasto permitidos por el CHECK de la BD; si no hay ninguno, mostramos al menos "otros"
+  const expenseTypesAllowed = expenseTypes.filter((t) => ALLOWED_EXPENSE_TYPES.has(t.code));
+  const expenseTypesForSelect =
+    expenseTypesAllowed.length > 0 ? expenseTypesAllowed : [{ id: "_default", code: "otros", label: "Otros", sort_order: 0, created_at: "", updated_at: "" }];
+
   const loadExpenseTypes = useCallback(async () => {
     try {
       const data = await expenseTypesService.getAll();
       setExpenseTypes(data);
     } catch (e) {
       console.error("Error cargando tipos de gasto:", e);
+      toast.error("No se pudieron cargar los tipos de gasto. Reintenta en un momento.");
     }
   }, []);
 
@@ -393,11 +417,10 @@ export default function Finance() {
     movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => acc + montoParaBalance(row), 0)
   );
 
+  const ingresosRealizados = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "realizado");
   const totalIngresos =
     sales.reduce((sum, s) => sum + Number(s.margin), 0) +
-    ingresosEmpresa
-      .filter((i) => (i.payment_status ?? "realizado") === "realizado")
-      .reduce((sum, i) => sum + Number(i.amount), 0);
+    ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
@@ -499,20 +522,28 @@ export default function Finance() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(form.amount.replace(/\D/g, "").replace(/^0+/, "") || "0");
-    if (amount <= 0) return;
+    if (amount <= 0) {
+      toast.error("El monto debe ser mayor a 0.");
+      return;
+    }
+    // Asegurar que expense_type cumple el CHECK de la BD (evita errores al guardar)
+    const expenseType = ALLOWED_EXPENSE_TYPES.has(form.expense_type) ? form.expense_type : "otros";
+    // HessenMotors es la empresa: la devolución no aplica, siempre false
+    const devolucion = form.inversor_name === INVERSOR_EMPRESA ? false : form.devolucion;
     try {
       // Gastos: siempre enviar expense_date (nunca income_date)
       if (editingId) {
         await gastosEmpresaService.update(editingId, {
           amount,
           description: form.description.trim() || null,
-          expense_type: form.expense_type,
+          expense_type: expenseType,
           inversor_id: null,
           inversor_name: form.inversor_name.trim() || null,
           expense_date: form.expense_date,
-          devolucion: form.devolucion,
+          devolucion,
         });
         setEditingId(null);
+        toast.success("Gasto actualizado correctamente.");
       } else {
         const branchId =
           user?.role === "admin" && form.branch_id
@@ -522,13 +553,14 @@ export default function Finance() {
           branch_id: branchId,
           amount,
           description: form.description.trim() || null,
-          expense_type: form.expense_type,
+          expense_type: expenseType,
           inversor_id: form.inversor_id || null,
           inversor_name: form.inversor_name.trim() || null,
           expense_date: form.expense_date,
-          devolucion: form.devolucion,
+          devolucion,
           created_by: user?.id ?? null,
         });
+        toast.success("Gasto registrado correctamente.");
       }
       setForm({
         amount: "",
@@ -544,6 +576,8 @@ export default function Finance() {
       loadGastos();
     } catch (err) {
       console.error(err);
+      const msg = err instanceof Error ? err.message : "No se pudo guardar el gasto.";
+      toast.error(msg);
     }
   };
 
@@ -568,18 +602,21 @@ export default function Finance() {
     try {
       if (editEtiquetaId) {
         await expenseTypesService.update(editEtiquetaId, { label });
+        toast.success("Etiqueta actualizada.");
       } else {
         await expenseTypesService.create({
           label,
           code: formEtiqueta.code.trim() || label.toLowerCase().replace(/\s+/g, "_"),
           sort_order: expenseTypes.length,
         });
+        toast.success("Etiqueta creada.");
       }
       setFormEtiqueta({ code: "", label: "" });
       setEditEtiquetaId(null);
       await loadExpenseTypes();
     } catch (e) {
       console.error(e);
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la etiqueta.");
     }
   };
 
@@ -587,15 +624,17 @@ export default function Finance() {
     try {
       const count = await expenseTypesService.countGastosByCode(code);
       if (count > 0) {
-        alert(`No se puede eliminar: hay ${count} gasto(s) con esta etiqueta. Cambia su tipo antes de eliminarla.`);
+        toast.error(`No se puede eliminar: hay ${count} gasto(s) con esta etiqueta. Cambia su tipo antes.`);
         return;
       }
       if (!confirm("¿Eliminar esta etiqueta?")) return;
       await expenseTypesService.remove(id);
       if (editEtiquetaId === id) setEditEtiquetaId(null);
+      toast.success("Etiqueta eliminada.");
       await loadExpenseTypes();
     } catch (e) {
       console.error(e);
+      toast.error(e instanceof Error ? e.message : "No se pudo eliminar la etiqueta.");
     }
   };
 
@@ -603,9 +642,11 @@ export default function Finance() {
     try {
       await gastosEmpresaService.remove(id);
       setDeleteConfirmId(null);
+      toast.success("Gasto eliminado.");
       loadGastos();
     } catch (err) {
       console.error(err);
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar el gasto.");
     }
   };
 
@@ -682,14 +723,24 @@ export default function Finance() {
     try {
       await ingresosEmpresaService.remove(id);
       setDeleteIngresoId(null);
+      toast.success("Ingreso eliminado.");
       loadGastos();
     } catch (err) {
       console.error(err);
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar el ingreso.");
     }
   };
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-destructive">{loadError}</p>
+          <Button variant="outline" size="sm" onClick={() => loadGastos()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Finanzas</h1>
@@ -721,7 +772,7 @@ export default function Finance() {
           <Button
             onClick={() => {
               setEditingId(null);
-              const defaultType = expenseTypes.length ? expenseTypes[0].code : "otros";
+              const defaultType = expenseTypesForSelect.length ? expenseTypesForSelect[0].code : "otros";
               setForm({
                 amount: "",
                 description: "",
@@ -752,7 +803,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalIngresos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Pago realizado · {sales.length} venta{sales.length !== 1 ? "s" : ""}
+              Ganancias ventas ({sales.length}) + ingresos manuales ({ingresosRealizados.length})
             </p>
           </CardContent>
         </Card>
@@ -797,8 +848,13 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(balance)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Ingresos − Gastos
+              Total ingresos − Total gastos
             </p>
+            {balance < 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Sale en rojo porque los gastos superan a los ingresos. Los &quot;Ingresos pendientes&quot; no suman hasta marcarlos como realizados.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -904,7 +960,7 @@ export default function Finance() {
             Gastos / Ingresos
           </CardTitle>
           <CardDescription>
-            Lista unificada: ingresos por ventas (tipo Vehículo) y gastos. Depuración y control de lo que entra y sale.
+            Lista unificada: ganancias de ventas (pago realizado), ingresos manuales y gastos. Balance = Total ingresos − Total gastos. Los ingresos pendientes no suman hasta marcarlos como realizados.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -930,7 +986,7 @@ export default function Finance() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los tipos</SelectItem>
-                  {expenseTypes.map((t) => (
+                  {expenseTypesForSelect.map((t) => (
                     <SelectItem key={t.id} value={t.code}>
                       {t.label}
                     </SelectItem>
@@ -1154,11 +1210,12 @@ export default function Finance() {
                 <TableFooter>
                   <TableRow className="bg-muted/60 hover:bg-muted/60">
                     <TableCell colSpan={6} className="text-right font-semibold text-muted-foreground">
-                      Total
+                      Balance (depuración)
                     </TableCell>
                     <TableCell className="text-right font-medium text-muted-foreground">—</TableCell>
                     <TableCell
                       className={`text-right font-bold ${balanceLista >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                      title={balanceLista >= 0 ? "Balance positivo" : "Balance negativo: gastos superan ingresos"}
                     >
                       {balanceLista >= 0 ? "+" : ""}
                       {formatCurrency(balanceLista)}
@@ -1225,7 +1282,7 @@ export default function Finance() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {expenseTypes.map((t) => (
+                  {expenseTypesForSelect.map((t) => (
                     <SelectItem key={t.id} value={t.code}>
                       {t.label}
                     </SelectItem>
@@ -1262,23 +1319,25 @@ export default function Finance() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Devolución</Label>
-              <Select
-                value={form.devolucion ? "si" : "no"}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, devolucion: v === "si" }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no">No</SelectItem>
-                  <SelectItem value="si">Sí</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {form.inversor_name !== INVERSOR_EMPRESA && (
+              <div className="space-y-2">
+                <Label>Devolución</Label>
+                <Select
+                  value={form.devolucion ? "si" : "no"}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, devolucion: v === "si" }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no">No</SelectItem>
+                    <SelectItem value="si">Sí</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {user?.role === "admin" && branches.length > 1 && (
               <div className="space-y-2">
                 <Label>Sucursal</Label>

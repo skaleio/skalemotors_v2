@@ -640,24 +640,28 @@ export default function Consignaciones() {
     );
 
     try {
-      await consignacionesService.update(item.id, { label: nextLabel });
+      const updated = await consignacionesService.update(item.id, { label: nextLabel });
+      // Actualizar estado con la respuesta del servidor
+      setConsignaciones((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, ...updated } : row))
+      );
 
-      // Actualizar tags del lead si existe
+      // Actualizar tags del lead si existe (en segundo plano)
       if (item.lead_id) {
         const lead = leads.find((l) => l.id === item.lead_id);
         const nextTags = buildTagsWithLabel(lead?.tags, toLeadTagLabel(nextLabel));
-        await leadService.update(item.lead_id, { tags: nextTags as any });
+        leadService.update(item.lead_id, { tags: nextTags as any }).catch((err) =>
+          console.error("Error actualizando tags del lead:", err)
+        );
       }
 
-      // Refrescar desde Supabase para asegurar sincronización
-      await refetch();
+      refetch().catch(() => {});
     } catch (error: any) {
       console.error("Error actualizando etiqueta:", error);
-      // Revertir cambio optimista
       setConsignaciones((prev) =>
         prev.map((row) => (row.id === item.id ? { ...row, label: prevLabel } : row))
       );
-      await refetch();
+      refetch().catch(() => {});
       alert(error?.message || "No se pudo actualizar la etiqueta.");
     }
   };

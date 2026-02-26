@@ -99,18 +99,6 @@ const menuCategories = [
     ]
   },
   {
-    title: "Operaciones",
-    icon: Settings,
-    items: [
-      { title: "Llamadas", url: "/app/calls", icon: Phone },
-      { title: "Citas", url: "/app/appointments", icon: Calendar },
-      { title: "Cotizaciones", url: "/app/quotes", icon: FileText },
-      { title: "Trámites", url: "/app/tramites", icon: ClipboardCheck },
-      { title: "Permutas", url: "/app/tradein", icon: RefreshCw },
-      { title: "Entregas", url: "/app/deliveries", icon: Package },
-    ]
-  },
-  {
     title: "Finanzas",
     icon: DollarSign,
     items: [
@@ -121,6 +109,18 @@ const menuCategories = [
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
       { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },
       { title: "Facturación Electrónica", url: "/app/billing", icon: BillingIcon },
+    ]
+  },
+  {
+    title: "Operaciones",
+    icon: Settings,
+    items: [
+      { title: "Llamadas", url: "/app/calls", icon: Phone },
+      { title: "Citas", url: "/app/appointments", icon: Calendar },
+      { title: "Cotizaciones", url: "/app/quotes", icon: FileText },
+      { title: "Trámites", url: "/app/tramites", icon: ClipboardCheck },
+      { title: "Permutas", url: "/app/tradein", icon: RefreshCw },
+      { title: "Entregas", url: "/app/deliveries", icon: Package },
     ]
   },
   {
