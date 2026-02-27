@@ -234,19 +234,15 @@ export default function Finance() {
     devolucion: false,
   });
 
-  // Cargar gastos, ingresos empresa y ventas con pago realizado (para que el balance se actualice al marcar "Pago realizado" en Ventas).
+  // Cargar gastos e ingresos empresa.
   const loadGastos = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [gastosData, ingresosEmpresaData, salesData] = await Promise.all([
+      const [gastosData, ingresosEmpresaData] = await Promise.all([
         gastosEmpresaService.getAll(),
         ingresosEmpresaService.getAll().catch((err) => {
           console.error("Error cargando ingresos empresa:", err);
-          return [];
-        }),
-        saleService.getAll({ status: "completada", paymentStatus: "realizado" }).catch((err) => {
-          console.error("Error cargando ventas para balance:", err);
           return [];
         }),
       ]);
@@ -262,16 +258,8 @@ export default function Finance() {
           sale_id: (i as { sale_id?: string | null }).sale_id ?? null,
         }))
       );
-      type SaleRaw = { id: string; sale_price?: number; margin?: number | null; sale_date: string; payment_status?: string | null; vehicle_description?: string | null; vehicle?: { make: string; model: string; year: number } | null; seller?: { full_name: string | null } | null };
-      const ventasPagoRealizado = (salesData as SaleRaw[]).filter((s) => s.payment_status === "realizado").map((s) => ({
-        id: s.id,
-        sale_date: s.sale_date,
-        margin: Number(s.margin ?? 0),
-        vehicle_description: s.vehicle_description ?? null,
-        vehicle: s.vehicle ?? null,
-        seller: s.seller ?? null,
-      }));
-      setSales(ventasPagoRealizado);
+      // Ventas se usan solo para la tarjeta de "ventas sin cargar".
+      setSales([]);
     } catch (e) {
       console.error("Error cargando Gastos/Ingresos:", e);
       const message = e instanceof Error ? e.message : "No se pudieron cargar los datos.";
@@ -282,7 +270,7 @@ export default function Finance() {
     }
   }, []);
 
-  // Realtime: actualizar lista y balance cuando cambien gastos, ingresos empresa o ventas (p. ej. al marcar "Pago realizado" en Ventas)
+  // Realtime: actualizar lista cuando cambien gastos o ingresos empresa
   useEffect(() => {
     const channelGastos = supabase
       .channel("finance-gastos-empresa")
@@ -294,15 +282,9 @@ export default function Finance() {
       .on("postgres_changes", { event: "*", schema: "public", table: "ingresos_empresa" }, loadGastos)
       .subscribe();
 
-    const channelVentas = supabase
-      .channel("finance-sales")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, loadGastos)
-      .subscribe();
-
     return () => {
       supabase.removeChannel(channelGastos);
       supabase.removeChannel(channelIngresos);
-      supabase.removeChannel(channelVentas);
     };
   }, [loadGastos]);
 
@@ -398,15 +380,11 @@ export default function Finance() {
   const ingresosRealizados = ingresosEmpresa.filter(
     (i) => (i.payment_status ?? "realizado") === "realizado"
   );
-  const idsVentasYaCargadas = new Set(ingresosEmpresa.map((i) => i.sale_id).filter(Boolean));
-  const ventasQueSumanAlBalance = sales.filter((s) => !idsVentasYaCargadas.has(s.id));
   const totalGananciasVentasSinCargar = ventasSinCargar.reduce(
     (sum, v) => sum + Number(v.margin ?? 0),
     0
   );
-  const totalIngresos =
-    ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0) +
-    ventasQueSumanAlBalance.reduce((sum, s) => sum + Number(s.margin), 0);
+  const totalIngresos = ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
