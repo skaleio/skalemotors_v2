@@ -42,7 +42,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { gastosEmpresaService, type ExpenseType, type GastoEmpresaWithInversor } from "@/lib/services/gastosEmpresa";
 import { expenseTypesService, type ExpenseTypeRow } from "@/lib/services/expenseTypes";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
-import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
 import {
   BarChart3,
@@ -181,7 +180,6 @@ function ingresoDescription(row: MovimientoRow): string {
 export default function Finance() {
   const { user } = useAuth();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
-  const [sales, setSales] = useState<SaleForIngreso[]>([]);
   const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string; sale_id?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -211,10 +209,9 @@ export default function Finance() {
   const [editingIngresoId, setEditingIngresoId] = useState<string | null>(null);
   const [deleteIngresoId, setDeleteIngresoId] = useState<string | null>(null);
   const [detailMovimiento, setDetailMovimiento] = useState<MovimientoRow | null>(null);
-  /** Ventas con pago realizado que aún no tienen un ingreso en Finanzas (sale_id). Se muestran para cargarlas una vez. */
-  const [ventasSinCargar, setVentasSinCargar] = useState<{ id: string; sale_date: string; margin: number; vehicle_description: string | null; vehicle?: { make: string; model: string; year: number } | null }[]>([]);
-  const [loadingVentasSinCargar, setLoadingVentasSinCargar] = useState(false);
-  const [cargandoGanancias, setCargandoGanancias] = useState(false);
+
+  // Respaldo para evitar ReferenceError si el bundler sirve código antiguo que referenciaba ventas sin cargar (ya no se usan).
+  const loadingVentasSinCargar = false;
 
   // Fechas independientes: ingresos usan solo income_date, gastos solo expense_date. No mezclar ni reutilizar.
   const [formIngreso, setFormIngreso] = useState({
@@ -234,32 +231,52 @@ export default function Finance() {
     devolucion: false,
   });
 
-  // Cargar gastos e ingresos empresa.
+  // Cargar gastos e ingresos empresa. Carga en paralelo; si uno falla, se muestra el otro y un aviso.
   const loadGastos = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
-    try {
-      const [gastosData, ingresosEmpresaData] = await Promise.all([
-        gastosEmpresaService.getAll(),
-        ingresosEmpresaService.getAll().catch((err) => {
-          console.error("Error cargando ingresos empresa:", err);
-          return [];
-        }),
+    const TIMEOUT_MS = 15000;
+    const withTimeout = <T,>(p: Promise<T>): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Tiempo de espera agotado. Revisa la conexión.")), TIMEOUT_MS)
+        ),
       ]);
-      setGastos(gastosData);
-      setIngresosEmpresa(
-        ingresosEmpresaData.map((i) => ({
-          id: i.id,
-          amount: Number(i.amount),
-          description: i.description,
-          etiqueta: i.etiqueta,
-          income_date: i.income_date,
-          payment_status: (i as { payment_status?: string }).payment_status,
-          sale_id: (i as { sale_id?: string | null }).sale_id ?? null,
-        }))
-      );
-      // Ventas se usan solo para la tarjeta de "ventas sin cargar".
-      setSales([]);
+    try {
+      const [gastosResult, ingresosResult] = await Promise.allSettled([
+        withTimeout(gastosEmpresaService.getAll()),
+        withTimeout(ingresosEmpresaService.getAll()),
+      ]);
+      if (gastosResult.status === "fulfilled") {
+        setGastos(gastosResult.value);
+      } else {
+        console.error("Error cargando gastos:", gastosResult.reason);
+        setGastos([]);
+        setLoadError(gastosResult.reason instanceof Error ? gastosResult.reason.message : "Error al cargar gastos.");
+        toast.error("No se pudieron cargar los gastos. Revisa la conexión.");
+      }
+      if (ingresosResult.status === "fulfilled") {
+        setIngresosEmpresa(
+          ingresosResult.value.map((i: { id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string; sale_id?: string | null }) => ({
+            id: i.id,
+            amount: Number(i.amount),
+            description: i.description,
+            etiqueta: i.etiqueta,
+            income_date: i.income_date,
+            payment_status: i.payment_status,
+            sale_id: i.sale_id ?? null,
+          }))
+        );
+      } else {
+        console.error("Error cargando ingresos empresa:", ingresosResult.reason);
+        setIngresosEmpresa([]);
+        const errMsg = ingresosResult.reason instanceof Error ? ingresosResult.reason.message : "Error al cargar ingresos.";
+        if (gastosResult.status === "fulfilled") {
+          setLoadError(errMsg);
+          toast.error("No se pudieron cargar los ingresos. Revisa la conexión.");
+        }
+      }
     } catch (e) {
       console.error("Error cargando Gastos/Ingresos:", e);
       const message = e instanceof Error ? e.message : "No se pudieron cargar los datos.";
@@ -287,25 +304,6 @@ export default function Finance() {
       supabase.removeChannel(channelIngresos);
     };
   }, [loadGastos]);
-
-  // Detectar ventas con pago realizado que aún no están cargadas como ingreso en Finanzas (para ofrecer cargarlas una vez)
-  useEffect(() => {
-    if (loading) return;
-    let cancelled = false;
-    setLoadingVentasSinCargar(true);
-    saleService
-      .getAll({ status: "completada", paymentStatus: "realizado" })
-      .then((salesData) => {
-        if (cancelled || !salesData) return;
-        type SaleRow = { id: string; sale_date: string; margin: number | null; vehicle_description: string | null; vehicle?: { make: string; model: string; year: number } | null };
-        const ventas = (salesData as SaleRow[]).filter((s) => Number(s.margin ?? 0) > 0);
-        const idsCargados = new Set(ingresosEmpresa.map((i) => i.sale_id).filter(Boolean));
-        setVentasSinCargar(ventas.filter((s) => !idsCargados.has(s.id)));
-      })
-      .catch((err) => console.error("Error cargando ventas sin cargar:", err))
-      .finally(() => setLoadingVentasSinCargar(false));
-    return () => { cancelled = true; };
-  }, [loading, ingresosEmpresa]);
 
   const displayInversor = (g: GastoEmpresaWithInversor) =>
     g.inversor?.full_name || g.inversor_name || "—";
@@ -380,10 +378,6 @@ export default function Finance() {
   const ingresosRealizados = ingresosEmpresa.filter(
     (i) => (i.payment_status ?? "realizado") === "realizado"
   );
-  const totalGananciasVentasSinCargar = ventasSinCargar.reduce(
-    (sum, v) => sum + Number(v.margin ?? 0),
-    0
-  );
   const totalIngresos = ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
@@ -395,35 +389,6 @@ export default function Finance() {
   const ingresosPendientes = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "pendiente");
   const totalIngresosPendientes = ingresosPendientes.reduce((sum, i) => sum + Number(i.amount), 0);
   const balance = totalIngresos - totalGastos;
-
-    /** Cargar ganancias de ventas (con pago realizado) como ingresos en Finanzas, una vez. No se quita nada; solo se agregan los que faltan. */
-  const cargarGananciasVentas = useCallback(async () => {
-    if (ventasSinCargar.length === 0) return;
-    setCargandoGanancias(true);
-    try {
-      for (const v of ventasSinCargar) {
-        const desc =
-          v.vehicle_description?.trim() ||
-          (v.vehicle ? `${v.vehicle.make} ${v.vehicle.model} ${v.vehicle.year}` : "Venta");
-        await ingresosEmpresaService.create({
-          amount: v.margin,
-          description: `Ganancia venta ${desc}`,
-          etiqueta: "Vehículo",
-          income_date: v.sale_date,
-          payment_status: "realizado",
-          sale_id: v.id,
-        });
-      }
-      toast.success(`Se agregaron ${ventasSinCargar.length} ganancia(s) de venta como ingresos.`);
-      await loadGastos();
-      // ventasSinCargar se actualiza solo cuando el efecto vea los nuevos ingresosEmpresa
-    } catch (e) {
-      console.error("Error cargando ganancias de ventas:", e);
-      toast.error(e instanceof Error ? e.message : "No se pudieron cargar las ganancias.");
-    } finally {
-      setCargandoGanancias(false);
-    }
-  }, [ventasSinCargar, loadGastos]);
 
   const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
     Jota: gastos
@@ -846,7 +811,6 @@ export default function Finance() {
             {balance < 0 && (
               <p className="text-xs text-muted-foreground mt-1">
                 Sale en rojo porque los gastos superan a los ingresos. Los &quot;Ingresos pendientes&quot; no suman hasta marcarlos como realizados.
-                {ventasSinCargar.length > 0 && " Si tenés ventas con pago realizado, podés cargar esas ganancias más abajo para que sumen al balance."}
               </p>
             )}
           </CardContent>
@@ -914,86 +878,6 @@ export default function Finance() {
           </CardContent>
         </Card>
       </div>
-
-      {!loadingVentasSinCargar && ventasSinCargar.length > 0 && (
-        <Card className="border-amber-500/60 bg-amber-50/70 dark:bg-amber-950/30 shadow-sm">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-900 dark:text-amber-100">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/70 dark:text-amber-100">
-                    <TrendingUp className="h-4 w-4" />
-                  </span>
-                  Ganancias de ventas aún no cargadas
-                </CardTitle>
-                <CardDescription className="mt-1 text-xs leading-relaxed">
-                  Hay {ventasSinCargar.length} venta
-                  {ventasSinCargar.length !== 1 ? "s" : ""} con pago realizado cuyas ganancias no están
-                  en Finanzas. Si las cargas aquí, sumarán al balance. Desde ahora todo lo demás lo
-                  agregas vos manualmente; esto es solo para no descolocarte con lo que ya existía.
-                </CardDescription>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-[11px] uppercase tracking-wide text-amber-700/80 dark:text-amber-200/80">
-                  Monto total
-                </span>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                  +{formatCurrency(totalGananciasVentasSinCargar)}
-                </span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            <div className="rounded-md border border-amber-200/70 bg-white/70 dark:border-amber-900/70 dark:bg-slate-950/40 max-h-40 overflow-auto">
-              {ventasSinCargar.slice(0, 10).map((v) => (
-                <div
-                  key={v.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm border-b last:border-b-0 border-amber-100/70 dark:border-amber-900/40"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-amber-900 dark:text-amber-50">
-                      {v.vehicle_description?.trim() ||
-                        (v.vehicle
-                          ? `${v.vehicle.make} ${v.vehicle.model} ${v.vehicle.year}`
-                          : "Venta")}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Fecha: {formatDate(v.sale_date)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                    +{formatCurrency(v.margin)}
-                  </span>
-                </div>
-              ))}
-              {ventasSinCargar.length > 10 && (
-                <div className="px-3 py-1 text-[11px] text-muted-foreground">
-                  … y {ventasSinCargar.length - 10} venta
-                  {ventasSinCargar.length - 10 !== 1 ? "s" : ""} más
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[11px] text-muted-foreground">
-                Este paso se hace una sola vez para las ventas que ya existen. Después, cargá las
-                nuevas ganancias con <span className="font-semibold">“Nuevo Ingreso”</span>.
-              </p>
-              <Button
-                size="sm"
-                className="whitespace-nowrap"
-                onClick={cargarGananciasVentas}
-                disabled={cargandoGanancias}
-              >
-                {cargandoGanancias
-                  ? "Cargando ganancias…"
-                  : `Cargar estas ${ventasSinCargar.length} ganancia${
-                      ventasSinCargar.length !== 1 ? "s" : ""
-                    } como ingresos`}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">A devolver por inversor</h2>

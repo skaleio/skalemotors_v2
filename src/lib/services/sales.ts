@@ -26,6 +26,7 @@ export const saleService = {
         sale_expenses(id, amount, description)
       `)
       .order('sale_date', { ascending: false })
+      .limit(500)
 
     if (filters?.sellerId) {
       query = query.eq('seller_id', filters.sellerId)

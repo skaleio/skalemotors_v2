@@ -42,6 +42,7 @@ export function useSales(options: UseSalesOptions = {}) {
     enabled,
     staleTime,
     refetchOnWindowFocus: true,
+    retry: 2,
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
