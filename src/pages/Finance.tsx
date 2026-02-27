@@ -395,9 +395,15 @@ export default function Finance() {
     movimientosOrdenados.slice(0, i + 1).reduce((acc, row) => acc + montoParaBalance(row), 0)
   );
 
-  const ingresosRealizados = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "realizado");
+  const ingresosRealizados = ingresosEmpresa.filter(
+    (i) => (i.payment_status ?? "realizado") === "realizado"
+  );
   const idsVentasYaCargadas = new Set(ingresosEmpresa.map((i) => i.sale_id).filter(Boolean));
   const ventasQueSumanAlBalance = sales.filter((s) => !idsVentasYaCargadas.has(s.id));
+  const totalGananciasVentasSinCargar = ventasSinCargar.reduce(
+    (sum, v) => sum + Number(v.margin ?? 0),
+    0
+  );
   const totalIngresos =
     ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0) +
     ventasQueSumanAlBalance.reduce((sum, s) => sum + Number(s.margin), 0);
@@ -932,28 +938,81 @@ export default function Finance() {
       </div>
 
       {!loadingVentasSinCargar && ventasSinCargar.length > 0 && (
-        <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
-              <TrendingUp className="h-4 w-4" />
-              Ganancias de ventas aún no cargadas en Finanzas
-            </CardTitle>
-            <CardDescription>
-              Hay {ventasSinCargar.length} venta{ventasSinCargar.length !== 1 ? "s" : ""} con pago realizado cuyas ganancias no están en la lista. Si las cargas aquí, sumarán al balance. Desde ahora todo lo demás lo agregas vos manualmente; esto es solo para no descolocarte con lo que ya existía.
-            </CardDescription>
+        <Card className="border-amber-500/60 bg-amber-50/70 dark:bg-amber-950/30 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-900 dark:text-amber-100">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/70 dark:text-amber-100">
+                    <TrendingUp className="h-4 w-4" />
+                  </span>
+                  Ganancias de ventas aún no cargadas
+                </CardTitle>
+                <CardDescription className="mt-1 text-xs leading-relaxed">
+                  Hay {ventasSinCargar.length} venta
+                  {ventasSinCargar.length !== 1 ? "s" : ""} con pago realizado cuyas ganancias no están
+                  en Finanzas. Si las cargas aquí, sumarán al balance. Desde ahora todo lo demás lo
+                  agregas vos manualmente; esto es solo para no descolocarte con lo que ya existía.
+                </CardDescription>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-[11px] uppercase tracking-wide text-amber-700/80 dark:text-amber-200/80">
+                  Monto total
+                </span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                  +{formatCurrency(totalGananciasVentasSinCargar)}
+                </span>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <ul className="text-sm list-disc list-inside text-muted-foreground">
+          <CardContent className="space-y-4 pt-0">
+            <div className="rounded-md border border-amber-200/70 bg-white/70 dark:border-amber-900/70 dark:bg-slate-950/40 max-h-40 overflow-auto">
               {ventasSinCargar.slice(0, 10).map((v) => (
-                <li key={v.id}>
-                  {v.vehicle_description?.trim() || (v.vehicle ? `${v.vehicle.make} ${v.vehicle.model} ${v.vehicle.year}` : "Venta")} · +{formatCurrency(v.margin)}
-                </li>
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm border-b last:border-b-0 border-amber-100/70 dark:border-amber-900/40"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-amber-900 dark:text-amber-50">
+                      {v.vehicle_description?.trim() ||
+                        (v.vehicle
+                          ? `${v.vehicle.make} ${v.vehicle.model} ${v.vehicle.year}`
+                          : "Venta")}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Fecha: {formatDate(v.sale_date)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    +{formatCurrency(v.margin)}
+                  </span>
+                </div>
               ))}
-              {ventasSinCargar.length > 10 && <li>… y {ventasSinCargar.length - 10} más</li>}
-            </ul>
-            <Button onClick={cargarGananciasVentas} disabled={cargandoGanancias}>
-              {cargandoGanancias ? "Cargando…" : `Cargar estas ${ventasSinCargar.length} ganancia(s) como ingresos (una vez)`}
-            </Button>
+              {ventasSinCargar.length > 10 && (
+                <div className="px-3 py-1 text-[11px] text-muted-foreground">
+                  … y {ventasSinCargar.length - 10} venta
+                  {ventasSinCargar.length - 10 !== 1 ? "s" : ""} más
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11px] text-muted-foreground">
+                Este paso se hace una sola vez para las ventas que ya existen. Después, cargá las
+                nuevas ganancias con <span className="font-semibold">“Nuevo Ingreso”</span>.
+              </p>
+              <Button
+                size="sm"
+                className="whitespace-nowrap"
+                onClick={cargarGananciasVentas}
+                disabled={cargandoGanancias}
+              >
+                {cargandoGanancias
+                  ? "Cargando ganancias…"
+                  : `Cargar estas ${ventasSinCargar.length} ganancia${
+                      ventasSinCargar.length !== 1 ? "s" : ""
+                    } como ingresos`}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
