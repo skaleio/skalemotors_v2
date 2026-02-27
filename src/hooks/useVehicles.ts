@@ -27,7 +27,7 @@ export function useVehicles(options: UseVehiclesOptions = {}) {
 
   const queryKey = ['vehicles', branchId, status, category, search]
 
-  const { data: vehicles = [], isLoading: loading, error, refetch } = useQuery({
+  const { data: vehicles = [], isLoading: loading, isFetching, error, refetch } = useQuery({
     queryKey,
     queryFn: () => vehicleService.getAll({
       branchId,
@@ -36,16 +36,18 @@ export function useVehicles(options: UseVehiclesOptions = {}) {
       search
     }),
     enabled: enabled && !!branchId, // Solo habilitar si hay branchId
-    staleTime, // Los datos se consideran frescos por 5 minutos
-    gcTime, // Mantener en cache por 10 minutos
-    refetchOnWindowFocus: true, // Refetch al cambiar de ventana
-    refetchOnMount: true, // Refetch al montar si hay datos en cache
-    retry: 2, // Reintentar 2 veces en caso de error
+    staleTime, // Los datos se consideran frescos (evita refetches innecesarios)
+    gcTime, // Mantener en cache
+    refetchOnWindowFocus: false, // Evita refetch al cambiar ventana que a veces falla y deja vacío
+    refetchOnMount: true, // Al montar usa cache si hay y está fresco; si no, carga
+    retry: 3, // Más reintentos para redes lentas o inestables
+    retryDelay: (attemptIndex) => Math.min(800 * 2 ** attemptIndex, 8000), // Backoff: ~0.8s, 1.6s, 3.2s
   })
 
   return {
     vehicles: vehicles as Vehicle[],
     loading,
+    isFetching,
     error: error as Error | null,
     refetch
   }

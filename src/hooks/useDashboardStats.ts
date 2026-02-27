@@ -280,10 +280,10 @@ export function useDashboardStats(branchId?: string) {
 
         console.log('✅ Appointments data:', { scheduledAppointments })
 
-        // 5. Total ingresos y balance (solo comisiones de ventas con pago realizado + ingresos_empresa - gastos_empresa)
+        // 5. Total ingresos y balance (ganancia por ventas con pago realizado + ingresos_empresa - gastos_empresa)
         let incomeFromSalesQuery = supabase
           .from('sales')
-          .select('commission, payment_status')
+          .select('margin, payment_status')
           .eq('status', 'completada')
           .eq('payment_status', 'realizado')
 
@@ -297,11 +297,11 @@ export function useDashboardStats(branchId?: string) {
           { data: null, error: null }
         )
 
-        // Lista de comisiones realizadas (ventas con valor comisión y pago realizado)
+        // Lista de ventas que suman al ingreso (ganancia = margin, para modal Total ingresos)
         let incomeSalesListQuery = supabase
           .from('sales')
           .select(`
-            id, sale_date, commission, vehicle_description,
+            id, sale_date, margin, vehicle_description,
             vehicle:vehicles (make, model, year)
           `)
           .eq('status', 'completada')
@@ -316,19 +316,17 @@ export function useDashboardStats(branchId?: string) {
           'incomeSalesListQuery',
           { data: null, error: null }
         )
-        const incomeFromSalesList = (incomeSalesListData || [])
-          .filter((s: any) => Number(s.commission ?? 0) > 0)
-          .map((s: any) => {
-            const vehicleText = s.vehicle_description?.trim() ||
-              (s.vehicle ? [s.vehicle.make, s.vehicle.model, s.vehicle.year].filter(Boolean).join(' ').trim() : '') || 'Vehículo'
-            return {
-              type: 'sale' as const,
-              id: s.id,
-              date: s.sale_date,
-              description: `Valor Comisión de ${vehicleText}`,
-              amount: Number(s.commission || 0),
-            }
-          })
+        const incomeFromSalesList = (incomeSalesListData || []).map((s: any) => {
+          const description = s.vehicle_description?.trim() ||
+            (s.vehicle ? [s.vehicle.make, s.vehicle.model, s.vehicle.year].filter(Boolean).join(' ').trim() : '') || 'Venta'
+          return {
+            type: 'sale' as const,
+            id: s.id,
+            date: s.sale_date,
+            description: description || 'Venta',
+            amount: Number(s.margin || 0),
+          }
+        })
 
         let ingresosEmpresaQuery = supabase
           .from('ingresos_empresa')
@@ -416,12 +414,9 @@ export function useDashboardStats(branchId?: string) {
           inversor_name: g.inversor_name ?? null,
         }))
 
-        const incomeFromSales = (incomeSalesData || []).reduce(
-          (sum: number, s: any) => sum + (s.payment_status === 'realizado' && Number(s.commission ?? 0) > 0 ? Number(s.commission) : 0),
-          0
-        )
+        const incomeFromSales = (incomeSalesData || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
         const incomeFromEmpresa = (ingresosEmpresaData || []).reduce(
-          (sum: number, i: any) => sum + ((i.payment_status === 'realizado' ? Number(i.amount || 0) : 0)),
+          (sum: number, i: any) => sum + ((i.payment_status ?? 'realizado') === 'realizado' ? Number(i.amount || 0) : 0),
           0
         )
         const totalIncome = incomeFromSales + incomeFromEmpresa

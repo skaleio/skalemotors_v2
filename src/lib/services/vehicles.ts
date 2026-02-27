@@ -6,40 +6,62 @@ type VehicleInsert = Database['public']['Tables']['vehicles']['Insert']
 type VehicleUpdate = Database['public']['Tables']['vehicles']['Update']
 
 export const vehicleService = {
-  // Obtener todos los vehículos
+  // Obtener todos los vehículos (con timeout y un reintento si se agota el tiempo)
   async getAll(filters?: {
     branchId?: string
     status?: string
     category?: string
     search?: string
   }) {
-    let query = supabase
-      .from('vehicles')
-      .select('*, branches(name, city, region)')
-      .order('created_at', { ascending: false })
+    const run = () => {
+      let query = supabase
+        .from('vehicles')
+        .select('*, branches(name, city, region)')
+        .order('created_at', { ascending: false })
 
-    if (filters?.branchId) {
-      query = query.eq('branch_id', filters.branchId)
+      if (filters?.branchId) {
+        query = query.eq('branch_id', filters.branchId)
+      }
+
+      if (filters?.status) {
+        query = query.eq('status', filters.status)
+      }
+
+      if (filters?.category) {
+        query = query.eq('category', filters.category)
+      }
+
+      if (filters?.search) {
+        query = query.or(
+          `make.ilike.%${filters.search}%,model.ilike.%${filters.search}%,vin.ilike.%${filters.search}%`
+        )
+      }
+
+      return query.then(({ data, error }) => {
+        if (error) throw error
+        return data as Vehicle[]
+      })
     }
 
-    if (filters?.status) {
-      query = query.eq('status', filters.status)
+    const timeoutMs = 25000 // 25 s para inventarios grandes
+    const withTimeout = <T>(promise: Promise<T>): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout cargando inventario')), timeoutMs)
+        )
+      ])
+
+    try {
+      return await withTimeout(run())
+    } catch (err) {
+      // Un solo reintento si fue timeout o fallo de red
+      try {
+        return await withTimeout(run())
+      } catch (retryErr) {
+        throw retryErr
+      }
     }
-
-    if (filters?.category) {
-      query = query.eq('category', filters.category)
-    }
-
-    if (filters?.search) {
-      query = query.or(
-        `make.ilike.%${filters.search}%,model.ilike.%${filters.search}%,vin.ilike.%${filters.search}%`
-      )
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-    return data as Vehicle[]
   },
 
   // Obtener un vehículo por ID

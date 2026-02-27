@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -15,18 +16,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Calendar as CalendarUi } from "@/components/ui/calendar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFundManagement } from "@/hooks/useFundManagement";
+import type { SeriePorDia, SeriePorMes } from "@/hooks/useFundManagement";
 import { supabase } from "@/lib/supabase";
 import {
   BarChart3,
   Building2,
   Calendar,
+  CalendarRange,
   DollarSign,
   Target,
   Users,
   Wallet,
 } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -119,12 +125,42 @@ function ChartTooltip(
   );
 }
 
+function filterSeriesByDateRange<T extends { date?: string; monthKey?: string }>(
+  series: T[],
+  range: DateRange | undefined
+): T[] {
+  if (!range?.from) return series;
+  const fromStr = range.from.toISOString().slice(0, 10);
+  const toStr = range.to ? range.to.toISOString().slice(0, 10) : fromStr;
+  const fromMonth = fromStr.slice(0, 7);
+  const toMonth = toStr.slice(0, 7);
+  return series.filter((item) => {
+    if ("date" in item && item.date) {
+      return item.date >= fromStr && item.date <= toStr;
+    }
+    if ("monthKey" in item && item.monthKey) {
+      return item.monthKey >= fromMonth && item.monthKey <= toMonth;
+    }
+    return true;
+  });
+}
+
 export default function FundManagement() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: fundData, isLoading: fundLoading } = useFundManagement(user?.branch_id ?? null);
   const [chartView, setChartView] = useState<ChartView>("day");
+  const [chartDateRange, setChartDateRange] = useState<DateRange | undefined>(undefined);
   const [detailModal, setDetailModal] = useState<DetailModalKey>(null);
+
+  const chartPorDia = (() => {
+    const raw = fundData?.charts?.porDia ?? [];
+    return filterSeriesByDateRange(raw as SeriePorDia[], chartDateRange);
+  })();
+  const chartPorMes = (() => {
+    const raw = fundData?.charts?.porMes ?? [];
+    return filterSeriesByDateRange(raw as SeriePorMes[], chartDateRange);
+  })();
 
   // Sincronización con Supabase: cuando se agrega, actualiza o elimina una venta, refrescar Ventas Hessen / Miami
   useEffect(() => {
@@ -193,23 +229,64 @@ export default function FundManagement() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <span className="text-sm font-medium text-muted-foreground">Vista del gráfico</span>
-                <Tabs value={chartView} onValueChange={(v) => setChartView(v as ChartView)}>
-                  <TabsList className="h-9 bg-muted/50">
-                    <TabsTrigger value="day" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                      Por día
-                    </TabsTrigger>
-                    <TabsTrigger value="month" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                      Por mes
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <div className="flex items-center gap-2">
+                  <Tabs value={chartView} onValueChange={(v) => setChartView(v as ChartView)}>
+                    <TabsList className="h-9 bg-muted/50">
+                      <TabsTrigger value="day" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        Por día
+                      </TabsTrigger>
+                      <TabsTrigger value="month" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        Por mes
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        aria-label="Filtrar por rango de fechas"
+                      >
+                        <CalendarRange className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <CalendarUi
+                        mode="range"
+                        selected={chartDateRange}
+                        onSelect={setChartDateRange}
+                        numberOfMonths={2}
+                        locale={undefined}
+                      />
+                      {chartDateRange?.from && (
+                        <div className="p-2 border-t flex items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {chartDateRange.to
+                              ? `${chartDateRange.from.toLocaleDateString("es-CL")} – ${chartDateRange.to.toLocaleDateString("es-CL")}`
+                              : chartDateRange.from.toLocaleDateString("es-CL")}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setChartDateRange(undefined)}
+                          >
+                            Limpiar
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
               <div className="rounded-xl border border-border/50 bg-muted/20 p-4 shadow-inner">
                 <div className="h-[360px] w-full">
                   {chartView === "day" ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart
-                        data={fundData.charts?.porDia ?? []}
+                        data={chartPorDia}
                         margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
                         barCategoryGap="12%"
                         barGap={6}
@@ -288,7 +365,7 @@ export default function FundManagement() {
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart
-                        data={fundData.charts?.porMes ?? []}
+                        data={chartPorMes}
                         margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
                         barCategoryGap="20%"
                         barGap={8}
@@ -690,6 +767,11 @@ export default function FundManagement() {
                   <p className="text-sm font-medium text-muted-foreground">Costo prep./limpieza</p>
                   <p className="text-xl font-bold text-red-600 dark:text-red-400">{formatCurrency(fundData.money?.costoPreparacionLimpieza ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Gasto acumulado</p>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <p className="text-sm font-medium text-muted-foreground">Invertido (Jota, Mike, Ronald)</p>
+                  <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(fundData.money?.invertidoJotaMikeRonald ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Total invertido por socios</p>
                 </div>
               </div>
               {(fundData.money?.rankingMarcas ?? []).length > 0 && (

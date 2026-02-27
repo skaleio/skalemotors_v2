@@ -247,7 +247,7 @@ const updateVehicleImages = async (
 
 export default function Inventory() {
   const { user, session } = useAuth();
-  const { vehicles, loading, refetch } = useVehicles({
+  const { vehicles, loading, isFetching, error: vehiclesError, refetch } = useVehicles({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user?.branch_id,
   });
@@ -374,18 +374,16 @@ export default function Inventory() {
     });
   }, [vehicles, searchQuery, selectedMake, selectedStatus, selectedType]);
 
-  useEffect(() => {
-    if (!user?.branch_id) return;
-    refetch();
-    setHasRetriedEmpty(false);
-  }, [user?.branch_id, refetch]);
-
+  // Un solo reintento cuando la carga terminó y llegó vacío (p. ej. fallo transitorio), con delay para no pisar la primera petición
   useEffect(() => {
     if (!user?.branch_id || loading) return;
     if (vehicles.length > 0) return;
     if (hasRetriedEmpty) return;
-    setHasRetriedEmpty(true);
-    refetch();
+    const t = setTimeout(() => {
+      setHasRetriedEmpty(true);
+      refetch();
+    }, 2200);
+    return () => clearTimeout(t);
   }, [user?.branch_id, loading, vehicles.length, hasRetriedEmpty, refetch]);
 
   useEffect(() => {
@@ -1188,7 +1186,12 @@ export default function Inventory() {
       {/* Vehicles Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Vehículos en Stock</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Vehículos en Stock
+            {isFetching && !loading && vehicles.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">Actualizando...</span>
+            )}
+          </CardTitle>
           <CardDescription>
             {filteredVehicles.length} vehículo{filteredVehicles.length !== 1 ? 's' : ''} encontrado{filteredVehicles.length !== 1 ? 's' : ''}
           </CardDescription>
@@ -1208,14 +1211,26 @@ export default function Inventory() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && (
+              {loading && !vehiclesError && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Cargando vehículos...
                   </TableCell>
                 </TableRow>
               )}
-              {filteredVehicles.map((vehicle) => (
+              {vehiclesError && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <p>No se pudo cargar el inventario. {vehiclesError.message || "Error de conexión."}</p>
+                      <Button variant="outline" size="sm" onClick={() => refetch()}>
+                        Reintentar
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && !vehiclesError && filteredVehicles.map((vehicle) => (
                 <TableRow
                   key={vehicle.id}
                   className="cursor-pointer"
@@ -1466,7 +1481,7 @@ export default function Inventory() {
             </TableBody>
           </Table>
 
-          {!loading && filteredVehicles.length === 0 && (
+          {!loading && !vehiclesError && filteredVehicles.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">
                 {isFilterActive

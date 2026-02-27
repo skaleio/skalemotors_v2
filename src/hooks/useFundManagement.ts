@@ -53,6 +53,8 @@ export interface FundManagementMoneyBlock {
   gananciasPorCredito: number;
   /** Costo preparación/limpieza: gasto acumulado por tipo */
   costoPreparacionLimpieza: number;
+  /** Total invertido por Jota, Mike y Ronald (suma de gastos con esos inversores) */
+  invertidoJotaMikeRonald: number;
   /** Ranking marcas más rentables por modelo */
   rankingMarcas: { make: string; model: string; units: number; margin: number }[];
 }
@@ -131,6 +133,7 @@ const EMPTY_FUND_DATA: FundManagementData = {
     gananciasPendientes: 0,
     gananciasPorCredito: 0,
     costoPreparacionLimpieza: 0,
+    invertidoJotaMikeRonald: 0,
     rankingMarcas: [],
   },
   performance: {
@@ -334,10 +337,11 @@ export function useFundManagement(branchId: string | null) {
         })
         .reduce((sum: number, s: { margin?: number | null }) => sum + Number(s.margin ?? 0), 0);
 
-      // Gastos preparación / limpieza (expense_type que contenga preparacion o limpieza)
+      // Gastos: preparación/limpieza e invertido por Jota, Mike, Ronald
+      const INVERSORES_INVERTIDO = ["Jota", "Mike", "Ronald"] as const;
       let gastosQuery = supabase
         .from("gastos_empresa")
-        .select("id, amount, expense_type");
+        .select("id, amount, expense_type, inversor_name, inversor:users!gastos_empresa_inversor_id_fkey(id, full_name)");
       if (branchId) {
         gastosQuery = gastosQuery.eq("branch_id", branchId);
       }
@@ -347,6 +351,14 @@ export function useFundManagement(branchId: string | null) {
         .filter((g: { expense_type?: string }) => {
           const t = (g.expense_type || "").toLowerCase();
           return t.includes("preparacion") || t.includes("preparación") || t.includes("limpieza");
+        })
+        .reduce((sum: number, g: { amount?: number }) => sum + Number(g.amount ?? 0), 0);
+      const displayInversor = (g: { inversor?: { full_name?: string | null } | null; inversor_name?: string | null }) =>
+        g.inversor?.full_name ?? g.inversor_name ?? "";
+      const invertidoJotaMikeRonald = gastos
+        .filter((g: { amount?: number }) => {
+          const name = displayInversor(g);
+          return INVERSORES_INVERTIDO.some((n) => name === n);
         })
         .reduce((sum: number, g: { amount?: number }) => sum + Number(g.amount ?? 0), 0);
 
@@ -559,6 +571,7 @@ export function useFundManagement(branchId: string | null) {
           gananciasPendientes,
           gananciasPorCredito,
           costoPreparacionLimpieza,
+          invertidoJotaMikeRonald,
           rankingMarcas,
         },
         performance: {
