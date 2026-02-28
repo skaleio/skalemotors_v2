@@ -206,6 +206,8 @@ export default function Finance() {
   const [totalGastosModalOpen, setTotalGastosModalOpen] = useState(false);
   const [filterTotalGastosTipo, setFilterTotalGastosTipo] = useState<ExpenseType | "all">("all");
   const [filterTotalGastosInversor, setFilterTotalGastosInversor] = useState<string>("all");
+  const [totalIngresosModalOpen, setTotalIngresosModalOpen] = useState(false);
+  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [pendientesCardModalOpen, setPendientesCardModalOpen] = useState(false);
   const [devolucionInversorModal, setDevolucionInversorModal] = useState<(typeof INVERSORES_A_DEVOLVER)[number] | null>(null);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
@@ -768,7 +770,10 @@ export default function Finance() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setTotalIngresosModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total ingresos</CardTitle>
             <TrendingUp className="h-4 w-4 text-emerald-500" />
@@ -816,7 +821,10 @@ export default function Finance() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setBalanceModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Balance</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-500" />
@@ -2233,6 +2241,244 @@ export default function Finance() {
                 </>
               );
             })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={totalIngresosModalOpen} onOpenChange={setTotalIngresosModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              Total ingresos
+            </DialogTitle>
+            <DialogDescription>
+              Ingresos cargados manualmente y marcados como realizados (suman al balance). Ordenados por fecha (más reciente primero).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : ingresosRealizados.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay ingresos realizados.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[...ingresosRealizados]
+                    .sort((a, b) => b.income_date.localeCompare(a.income_date))
+                    .map((i) => (
+                      <Card key={i.id} className="overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <Badge variant="secondary">{i.etiqueta}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                handleEditIngreso(i.id);
+                                setTotalIngresosModalOpen(false);
+                                setDialogIngresoOpen(true);
+                              }}
+                              title="Editar ingreso"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setDeleteIngresoId(i.id);
+                                setTotalIngresosModalOpen(false);
+                              }}
+                              title="Eliminar ingreso"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                            {i.description || "Ingreso"}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                            {formatDate(i.income_date)}
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">Monto</span>
+                            <span className="font-medium text-emerald-600">
+                              +{formatCurrency(Number(i.amount))}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+                <Card className="mt-4 bg-muted/60">
+                  <CardContent className="py-3 px-4 flex items-center justify-between">
+                    <span className="font-semibold text-muted-foreground">Total ingresos (realizados)</span>
+                    <span className="font-bold text-emerald-600">+{formatCurrency(totalIngresos)}</span>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={balanceModalOpen} onOpenChange={setBalanceModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-blue-500" />
+              Balance
+            </DialogTitle>
+            <DialogDescription>
+              Resumen: Total ingresos (realizados) menos Total gastos. Los ingresos pendientes no suman hasta marcarlos como realizados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto space-y-4 py-2">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex items-center justify-between rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total ingresos</p>
+                  <p className="text-xs text-muted-foreground">
+                    {ingresosRealizados.length} ingreso{ingresosRealizados.length !== 1 ? "s" : ""} realizados
+                  </p>
+                </div>
+                <span className="text-lg font-bold text-emerald-600">
+                  {loading ? "…" : formatCurrency(totalIngresos)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total gastos</p>
+                  <p className="text-xs text-muted-foreground">{gastos.length} gasto{gastos.length !== 1 ? "s" : ""}</p>
+                </div>
+                <span className="text-lg font-bold text-red-600">
+                  {loading ? "…" : formatCurrency(totalGastos)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border-2 border-primary/30 px-4 py-3 bg-muted/50">
+                <div>
+                  <p className="text-sm font-semibold">Balance</p>
+                  <p className="text-xs text-muted-foreground">Ingresos − Gastos</p>
+                </div>
+                <span className={`text-xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                  {loading ? "…" : formatCurrency(balance)}
+                </span>
+              </div>
+            </div>
+            {balance < 0 && (
+              <p className="text-xs text-muted-foreground rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2">
+                El balance sale en rojo porque los gastos superan a los ingresos. Los &quot;Ingresos pendientes&quot; no suman hasta marcarlos como realizados.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Ingresos pendientes: {formatCurrency(totalIngresosPendientes)} ({ingresosPendientes.length} ingreso{ingresosPendientes.length !== 1 ? "s" : ""}) — no incluidos en el balance.
+            </p>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Detalle de ingresos realizados
+              </h4>
+              <div className="rounded-md border overflow-hidden">
+                {loading || ingresosRealizados.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    {loading ? "Cargando…" : "No hay ingresos realizados."}
+                  </div>
+                ) : (
+                  <div className="max-h-48 overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Fecha</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead className="w-24">Etiqueta</TableHead>
+                          <TableHead className="text-right w-28">Monto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...ingresosRealizados]
+                          .sort((a, b) => b.income_date.localeCompare(a.income_date))
+                          .map((i) => (
+                            <TableRow key={i.id}>
+                              <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                                {formatDate(i.income_date)}
+                              </TableCell>
+                              <TableCell className="text-sm max-w-[200px] truncate">
+                                {i.description || "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-xs">{i.etiqueta}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-emerald-600 text-sm">
+                                +{formatCurrency(Number(i.amount))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1">
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+                Detalle de gastos
+              </h4>
+              <div className="rounded-md border overflow-hidden">
+                {loading || gastos.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    {loading ? "Cargando…" : "No hay gastos."}
+                  </div>
+                ) : (
+                  <div className="max-h-56 overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Fecha</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead className="w-24">Tipo</TableHead>
+                          <TableHead className="w-24">Inversor</TableHead>
+                          <TableHead className="text-right w-28">Monto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...gastos]
+                          .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+                          .map((g) => (
+                            <TableRow key={g.id}>
+                              <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                                {formatDate(g.expense_date)}
+                              </TableCell>
+                              <TableCell className="text-sm max-w-[180px] truncate">
+                                {g.description || "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-xs">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {displayInversor(g)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-red-600 text-sm">
+                                -{formatCurrency(Number(g.amount))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

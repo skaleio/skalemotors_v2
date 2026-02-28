@@ -6,6 +6,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -29,9 +39,14 @@ import {
   CalendarRange,
   DollarSign,
   Target,
+  Trash2,
   Users,
   Wallet,
 } from "lucide-react";
+import { toast } from "sonner";
+import { saleService } from "@/lib/services/sales";
+import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
+import { gastosEmpresaService } from "@/lib/services/gastosEmpresa";
 import type { DateRange } from "react-day-picker";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -71,6 +86,15 @@ function getConsignacionStatusDisplay(status: string) {
 }
 
 type DetailModalKey = "hessen" | "miami" | "comprados" | "consignados" | "stock" | null;
+
+type MoneyDetailModalKey =
+  | "facturaciones"
+  | "ganancias_reales"
+  | "ganancias_pendientes"
+  | "credito"
+  | "costo_prep"
+  | "invertido"
+  | null;
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "—";
@@ -156,6 +180,29 @@ export default function FundManagement() {
   const [chartView, setChartView] = useState<ChartView>("day");
   const [chartDateRange, setChartDateRange] = useState<DateRange | undefined>(undefined);
   const [detailModal, setDetailModal] = useState<DetailModalKey>(null);
+  const [moneyDetailModal, setMoneyDetailModal] = useState<MoneyDetailModalKey>(null);
+  const [deleteMoneyItem, setDeleteMoneyItem] = useState<{ type: "sale" | "ingreso" | "gasto"; id: string } | null>(null);
+
+  const handleDeleteMoneyItem = async () => {
+    if (!deleteMoneyItem) return;
+    try {
+      if (deleteMoneyItem.type === "sale") {
+        await saleService.delete(deleteMoneyItem.id);
+        toast.success("Venta eliminada. Los datos se actualizarán.");
+      } else if (deleteMoneyItem.type === "ingreso") {
+        await ingresosEmpresaService.remove(deleteMoneyItem.id);
+        toast.success("Ingreso eliminado. Los datos se actualizarán.");
+      } else {
+        await gastosEmpresaService.remove(deleteMoneyItem.id);
+        toast.success("Gasto eliminado. Los datos se actualizarán.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["fund-management"] });
+      setDeleteMoneyItem(null);
+    } catch (e) {
+      console.error(e);
+      toast.error("No se pudo eliminar. Intenta de nuevo.");
+    }
+  };
 
   const chartPorDia = (() => {
     const raw = fundData?.charts?.porDia ?? [];
@@ -747,36 +794,60 @@ export default function FundManagement() {
           ) : fundData ? (
             <div className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <div className="rounded-lg border bg-background p-4">
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("facturaciones")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Facturaciones</p>
                   <p className="text-xl font-bold">{formatCurrency(fundData.money?.facturaciones ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Ingreso total bruto</p>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("ganancias_reales")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Ganancias reales</p>
                   <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(fundData.money?.gananciasReales ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Lo que ya entró a caja</p>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("ganancias_pendientes")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Ganancias pendientes</p>
                   <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(fundData.money?.gananciasPendientes ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Por cobrar</p>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("credito")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Ganancias por crédito</p>
                   <p className="text-xl font-bold">{formatCurrency(fundData.money?.gananciasPorCredito ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Margen financieras</p>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("costo_prep")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Costo prep./limpieza</p>
                   <p className="text-xl font-bold text-red-600 dark:text-red-400">{formatCurrency(fundData.money?.costoPreparacionLimpieza ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Gasto acumulado</p>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoneyDetailModal("invertido")}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                >
                   <p className="text-sm font-medium text-muted-foreground">Invertido (Jota, Mike, Ronald)</p>
                   <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(fundData.money?.invertidoJotaMikeRonald ?? 0)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Total invertido por socios</p>
-                </div>
+                </button>
               </div>
               {(fundData.money?.rankingMarcas ?? []).length > 0 && (
                 <div className="rounded-md border p-3">
@@ -805,6 +876,327 @@ export default function FundManagement() {
                   </div>
                 </div>
               )}
+
+              {/* Modal detalle de métricas de dinero */}
+              <Dialog open={!!moneyDetailModal} onOpenChange={(open) => !open && setMoneyDetailModal(null)}>
+                <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {moneyDetailModal === "facturaciones" && "Facturaciones — Detalle"}
+                      {moneyDetailModal === "ganancias_reales" && "Ganancias reales — Detalle"}
+                      {moneyDetailModal === "ganancias_pendientes" && "Ganancias pendientes — Detalle"}
+                      {moneyDetailModal === "credito" && "Ganancias por crédito — Detalle"}
+                      {moneyDetailModal === "costo_prep" && "Costo prep./limpieza — Detalle"}
+                      {moneyDetailModal === "invertido" && "Invertido (Jota, Mike, Ronald) — Detalle"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {moneyDetailModal === "facturaciones" && "Ventas completadas que componen el ingreso total bruto."}
+                      {moneyDetailModal === "ganancias_reales" && "Margen de ventas con pago realizado más ingresos realizados. Si falta alguna venta (ej. JAC), revisa que su estado de pago sea «Realizado» en Ventas o en Ganancias pendientes."}
+                      {moneyDetailModal === "ganancias_pendientes" && "Margen de ventas por cobrar más ingresos pendientes."}
+                      {moneyDetailModal === "credito" && "Ventas con financiamiento/crédito."}
+                      {moneyDetailModal === "costo_prep" && "Gastos de preparación y limpieza."}
+                      {moneyDetailModal === "invertido" && "Gastos registrados a nombre de Jota, Mike y Ronald."}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="overflow-auto flex-1 min-h-0 -mx-1 px-1">
+                    {moneyDetailModal === "facturaciones" && (() => {
+                      const list = fundData?.money?.moneyDetails?.facturacionesSales ?? [];
+                      return list.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay ventas en este período.</p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">Total: {formatCurrency(list.reduce((s, i) => s + i.sale_price, 0))} ({list.length} ventas)</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Vehículo / Descripción</TableHead>
+                                <TableHead className="text-right">Precio venta</TableHead>
+                                <TableHead className="w-12">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {list.map((r) => (
+                                <TableRow key={r.id}>
+                                  <TableCell className="text-muted-foreground">{formatDate(r.sale_date)}</TableCell>
+                                  <TableCell className="font-medium">{r.label || "—"}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(r.sale_price)}</TableCell>
+                                  <TableCell>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "sale", id: r.id })} aria-label="Eliminar venta">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      );
+                    })()}
+                    {moneyDetailModal === "ganancias_reales" && (() => {
+                      const ventas = fundData?.money?.moneyDetails?.gananciasRealesVentas ?? [];
+                      const ingresos = fundData?.money?.moneyDetails?.gananciasRealesIngresos ?? [];
+                      const totalV = ventas.reduce((s, i) => s + i.margin, 0);
+                      const totalI = ingresos.reduce((s, i) => s + i.amount, 0);
+                      return (ventas.length === 0 && ingresos.length === 0) ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay datos.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          <p className="text-sm text-muted-foreground">Margen ventas realizadas: {formatCurrency(totalV)} · Ingresos realizados: {formatCurrency(totalI)} · Total: {formatCurrency(totalV + totalI)}</p>
+                          {ventas.length > 0 && (
+                            <>
+                              <p className="text-sm font-medium">Ventas con pago realizado</p>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Vehículo</TableHead>
+                                    <TableHead className="text-right">Margen</TableHead>
+                                    <TableHead className="w-12">Acciones</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {ventas.map((r) => (
+                                    <TableRow key={r.id}>
+                                      <TableCell>{formatDate(r.sale_date)}</TableCell>
+                                      <TableCell>{r.label || "—"}</TableCell>
+                                      <TableCell className="text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(r.margin)}</TableCell>
+                                      <TableCell>
+                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "sale", id: r.id })} aria-label="Eliminar venta">
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </>
+                          )}
+                          {ingresos.length > 0 && (
+                            <>
+                              <p className="text-sm font-medium">Ingresos realizados</p>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Descripción</TableHead>
+                                    <TableHead className="text-right">Monto</TableHead>
+                                    <TableHead className="w-12">Acciones</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {ingresos.map((r) => (
+                                    <TableRow key={r.id}>
+                                      <TableCell>{formatDate(r.income_date)}</TableCell>
+                                      <TableCell>{r.description || "—"}</TableCell>
+                                      <TableCell className="text-right">{formatCurrency(r.amount)}</TableCell>
+                                      <TableCell>
+                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "ingreso", id: r.id })} aria-label="Eliminar ingreso">
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {moneyDetailModal === "ganancias_pendientes" && (() => {
+                      const ventas = fundData?.money?.moneyDetails?.gananciasPendientesVentas ?? [];
+                      const ingresos = fundData?.money?.moneyDetails?.gananciasPendientesIngresos ?? [];
+                      const totalV = ventas.reduce((s, i) => s + i.margin, 0);
+                      const totalI = ingresos.reduce((s, i) => s + i.amount, 0);
+                      return (ventas.length === 0 && ingresos.length === 0) ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay pendientes de cobro.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          <p className="text-sm text-muted-foreground">Margen por cobrar: {formatCurrency(totalV)} · Ingresos pendientes: {formatCurrency(totalI)} · Total: {formatCurrency(totalV + totalI)}</p>
+                          {ventas.length > 0 && (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Fecha</TableHead>
+                                  <TableHead>Vehículo</TableHead>
+                                  <TableHead className="text-right">Margen</TableHead>
+                                  <TableHead className="w-12">Acciones</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {ventas.map((r) => (
+                                  <TableRow key={r.id}>
+                                    <TableCell>{formatDate(r.sale_date)}</TableCell>
+                                    <TableCell>{r.label || "—"}</TableCell>
+                                    <TableCell className="text-right text-amber-600 dark:text-amber-400">{formatCurrency(r.margin)}</TableCell>
+                                    <TableCell>
+                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "sale", id: r.id })} aria-label="Eliminar venta">
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                          {ingresos.length > 0 && (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Fecha</TableHead>
+                                  <TableHead>Descripción</TableHead>
+                                  <TableHead className="text-right">Monto</TableHead>
+                                  <TableHead className="w-12">Acciones</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {ingresos.map((r) => (
+                                  <TableRow key={r.id}>
+                                    <TableCell>{formatDate(r.income_date)}</TableCell>
+                                    <TableCell>{r.description || "—"}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(r.amount)}</TableCell>
+                                    <TableCell>
+                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "ingreso", id: r.id })} aria-label="Eliminar ingreso">
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {moneyDetailModal === "credito" && (() => {
+                      const list = fundData?.money?.moneyDetails?.creditoVentas ?? [];
+                      return list.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay ventas con crédito/financiamiento.</p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">Total margen: {formatCurrency(list.reduce((s, i) => s + i.margin, 0))} ({list.length} ventas)</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Vehículo</TableHead>
+                                <TableHead className="text-right">Margen</TableHead>
+                                <TableHead className="w-12">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {list.map((r) => (
+                                <TableRow key={r.id}>
+                                  <TableCell>{formatDate(r.sale_date)}</TableCell>
+                                  <TableCell>{r.label || "—"}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(r.margin)}</TableCell>
+                                  <TableCell>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "sale", id: r.id })} aria-label="Eliminar venta">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      );
+                    })()}
+                    {moneyDetailModal === "costo_prep" && (() => {
+                      const list = fundData?.money?.moneyDetails?.gastosPreparacion ?? [];
+                      return list.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay gastos de preparación/limpieza.</p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">Total: {formatCurrency(list.reduce((s, i) => s + i.amount, 0))} ({list.length} gastos)</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead className="text-right">Monto</TableHead>
+                                <TableHead className="w-12">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {list.map((r) => (
+                                <TableRow key={r.id}>
+                                  <TableCell>{formatDate(r.expense_date)}</TableCell>
+                                  <TableCell>{r.expense_type || "—"}</TableCell>
+                                  <TableCell className="text-right text-red-600 dark:text-red-400">{formatCurrency(r.amount)}</TableCell>
+                                  <TableCell>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "gasto", id: r.id })} aria-label="Eliminar gasto">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      );
+                    })()}
+                    {moneyDetailModal === "invertido" && (() => {
+                      const list = fundData?.money?.moneyDetails?.gastosInversores ?? [];
+                      return list.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">No hay gastos de Jota, Mike o Ronald.</p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-2">Total invertido: {formatCurrency(list.reduce((s, i) => s + i.amount, 0))} ({list.length} registros)</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Inversor</TableHead>
+                                <TableHead className="text-right">Monto</TableHead>
+                                <TableHead className="w-12">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {list.map((r) => (
+                                <TableRow key={r.id}>
+                                  <TableCell>{formatDate(r.expense_date)}</TableCell>
+                                  <TableCell className="font-medium">{r.inversor_name || "—"}</TableCell>
+                                  <TableCell className="text-right text-blue-600 dark:text-blue-400">{formatCurrency(r.amount)}</TableCell>
+                                  <TableCell>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteMoneyItem({ type: "gasto", id: r.id })} aria-label="Eliminar gasto">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <AlertDialog open={!!deleteMoneyItem} onOpenChange={(open) => !open && setDeleteMoneyItem(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {deleteMoneyItem?.type === "sale" && "¿Eliminar esta venta?"}
+                      {deleteMoneyItem?.type === "ingreso" && "¿Eliminar este ingreso?"}
+                      {deleteMoneyItem?.type === "gasto" && "¿Eliminar este gasto?"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {deleteMoneyItem?.type === "sale" && "La venta se eliminará y se revertirá el estado del lead y del vehículo si aplica. Esta acción no se puede deshacer."}
+                      {deleteMoneyItem?.type === "ingreso" && "El ingreso se eliminará de los registros. Esta acción no se puede deshacer."}
+                      {deleteMoneyItem?.type === "gasto" && "El gasto se eliminará de los registros. Esta acción no se puede deshacer."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setDeleteMoneyItem(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteMoneyItem} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Eliminar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ) : (
             <div className="py-8 text-center text-muted-foreground">Sin datos de métricas</div>

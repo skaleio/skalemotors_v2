@@ -105,6 +105,7 @@ const menuCategories = [
       { title: "Gastos/Ingresos", url: "/app/finance", icon: Receipt },
       { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
       { title: "Ventas", url: "/app/sales", icon: TrendingUp },
+      { title: "Distribución de salarios", url: "/app/salary-distribution", icon: PieChart },
       { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
       { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },

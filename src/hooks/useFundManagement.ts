@@ -57,6 +57,19 @@ export interface FundManagementMoneyBlock {
   invertidoJotaMikeRonald: number;
   /** Ranking marcas más rentables por modelo */
   rankingMarcas: { make: string; model: string; units: number; margin: number }[];
+  /** Detalle para modales de cada métrica */
+  moneyDetails?: FundManagementMoneyDetails;
+}
+
+export interface FundManagementMoneyDetails {
+  facturacionesSales: { id: string; sale_date: string; label: string; sale_price: number }[];
+  gananciasRealesVentas: { id: string; sale_date: string; label: string; margin: number; payment_status: string | null }[];
+  gananciasRealesIngresos: { id: string; amount: number; description: string | null; income_date: string }[];
+  gananciasPendientesVentas: { id: string; sale_date: string; label: string; margin: number }[];
+  gananciasPendientesIngresos: { id: string; amount: number; description: string | null; income_date: string }[];
+  creditoVentas: { id: string; sale_date: string; label: string; margin: number }[];
+  gastosPreparacion: { id: string; amount: number; expense_type: string; expense_date: string }[];
+  gastosInversores: { id: string; amount: number; inversor_name: string; expense_date: string }[];
 }
 
 export interface FundManagementPerformanceBlock {
@@ -135,6 +148,16 @@ const EMPTY_FUND_DATA: FundManagementData = {
     costoPreparacionLimpieza: 0,
     invertidoJotaMikeRonald: 0,
     rankingMarcas: [],
+    moneyDetails: {
+      facturacionesSales: [],
+      gananciasRealesVentas: [],
+      gananciasRealesIngresos: [],
+      gananciasPendientesVentas: [],
+      gananciasPendientesIngresos: [],
+      creditoVentas: [],
+      gastosPreparacion: [],
+      gastosInversores: [],
+    },
   },
   performance: {
     totalVendidos: 0,
@@ -311,31 +334,35 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
       // Ingresos empresa (realizados vs pendientes)
       let ingresosQuery = supabase
         .from("ingresos_empresa")
-        .select("id, amount, payment_status");
+        .select("id, amount, payment_status, description, income_date");
       if (branchId) {
         ingresosQuery = ingresosQuery.eq("branch_id", branchId);
       }
       const { data: ingresosData } = await ingresosQuery;
       const ingresos = ingresosData ?? [];
       const ingresosRealizados = ingresos.filter(
-        (i: { payment_status?: string }) => (i.payment_status || "realizado") === "realizado"
+        (i: { payment_status?: string }) => (i.payment_status ?? "").trim().toLowerCase() !== "pendiente"
       );
       const ingresosPendientes = ingresos.filter(
-        (i: { payment_status?: string }) => (i.payment_status || "") === "pendiente"
+        (i: { payment_status?: string }) => (i.payment_status || "").trim().toLowerCase() === "pendiente"
       );
+
+      // Comparación robusta: "realizado" con cualquier mayúscula/espacios para no perder ventas (ej. JAC)
+      const isPaymentRealizado = (ps: string | null | undefined) =>
+        (ps ?? "").trim().toLowerCase() === "realizado";
 
       const facturaciones = sales.reduce(
         (sum: number, s: { sale_price?: number }) => sum + Number(s.sale_price ?? 0),
         0
       );
       const marginRealizado = sales
-        .filter((s: { payment_status?: string | null }) => s.payment_status === "realizado")
+        .filter((s: { payment_status?: string | null }) => isPaymentRealizado(s.payment_status))
         .reduce((sum: number, s: { margin?: number | null }) => sum + Number(s.margin ?? 0), 0);
       const gananciasReales =
         marginRealizado +
         ingresosRealizados.reduce((sum: number, i: { amount?: number }) => sum + Number(i.amount ?? 0), 0);
       const marginPendiente = sales
-        .filter((s: { payment_status?: string | null }) => s.payment_status !== "realizado")
+        .filter((s: { payment_status?: string | null }) => !isPaymentRealizado(s.payment_status))
         .reduce((sum: number, s: { margin?: number | null }) => sum + Number(s.margin ?? 0), 0);
       const gananciasPendientes =
         marginPendiente +
@@ -351,7 +378,7 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
       const INVERSORES_INVERTIDO = ["Jota", "Mike", "Ronald"] as const;
       let gastosQuery = supabase
         .from("gastos_empresa")
-        .select("id, amount, expense_type, inversor_name, inversor:users!gastos_empresa_inversor_id_fkey(id, full_name)");
+        .select("id, amount, expense_type, expense_date, inversor_name, inversor:users!gastos_empresa_inversor_id_fkey(id, full_name)");
       if (branchId) {
         gastosQuery = gastosQuery.eq("branch_id", branchId);
       }
@@ -371,6 +398,89 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
           return INVERSORES_INVERTIDO.some((n) => name === n);
         })
         .reduce((sum: number, g: { amount?: number }) => sum + Number(g.amount ?? 0), 0);
+
+      // Detalle para modales de métricas de dinero
+      const facturacionesSales = (sales as any[])
+        .map((s: any) => ({
+          id: s.id,
+          sale_date: (s.sale_date || "").slice(0, 10),
+          label: (s.vehicle_description || "").trim() || (s.vehicle ? `${s.vehicle.make || ""} ${s.vehicle.model || ""} ${s.vehicle.year || ""}`.trim() : "") || "Venta",
+          sale_price: Number(s.sale_price ?? 0),
+        }))
+        .sort((a: { sale_date: string }, b: { sale_date: string }) => (b.sale_date || "").localeCompare(a.sale_date || ""));
+      const gananciasRealesVentas = (sales as any[])
+        .filter((s: any) => isPaymentRealizado(s.payment_status))
+        .map((s: any) => ({
+          id: s.id,
+          sale_date: (s.sale_date || "").slice(0, 10),
+          label: (s.vehicle_description || "").trim() || (s.vehicle ? `${s.vehicle.make || ""} ${s.vehicle.model || ""} ${s.vehicle.year || ""}`.trim() : "") || "Venta",
+          margin: Number(s.margin ?? 0),
+          payment_status: s.payment_status ?? null,
+        }))
+        .sort((a: { sale_date: string }, b: { sale_date: string }) => (b.sale_date || "").localeCompare(a.sale_date || ""));
+      const gananciasRealesIngresos = (ingresosRealizados as any[]).map((i: any) => ({
+        id: i.id,
+        amount: Number(i.amount ?? 0),
+        description: i.description ?? null,
+        income_date: (i.income_date || "").slice(0, 10),
+      }));
+      const gananciasPendientesVentas = (sales as any[])
+        .filter((s: any) => !isPaymentRealizado(s.payment_status))
+        .map((s: any) => ({
+          id: s.id,
+          sale_date: (s.sale_date || "").slice(0, 10),
+          label: (s.vehicle_description || "").trim() || (s.vehicle ? `${s.vehicle.make || ""} ${s.vehicle.model || ""} ${s.vehicle.year || ""}`.trim() : "") || "Venta",
+          margin: Number(s.margin ?? 0),
+        }))
+        .sort((a: { sale_date: string }, b: { sale_date: string }) => (b.sale_date || "").localeCompare(a.sale_date || ""));
+      const gananciasPendientesIngresos = (ingresosPendientes as any[]).map((i: any) => ({
+        id: i.id,
+        amount: Number(i.amount ?? 0),
+        description: i.description ?? null,
+        income_date: (i.income_date || "").slice(0, 10),
+      }));
+      const creditoVentas = (sales as any[])
+        .filter((s: any) => {
+          const pm = (s.payment_method || "").toLowerCase();
+          return pm.includes("credito") || pm.includes("crédito") || pm.includes("financiamiento") || pm.includes("financiado");
+        })
+        .map((s: any) => ({
+          id: s.id,
+          sale_date: (s.sale_date || "").slice(0, 10),
+          label: (s.vehicle_description || "").trim() || (s.vehicle ? `${s.vehicle.make || ""} ${s.vehicle.model || ""} ${s.vehicle.year || ""}`.trim() : "") || "Venta",
+          margin: Number(s.margin ?? 0),
+        }))
+        .sort((a: { sale_date: string }, b: { sale_date: string }) => (b.sale_date || "").localeCompare(a.sale_date || ""));
+      const gastosPreparacion = (gastos as any[])
+        .filter((g: any) => {
+          const t = (g.expense_type || "").toLowerCase();
+          return t.includes("preparacion") || t.includes("preparación") || t.includes("limpieza");
+        })
+        .map((g: any) => ({
+          id: g.id,
+          amount: Number(g.amount ?? 0),
+          expense_type: g.expense_type || "",
+          expense_date: (g.expense_date || "").slice(0, 10),
+        }));
+      const gastosInversores = (gastos as any[])
+        .filter((g: any) => INVERSORES_INVERTIDO.some((n) => displayInversor(g) === n))
+        .map((g: any) => ({
+          id: g.id,
+          amount: Number(g.amount ?? 0),
+          inversor_name: displayInversor(g),
+          expense_date: (g.expense_date || "").slice(0, 10),
+        }))
+        .sort((a: { expense_date: string }, b: { expense_date: string }) => (b.expense_date || "").localeCompare(a.expense_date || ""));
+      const moneyDetails: FundManagementMoneyDetails = {
+        facturacionesSales,
+        gananciasRealesVentas,
+        gananciasRealesIngresos,
+        gananciasPendientesVentas,
+        gananciasPendientesIngresos,
+        creditoVentas,
+        gastosPreparacion,
+        gastosInversores,
+      };
 
       // Ranking marcas por margen (ventas: vehicle make/model o vehicle_description como fallback)
       const makeModelMap = new Map<
@@ -600,6 +710,7 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
           costoPreparacionLimpieza,
           invertidoJotaMikeRonald,
           rankingMarcas,
+          moneyDetails,
         },
         performance: {
           totalVendidos,

@@ -32,6 +32,7 @@ const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
 const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
+const SalaryDistribution = lazy(() => import("./pages/SalaryDistribution"));
 const Billing = lazy(() => import("./pages/Billing"));
 const PostSaleCRM = lazy(() => import("./pages/PostSaleCRM"));
 const AdvancedInventory = lazy(() => import("./pages/AdvancedInventory"));
@@ -231,6 +232,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <FinancialCalculator />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/salary-distribution" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <SalaryDistribution />
                   </Layout>
                 </ProtectedRoute>
               } />
