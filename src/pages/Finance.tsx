@@ -207,6 +207,7 @@ export default function Finance() {
   const [filterTotalGastosTipo, setFilterTotalGastosTipo] = useState<ExpenseType | "all">("all");
   const [filterTotalGastosInversor, setFilterTotalGastosInversor] = useState<string>("all");
   const [pendientesCardModalOpen, setPendientesCardModalOpen] = useState(false);
+  const [devolucionInversorModal, setDevolucionInversorModal] = useState<(typeof INVERSORES_A_DEVOLVER)[number] | null>(null);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
@@ -908,7 +909,11 @@ export default function Finance() {
             const monto = aDevolverPorInversor[nombre];
             const colorClass = INVERSOR_COLORS[nombre];
             return (
-              <Card key={nombre}>
+              <Card
+                key={nombre}
+                className="cursor-pointer transition-colors hover:bg-muted/50"
+                onClick={() => setDevolucionInversorModal(nombre)}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
@@ -2222,6 +2227,106 @@ export default function Finance() {
                       </span>
                       <span className="font-bold text-red-600">
                         -{formatCurrency(totalFiltrado)}
+                      </span>
+                    </CardContent>
+                  </Card>
+                </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={devolucionInversorModal !== null} onOpenChange={(open) => !open && setDevolucionInversorModal(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${devolucionInversorModal ? INVERSOR_COLORS[devolucionInversorModal] : ""}`}>
+                {devolucionInversorModal ?? ""}
+              </span>
+              Gastos a devolver
+            </DialogTitle>
+            <DialogDescription>
+              {devolucionInversorModal
+                ? `Gastos de ${devolucionInversorModal} sin devolver (devolución = No). Ordenados por fecha (más reciente primero).`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {!devolucionInversorModal ? null : loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : (() => {
+              const gastosInversor = gastos.filter(
+                (g) => displayInversor(g) === devolucionInversorModal && !(g.devolucion ?? false)
+              );
+              const totalInversor = gastosInversor.reduce((sum, g) => sum + Number(g.amount), 0);
+              const ordenados = [...gastosInversor].sort((a, b) =>
+                b.expense_date.localeCompare(a.expense_date)
+              );
+              return ordenados.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No hay gastos pendientes de devolver para {devolucionInversorModal}.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {ordenados.map((g) => (
+                      <Card key={g.id} className="overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                handleEdit(g);
+                                setDevolucionInversorModal(null);
+                                setDialogOpen(true);
+                              }}
+                              title="Editar gasto"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setDeleteConfirmId(g.id);
+                                setDevolucionInversorModal(null);
+                              }}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                            {g.description || "—"}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                            {formatDate(g.expense_date)}
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">Monto</span>
+                            <span className="font-medium text-red-600">
+                              -{formatCurrency(Number(g.amount))}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  <Card className="mt-4 bg-muted/60">
+                    <CardContent className="py-3 px-4 flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">
+                        Total a devolver a {devolucionInversorModal}
+                      </span>
+                      <span className="font-bold text-red-600">
+                        -{formatCurrency(totalInversor)}
                       </span>
                     </CardContent>
                   </Card>
