@@ -99,7 +99,6 @@ export default function SalaryDistribution() {
   const openMonthDialog = (year: number, month: number) => {
     const key = yearMonthKey(year, month);
     const existing = data[key];
-    const realBalance = balanceByMonth[key]?.balance ?? 0;
     setDialogMonth({ year, month });
     setProfitInput(existing ? String(existing.profit) : "");
     setDialogOpen(true);
@@ -148,11 +147,6 @@ export default function SalaryDistribution() {
   const totals = totalsByBeneficiary();
   const totalProfit = Object.values(totals).reduce((a, b) => a + b, 0);
 
-  const realBalanceForDialog =
-    dialogMonth != null
-      ? balanceByMonth[yearMonthKey(dialogMonth.year, dialogMonth.month)]?.balance ?? 0
-      : 0;
-
   const importYearFromBalance = () => {
     const next = { ...data };
     for (let month = 1; month <= 12; month++) {
@@ -173,7 +167,7 @@ export default function SalaryDistribution() {
           Distribución de salarios
         </h1>
         <p className="text-muted-foreground mt-1">
-          Profit por cierre de mes se reparte: 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo.
+          Ingresan el monto a repartir por mes; al aceptar se distribuye según los porcentajes: 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo.
         </p>
       </div>
 
@@ -323,8 +317,8 @@ export default function SalaryDistribution() {
                     <span className="text-xs text-muted-foreground mt-1">Sin datos</span>
                   )}
                   {hasRealBalance && (
-                    <span className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 tabular-nums">
-                      Balance real: {formatCurrency(realBal.balance)}
+                    <span className="text-xs text-violet-600 dark:text-violet-400 mt-0.5 tabular-nums">
+                      Balance (Gastos/Ingresos): {formatCurrency(realBal.balance)}
                     </span>
                   )}
                 </button>
@@ -344,25 +338,12 @@ export default function SalaryDistribution() {
                 : "Profit de cierre"}
             </DialogTitle>
             <DialogDescription>
-              Ingresa el profit del cierre del mes. La distribución se calculará automáticamente.
+              Ingresa el monto que quieren repartir. Al aceptar, se distribuye entre todos según los porcentajes (30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {realBalanceForDialog !== 0 && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30 p-3 flex items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">Balance real del mes (ingresos − gastos):</span>
-                <span className="font-semibold tabular-nums">{formatCurrency(realBalanceForDialog)}</span>
-                <button
-                  type="button"
-                  onClick={() => setProfitInput(String(Math.round(realBalanceForDialog)))}
-                  className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-                >
-                  Usar balance real
-                </button>
-              </div>
-            )}
             <div className="space-y-2">
-              <Label htmlFor="profit">Profit (CLP)</Label>
+              <Label htmlFor="profit">Monto a repartir (CLP)</Label>
               <Input
                 id="profit"
                 type="number"
@@ -372,10 +353,11 @@ export default function SalaryDistribution() {
                 value={profitInput}
                 onChange={(e) => setProfitInput(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">Pon el valor que tienen que repartir y acepta para ver el reparto por porcentajes.</p>
             </div>
             {profitInput !== "" && !Number.isNaN(Number(profitInput)) && (
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <p className="text-sm font-medium">Distribución automática</p>
+                <p className="text-sm font-medium">Al aceptar, cada uno recibirá:</p>
                 <ul className="space-y-1 text-sm">
                   {BENEFICIARIOS.map((name) => (
                     <li key={name} className="flex justify-between tabular-nums">
@@ -401,7 +383,7 @@ export default function SalaryDistribution() {
               disabled={saving}
               className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {saving ? "Guardando…" : "Guardar"}
+              {saving ? "Guardando…" : "Aceptar y distribuir"}
             </button>
           </DialogFooter>
         </DialogContent>
