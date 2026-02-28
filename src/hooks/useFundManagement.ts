@@ -180,7 +180,7 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
         .from("sales")
         .select(
           `
-          id, sale_price, margin, sale_date, payment_status, payment_method, stock_origin, vehicle_id,
+          id, sale_price, margin, sale_date, payment_status, payment_method, stock_origin, vehicle_id, vehicle_description,
           vehicle:vehicles(id, make, model, year, category, arrival_date, created_at)
         `
         )
@@ -372,35 +372,52 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
         })
         .reduce((sum: number, g: { amount?: number }) => sum + Number(g.amount ?? 0), 0);
 
-      // Ranking marcas por margen (ventas con vehicle)
+      // Ranking marcas por margen (ventas: vehicle make/model o vehicle_description como fallback)
       const makeModelMap = new Map<
         string,
-        { units: number; margin: number }
+        { make: string; model: string; units: number; margin: number }
       >();
-      sales.forEach((s: { vehicle?: { make?: string; model?: string } | null; margin?: number | null }) => {
-        const v = s.vehicle;
-        const key = v ? `${v.make || ""}|${v.model || ""}` : "Sin vehículo";
-        const prev = makeModelMap.get(key) ?? { units: 0, margin: 0 };
+      const getMakeModel = (
+        v: { make?: string; model?: string } | null,
+        vehicleDescription?: string | null
+      ): { make: string; model: string } => {
+        if (v && (v.make || v.model)) {
+          return { make: (v.make || "").trim() || "—", model: (v.model || "").trim() || "—" };
+        }
+        const desc = (vehicleDescription || "").trim();
+        if (!desc) return { make: "—", model: "—" };
+        const parts = desc.split(/\s+/).filter(Boolean);
+        if (parts.length === 0) return { make: "—", model: "—" };
+        if (parts.length === 1) return { make: parts[0], model: "—" };
+        return { make: parts[0], model: parts.slice(1).join(" ") };
+      };
+      sales.forEach((s: {
+        vehicle?: { make?: string; model?: string } | null;
+        vehicle_description?: string | null;
+        margin?: number | null;
+      }) => {
+        const { make, model } = getMakeModel(s.vehicle, s.vehicle_description);
+        const key = `${make}|${model}`;
+        const prev = makeModelMap.get(key) ?? { make: "—", model: "—", units: 0, margin: 0 };
         makeModelMap.set(key, {
+          make,
+          model,
           units: prev.units + 1,
           margin: prev.margin + Number(s.margin ?? 0),
         });
       });
       const rankingMarcas = Array.from(makeModelMap.entries())
-        .map(([key, val]) => {
-          const [make, model] = key.split("|");
-          return { make: make || "—", model: model || "—", units: val.units, margin: val.margin };
-        })
+        .map(([, val]) => ({ make: val.make, model: val.model, units: val.units, margin: val.margin }))
         .sort((a, b) => b.margin - a.margin)
         .slice(0, 10);
 
       // Rendimiento: total vendidos, top modelos, lead time
       const totalVendidos = sales.length;
       const modelCountMap = new Map<string, number>();
-      sales.forEach((s: { vehicle?: { make?: string; model?: string } | null }) => {
-        const v = s.vehicle;
-        const key = v ? `${v.make || ""} ${v.model || ""}` : "Sin dato";
-        modelCountMap.set(key, (modelCountMap.get(key) ?? 0) + 1);
+      sales.forEach((s: { vehicle?: { make?: string; model?: string } | null; vehicle_description?: string | null }) => {
+        const { make, model } = getMakeModel(s.vehicle, s.vehicle_description);
+        const label = [make, model].filter((x) => x && x !== "—").join(" ") || "Sin dato";
+        modelCountMap.set(label, (modelCountMap.get(label) ?? 0) + 1);
       });
       const topModelos = Array.from(modelCountMap.entries())
         .map(([label, count]) => {

@@ -126,6 +126,8 @@ type MovimientoRow =
   | { tipo: "gasto"; id: string; date: string; data: GastoEmpresaWithInversor }
   | { tipo: "ingreso"; id: string; date: string; data: SaleForIngreso | IngresoEmpresaForList };
 
+/** Regla UI: Devolución solo aplica a gastos (Sí/No/—). Para cualquier ingreso se muestra siempre "—". */
+
 /** Unifica gastos e ingresos en una lista. Fechas: gastos → expense_date, ingresos empresa → income_date, ventas → sale_date. No mezclar. */
 function buildMovimientos(
   gastos: GastoEmpresaWithInversor[],
@@ -190,6 +192,7 @@ export default function Finance() {
   const [filterInversor, setFilterInversor] = useState<string | "all">("all");
   const [filterMovimiento, setFilterMovimiento] = useState<"all" | "gasto" | "ingreso">("all");
   const [filterDevolucion, setFilterDevolucion] = useState<"all" | "pendiente" | "realizado">("all");
+  const [filterPago, setFilterPago] = useState<"all" | "pendiente" | "realizado">("all");
   const [filterOrdenFecha, setFilterOrdenFecha] = useState<"ascendente" | "descendente">("descendente");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [gastosModalOpen, setGastosModalOpen] = useState(false);
@@ -200,6 +203,9 @@ export default function Finance() {
   const [filterPendientesEtiqueta, setFilterPendientesEtiqueta] = useState<ExpenseType | "all">("all");
   const [hessenModalOpen, setHessenModalOpen] = useState(false);
   const [filterHessenEtiqueta, setFilterHessenEtiqueta] = useState<ExpenseType | "all">("all");
+  const [totalGastosModalOpen, setTotalGastosModalOpen] = useState(false);
+  const [filterTotalGastosTipo, setFilterTotalGastosTipo] = useState<ExpenseType | "all">("all");
+  const [filterTotalGastosInversor, setFilterTotalGastosInversor] = useState<string>("all");
   const [pendientesCardModalOpen, setPendientesCardModalOpen] = useState(false);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
@@ -352,6 +358,16 @@ export default function Finance() {
       ? movimientos
       : movimientos.filter((m) => m.tipo === filterMovimiento);
 
+  const movimientosFiltradosPorPago =
+    filterPago === "all"
+      ? movimientosFiltrados
+      : movimientosFiltrados.filter((row) => {
+          if (row.tipo === "gasto") return true;
+          if (row.tipo === "ingreso" && "source" in row.data && row.data.source === "ingreso_empresa")
+            return row.data.payment_status === filterPago;
+          return true;
+        });
+
   const montoParaBalance = (row: MovimientoRow): number => {
     if (row.tipo === "gasto") return -Number(row.data.amount);
     if (row.tipo === "ingreso") {
@@ -362,10 +378,10 @@ export default function Finance() {
     return 0;
   };
 
-  const balanceLista = movimientosFiltrados.reduce((acc, row) => acc + montoParaBalance(row), 0);
+  const balanceLista = movimientosFiltradosPorPago.reduce((acc, row) => acc + montoParaBalance(row), 0);
 
   // Orden por fecha: ascendente = más antiguos primero, descendente = más recientes primero
-  const movimientosOrdenados = [...movimientosFiltrados].sort((a, b) => {
+  const movimientosOrdenados = [...movimientosFiltradosPorPago].sort((a, b) => {
     if (a.date === b.date) return 0;
     if (filterOrdenFecha === "ascendente") return a.date < b.date ? -1 : 1;
     return a.date > b.date ? -1 : 1;
@@ -765,7 +781,10 @@ export default function Finance() {
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => setTotalGastosModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total gastos</CardTitle>
             <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -977,12 +996,22 @@ export default function Finance() {
             </Select>
             <Select value={filterDevolucion} onValueChange={(v) => setFilterDevolucion(v as "all" | "pendiente" | "realizado")}>
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Devolución" />
+                <SelectValue placeholder="Devoluciones" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="realizado">Realizado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterPago} onValueChange={(v) => setFilterPago(v as "all" | "pendiente" | "realizado")}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Pagos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pendiente">Pendientes</SelectItem>
+                <SelectItem value="realizado">Realizados</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterOrdenFecha} onValueChange={(v) => setFilterOrdenFecha(v as "ascendente" | "descendente")}>
@@ -998,7 +1027,7 @@ export default function Finance() {
 
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Cargando…</div>
-          ) : movimientosFiltrados.length === 0 ? (
+          ) : movimientosOrdenados.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-4 opacity-20" />
               <p>No hay movimientos. Agrega un ingreso con &quot;Nuevo Ingreso&quot;, un gasto con &quot;Nuevo Gasto&quot; o registra ventas en Ventas.</p>
@@ -1014,7 +1043,10 @@ export default function Finance() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Descripción</TableHead>
                       <TableHead>Inversor</TableHead>
-                    <TableHead>Devolución</TableHead>
+                    {/* Devolución: solo gastos (Sí/No/—). Ingresos siempre "—". */}
+                    <TableHead>Devoluciones</TableHead>
+                    {/* Pago: solo ingresos (Realizado/Pendiente). Gastos siempre "—". */}
+                    <TableHead>Pago</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right min-w-[120px]">Saldo</TableHead>
                     <TableHead className="w-24" />
@@ -1071,6 +1103,9 @@ export default function Finance() {
                               </Badge>
                             )}
                           </TableCell>
+                          <TableCell>
+                            <span className="text-muted-foreground">—</span>
+                          </TableCell>
                           <TableCell className="text-right font-medium text-red-600">
                             -{formatCurrency(Number(row.data.amount))}
                           </TableCell>
@@ -1120,6 +1155,10 @@ export default function Finance() {
                             </span>
                           </TableCell>
                           <TableCell>
+                            {/* Devolución solo aplica a gastos; ingresos siempre "—". */}
+                            <span className="text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell>
                             {"source" in row.data && row.data.source === "ingreso_empresa" ? (
                               <Badge variant={row.data.payment_status === "realizado" ? "default" : "outline"}>
                                 {row.data.payment_status === "realizado" ? "Realizado" : "Pendiente"}
@@ -1167,7 +1206,7 @@ export default function Finance() {
                 </TableBody>
                 <TableFooter>
                   <TableRow className="bg-muted/60 hover:bg-muted/60">
-                    <TableCell colSpan={6} className="text-right font-semibold text-muted-foreground">
+                    <TableCell colSpan={7} className="text-right font-semibold text-muted-foreground">
                       Balance (depuración)
                     </TableCell>
                     <TableCell className="text-right font-medium text-muted-foreground">—</TableCell>
@@ -1406,7 +1445,7 @@ export default function Finance() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Estado del pago</Label>
+              <Label>Pago</Label>
               <Select
                 value={formIngreso.payment_status}
                 onValueChange={(v: "pendiente" | "realizado") =>
@@ -1414,11 +1453,11 @@ export default function Finance() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Estado" />
+                  <SelectValue placeholder="Pago" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pendiente">Pendiente (no suma al balance)</SelectItem>
-                  <SelectItem value="realizado">Realizado (suma al balance)</SelectItem>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="realizado">Realizado</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
@@ -1520,7 +1559,9 @@ export default function Finance() {
                     )}
                     {"source" in detailMovimiento.data && detailMovimiento.data.source === "ingreso_empresa" && (
                       <>
-                        <span className="text-muted-foreground">Estado del pago</span>
+                        <span className="text-muted-foreground">Devolución</span>
+                        <span>—</span>
+                        <span className="text-muted-foreground">Pago</span>
                         <span>
                           <Badge variant={detailMovimiento.data.payment_status === "realizado" ? "default" : "outline"}>
                             {detailMovimiento.data.payment_status === "realizado" ? "Realizado" : "Pendiente"}
@@ -2026,6 +2067,165 @@ export default function Finance() {
                   </CardContent>
                 </Card>
               </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={totalGastosModalOpen}
+        onOpenChange={(open) => {
+          setTotalGastosModalOpen(open);
+          if (!open) {
+            setFilterTotalGastosTipo("all");
+            setFilterTotalGastosInversor("all");
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-muted-foreground" />
+              Total gastos
+            </DialogTitle>
+            <DialogDescription>
+              Lista de todos los gastos registrados. Ordenados por fecha (más reciente primero).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2 pb-3">
+            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground shrink-0">Tipo:</span>
+            <Select value={filterTotalGastosTipo} onValueChange={(v) => setFilterTotalGastosTipo(v as ExpenseType | "all")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {expenseTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.code}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground shrink-0">Inversor:</span>
+            <Select value={filterTotalGastosInversor} onValueChange={setFilterTotalGastosInversor}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {INVERSOR_OPCIONES.map((nombre) => (
+                  <SelectItem key={nombre} value={nombre}>
+                    {nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
+            ) : gastos.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay gastos registrados.
+              </div>
+            ) : (() => {
+              const gastosFiltradosModal =
+                filterTotalGastosTipo === "all"
+                  ? gastos
+                  : gastos.filter((g) => g.expense_type === filterTotalGastosTipo);
+              const gastosPorInversor =
+                filterTotalGastosInversor === "all"
+                  ? gastosFiltradosModal
+                  : gastosFiltradosModal.filter((g) => displayInversor(g) === filterTotalGastosInversor);
+              const totalFiltrado = gastosPorInversor.reduce((sum, g) => sum + Number(g.amount), 0);
+              const ordenados = [...gastosPorInversor].sort((a, b) =>
+                b.expense_date.localeCompare(a.expense_date)
+              );
+              return ordenados.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No hay gastos con los filtros seleccionados.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {ordenados.map((g) => (
+                      <Card key={g.id} className="overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
+                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                handleEdit(g);
+                                setTotalGastosModalOpen(false);
+                                setDialogOpen(true);
+                              }}
+                              title="Editar gasto"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setDeleteConfirmId(g.id);
+                                setTotalGastosModalOpen(false);
+                              }}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
+                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
+                            {g.description || "—"}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 shrink-0" />
+                              {formatDate(g.expense_date)}
+                            </span>
+                            <span
+                              className={`rounded border px-1.5 py-0.5 ${
+                                INVERSOR_OPCIONES.includes(displayInversor(g) as (typeof INVERSOR_OPCIONES)[number])
+                                  ? INVERSOR_COLORS[displayInversor(g) as (typeof INVERSOR_OPCIONES)[number]]
+                                  : ""
+                              }`}
+                            >
+                              {displayInversor(g)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">Monto</span>
+                            <span className="font-medium text-red-600">
+                              -{formatCurrency(Number(g.amount))}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  <Card className="mt-4 bg-muted/60">
+                    <CardContent className="py-3 px-4 flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">
+                        Total gastos
+                        {(filterTotalGastosTipo !== "all" || filterTotalGastosInversor !== "all")
+                          ? ` (filtrado)`
+                          : ""}
+                      </span>
+                      <span className="font-bold text-red-600">
+                        -{formatCurrency(totalFiltrado)}
+                      </span>
+                    </CardContent>
+                  </Card>
+                </>
               );
             })()}
           </div>
