@@ -158,9 +158,19 @@ const EMPTY_FUND_DATA: FundManagementData = {
   },
 };
 
-export function useFundManagement(branchId: string | null) {
+/** Opciones para evitar cargar métricas antes de tener el contexto correcto (ej. branch del usuario). */
+export type UseFundManagementOptions = { enabled?: boolean };
+
+/**
+ * Métricas de fondos por sucursal. Solo debe ejecutarse cuando el branchId es definitivo
+ * (auth cargada). Si se ejecuta con branchId null por "auth aún cargando", se traen
+ * ventas de todas las sucursales y las cifras (Facturaciones, etc.) cambian al cargar el usuario.
+ */
+export function useFundManagement(branchId: string | null, options?: UseFundManagementOptions) {
+  const enabled = options?.enabled !== false;
   return useQuery({
     queryKey: ["fund-management", branchId],
+    enabled,
     queryFn: async (): Promise<FundManagementData> => {
       try {
       const branchFilter = branchId ? { branch_id: branchId } : {};

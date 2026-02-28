@@ -146,9 +146,13 @@ function filterSeriesByDateRange<T extends { date?: string; monthKey?: string }>
 }
 
 export default function FundManagement() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { data: fundData, isLoading: fundLoading } = useFundManagement(user?.branch_id ?? null);
+  // Solo cargar métricas cuando la auth está resuelta; así branchId es definitivo y las cifras no saltan (ej. 100M → 68M)
+  const { data: fundData, isLoading: fundLoading } = useFundManagement(user?.branch_id ?? null, {
+    enabled: !authLoading,
+  });
+  const isLoading = authLoading || fundLoading;
   const [chartView, setChartView] = useState<ChartView>("day");
   const [chartDateRange, setChartDateRange] = useState<DateRange | undefined>(undefined);
   const [detailModal, setDetailModal] = useState<DetailModalKey>(null);
@@ -203,7 +207,7 @@ export default function FundManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {fundLoading ? (
+          {isLoading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando…</div>
           ) : fundData?.charts ? (
             <div className="space-y-6">
@@ -461,7 +465,7 @@ export default function FundManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {fundLoading ? (
+          {isLoading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando…</div>
           ) : fundData ? (
             <div className="space-y-6">
@@ -738,7 +742,7 @@ export default function FundManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {fundLoading ? (
+          {isLoading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando…</div>
           ) : fundData ? (
             <div className="space-y-6">
@@ -820,7 +824,7 @@ export default function FundManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {fundLoading ? (
+          {isLoading ? (
             <div className="py-8 text-center text-muted-foreground">Cargando…</div>
           ) : fundData ? (
             <div className="space-y-6">
