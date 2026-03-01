@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { FinanceMonthSelector, getCurrentPeriod, getMonthDateRange } from "@/components/finance/FinanceMonthSelector";
+import { useEnsureMonthClosed } from "@/hooks/useEnsureMonthClosed";
 import { gastosEmpresaService, type ExpenseType, type GastoEmpresaWithInversor } from "@/lib/services/gastosEmpresa";
 import { expenseTypesService, type ExpenseTypeRow } from "@/lib/services/expenseTypes";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
@@ -181,6 +183,8 @@ function ingresoDescription(row: MovimientoRow): string {
 
 export default function Finance() {
   const { user } = useAuth();
+  const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod);
+  useEnsureMonthClosed();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
   const [ingresosEmpresa, setIngresosEmpresa] = useState<{ id: string; amount: number; description: string | null; etiqueta: string; income_date: string; payment_status?: string; sale_id?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,7 +245,9 @@ export default function Finance() {
   });
 
   // Cargar gastos e ingresos empresa. Carga en paralelo; si uno falla, se muestra el otro y un aviso.
+  // Filtra por período seleccionado (mes/año); no se eliminan datos históricos.
   const loadGastos = useCallback(async () => {
+    const { from, to } = getMonthDateRange(selectedPeriod.year, selectedPeriod.month);
     setLoading(true);
     setLoadError(null);
     const TIMEOUT_MS = 15000;
@@ -254,8 +260,8 @@ export default function Finance() {
       ]);
     try {
       const [gastosResult, ingresosResult] = await Promise.allSettled([
-        withTimeout(gastosEmpresaService.getAll()),
-        withTimeout(ingresosEmpresaService.getAll()),
+        withTimeout(gastosEmpresaService.getAll({ fromDate: from, toDate: to })),
+        withTimeout(ingresosEmpresaService.getAll({ fromDate: from, toDate: to })),
       ]);
       if (gastosResult.status === "fulfilled") {
         setGastos(gastosResult.value);
@@ -294,7 +300,7 @@ export default function Finance() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedPeriod]);
 
   // Realtime: actualizar lista cuando cambien gastos o ingresos empresa
   useEffect(() => {
@@ -724,6 +730,12 @@ export default function Finance() {
           <p className="text-muted-foreground mt-2">
             Control de ingresos (ventas) y gastos · Depuración y balance
           </p>
+          <div className="mt-3">
+            <FinanceMonthSelector
+              period={selectedPeriod}
+              onPeriodChange={setSelectedPeriod}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setGastosModalOpen(true)}>

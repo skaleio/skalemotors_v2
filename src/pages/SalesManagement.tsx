@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/FinanceMonthSelector";
 import { useSales, type SaleWithRelations } from "@/hooks/useSales";
 import { useVehicles } from "@/hooks/useVehicles";
 import { toast } from "@/hooks/use-toast";
@@ -103,6 +104,11 @@ const statusStyles: Record<string, string> = {
   cancelada: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
 function formatCurrency(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "$0";
   return new Intl.NumberFormat("es-CL", {
@@ -119,6 +125,7 @@ export default function SalesManagement() {
   const location = useLocation();
   const navigate = useNavigate();
   const branchId = user?.branch_id ?? null;
+  const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod);
   const {
     sales,
     stats,
@@ -131,7 +138,7 @@ export default function SalesManagement() {
     deleteSale,
     isDeleting,
     refetch,
-  } = useSales({ branchId, enabled: true });
+  } = useSales({ branchId, enabled: true, period: selectedPeriod });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -526,6 +533,12 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
           <p className="text-muted-foreground mt-1">
             Todas las ventas realizadas y el monto que hemos ganado
           </p>
+          <div className="mt-3">
+            <FinanceMonthSelector
+              period={selectedPeriod}
+              onPeriodChange={setSelectedPeriod}
+            />
+          </div>
         </div>
         <Button onClick={handleOpenDialog}>
           <Plus className="h-4 w-4 mr-2" />
@@ -537,7 +550,9 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total vendido (30 días)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total vendido ({MESES[selectedPeriod.month - 1]} {selectedPeriod.year})
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -556,7 +571,9 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ganancia (30 días)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Ganancia ({MESES[selectedPeriod.month - 1]} {selectedPeriod.year})
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -575,7 +592,9 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gastos (30 días)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Gastos ({MESES[selectedPeriod.month - 1]} {selectedPeriod.year})
+            </CardTitle>
             <Minus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -594,7 +613,9 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ganancia neta (30 días)</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Ganancia neta ({MESES[selectedPeriod.month - 1]} {selectedPeriod.year})
+            </CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

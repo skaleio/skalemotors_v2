@@ -182,7 +182,18 @@ const EMPTY_FUND_DATA: FundManagementData = {
 };
 
 /** Opciones para evitar cargar métricas antes de tener el contexto correcto (ej. branch del usuario). */
-export type UseFundManagementOptions = { enabled?: boolean };
+export type UseFundManagementOptions = {
+  enabled?: boolean;
+  /** Si se pasa, las métricas de dinero (ventas, ingresos, gastos) se filtran por este mes. */
+  period?: { year: number; month: number };
+};
+
+function getMonthRange(year: number, month: number) {
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
 
 /**
  * Métricas de fondos por sucursal. Solo debe ejecutarse cuando el branchId es definitivo
@@ -191,12 +202,14 @@ export type UseFundManagementOptions = { enabled?: boolean };
  */
 export function useFundManagement(branchId: string | null, options?: UseFundManagementOptions) {
   const enabled = options?.enabled !== false;
+  const period = options?.period;
   return useQuery({
-    queryKey: ["fund-management", branchId],
+    queryKey: ["fund-management", branchId, period?.year, period?.month],
     enabled,
     queryFn: async (): Promise<FundManagementData> => {
       try {
       const branchFilter = branchId ? { branch_id: branchId } : {};
+      const dateRange = period ? getMonthRange(period.year, period.month) : null;
 
       // Sales completadas (todas para métricas; filtro branch opcional)
       let salesQuery = supabase
@@ -212,6 +225,9 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
 
       if (branchId) {
         salesQuery = salesQuery.eq("branch_id", branchId);
+      }
+      if (dateRange) {
+        salesQuery = salesQuery.gte("sale_date", dateRange.from).lte("sale_date", dateRange.to);
       }
       const { data: salesData } = await salesQuery;
       const sales = salesData ?? [];
@@ -338,6 +354,9 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
       if (branchId) {
         ingresosQuery = ingresosQuery.eq("branch_id", branchId);
       }
+      if (dateRange) {
+        ingresosQuery = ingresosQuery.gte("income_date", dateRange.from).lte("income_date", dateRange.to);
+      }
       const { data: ingresosData } = await ingresosQuery;
       const ingresos = ingresosData ?? [];
       const ingresosRealizados = ingresos.filter(
@@ -381,6 +400,9 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
         .select("id, amount, expense_type, expense_date, inversor_name, inversor:users!gastos_empresa_inversor_id_fkey(id, full_name)");
       if (branchId) {
         gastosQuery = gastosQuery.eq("branch_id", branchId);
+      }
+      if (dateRange) {
+        gastosQuery = gastosQuery.gte("expense_date", dateRange.from).lte("expense_date", dateRange.to);
       }
       const { data: gastosData } = await gastosQuery;
       const gastos = gastosData ?? [];

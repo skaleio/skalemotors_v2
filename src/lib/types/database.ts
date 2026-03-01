@@ -1065,6 +1065,70 @@ export interface Database {
           updated_at?: string | null
         }
       }
+      finance_month_summary: {
+        Row: {
+          id: string
+          branch_id: string | null
+          year: number
+          month: number
+          total_income: number
+          total_expenses: number
+          balance: number
+          closed_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          year: number
+          month: number
+          total_income?: number
+          total_expenses?: number
+          balance?: number
+          closed_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          year?: number
+          month?: number
+          total_income?: number
+          total_expenses?: number
+          balance?: number
+          closed_at?: string
+        }
+      }
+      salary_distribution: {
+        Row: {
+          id: string
+          branch_id: string
+          year: number
+          month: number
+          profit: number
+          amounts: Record<string, number>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id: string
+          year: number
+          month: number
+          profit?: number
+          amounts?: Record<string, number>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string
+          year?: number
+          month?: number
+          profit?: number
+          amounts?: Record<string, number>
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       executive_dashboard: {

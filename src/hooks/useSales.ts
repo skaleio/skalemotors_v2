@@ -22,6 +22,8 @@ interface UseSalesOptions {
   status?: string;
   enabled?: boolean;
   staleTime?: number;
+  /** Si se pasa, ventas y estadísticas se filtran por este mes (año y mes 1-12). */
+  period?: { year: number; month: number };
 }
 
 export function useSales(options: UseSalesOptions = {}) {
@@ -31,14 +33,30 @@ export function useSales(options: UseSalesOptions = {}) {
     status,
     enabled = true,
     staleTime = 3 * 60 * 1000,
+    period,
   } = options;
 
   const queryClient = useQueryClient();
-  const queryKey = ["sales", branchId, sellerId, status];
+  const queryKey = ["sales", branchId, sellerId, status, period?.year, period?.month];
+
+  const dateRange =
+    period &&
+    (() => {
+      const from = `${period.year}-${String(period.month).padStart(2, "0")}-01`;
+      const to = `${period.year}-${String(period.month).padStart(2, "0")}-${String(new Date(period.year, period.month, 0).getDate()).padStart(2, "0")}`;
+      return { from, to };
+    })();
 
   const { data: sales = [], isLoading, error, refetch } = useQuery({
     queryKey,
-    queryFn: () => saleService.getAll({ branchId: branchId ?? undefined, sellerId, status }),
+    queryFn: () =>
+      saleService.getAll({
+        branchId: branchId ?? undefined,
+        sellerId,
+        status,
+        dateFrom: dateRange?.from,
+        dateTo: dateRange?.to,
+      }),
     enabled,
     staleTime,
     refetchOnWindowFocus: true,
@@ -46,8 +64,11 @@ export function useSales(options: UseSalesOptions = {}) {
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["sales-stats", branchId],
-    queryFn: () => saleService.getStats(undefined, branchId ?? undefined, 30),
+    queryKey: ["sales-stats", branchId, period?.year, period?.month],
+    queryFn: () =>
+      dateRange
+        ? saleService.getStats(undefined, branchId ?? undefined, { from: dateRange.from, to: dateRange.to })
+        : saleService.getStats(undefined, branchId ?? undefined, 30),
     enabled,
     staleTime,
   });

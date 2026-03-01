@@ -168,9 +168,25 @@ export const saleService = {
   },
 
   // Obtener estadísticas de ventas (incluye gastos y ganancia neta)
-  async getStats(userId?: string, branchId?: string, days: number = 30) {
-    const dateFrom = new Date()
-    dateFrom.setDate(dateFrom.getDate() - days)
+  // options.days = últimos N días (default 30); o options.from + options.to para un rango fijo (ej. mes)
+  async getStats(
+    userId?: string,
+    branchId?: string,
+    options: number | { days?: number; from?: string; to?: string } = 30
+  ) {
+    const opts = typeof options === 'number' ? { days: options } : options
+    let dateFrom: string
+    let dateTo: string
+    if (opts.from && opts.to) {
+      dateFrom = opts.from
+      dateTo = opts.to
+    } else {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - (opts.days ?? 30))
+      dateTo = end.toISOString().split('T')[0]
+      dateFrom = start.toISOString().split('T')[0]
+    }
 
     let query = supabase
       .from('sales')
@@ -184,7 +200,7 @@ export const saleService = {
       query = query.eq('branch_id', branchId)
     }
 
-    query = query.gte('sale_date', dateFrom.toISOString().split('T')[0])
+    query = query.gte('sale_date', dateFrom).lte('sale_date', dateTo)
 
     const { data, error } = await query
 

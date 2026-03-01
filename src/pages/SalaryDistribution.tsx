@@ -18,8 +18,10 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBalanceByMonth } from "@/hooks/useBalanceByMonth";
+import { salaryDistributionService, type MonthData, type StoredData } from "@/lib/services/salaryDistribution";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Calendar, DollarSign, Download, PieChart, User } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const DISTRIBUTION = {
   Mike: 0.3,
@@ -38,13 +40,6 @@ const MESES = [
 
 const STORAGE_KEY = "skalemotors_salary_distribution";
 
-type MonthData = {
-  profit: number;
-  amounts: Record<string, number>;
-};
-
-type StoredData = Record<string, MonthData>;
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
@@ -52,20 +47,6 @@ function formatCurrency(value: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function loadData(): StoredData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
-function saveData(data: StoredData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 function computeAmounts(profit: number): Record<string, number> {
@@ -79,7 +60,13 @@ function computeAmounts(profit: number): Record<string, number> {
 export default function SalaryDistribution() {
   const { user } = useAuth();
   const branchId = user?.branch_id ?? null;
-  const [data, setData] = useState<StoredData>(() => loadData());
+  const queryClient = useQueryClient();
+  const { data: dataFromDb = {}, isLoading: dataLoading } = useQuery({
+    queryKey: ["salary-distribution", branchId],
+    queryFn: () => salaryDistributionService.getByBranch(branchId ?? ""),
+    enabled: Boolean(branchId),
+  });
+  const [data, setData] = useState<StoredData>(dataFromDb);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,10 +76,18 @@ export default function SalaryDistribution() {
 
   const { data: balanceByMonth = {}, isLoading: balanceLoading } = useBalanceByMonth(branchId, selectedYear);
 
-  const persist = useCallback((next: StoredData) => {
-    setData(next);
-    saveData(next);
-  }, []);
+  useEffect(() => {
+    setData(dataFromDb);
+  }, [dataFromDb]);
+
+  const persist = useCallback(
+    (next: StoredData) => {
+      setData(next);
+      if (!branchId) return;
+      queryClient.setQueryData(["salary-distribution", branchId], next);
+    },
+    [branchId, queryClient]
+  );
 
   const yearMonthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
 
@@ -104,17 +99,29 @@ export default function SalaryDistribution() {
     setDialogOpen(true);
   };
 
-  const saveMonth = () => {
-    if (!dialogMonth) return;
+  const saveMonth = async () => {
+    if (!dialogMonth || !branchId) return;
     const profit = Number(profitInput) || 0;
     const key = yearMonthKey(dialogMonth.year, dialogMonth.month);
-    setSaving(true);
     const amounts = computeAmounts(profit);
-    const next = { ...data, [key]: { profit, amounts } };
-    persist(next);
-    setSaving(false);
-    setDialogOpen(false);
-    setDialogMonth(null);
+    setSaving(true);
+    try {
+      await salaryDistributionService.upsertMonth(
+        branchId,
+        dialogMonth.year,
+        dialogMonth.month,
+        profit,
+        amounts
+      );
+      const next = { ...data, [key]: { profit, amounts } };
+      persist(next);
+      setDialogOpen(false);
+      setDialogMonth(null);
+    } catch (e) {
+      console.error("Error saving salary distribution:", e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const totalsByBeneficiary = useCallback(() => {
@@ -147,13 +154,17 @@ export default function SalaryDistribution() {
   const totals = totalsByBeneficiary();
   const totalProfit = Object.values(totals).reduce((a, b) => a + b, 0);
 
-  const importYearFromBalance = () => {
+  const importYearFromBalance = async () => {
+    if (!branchId) return;
     const next = { ...data };
     for (let month = 1; month <= 12; month++) {
       const key = yearMonthKey(selectedYear, month);
       const bal = balanceByMonth[key];
       if (bal && bal.balance > 0) {
-        next[key] = { profit: bal.balance, amounts: computeAmounts(bal.balance) };
+        const profit = bal.balance;
+        const amounts = computeAmounts(profit);
+        next[key] = { profit, amounts };
+        await salaryDistributionService.upsertMonth(branchId, selectedYear, month, profit, amounts);
       }
     }
     persist(next);
@@ -169,6 +180,11 @@ export default function SalaryDistribution() {
         <p className="text-muted-foreground mt-1">
           Ingresan el monto a repartir por mes; al aceptar se distribuye según los porcentajes: 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo.
         </p>
+        {!branchId && (
+          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+            Debes tener una sucursal asignada para ver y guardar la distribución.
+          </p>
+        )}
       </div>
 
       {/* Dashboard: totales por persona + filtro por mes */}

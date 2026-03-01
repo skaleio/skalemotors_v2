@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarUi } from "@/components/ui/calendar";
 import { useAuth } from "@/contexts/AuthContext";
+import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/FinanceMonthSelector";
 import { useFundManagement } from "@/hooks/useFundManagement";
 import type { SeriePorDia, SeriePorMes } from "@/hooks/useFundManagement";
 import { supabase } from "@/lib/supabase";
@@ -172,9 +173,11 @@ function filterSeriesByDateRange<T extends { date?: string; monthKey?: string }>
 export default function FundManagement() {
   const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  // Solo cargar métricas cuando la auth está resuelta; así branchId es definitivo y las cifras no saltan (ej. 100M → 68M)
+  const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod);
+  // Solo cargar métricas cuando la auth está resuelta; period opcional filtra ventas/ingresos/gastos por mes
   const { data: fundData, isLoading: fundLoading } = useFundManagement(user?.branch_id ?? null, {
     enabled: !authLoading,
+    period: selectedPeriod,
   });
   const isLoading = authLoading || fundLoading;
   const [chartView, setChartView] = useState<ChartView>("day");
@@ -240,6 +243,12 @@ export default function FundManagement() {
         <p className="text-muted-foreground mt-2">
           Herramienta independiente: resumen por automotora, métricas de dinero y rendimiento
         </p>
+        <div className="mt-3">
+          <FinanceMonthSelector
+            period={selectedPeriod}
+            onPeriodChange={setSelectedPeriod}
+          />
+        </div>
       </div>
 
       {/* Consignaciones diarias, ventas diarias y gráfico por día/mes */}
