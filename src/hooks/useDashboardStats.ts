@@ -280,24 +280,42 @@ export function useDashboardStats(branchId?: string) {
 
         console.log('✅ Appointments data:', { scheduledAppointments })
 
-        // 5. Total ingresos y balance (ganancia por ventas con pago realizado + ingresos_empresa - gastos_empresa)
-        let incomeFromSalesQuery = supabase
+        // 5. Ingresos: TOTAL HISTÓRICO para la tarjeta "Total ingresos"; datos del MES para el balance
+        let incomeFromSalesQueryMonth = supabase
           .from('sales')
-          .select('margin, payment_status')
+          .select('margin, sale_date, payment_status')
           .eq('status', 'completada')
           .eq('payment_status', 'realizado')
+          .gte('sale_date', firstDayStr)
+          .lte('sale_date', lastDayStr)
 
         if (branchId) {
-          incomeFromSalesQuery = incomeFromSalesQuery.eq('branch_id', branchId)
+          incomeFromSalesQueryMonth = incomeFromSalesQueryMonth.eq('branch_id', branchId)
         }
 
-        const { data: incomeSalesData } = await safeQuery(
-          incomeFromSalesQuery.then(res => res),
-          'incomeFromSalesQuery',
+        const { data: incomeSalesDataMonth } = await safeQuery(
+          incomeFromSalesQueryMonth.then(res => res),
+          'incomeFromSalesQueryMonth',
           { data: null, error: null }
         )
 
-        // Lista de ventas que suman al ingreso (ganancia = margin, para modal Total ingresos)
+        // Total histórico (toda la vida) para la tarjeta Total ingresos
+        let incomeFromSalesQueryAll = supabase
+          .from('sales')
+          .select('margin')
+          .eq('status', 'completada')
+          .eq('payment_status', 'realizado')
+        if (branchId) {
+          incomeFromSalesQueryAll = incomeFromSalesQueryAll.eq('branch_id', branchId)
+        }
+        const { data: incomeSalesDataAll } = await safeQuery(
+          incomeFromSalesQueryAll.then(res => res),
+          'incomeFromSalesQueryAll',
+          { data: null, error: null }
+        )
+        const incomeFromSalesAllTime = (incomeSalesDataAll || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
+
+        // Lista de ventas que suman al ingreso (todas las realizadas para el modal; total card = solo mes)
         let incomeSalesListQuery = supabase
           .from('sales')
           .select(`
@@ -330,7 +348,7 @@ export function useDashboardStats(branchId?: string) {
 
         let ingresosEmpresaQuery = supabase
           .from('ingresos_empresa')
-          .select('id, amount, income_date, description, etiqueta, payment_status')
+          .select('id, amount, income_date, description, etiqueta, payment_status, sale_id')
           .order('income_date', { ascending: false })
         if (branchId) {
           ingresosEmpresaQuery = ingresosEmpresaQuery.eq('branch_id', branchId)
@@ -343,7 +361,17 @@ export function useDashboardStats(branchId?: string) {
 
         const ingresosEmpresaRealizados = (ingresosEmpresaData || [])
           .filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
-        const recentIngresosEmpresa = ingresosEmpresaRealizados.slice(0, 50).map((i: any) => ({
+        // Excluir ingresos ligados a una venta (sale_id) para no duplicar con "Ganancia por ventas"
+        const ingresosEmpresaSoloOtros = ingresosEmpresaRealizados.filter((i: any) => !i.sale_id)
+        // Segunda línea de defensa: no contar ni mostrar "otros" que coincidan con una venta (misma fecha y monto)
+        const saleKeys = new Set(incomeFromSalesList.map((s) => `${s.date}|${s.amount}`))
+        const ingresosEmpresaSoloOtrosSinDuplicados = ingresosEmpresaSoloOtros.filter(
+          (i: any) => !saleKeys.has(`${i.income_date}|${Number(i.amount || 0)}`)
+        )
+        const ingresosEmpresaDelMes = ingresosEmpresaSoloOtrosSinDuplicados.filter(
+          (i: any) => i.income_date >= firstDayStr && i.income_date <= lastDayStr
+        )
+        const recentIngresosEmpresa = ingresosEmpresaSoloOtrosSinDuplicados.slice(0, 50).map((i: any) => ({
           id: i.id,
           amount: Number(i.amount || 0),
           income_date: i.income_date,
@@ -352,7 +380,7 @@ export function useDashboardStats(branchId?: string) {
           payment_status: i.payment_status || 'realizado',
         }))
 
-        const otherIncomeList = ingresosEmpresaRealizados.slice(0, 100).map((i: any) => ({
+        const otherIncomeList = ingresosEmpresaSoloOtrosSinDuplicados.slice(0, 100).map((i: any) => ({
           type: 'other' as const,
           id: i.id,
           date: i.income_date,
@@ -414,13 +442,15 @@ export function useDashboardStats(branchId?: string) {
           inversor_name: g.inversor_name ?? null,
         }))
 
-        const incomeFromSales = (incomeSalesData || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
-        const incomeFromEmpresa = (ingresosEmpresaData || []).reduce(
-          (sum: number, i: any) => sum + ((i.payment_status ?? 'realizado') === 'realizado' ? Number(i.amount || 0) : 0),
-          0
+        const incomeFromSalesMonth = (incomeSalesDataMonth || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
+        const incomeFromEmpresaMonth = ingresosEmpresaDelMes.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+        const incomeFromEmpresaAllTime = ingresosEmpresaSoloOtrosSinDuplicados.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+        const totalIncome = incomeFromSalesAllTime + incomeFromEmpresaAllTime
+        const totalIncomeMonth = incomeFromSalesMonth + incomeFromEmpresaMonth
+        const gastosDelMes = (gastosEmpresaData || []).filter(
+          (g: any) => g.expense_date >= firstDayStr && g.expense_date <= lastDayStr
         )
-        const totalIncome = incomeFromSales + incomeFromEmpresa
-        const totalExpenses = (gastosEmpresaData || []).reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
+        const totalExpenses = gastosDelMes.reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
 
         // Gastos agrupados por tipo (para gráfico de distribución)
         const expensesByType = (gastosEmpresaData || []).reduce(
@@ -437,9 +467,9 @@ export function useDashboardStats(branchId?: string) {
           },
           []
         )
-        const balance = totalIncome - totalExpenses
+        const balance = totalIncomeMonth - totalExpenses
 
-        console.log('✅ Financial data:', { totalIncome, totalExpenses, balance })
+        console.log('✅ Financial data:', { totalIncome: totalIncome, totalIncomeMonth, totalExpenses, balance })
 
         // 7. Ventas por mes (últimos 6 meses) desde una sola consulta
         const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -533,8 +563,8 @@ export function useDashboardStats(branchId?: string) {
           salesRevenue,
           salesThisMonthList,
           totalIncome,
-          totalIncomeFromSales: incomeFromSales,
-          totalIncomeFromEmpresa: incomeFromEmpresa,
+          totalIncomeFromSales: incomeFromSalesAllTime,
+          totalIncomeFromEmpresa: incomeFromEmpresaAllTime,
           recentIngresosEmpresa,
           allIncomeList,
           totalExpenses,

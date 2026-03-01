@@ -18,9 +18,9 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBalanceByMonth } from "@/hooks/useBalanceByMonth";
-import { salaryDistributionService, type MonthData, type StoredData } from "@/lib/services/salaryDistribution";
+import { salaryDistributionService, type StoredData } from "@/lib/services/salaryDistribution";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Calendar, DollarSign, Download, PieChart, User } from "lucide-react";
+import { Building2, Calendar, DollarSign, PieChart, User } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 const DISTRIBUTION = {
@@ -94,8 +94,15 @@ export default function SalaryDistribution() {
   const openMonthDialog = (year: number, month: number) => {
     const key = yearMonthKey(year, month);
     const existing = data[key];
+    const balanceMonth = balanceByMonth[key];
     setDialogMonth({ year, month });
-    setProfitInput(existing ? String(existing.profit) : "");
+    if (existing) {
+      setProfitInput(String(existing.profit));
+    } else if (balanceMonth != null) {
+      setProfitInput(String(Math.round(balanceMonth.balance)));
+    } else {
+      setProfitInput("");
+    }
     setDialogOpen(true);
   };
 
@@ -154,21 +161,8 @@ export default function SalaryDistribution() {
   const totals = totalsByBeneficiary();
   const totalProfit = Object.values(totals).reduce((a, b) => a + b, 0);
 
-  const importYearFromBalance = async () => {
-    if (!branchId) return;
-    const next = { ...data };
-    for (let month = 1; month <= 12; month++) {
-      const key = yearMonthKey(selectedYear, month);
-      const bal = balanceByMonth[key];
-      if (bal && bal.balance > 0) {
-        const profit = bal.balance;
-        const amounts = computeAmounts(profit);
-        next[key] = { profit, amounts };
-        await salaryDistributionService.upsertMonth(branchId, selectedYear, month, profit, amounts);
-      }
-    }
-    persist(next);
-  };
+  const balanceForDialog =
+    dialogMonth != null ? balanceByMonth[yearMonthKey(dialogMonth.year, dialogMonth.month)] : null;
 
   return (
     <div className="space-y-8 p-6">
@@ -273,7 +267,7 @@ export default function SalaryDistribution() {
             Cierre por mes
           </CardTitle>
           <CardDescription>
-            Selecciona un mes para ingresar el profit de cierre; se calculará automáticamente la distribución.
+            Clic en un mes para ver el balance, revisar el reparto y aceptar. Los totales se actualizan en los cuadros de arriba.
           </CardDescription>
           <div className="flex items-center gap-2 pt-2">
             <Label className="text-sm font-medium">Año</Label>
@@ -290,15 +284,6 @@ export default function SalaryDistribution() {
                 ))}
               </SelectContent>
             </Select>
-            <button
-              type="button"
-              onClick={importYearFromBalance}
-              disabled={balanceLoading || Object.keys(balanceByMonth).length === 0}
-              className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" />
-              Importar año desde balance real
-            </button>
           </div>
         </CardHeader>
         <CardContent>
@@ -307,9 +292,7 @@ export default function SalaryDistribution() {
               const month = index + 1;
               const key = yearMonthKey(selectedYear, month);
               const monthData = data[key];
-              const realBal = balanceByMonth[key];
               const hasData = monthData && monthData.profit > 0;
-              const hasRealBalance = realBal != null;
               return (
                 <button
                   key={month}
@@ -332,11 +315,6 @@ export default function SalaryDistribution() {
                   ) : (
                     <span className="text-xs text-muted-foreground mt-1">Sin datos</span>
                   )}
-                  {hasRealBalance && (
-                    <span className="text-xs text-violet-600 dark:text-violet-400 mt-0.5 tabular-nums">
-                      Balance (Gastos/Ingresos): {formatCurrency(realBal.balance)}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -354,10 +332,15 @@ export default function SalaryDistribution() {
                 : "Profit de cierre"}
             </DialogTitle>
             <DialogDescription>
-              Ingresa el monto que quieren repartir. Al aceptar, se distribuye entre todos según los porcentajes (30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo).
+              Revisa el monto y el reparto. Al aceptar, se guarda y los cuadros de arriba se actualizan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {balanceForDialog != null && (
+              <p className="text-sm text-muted-foreground">
+                Balance del mes (Gastos/Ingresos): <span className="font-medium text-foreground tabular-nums">{formatCurrency(balanceForDialog.balance)}</span>
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="profit">Monto a repartir (CLP)</Label>
               <Input
@@ -369,11 +352,10 @@ export default function SalaryDistribution() {
                 value={profitInput}
                 onChange={(e) => setProfitInput(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Pon el valor que tienen que repartir y acepta para ver el reparto por porcentajes.</p>
             </div>
-            {profitInput !== "" && !Number.isNaN(Number(profitInput)) && (
+            {profitInput !== "" && !Number.isNaN(Number(profitInput)) && Number(profitInput) > 0 && (
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <p className="text-sm font-medium">Al aceptar, cada uno recibirá:</p>
+                <p className="text-sm font-medium">Reparto (al aceptar se guarda en los cuadros):</p>
                 <ul className="space-y-1 text-sm">
                   {BENEFICIARIOS.map((name) => (
                     <li key={name} className="flex justify-between tabular-nums">
@@ -396,7 +378,7 @@ export default function SalaryDistribution() {
             <button
               type="button"
               onClick={saveMonth}
-              disabled={saving}
+              disabled={saving || !profitInput.trim()}
               className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? "Guardando…" : "Aceptar y distribuir"}

@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Users, Wallet, Banknote } from "lucide-react";
+import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -100,7 +101,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id);
+  const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id);
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
 
@@ -108,6 +109,9 @@ export default function Dashboard() {
   const [showVentasMesModal, setShowVentasMesModal] = useState(false);
   const [showTotalIngresosModal, setShowTotalIngresosModal] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+
+  // Id del ingreso "Otro" que se está borrando (para deshabilitar el botón)
+  const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null);
 
   // Estado para modal de detalle de venta reciente
   const [selectedRecentSale, setSelectedRecentSale] = useState<{
@@ -158,6 +162,20 @@ export default function Dashboard() {
     contactMethod: 'phone',
     notes: ''
   });
+
+  const handleDeleteOtherIncome = async (id: string) => {
+    if (!id) return;
+    setDeletingIncomeId(id);
+    try {
+      await ingresosEmpresaService.remove(id);
+      toast({ title: "Ingreso eliminado", description: "Se quitó de la lista y del total de otros ingresos." });
+      refetchStats();
+    } catch (e) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : "No se pudo eliminar.", variant: "destructive" });
+    } finally {
+      setDeletingIncomeId(null);
+    }
+  };
 
   console.log('📊 Dashboard - user:', user);
   console.log('📊 Dashboard - stats:', stats);
@@ -335,7 +353,7 @@ export default function Dashboard() {
           <CardContent className="space-y-2">
             <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.totalIncome ?? 0)}</div>
             <p className="text-xs text-muted-foreground font-medium">
-              Ganancia ventas + otros ingresos
+              Ventas + otros ingresos (total histórico)
             </p>
           </CardContent>
         </Card>
@@ -361,7 +379,7 @@ export default function Dashboard() {
               {formatCLP(stats?.balance ?? 0)}
             </div>
             <p className="text-xs text-muted-foreground font-medium">
-              Ingresos − gastos
+              Ingresos − gastos (mes actual)
             </p>
           </CardContent>
         </Card>
@@ -1002,7 +1020,7 @@ export default function Dashboard() {
               Total ingresos
             </DialogTitle>
             <DialogDescription>
-              Desglose de ingresos (ganancia por ventas y otros ingresos con pago realizado)
+              Desglose total histórico (ganancia por ventas y otros ingresos con pago realizado)
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
@@ -1042,9 +1060,28 @@ export default function Dashboard() {
                           {new Date(item.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
-                        {formatCLP(item.amount)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                          {formatCLP(item.amount)}
+                        </span>
+                        {item.type === 'other' && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteOtherIncome(item.id)}
+                            disabled={deletingIncomeId === item.id}
+                            title="Eliminar este ingreso (solo ingresos empresa, no ventas)"
+                          >
+                            {deletingIncomeId === item.id ? (
+                              <span className="text-xs">...</span>
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1053,7 +1090,7 @@ export default function Dashboard() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Solo suman al total las ventas con pago realizado y los ingresos empresa marcados como realizados.
+              Solo suman al total las ventas con pago realizado y los ingresos empresa marcados como realizados. Los ingresos empresa ligados a una venta (mismo pago) no se suman en &quot;Otros ingresos&quot; para evitar duplicados. Podés eliminar entradas &quot;Otro&quot; con el ícono de papelera si son comisiones/ganancias ya contadas en una venta, para dejar solo las ganancias por ventas y otros ingresos reales.
             </p>
           </div>
           <DialogFooter>
@@ -1074,17 +1111,17 @@ export default function Dashboard() {
               Balance
             </DialogTitle>
             <DialogDescription>
-              Resumen de ingresos, gastos, balance y pendientes
+              Resumen del mes actual: ingresos, gastos, balance y pendientes
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total ingresos</span>
+                <span className="text-muted-foreground">Total ingresos (mes)</span>
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCLP(stats?.totalIncome ?? 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total gastos</span>
+                <span className="text-muted-foreground">Total gastos (mes)</span>
                 <span className="font-semibold text-red-600 dark:text-red-400">{formatCLP(stats?.totalExpenses ?? 0)}</span>
               </div>
               <div className="border-t pt-3 flex justify-between items-center">
