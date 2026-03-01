@@ -78,8 +78,7 @@ const INVERSOR_EMPRESA = "HessenMotors";
 
 /** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". */
 const ALLOWED_EXPENSE_TYPES = new Set([
-  "operacion", "marketing", "servicios", "mantenimiento", "combustible",
-  "seguros", "impuestos", "personal", "vehiculos", "otros",
+  "limpieza", "uber", "comida", "regalos", "propinas", "otros",
 ]);
 
 function formatCurrency(value: number) {
