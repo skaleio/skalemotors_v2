@@ -22,6 +22,7 @@ import { salaryDistributionService, type StoredData } from "@/lib/services/salar
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Calendar, DollarSign, PieChart, User } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 const DISTRIBUTION = {
   Mike: 0.3,
@@ -120,12 +121,20 @@ export default function SalaryDistribution() {
         profit,
         amounts
       );
-      const next = { ...data, [key]: { profit, amounts } };
-      persist(next);
+      setData((prev) => {
+        const next = { ...prev, [key]: { profit, amounts } };
+        queryClient.setQueryData(["salary-distribution", branchId], next);
+        return next;
+      });
       setDialogOpen(false);
       setDialogMonth(null);
+      toast.success("Reparto guardado. Los montos se sumaron a los cuadros de arriba.");
     } catch (e) {
+      const message = e instanceof Error ? e.message : "No se pudo guardar";
       console.error("Error saving salary distribution:", e);
+      toast.error(message.includes("does not exist") || message.includes("no existe")
+        ? "La tabla de distribución no existe en la base de datos. Ejecuta el SQL de migración en Supabase (SQL Editor)."
+        : `No se pudo guardar: ${message}`);
     } finally {
       setSaving(false);
     }

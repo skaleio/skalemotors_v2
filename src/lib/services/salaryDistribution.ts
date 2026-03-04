@@ -67,6 +67,12 @@ export const salaryDistributionService = {
       },
       { onConflict: "branch_id,year,month" }
     );
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || String(error);
+      const err = new Error(msg) as Error & { code?: string; details?: string };
+      err.code = (error as { code?: string }).code;
+      err.details = (error as { details?: string }).details;
+      throw err;
+    }
   },
 };
