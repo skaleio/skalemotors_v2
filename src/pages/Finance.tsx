@@ -76,8 +76,10 @@ const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
 /** Inversor cuyos gastos son de la empresa: no se devuelven. */
 const INVERSOR_EMPRESA = "HessenMotors";
 
-/** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". */
+/** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". Mantenemos las actuales y las que existían antes. */
 const ALLOWED_EXPENSE_TYPES = new Set([
+  "operacion", "marketing", "servicios", "mantenimiento", "combustible",
+  "seguros", "impuestos", "personal", "vehiculos",
   "limpieza", "uber", "comida", "regalos", "propinas", "otros",
 ]);
 
