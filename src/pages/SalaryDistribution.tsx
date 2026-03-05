@@ -34,6 +34,15 @@ const DISTRIBUTION = {
 
 const BENEFICIARIOS = Object.keys(DISTRIBUTION) as (keyof typeof DISTRIBUTION)[];
 
+/** Colores por beneficiario para los cuadros (Jota, Mike, Pozo/Ahorro Empresa, Antonio, Ronaldo). */
+const BENEFICIARY_CARD_CLASS: Record<string, string> = {
+  Mike: "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800",
+  Jota: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
+  "Ahorro Empresa": "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
+  Antonio: "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800",
+  Ronaldo: "bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800",
+};
+
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -63,9 +72,10 @@ export default function SalaryDistribution() {
   const branchId = user?.branch_id ?? null;
   const queryClient = useQueryClient();
   const { data: dataFromDb = {}, isLoading: dataLoading } = useQuery({
-    queryKey: ["salary-distribution", branchId],
+    queryKey: ["salary-distribution", branchId ?? "all"],
     queryFn: () => salaryDistributionService.getByBranch(branchId ?? ""),
-    enabled: Boolean(branchId),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
   const [data, setData] = useState<StoredData>(dataFromDb);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
@@ -108,7 +118,11 @@ export default function SalaryDistribution() {
   };
 
   const saveMonth = async () => {
-    if (!dialogMonth || !branchId) return;
+    if (!dialogMonth) return;
+    if (!branchId) {
+      toast.error("Para guardar la distribución, asigna una sucursal en Configuración.");
+      return;
+    }
     const profit = Number(profitInput) || 0;
     const key = yearMonthKey(dialogMonth.year, dialogMonth.month);
     const amounts = computeAmounts(profit);
@@ -183,11 +197,6 @@ export default function SalaryDistribution() {
         <p className="text-muted-foreground mt-1">
           Ingresan el monto a repartir por mes; al aceptar se distribuye según los porcentajes: 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo.
         </p>
-        {!branchId && (
-          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-            Debes tener una sucursal asignada para ver y guardar la distribución.
-          </p>
-        )}
       </div>
 
       {/* Dashboard: totales por persona + filtro por mes */}
@@ -239,7 +248,7 @@ export default function SalaryDistribution() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {BENEFICIARIOS.map((name) => (
-              <Card key={name} className="bg-muted/40">
+              <Card key={name} className={`border-2 ${BENEFICIARY_CARD_CLASS[name] ?? "bg-muted/40 border-border"}`}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     {name === "Ahorro Empresa" ? (

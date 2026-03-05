@@ -63,13 +63,14 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-const INVERSOR_OPCIONES = ["Mike", "Jota", "Ronald", "HessenMotors", "Antonio"] as const;
+const INVERSOR_OPCIONES = ["Mike", "Jota", "Ronald", "HessenMotors", "Pozo Hessen", "Antonio"] as const;
 
 const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
   Mike: "bg-blue-100 text-blue-800 border-blue-200",
   Jota: "bg-emerald-100 text-emerald-800 border-emerald-200",
   Ronald: "bg-amber-100 text-amber-800 border-amber-200",
   HessenMotors: "bg-violet-100 text-violet-800 border-violet-200",
+  "Pozo Hessen": "bg-violet-200 text-violet-900 border-violet-300",
   Antonio: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
@@ -78,7 +79,10 @@ const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
 /** Inversor cuyos gastos son de la empresa: no se devuelven. */
 const INVERSOR_EMPRESA = "HessenMotors";
 
-/** Fecha desde la cual se descuentan gastos Hessen del Pozo (solo desde marzo 2026). Gastos anteriores no cuentan. */
+/** Inversor cuyos gastos se descuentan del Pozo Hessen (tarjeta y lista al hacer clic). */
+const POZO_HESSEN_INVERSOR = "Pozo Hessen";
+
+/** Fecha desde la cual se descuentan gastos Pozo Hessen (solo desde marzo 2026). Gastos anteriores no cuentan. */
 const POZO_HESSEN_DESDE_FECHA = "2026-03-01";
 
 /** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". Mantenemos las actuales y las que existían antes. */
@@ -351,12 +355,12 @@ export default function Finance() {
           if (typeof a === "number") ahorroTotal += a;
         });
         setTotalAhorroEmpresa(ahorroTotal);
-        const hessenGastos = allGastos.filter(
-          (g) => (g.inversor?.full_name || g.inversor_name || "").trim() === INVERSOR_EMPRESA
+        const pozoGastos = allGastos.filter(
+          (g) => (g.inversor?.full_name || g.inversor_name || "").trim() === POZO_HESSEN_INVERSOR
         );
-        const hessenDesdeMarzo = hessenGastos.filter((g) => (g.expense_date || "") >= POZO_HESSEN_DESDE_FECHA);
-        setGastosHessenAllTime(hessenDesdeMarzo);
-        const sumHessen = hessenDesdeMarzo.reduce((s, g) => s + Number(g.amount), 0);
+        const pozoDesdeMarzo = pozoGastos.filter((g) => (g.expense_date || "") >= POZO_HESSEN_DESDE_FECHA);
+        setGastosHessenAllTime(pozoDesdeMarzo);
+        const sumHessen = pozoDesdeMarzo.reduce((s, g) => s + Number(g.amount), 0);
         setTotalGastosHessenAllTime(sumHessen);
       })
       .catch(() => {
@@ -472,10 +476,6 @@ export default function Finance() {
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosHessenMotors = gastos.filter((g) => displayInversor(g) === INVERSOR_EMPRESA);
   const totalGastosHessenMotors = gastosHessenMotors.reduce((sum, g) => sum + Number(g.amount), 0);
-  const ingresosHessenMotors = ingresosEmpresa.filter((i) =>
-    (i.etiqueta || "").toLowerCase().replace(/\s/g, "").includes("hessen")
-  );
-  const totalIngresosHessenMotors = ingresosHessenMotors.reduce((sum, i) => sum + Number(i.amount), 0);
   const ingresosPendientes = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "pendiente");
   const totalIngresosPendientes = ingresosPendientes.reduce((sum, i) => sum + Number(i.amount), 0);
   const balance = totalIngresos - totalGastos;
@@ -576,8 +576,8 @@ export default function Finance() {
     }
     // Asegurar que expense_type cumple el CHECK de la BD (evita errores al guardar)
     const expenseType = ALLOWED_EXPENSE_TYPES.has(form.expense_type) ? form.expense_type : "otros";
-    // HessenMotors es la empresa: la devolución no aplica, siempre false
-    const devolucion = form.inversor_name === INVERSOR_EMPRESA ? false : form.devolucion;
+    // HessenMotors y Pozo Hessen: la devolución no aplica, siempre false
+    const devolucion = (form.inversor_name === INVERSOR_EMPRESA || form.inversor_name === POZO_HESSEN_INVERSOR) ? false : form.devolucion;
     try {
       // Gastos: siempre enviar expense_date (nunca income_date)
       if (editingId) {
@@ -995,7 +995,7 @@ export default function Finance() {
               {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total Ahorro Empresa − Gastos Hessen (desde marzo 2026)
+              Total Ahorro Empresa − Gastos Pozo Hessen (desde marzo 2026)
             </p>
           </CardContent>
         </Card>
@@ -1202,7 +1202,7 @@ export default function Finance() {
                             })()}
                           </TableCell>
                           <TableCell>
-                            {displayInversor(row.data) === INVERSOR_EMPRESA ? (
+                            {(displayInversor(row.data) === INVERSOR_EMPRESA || displayInversor(row.data) === POZO_HESSEN_INVERSOR) ? (
                               <span className="text-muted-foreground">—</span>
                             ) : (
                               <Badge variant={row.data.devolucion ? "default" : "outline"}>
@@ -1423,7 +1423,7 @@ export default function Finance() {
                 </SelectContent>
               </Select>
             </div>
-            {form.inversor_name !== INVERSOR_EMPRESA && (
+            {form.inversor_name !== INVERSOR_EMPRESA && form.inversor_name !== POZO_HESSEN_INVERSOR && (
               <div className="space-y-2">
                 <Label>Devolución</Label>
                 <Select
@@ -1621,7 +1621,7 @@ export default function Finance() {
                     <span>{displayInversor(detailMovimiento.data)}</span>
                     <span className="text-muted-foreground">Devolución</span>
                     <span>
-                      {displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA ? (
+                      {(displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA || displayInversor(detailMovimiento.data) === POZO_HESSEN_INVERSOR) ? (
                         "—"
                       ) : (
                         <Badge variant={detailMovimiento.data.devolucion ? "default" : "outline"}>{detailMovimiento.data.devolucion ? "Sí" : "No"}</Badge>
@@ -2585,7 +2585,7 @@ export default function Finance() {
               Pozo Hessen
             </DialogTitle>
 <DialogDescription>
-              Total Ahorro Empresa (20% desde Distribución de salarios). Solo se descuentan del pozo los gastos Hessen Motors desde marzo 2026. Desglose abajo.
+              Total Ahorro Empresa (20% desde Distribución de salarios). Solo se descuentan del pozo los gastos con inversor Pozo Hessen desde marzo 2026. Desglose abajo.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4">
@@ -2600,8 +2600,8 @@ export default function Finance() {
             </div>
             <div className="rounded-lg border bg-muted/40 px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos Hessen Motors (desde marzo 2026)</p>
-                <p className="text-xs text-muted-foreground">Solo se descuentan del pozo los gastos con inversor HessenMotors desde el 01/03/2026</p>
+                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos Pozo Hessen (desde marzo 2026)</p>
+                <p className="text-xs text-muted-foreground">Solo se descuentan del pozo los gastos con inversor Pozo Hessen desde el 01/03/2026</p>
               </div>
               <span className="text-lg font-bold text-red-600">
                 {pozoHessenLoading ? "…" : formatCurrency(totalGastosHessenAllTime)}
@@ -2610,7 +2610,7 @@ export default function Finance() {
             <div className="rounded-lg border-2 border-primary/30 bg-muted/50 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Pozo disponible</p>
-                <p className="text-xs text-muted-foreground">Total Ahorro Empresa − Gastos Hessen (desde marzo 2026)</p>
+                <p className="text-xs text-muted-foreground">Total Ahorro Empresa − Gastos Pozo Hessen (desde marzo 2026)</p>
               </div>
               <span className={`text-xl font-bold ${totalAhorroEmpresa - totalGastosHessenAllTime >= 0 ? "text-violet-600" : "text-red-600"}`}>
                 {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
@@ -2622,12 +2622,12 @@ export default function Finance() {
                 <Receipt className="h-4 w-4 text-red-500" />
                 Gastos que se descuentan del pozo ({gastosHessenAllTime.length})
               </h4>
-              <p className="text-xs text-muted-foreground">Solo gastos con inversor HessenMotors desde el 01/03/2026. Los anteriores no se descuentan del pozo.</p>
+              <p className="text-xs text-muted-foreground">Solo gastos con inversor Pozo Hessen desde el 01/03/2026. Los anteriores no se descuentan del pozo.</p>
               <div className="rounded-md border overflow-hidden">
                 {pozoHessenLoading ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">Cargando…</div>
                 ) : gastosHessenAllTime.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos de HessenMotors registrados.</div>
+                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos con inversor Pozo Hessen registrados.</div>
                 ) : (
                   <div className="max-h-64 overflow-auto">
                     <Table>
@@ -2658,50 +2658,9 @@ export default function Finance() {
               <p className="text-xs text-muted-foreground">Total que se descuenta del pozo (desde marzo 2026): <span className="font-semibold text-red-600">-{formatCurrency(totalGastosHessenAllTime)}</span></p>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-1">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-                Ingresos con etiqueta Hessen Motors ({ingresosHessenMotors.length})
-              </h4>
-              <div className="rounded-md border overflow-hidden">
-                {ingresosHessenMotors.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">No hay ingresos con etiqueta Hessen Motors en este período.</div>
-                ) : (
-                  <div className="max-h-40 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-24">Fecha</TableHead>
-                          <TableHead>Descripción</TableHead>
-                          <TableHead className="w-24">Etiqueta</TableHead>
-                          <TableHead className="text-right w-28">Monto</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {[...ingresosHessenMotors]
-                          .sort((a, b) => b.income_date.localeCompare(a.income_date))
-                          .map((i) => (
-                            <TableRow key={i.id}>
-                              <TableCell className="text-muted-foreground text-xs whitespace-nowrap">{formatDate(i.income_date)}</TableCell>
-                              <TableCell className="text-sm max-w-[220px] truncate">{i.description || "—"}</TableCell>
-                              <TableCell><Badge variant="secondary" className="text-xs">{i.etiqueta}</Badge></TableCell>
-                              <TableCell className="text-right font-medium text-emerald-600 text-sm">+{formatCurrency(Number(i.amount))}</TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">Total ingresos Hessen: <span className="font-semibold text-emerald-600">+{formatCurrency(totalIngresosHessenMotors)}</span></p>
-            </div>
-
-            <div className="rounded-lg border bg-muted/50 px-4 py-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Referencia período {selectedPeriod.month}/{selectedPeriod.year}: Gastos Hessen del período + Ingresos Hessen del período</span>
-              <span className={`font-bold ${totalIngresosHessenMotors - totalGastosHessenMotors >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {formatCurrency(totalIngresosHessenMotors - totalGastosHessenMotors)}
-              </span>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              El Pozo Hessen solo aumenta cuando en Distribución de salarios se reparte el mes y se asigna el 20% a &quot;Ahorro Empresa&quot;. Los ingresos con etiqueta Hessen Motors en Gastos/Ingresos no suman al pozo.
+            </p>
           </div>
         </DialogContent>
       </Dialog>
