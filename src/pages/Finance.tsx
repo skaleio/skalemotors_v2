@@ -74,7 +74,7 @@ const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
   Antonio: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
-const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald"] as const;
+const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald", "Antonio"] as const;
 
 /** Inversor cuyos gastos son de la empresa: no se devuelven. */
 const INVERSOR_EMPRESA = "HessenMotors";
@@ -90,6 +90,7 @@ const ALLOWED_EXPENSE_TYPES = new Set([
   "operacion", "marketing", "servicios", "mantenimiento", "combustible",
   "seguros", "impuestos", "personal", "vehiculos",
   "limpieza", "uber", "comida", "regalos", "propinas", "otros",
+  "aplicaciones", "arriendo_oficina", "utensilios",
 ]);
 
 function formatCurrency(value: number) {
@@ -443,7 +444,10 @@ export default function Finance() {
         });
 
   const montoParaBalance = (row: MovimientoRow): number => {
-    if (row.tipo === "gasto") return -Number(row.data.amount);
+    if (row.tipo === "gasto") {
+      if (displayInversor(row.data) === POZO_HESSEN_INVERSOR) return 0;
+      return -Number(row.data.amount);
+    }
     if (row.tipo === "ingreso") {
       if ("source" in row.data && row.data.source === "ingreso_empresa" && row.data.payment_status !== "realizado")
         return 0;
@@ -469,7 +473,9 @@ export default function Finance() {
     (i) => (i.payment_status ?? "realizado") === "realizado"
   );
   const totalIngresos = ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
-  const totalGastos = gastos.reduce((sum, g) => sum + Number(g.amount), 0);
+  /** Gastos que afectan el balance (excluye Pozo Hessen: esos solo descontan del Pozo Hessen). */
+  const gastosParaBalance = gastos.filter((g) => displayInversor(g) !== POZO_HESSEN_INVERSOR);
+  const totalGastos = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
   );
@@ -489,6 +495,9 @@ export default function Finance() {
       .reduce((sum, g) => sum + Number(g.amount), 0),
     Ronald: gastos
       .filter((g) => displayInversor(g) === "Ronald" && !(g.devolucion ?? false))
+      .reduce((sum, g) => sum + Number(g.amount), 0),
+    Antonio: gastos
+      .filter((g) => displayInversor(g) === "Antonio" && !(g.devolucion ?? false))
       .reduce((sum, g) => sum + Number(g.amount), 0),
   };
 
@@ -877,7 +886,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastos.length} gasto{gastos.length !== 1 ? "s" : ""}
+              {gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} (no incl. Pozo Hessen)
             </p>
           </CardContent>
         </Card>
@@ -1006,7 +1015,7 @@ export default function Finance() {
         <p className="text-sm text-muted-foreground">
           Monto a devolver según gastos no devueltos (devolución = No).
         </p>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {INVERSORES_A_DEVOLVER.map((nombre) => {
             const monto = aDevolverPorInversor[nombre];
             const colorClass = INVERSOR_COLORS[nombre];
@@ -2197,7 +2206,7 @@ export default function Finance() {
               Total gastos
             </DialogTitle>
             <DialogDescription>
-              Lista de todos los gastos registrados. Ordenados por fecha (más reciente primero).
+              Gastos que afectan el balance (no incluye Pozo Hessen). Ordenados por fecha (más reciente primero).
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -2234,15 +2243,15 @@ export default function Finance() {
           <div className="flex-1 overflow-auto">
             {loading ? (
               <div className="py-12 text-center text-muted-foreground">Cargando…</div>
-            ) : gastos.length === 0 ? (
+            ) : gastosParaBalance.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
-                No hay gastos registrados.
+                No hay gastos que afecten el balance (los de Pozo Hessen no se incluyen aquí).
               </div>
             ) : (() => {
               const gastosFiltradosModal =
                 filterTotalGastosTipo === "all"
-                  ? gastos
-                  : gastos.filter((g) => g.expense_type === filterTotalGastosTipo);
+                  ? gastosParaBalance
+                  : gastosParaBalance.filter((g) => g.expense_type === filterTotalGastosTipo);
               const gastosPorInversor =
                 filterTotalGastosInversor === "all"
                   ? gastosFiltradosModal
@@ -2432,7 +2441,7 @@ export default function Finance() {
               Balance
             </DialogTitle>
             <DialogDescription>
-              Resumen: Total ingresos (realizados) menos Total gastos. Los ingresos pendientes no suman hasta marcarlos como realizados.
+              Resumen: Total ingresos (realizados) menos Total gastos. Los gastos Pozo Hessen no se incluyen en el balance (solo descontan del Pozo Hessen). Los ingresos pendientes no suman hasta marcarlos como realizados.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4 py-2">
@@ -2451,7 +2460,7 @@ export default function Finance() {
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total gastos</p>
-                  <p className="text-xs text-muted-foreground">{gastos.length} gasto{gastos.length !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-muted-foreground">{gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} (no incl. Pozo Hessen)</p>
                 </div>
                 <span className="text-lg font-bold text-red-600">
                   {loading ? "…" : formatCurrency(totalGastos)}
@@ -2529,9 +2538,9 @@ export default function Finance() {
                 Detalle de gastos
               </h4>
               <div className="rounded-md border overflow-hidden">
-                {loading || gastos.length === 0 ? (
+                {loading || gastosParaBalance.length === 0 ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">
-                    {loading ? "Cargando…" : "No hay gastos."}
+                    {loading ? "Cargando…" : "No hay gastos que afecten el balance."}
                   </div>
                 ) : (
                   <div className="max-h-56 overflow-auto">
@@ -2546,7 +2555,7 @@ export default function Finance() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {[...gastos]
+                        {[...gastosParaBalance]
                           .sort((a, b) => b.expense_date.localeCompare(a.expense_date))
                           .map((g) => (
                             <TableRow key={g.id}>
