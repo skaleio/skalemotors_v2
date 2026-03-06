@@ -54,7 +54,7 @@ export const salaryDistributionService = {
     year: number,
     month: number,
     profit: number,
-    amounts: Record<string, number>
+    amounts: Record<string, number | { amount: number; note: string }[]>
   ): Promise<void> {
     const { error } = await supabase.from("salary_distribution").upsert(
       {
