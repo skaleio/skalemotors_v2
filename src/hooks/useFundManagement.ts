@@ -292,7 +292,7 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
         (sales as { vehicle_id?: string | null }[]).map((s) => s.vehicle_id).filter(Boolean) as string[]
       );
 
-      // Consignaciones (con vehicle_id y created_at para series por día/mes)
+      // Consignaciones: siempre todas (no filtrar por period). No se resetean al terminar el mes.
       let consignQuery = supabase
         .from("consignaciones")
         .select("id, vehicle_id, vehicle_make, vehicle_model, vehicle_year, status, label, created_at");

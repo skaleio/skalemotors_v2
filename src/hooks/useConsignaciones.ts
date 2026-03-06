@@ -23,6 +23,9 @@ type ConsignacionWithRelations = Consignacion & {
   } | null;
 };
 
+/**
+ * Hook de consignaciones. Los datos son persistentes y no se resetean al cambiar de mes.
+ */
 interface UseConsignacionesOptions {
   branchId?: string;
   status?: string;

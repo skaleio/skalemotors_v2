@@ -1,4 +1,5 @@
 import DashboardLoader from "@/components/DashboardLoader";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -289,10 +290,6 @@ export default function Dashboard() {
     return ((current - previous) / previous) * 100;
   }, [stats?.salesByMonth]);
 
-  if (isLoading) {
-    return <DashboardLoader message="Cargando estadísticas" />;
-  }
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -321,9 +318,13 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.salesRevenue || 0)}</div>
+            {isLoading ? (
+              <Skeleton className="h-9 w-32" />
+            ) : (
+              <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.salesRevenue || 0)}</div>
+            )}
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground font-medium">{stats?.salesThisMonth || 0} vehículos</span>
+              <span className="text-muted-foreground font-medium">{isLoading ? <Skeleton className="h-4 w-20" /> : `${stats?.salesThisMonth || 0} vehículos`}</span>
               {salesChange !== 0 && (
                 <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${salesChange > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                   {salesChange > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
@@ -351,7 +352,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.totalIncome ?? 0)}</div>
+            {isLoading ? <Skeleton className="h-9 w-32" /> : <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.totalIncome ?? 0)}</div>}
             <p className="text-xs text-muted-foreground font-medium">
               Ventas + otros ingresos (total histórico)
             </p>
@@ -375,9 +376,11 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
-              {formatCLP(stats?.balance ?? 0)}
-            </div>
+            {isLoading ? <Skeleton className="h-9 w-32" /> : (
+              <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
+                {formatCLP(stats?.balance ?? 0)}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground font-medium">
               Ingresos − gastos (mes actual)
             </p>
@@ -395,9 +398,9 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{stats?.totalVehicles || 0}</div>
+            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.totalVehicles || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
-              {stats?.availableVehicles || 0} disponibles
+              {isLoading ? <Skeleton className="h-4 w-24" /> : `${stats?.availableVehicles || 0} disponibles`}
             </p>
           </CardContent>
         </Card>
@@ -413,7 +416,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{stats?.activeLeads || 0}</div>
+            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.activeLeads || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
               En conversión
             </p>
@@ -431,7 +434,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{stats?.scheduledAppointments || 0}</div>
+            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.scheduledAppointments || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
               Programadas
             </p>

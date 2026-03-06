@@ -1242,6 +1242,8 @@ export default function Inventory() {
                         src={((vehicle.images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-12 h-12 rounded-lg object-cover"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = "/placeholder.svg";
                         }}
@@ -1601,6 +1603,8 @@ export default function Inventory() {
                     src={(selectedVehicle.images as unknown as string[] | null)?.[0] || "/placeholder.svg"}
                     alt="Foto vehículo"
                     className="w-full h-[280px] object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
                 <div className="grid grid-cols-5 gap-2">
@@ -1625,7 +1629,7 @@ export default function Inventory() {
                           setSelectedVehicle({ ...selectedVehicle, images: next as any });
                         }}
                       >
-                        <img src={src} alt="thumb" className="w-full h-14 object-cover" />
+                        <img src={src} alt="thumb" className="w-full h-14 object-cover" loading="lazy" decoding="async" />
                       </button>
                     ))}
                 </div>
@@ -2177,6 +2181,8 @@ export default function Inventory() {
                           src={img}
                           alt={`Vehículo ${index + 1}`}
                           className="w-24 h-24 object-cover rounded-lg border"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     ))}

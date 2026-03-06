@@ -5,13 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { Database } from '@/lib/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -26,11 +19,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 const AVATAR_BUCKET = 'avatars';
 const AVATAR_MAX_SIZE_MB = 2;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const CREATE_BRANCH_OPTION_VALUE = '__create_branch__';
 
 export default function Settings() {
   const { user, fetchUserProfile } = useAuth();
@@ -58,7 +51,6 @@ export default function Settings() {
   });
   const [savingBranch, setSavingBranch] = useState(false);
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false);
-  const [branches, setBranches] = useState<{ id: string; name: string; city: string; region: string }[]>([]);
   const [editBranchDialogOpen, setEditBranchDialogOpen] = useState(false);
   const [editBranchLoading, setEditBranchLoading] = useState(false);
   const [editBranchSaving, setEditBranchSaving] = useState(false);
@@ -72,27 +64,10 @@ export default function Settings() {
     opening_hours: '',
   });
 
-  // Cargar lista de sucursales desde Supabase
-  useEffect(() => {
-    const loadBranches = async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, city, region')
-        .order('name');
-      if (!error && data) setBranches(data);
-    };
-    loadBranches();
-  }, []);
-
   // Cargar nombre de la sucursal actual si el usuario tiene una asignada
   useEffect(() => {
     if (!user?.branch_id) {
       setCurrentBranchName(null);
-      return;
-    }
-    const branch = branches.find((b) => b.id === user.branch_id);
-    if (branch) {
-      setCurrentBranchName(branch.name);
       return;
     }
     let cancelled = false;
@@ -108,7 +83,7 @@ export default function Settings() {
         if (!cancelled) setCurrentBranchName(null);
       });
     return () => { cancelled = true; };
-  }, [user?.branch_id, branches]);
+  }, [user?.branch_id]);
 
   // Cargar datos del usuario al montar el componente
   useEffect(() => {
@@ -251,13 +226,13 @@ export default function Settings() {
       setCurrentBranchName(newBranch.name.trim());
       setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
       setCreateBranchDialogOpen(false);
-      // Refrescar lista de sucursales para que aparezca la nueva
-      const { data: refreshed } = await supabase.from('branches').select('id, name, city, region').order('name');
-      if (refreshed) setBranches(refreshed);
       setSuccess(true);
+      toast.success('Sucursal creada y asignada correctamente.');
       setTimeout(() => setSuccess(false), 5000);
     } catch (err: any) {
-      setError(err.message || 'Error al crear la sucursal');
+      const msg = err?.message || 'Error al crear la sucursal';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSavingBranch(false);
     }
@@ -329,8 +304,6 @@ export default function Settings() {
         .eq('id', formData.branch_id);
       if (updateErr) throw updateErr;
       setCurrentBranchName(editBranchForm.name.trim());
-      const { data: refreshed } = await supabase.from('branches').select('id, name, city, region').order('name');
-      if (refreshed) setBranches(refreshed);
       setEditBranchDialogOpen(false);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 5000);
@@ -559,40 +532,32 @@ export default function Settings() {
                   />
                 </div>
 
-                {/* Sucursal: elegir existente o crear nueva */}
+                {/* Sucursal */}
                 <div className="space-y-3">
                   <Label className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
                     Sucursal
                   </Label>
-                  <Select
-                    value={formData.branch_id === CREATE_BRANCH_OPTION_VALUE ? 'none' : (formData.branch_id || 'none')}
-                    onValueChange={(v) => {
-                      if (v === CREATE_BRANCH_OPTION_VALUE) {
-                        setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
-                        setCreateBranchDialogOpen(true);
-                        return;
-                      }
-                      handleInputChange('branch_id', v === 'none' ? '' : v);
-                    }}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin sucursal</SelectItem>
-                      {(user?.role === 'admin' || user?.role === 'gerente' || branches.length === 0) && (
-                        <SelectItem value={CREATE_BRANCH_OPTION_VALUE}>Crear sucursal</SelectItem>
-                      )}
-                      {branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name} {b.city ? `(${b.city})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.branch_id && (
+                  {!formData.branch_id ? (
+                    <div className="rounded-lg border border-dashed p-4 space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        No tienes sucursal asignada. Agrega una para poder conectar integraciones como Meta Ads.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
+                          setCreateBranchDialogOpen(true);
+                        }}
+                        disabled={loading}
+                      >
+                        <Building2 className="h-4 w-4 mr-2" />
+                        Agregar sucursal
+                      </Button>
+                    </div>
+                  ) : (
                     <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
                       <span className="text-sm flex-1">
                         Sucursal actual: <strong>{currentBranchName ?? '…'}</strong>
@@ -614,9 +579,6 @@ export default function Settings() {
                       </Button>
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    La sucursal se guarda al hacer clic en &quot;Guardar cambios&quot; más abajo.
-                  </p>
 
                   {/* Modal editar sucursal */}
                   <Dialog open={editBranchDialogOpen} onOpenChange={setEditBranchDialogOpen}>

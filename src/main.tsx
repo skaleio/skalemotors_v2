@@ -68,6 +68,20 @@ function showErrorInRoot(title: string, message: string, detail?: string) {
   `;
 }
 
+if (supabaseUrl) {
+  try {
+    const url = new URL(supabaseUrl);
+    const origin = url.origin;
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = origin;
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  } catch {
+    // ignore invalid URL
+  }
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   showErrorInRoot(
     "Configuración requerida",

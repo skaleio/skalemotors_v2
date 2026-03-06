@@ -762,7 +762,7 @@ export default function Consignaciones() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Consignaciones</h1>
           <p className="text-muted-foreground mt-1 md:mt-2 text-sm md:text-base">
-            Controla clientes y autos consignados, y gestiona etiquetas de leads
+            Controla clientes y autos consignados, y gestiona etiquetas de leads. El listado se mantiene y no se resetea al cambiar de mes.
           </p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="w-full md:w-auto">

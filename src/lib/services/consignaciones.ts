@@ -24,8 +24,14 @@ type ConsignacionWithRelations = Consignacion & {
   } | null;
 };
 
+/**
+ * Servicio de consignaciones.
+ * Las consignaciones son persistentes: no se resetean ni se filtran por mes al cerrar el período.
+ * La lista siempre incluye todas las consignaciones (salvo filtros por sucursal, estado o búsqueda).
+ */
 export const consignacionesService = {
   async getAll(filters?: { branchId?: string; status?: string; search?: string }): Promise<ConsignacionWithRelations[]> {
+    // No filtrar por fecha/mes: las consignaciones se mantienen históricamente.
     let query = supabase
       .from("consignaciones")
       .select(
