@@ -477,7 +477,10 @@ export default function Finance() {
   const gastosParaBalance = gastos.filter((g) => displayInversor(g) !== POZO_HESSEN_INVERSOR);
   const totalGastos = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
-    (g) => !(g.devolucion ?? false) && displayInversor(g) !== INVERSOR_EMPRESA
+    (g) =>
+      !(g.devolucion ?? false) &&
+      displayInversor(g) !== INVERSOR_EMPRESA &&
+      displayInversor(g) !== POZO_HESSEN_INVERSOR
   );
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosHessenMotors = gastos.filter((g) => displayInversor(g) === INVERSOR_EMPRESA);
@@ -1934,7 +1937,7 @@ export default function Finance() {
               Devoluciones pendientes (sin devolver)
             </DialogTitle>
             <DialogDescription>
-              Gastos sin devolver (excluye HessenMotors: son gastos de la empresa y no se devuelven). Ordenados por fecha (más reciente primero).
+              Gastos sin devolver (excluye HessenMotors y Pozo Hessen: no se devuelven). Ordenados por fecha (más reciente primero).
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">

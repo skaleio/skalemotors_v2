@@ -2,6 +2,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 
 const CHILEAUTOS_BASE = "https://www.chileautos.cl/vehiculos/";
+const CHILEAUTOS_ORIGIN = "https://www.chileautos.cl";
 
 function buildSearchUrl(keyword: string, offset: number): string {
   const q = `(And.Servicio.chileautos._.CarAll.keyword(${keyword.trim().replace(/\s+/g, "+")}).)`;
@@ -11,7 +12,7 @@ function buildSearchUrl(keyword: string, offset: number): string {
 }
 
 function injectBaseTag(html: string): string {
-  const baseTag = '<base href="https://www.chileautos.cl/">';
+  const baseTag = `<base href="${CHILEAUTOS_ORIGIN}/">`;
   if (/<head(\s[^>]*)?>/i.test(html)) {
     return html.replace(/(<head)(\s[^>]*)?>/i, `$1$2>${baseTag}`);
   }
@@ -19,6 +20,16 @@ function injectBaseTag(html: string): string {
     return html.replace(/(<html[^>]*>)/i, `$1${baseTag}`);
   }
   return baseTag + html;
+}
+
+/** Valida que la URL sea de chileautos.cl para evitar abuso del proxy */
+function isSafeChileAutosUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.hostname === "www.chileautos.cl" || u.hostname === "chileautos.cl";
+  } catch {
+    return false;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -33,18 +44,26 @@ Deno.serve(async (req) => {
     });
   }
 
-  const url = new URL(req.url);
-  const keyword = url.searchParams.get("q")?.trim() ?? "";
-  const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+  const reqUrl = new URL(req.url);
+  const directUrl = reqUrl.searchParams.get("url")?.trim() ?? "";
+  const keyword = reqUrl.searchParams.get("q")?.trim() ?? "";
+  const offset = Math.max(0, Number(reqUrl.searchParams.get("offset")) || 0);
 
-  if (!keyword) {
-    return new Response("Falta parámetro q (búsqueda)", {
+  let targetUrl: string;
+
+  if (directUrl) {
+    if (!isSafeChileAutosUrl(directUrl)) {
+      return new Response("URL no permitida", { status: 400, headers: { ...corsHeaders } });
+    }
+    targetUrl = directUrl;
+  } else if (keyword) {
+    targetUrl = buildSearchUrl(keyword, offset);
+  } else {
+    return new Response("Falta parámetro url o q", {
       status: 400,
       headers: { ...corsHeaders },
     });
   }
-
-  const targetUrl = buildSearchUrl(keyword, offset);
   const scraperApiKey = Deno.env.get("SCRAPER_API_KEY");
 
   try {

@@ -20,7 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBalanceByMonth } from "@/hooks/useBalanceByMonth";
 import { salaryDistributionService, type StoredData } from "@/lib/services/salaryDistribution";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Calendar, DollarSign, PieChart, User } from "lucide-react";
+import { Building2, Calendar, DollarSign, Percent, PieChart, User } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,17 +30,19 @@ const DISTRIBUTION = {
   "Ahorro Empresa": 0.2,
   Antonio: 0.15,
   Ronaldo: 0.05,
+  Comisiones: 0,
 } as const;
 
 const BENEFICIARIOS = Object.keys(DISTRIBUTION) as (keyof typeof DISTRIBUTION)[];
 
-/** Colores por beneficiario para los cuadros (Jota, Mike, Pozo/Ahorro Empresa, Antonio, Ronaldo). */
+/** Colores por beneficiario para los cuadros. */
 const BENEFICIARY_CARD_CLASS: Record<string, string> = {
   Mike: "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800",
   Jota: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
   "Ahorro Empresa": "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
   Antonio: "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800",
   Ronaldo: "bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800",
+  Comisiones: "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800",
 };
 
 const MESES = [
@@ -84,6 +86,7 @@ export default function SalaryDistribution() {
   const [dialogMonth, setDialogMonth] = useState<{ year: number; month: number } | null>(null);
   const [profitInput, setProfitInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [beneficiaryDetailName, setBeneficiaryDetailName] = useState<string | null>(null);
 
   const { data: balanceByMonth = {}, isLoading: balanceLoading } = useBalanceByMonth(branchId, selectedYear);
 
@@ -187,6 +190,27 @@ export default function SalaryDistribution() {
   const balanceForDialog =
     dialogMonth != null ? balanceByMonth[yearMonthKey(dialogMonth.year, dialogMonth.month)] : null;
 
+  const detailEntries = beneficiaryDetailName
+    ? (() => {
+        const out: { key: string; dateLabel: string; amount: number }[] = [];
+        Object.entries(data).forEach(([key, monthData]) => {
+          const amount = monthData.amounts[beneficiaryDetailName];
+          if (amount != null && amount > 0) {
+            const [y, m] = key.split("-").map(Number);
+            out.push({
+              key,
+              dateLabel: `${MESES[m - 1]} ${y}`,
+              amount,
+            });
+          }
+        });
+        out.sort((a, b) => b.key.localeCompare(a.key));
+        return out;
+      })()
+    : [];
+
+  const detailTotal = detailEntries.reduce((sum, e) => sum + e.amount, 0);
+
   return (
     <div className="space-y-8 p-6">
       <div>
@@ -246,13 +270,19 @@ export default function SalaryDistribution() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {BENEFICIARIOS.map((name) => (
-              <Card key={name} className={`border-2 ${BENEFICIARY_CARD_CLASS[name] ?? "bg-muted/40 border-border"}`}>
+              <Card
+                key={name}
+                className={`border-2 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${BENEFICIARY_CARD_CLASS[name] ?? "bg-muted/40 border-border"}`}
+                onClick={() => setBeneficiaryDetailName(name)}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     {name === "Ahorro Empresa" ? (
                       <Building2 className="h-4 w-4" />
+                    ) : name === "Comisiones" ? (
+                      <Percent className="h-4 w-4" />
                     ) : (
                       <User className="h-4 w-4" />
                     )}
@@ -339,6 +369,40 @@ export default function SalaryDistribution() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ventana emergente: detalle por beneficiario (fechas y montos) */}
+      <Dialog open={beneficiaryDetailName != null} onOpenChange={(open) => !open && setBeneficiaryDetailName(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {beneficiaryDetailName ? `Detalle — ${beneficiaryDetailName}` : "Detalle"}
+            </DialogTitle>
+            <DialogDescription>
+              Fechas en que se agregaron montos y monto en cada ocasión.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {detailEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aún no hay montos registrados para este beneficiario.</p>
+            ) : (
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {detailEntries.map(({ key, dateLabel, amount }) => (
+                  <div key={key} className="flex items-center justify-between py-2 border-b border-border/60 last:border-0">
+                    <span className="text-sm font-medium">{dateLabel}</span>
+                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {detailEntries.length > 0 && (
+              <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Total</span>
+                <span className="text-lg font-bold tabular-nums">{formatCurrency(detailTotal)}</span>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo: ingresar profit del mes */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -320,6 +320,76 @@ export interface Database {
           updated_at?: string
         }
       }
+      chileautos_saved_listings: {
+        Row: {
+          id: string
+          branch_id: string | null
+          user_id: string | null
+          source: string
+          listing_id: string | null
+          listing_url: string | null
+          title: string | null
+          make: string | null
+          model: string | null
+          price_text: string | null
+          state: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          source?: string
+          listing_id?: string | null
+          listing_url?: string | null
+          title?: string | null
+          make?: string | null
+          model?: string | null
+          price_text?: string | null
+          state?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          source?: string
+          listing_id?: string | null
+          listing_url?: string | null
+          title?: string | null
+          make?: string | null
+          model?: string | null
+          price_text?: string | null
+          state?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+      }
+      chileautos_search_log: {
+        Row: {
+          id: string
+          branch_id: string | null
+          user_id: string | null
+          search_keyword: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          search_keyword: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          search_keyword?: string
+          created_at?: string
+        }
+      }
       tramite_tipos: {
         Row: {
           id: string
