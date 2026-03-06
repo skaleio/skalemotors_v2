@@ -50,6 +50,9 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+/** Detalle de una comisión guardada (monto + nota). */
+const COMISIONES_DETALLE_KEY = "ComisionesDetalle";
+
 const STORAGE_KEY = "skalemotors_salary_distribution";
 
 function formatCurrency(value: number) {
@@ -87,6 +90,11 @@ export default function SalaryDistribution() {
   const [profitInput, setProfitInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [beneficiaryDetailName, setBeneficiaryDetailName] = useState<string | null>(null);
+  const [comisionesModalOpen, setComisionesModalOpen] = useState(false);
+  const [commissionAmount, setCommissionAmount] = useState("");
+  const [commissionNote, setCommissionNote] = useState("");
+  const [commissionMonth, setCommissionMonth] = useState(() => new Date().getMonth() + 1);
+  const [commissionYear, setCommissionYear] = useState(() => new Date().getFullYear());
 
   const { data: balanceByMonth = {}, isLoading: balanceLoading } = useBalanceByMonth(branchId, selectedYear);
 
@@ -157,6 +165,50 @@ export default function SalaryDistribution() {
     }
   };
 
+  const saveCommission = async () => {
+    if (!branchId) {
+      toast.error("Para guardar, asigna una sucursal en Configuración.");
+      return;
+    }
+    const amount = Number(commissionAmount) || 0;
+    if (amount <= 0) {
+      toast.error("Ingresa un monto mayor a 0.");
+      return;
+    }
+    const key = yearMonthKey(commissionYear, commissionMonth);
+    const existing = data[key];
+    const existingAmounts = existing?.amounts ?? {};
+    const detalle: { amount: number; note: string }[] = Array.isArray(existingAmounts[COMISIONES_DETALLE_KEY])
+      ? [...(existingAmounts[COMISIONES_DETALLE_KEY] as { amount: number; note: string }[])]
+      : [];
+    detalle.push({ amount, note: commissionNote.trim() || "—" });
+    const totalComisiones = detalle.reduce((s, e) => s + e.amount, 0);
+    const amounts = {
+      ...existingAmounts,
+      Comisiones: totalComisiones,
+      [COMISIONES_DETALLE_KEY]: detalle,
+    } as Record<string, number | { amount: number; note: string }[]>;
+    const profit = existing?.profit ?? 0;
+    setSaving(true);
+    try {
+      await salaryDistributionService.upsertMonth(branchId, commissionYear, commissionMonth, profit, amounts);
+      setData((prev) => {
+        const next = { ...prev, [key]: { profit, amounts: { ...amounts } } };
+        queryClient.setQueryData(["salary-distribution", branchId], next);
+        return next;
+      });
+      setCommissionAmount("");
+      setCommissionNote("");
+      toast.success("Comisión agregada.");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "No se pudo guardar";
+      console.error("Error saving commission:", e);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const totalsByBeneficiary = useCallback(() => {
     const totals: Record<string, number> = {};
     BENEFICIARIOS.forEach((b) => (totals[b] = 0));
@@ -166,8 +218,10 @@ export default function SalaryDistribution() {
       const [y, m] = key.split("-").map(Number);
       if (y !== filterYear) return;
       if (filterMonth != null && m !== filterMonth) return;
-      Object.entries(monthData.amounts).forEach(([name, amount]) => {
-        totals[name] = (totals[name] ?? 0) + amount;
+      Object.entries(monthData.amounts).forEach(([name, value]) => {
+        if (BENEFICIARIOS.includes(name) && typeof value === "number") {
+          totals[name] = (totals[name] ?? 0) + value;
+        }
       });
     });
     return totals;
@@ -210,6 +264,27 @@ export default function SalaryDistribution() {
     : [];
 
   const detailTotal = detailEntries.reduce((sum, e) => sum + e.amount, 0);
+
+  const comisionesDetalleList: { key: string; dateLabel: string; amount: number; note: string }[] = [];
+  Object.entries(data).forEach(([key, monthData]) => {
+    const detalle = monthData.amounts[COMISIONES_DETALLE_KEY];
+    if (!Array.isArray(detalle)) return;
+    const [y, m] = key.split("-").map(Number);
+    const dateLabel = `${MESES[m - 1]} ${y}`;
+    (detalle as { amount: number; note: string }[]).forEach((entry, idx) => {
+      comisionesDetalleList.push({
+        key: `${key}-${idx}`,
+        dateLabel,
+        amount: entry.amount,
+        note: entry.note || "—",
+      });
+    });
+  });
+  comisionesDetalleList.sort((a, b) => {
+    const [ay, am] = a.key.split("-").slice(0, 2).map(Number);
+    const [by, bm] = b.key.split("-").slice(0, 2).map(Number);
+    return by !== ay ? by - ay : bm - am;
+  });
 
   return (
     <div className="space-y-8 p-6">
@@ -275,7 +350,7 @@ export default function SalaryDistribution() {
               <Card
                 key={name}
                 className={`border-2 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${BENEFICIARY_CARD_CLASS[name] ?? "bg-muted/40 border-border"}`}
-                onClick={() => setBeneficiaryDetailName(name)}
+                onClick={() => (name === "Comisiones" ? setComisionesModalOpen(true) : setBeneficiaryDetailName(name))}
               >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -369,6 +444,107 @@ export default function SalaryDistribution() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal Comisiones: detalle de comisiones agregadas + formulario para agregar (con nota) */}
+      <Dialog open={comisionesModalOpen} onOpenChange={(open) => { setComisionesModalOpen(open); if (!open) { setCommissionAmount(""); setCommissionNote(""); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Comisiones</DialogTitle>
+            <DialogDescription>
+              Detalle de las comisiones agregadas. Puedes agregar una nueva con monto y nota.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-2">
+            <div>
+              <p className="text-sm font-medium mb-2">Detalle de comisiones agregadas</p>
+              {comisionesDetalleList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aún no hay comisiones. Agrega una abajo.</p>
+              ) : (
+                <div className="max-h-[220px] overflow-y-auto space-y-2 rounded-lg border bg-muted/30 p-3">
+                  {comisionesDetalleList.map((item) => (
+                    <div key={item.key} className="flex flex-col gap-0.5 py-2 border-b border-border/60 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.dateLabel}</span>
+                        <span className="text-sm font-semibold tabular-nums">{formatCurrency(item.amount)}</span>
+                      </div>
+                      {item.note !== "—" && (
+                        <p className="text-xs text-muted-foreground">{item.note}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-3">Agregar comisión</p>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="commission-amount">Monto (CLP)</Label>
+                  <Input
+                    id="commission-amount"
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="Ej: 150000"
+                    value={commissionAmount}
+                    onChange={(e) => setCommissionAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="commission-note">Nota / detalle</Label>
+                  <Input
+                    id="commission-note"
+                    type="text"
+                    placeholder="Ej: Comisión venta Toyota Corolla"
+                    value={commissionNote}
+                    onChange={(e) => setCommissionNote(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Mes</Label>
+                    <Select value={String(commissionMonth)} onValueChange={(v) => setCommissionMonth(Number(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MESES.map((nombre, i) => (
+                          <SelectItem key={i} value={String(i + 1)}>{nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Año</Label>
+                    <Select value={String(commissionYear)} onValueChange={(v) => setCommissionYear(Number(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          const current = new Date().getFullYear();
+                          const years = new Set([...yearsWithData(), current - 1, current - 2, current + 1]);
+                          return Array.from(years).sort((a, b) => b - a).map((y) => (
+                            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                          ));
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveCommission}
+                  disabled={saving || !commissionAmount.trim()}
+                  className="w-full py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {saving ? "Guardando…" : "Agregar comisión"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Ventana emergente: detalle por beneficiario (fechas y montos) */}
       <Dialog open={beneficiaryDetailName != null} onOpenChange={(open) => !open && setBeneficiaryDetailName(null)}>

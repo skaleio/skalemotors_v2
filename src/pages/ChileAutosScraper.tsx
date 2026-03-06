@@ -77,9 +77,16 @@ const CITY_SEDAN: { marca: string; modelo: string; url: string }[] = [
   { marca: "Nissan",   modelo: "Versa",    url: "https://www.chileautos.cl/vehiculos/nissan/versa/" },
 ];
 
+/**
+ * Fallback cuando no se puede armar marca/modelo: búsqueda por palabra clave.
+ * ChileAutos acepta búsqueda en la barra del sitio; abrimos la lista de vehículos
+ * y el usuario puede usar "Palabra clave" allí. Usamos parámetro de búsqueda simple.
+ */
 function buildChileAutosListUrl(keyword: string, offset: number = 0): string {
-  const q = `(And.Servicio.chileautos._.CarAll.keyword(${keyword.trim().replace(/\s+/g, "+")}).)`;
-  const params = new URLSearchParams({ q, sort: "topdeal" });
+  const trimmed = keyword.trim().replace(/\s+/g, " ");
+  if (!trimmed) return CHILEAUTOS_BASE;
+  const params = new URLSearchParams();
+  params.set("q", trimmed);
   if (offset > 0) params.set("offset", String(offset));
   return `${CHILEAUTOS_BASE}?${params.toString()}`;
 }
@@ -94,9 +101,9 @@ function slug(texto: string): string {
 }
 
 /**
- * Construye URL de ChileAutos con filtros (marca, modelo, año, km máx).
- * Si el modelo está en nuestra lista, usa la URL directa; si no, arma /vehiculos/marca-slug/modelo-slug/
- * y añade parámetros de filtro cuando el sitio los soporte.
+ * Construye URL de ChileAutos por marca y modelo.
+ * Usa la URL directa /vehiculos/marca/modelo/ (lista conocida o slug). El año y kilometraje
+ * se pueden filtrar en la propia página de ChileAutos una vez abierta.
  */
 function buildChileAutosUrlWithFilters(filtros: {
   marca: string;
@@ -104,7 +111,7 @@ function buildChileAutosUrlWithFilters(filtros: {
   año?: number | null;
   kilometrajeMax?: number | null;
 }): string {
-  const { marca, modelo, año, kilometrajeMax } = filtros;
+  const { marca, modelo } = filtros;
   const m = marca.trim();
   const mod = modelo.trim();
   if (!m || !mod) return buildChileAutosListUrl(`${m} ${mod}`.trim(), 0);
@@ -112,13 +119,8 @@ function buildChileAutosUrlWithFilters(filtros: {
   const exact = TODOS_MODELOS.find(
     (a) => a.marca.toLowerCase() === m.toLowerCase() && a.modelo.toLowerCase() === mod.toLowerCase()
   );
-  const baseUrl = exact ? exact.url : `${CHILEAUTOS_BASE}${slug(m)}/${slug(mod)}/`;
-
-  const params = new URLSearchParams();
-  if (año != null && año >= 1990 && año <= 2030) params.set("year", String(año));
-  if (kilometrajeMax != null && kilometrajeMax > 0) params.set("kmmax", String(kilometrajeMax));
-  const query = params.toString();
-  return query ? `${baseUrl.replace(/\/?$/, "")}?${query}` : baseUrl;
+  if (exact) return exact.url;
+  return `${CHILEAUTOS_BASE}${slug(m)}/${slug(mod)}/`;
 }
 
 const TODOS_MODELOS = [...AUTOS_MAS_COMERCIALES, ...CITY_SEDAN];
@@ -132,26 +134,82 @@ function normalizarParaMatch(texto: string): string {
     .trim();
 }
 
-/** Si coincide con un modelo de la lista, devuelve su URL directa. */
-function resolverUrlBusqueda(texto: string): string {
-  const normalizado = normalizarParaMatch(texto);
-  if (!normalizado) return buildChileAutosListUrl(texto.trim(), 0);
-  const match = TODOS_MODELOS.find((auto) => {
-    const clave = `${auto.marca.toLowerCase()} ${auto.modelo.toLowerCase()}`;
-    return normalizado.includes(clave) || clave.includes(normalizado);
-  });
-  return match ? match.url : buildChileAutosListUrl(texto.trim(), 0);
+/** Distancia de Levenshtein para tolerar un typo (ej. swfit → swift). */
+function levenshtein(a: string, b: string): number {
+  const n = a.length;
+  const m = b.length;
+  let prev = Array.from({ length: m + 1 }, (_, j) => j);
+  for (let i = 1; i <= n; i++) {
+    const curr = [i];
+    for (let j = 1; j <= m; j++) {
+      curr[j] = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+    }
+    prev = curr;
+  }
+  return prev[m];
 }
 
-/** Etiqueta para registrar en métricas: "Marca Modelo" si coincide con lista, si no el texto normalizado. */
+/**
+ * Resuelve la URL de búsqueda en ChileAutos.
+ * 1) Si el texto tiene al menos "marca modelo", se usa la URL directa /vehiculos/marca/modelo/
+ *    (coincidencia exacta en lista conocida o construcción por slug).
+ * 2) Con un solo término se usa búsqueda por palabra clave (?q=).
+ */
+function resolverUrlBusqueda(texto: string): string {
+  const original = texto.trim();
+  const normalizado = normalizarParaMatch(original);
+  if (!normalizado) return buildChileAutosListUrl(original, 0);
+
+  const words = normalizado.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const marcaTyped = words[0];
+    const modeloTyped = words.slice(1).join(" ");
+    const slugModeloTyped = slug(modeloTyped);
+
+    const exact = TODOS_MODELOS.find(
+      (a) =>
+        a.marca.toLowerCase() === marcaTyped &&
+        a.modelo.toLowerCase().replace(/\s+/g, " ") === modeloTyped
+    );
+    if (exact) return exact.url;
+
+    const withTypo = TODOS_MODELOS.find((a) => {
+      if (a.marca.toLowerCase() !== marcaTyped) return false;
+      const slugModelo = slug(a.modelo);
+      return slugModeloTyped === slugModelo || levenshtein(slugModeloTyped, slugModelo) <= 2;
+    });
+    if (withTypo) return withTypo.url;
+
+    return `${CHILEAUTOS_BASE}${slug(marcaTyped)}/${slugModeloTyped}/`;
+  }
+
+  return buildChileAutosListUrl(original, 0);
+}
+
+/** Etiqueta para métricas: "Marca Modelo" si hay match en lista, si no el texto sin año. */
 function resolverLabelBusqueda(texto: string): string {
   const normalizado = normalizarParaMatch(texto);
   if (!normalizado) return texto.trim();
-  const match = TODOS_MODELOS.find((auto) => {
-    const clave = `${auto.marca.toLowerCase()} ${auto.modelo.toLowerCase()}`;
-    return normalizado.includes(clave) || clave.includes(normalizado);
-  });
-  return match ? `${match.marca} ${match.modelo}` : texto.trim();
+  const words = normalizado.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const marcaTyped = words[0];
+    const modeloTyped = words.slice(1).join(" ");
+    const slugModeloTyped = slug(modeloTyped);
+    const exact = TODOS_MODELOS.find(
+      (a) =>
+        a.marca.toLowerCase() === marcaTyped &&
+        a.modelo.toLowerCase().replace(/\s+/g, " ") === modeloTyped
+    );
+    if (exact) return `${exact.marca} ${exact.modelo}`;
+    const withTypo = TODOS_MODELOS.find((a) => {
+      if (a.marca.toLowerCase() !== marcaTyped) return false;
+      const slugModelo = slug(a.modelo);
+      return slugModeloTyped === slugModelo || levenshtein(slugModeloTyped, slugModelo) <= 2;
+    });
+    if (withTypo) return `${withTypo.marca} ${withTypo.modelo}`;
+    return `${marcaTyped.charAt(0).toUpperCase() + marcaTyped.slice(1)} ${modeloTyped}`;
+  }
+  return texto.trim();
 }
 
 const SAVED_QUERY_KEY = ["chileautos-saved"];
