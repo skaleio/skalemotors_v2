@@ -95,6 +95,9 @@ export default function SalaryDistribution() {
   const [commissionNote, setCommissionNote] = useState("");
   const [commissionMonth, setCommissionMonth] = useState(() => new Date().getMonth() + 1);
   const [commissionYear, setCommissionYear] = useState(() => new Date().getFullYear());
+  const [moveCommissionEntry, setMoveCommissionEntry] = useState<{ sourceKey: string; entryIndex: number; amount: number; note: string } | null>(null);
+  const [moveTargetMonth, setMoveTargetMonth] = useState(1);
+  const [moveTargetYear, setMoveTargetYear] = useState(() => new Date().getFullYear());
 
   const { data: balanceByMonth = {}, isLoading: balanceLoading } = useBalanceByMonth(branchId, selectedYear);
 
@@ -217,6 +220,66 @@ export default function SalaryDistribution() {
     }
   };
 
+  const moveCommissionToMonth = async () => {
+    if (!branchId || !moveCommissionEntry) return;
+    const { sourceKey, entryIndex, amount, note } = moveCommissionEntry;
+    const [sourceYear, sourceMonth] = sourceKey.split("-").map(Number);
+    const targetKey = yearMonthKey(moveTargetYear, moveTargetMonth);
+    if (sourceKey === targetKey) {
+      toast.error("El mes de destino debe ser distinto al actual.");
+      return;
+    }
+    const sourceData = data[sourceKey];
+    const detalleSource = Array.isArray(sourceData?.amounts[COMISIONES_DETALLE_KEY])
+      ? (sourceData!.amounts[COMISIONES_DETALLE_KEY] as { amount: number; note: string }[]).slice()
+      : [];
+    const entry = detalleSource[entryIndex];
+    if (!entry) return;
+    detalleSource.splice(entryIndex, 1);
+    const newComisionesSource = detalleSource.reduce((s, e) => s + e.amount, 0);
+    const amountsSource = {
+      ...(sourceData?.amounts ?? {}),
+      Comisiones: newComisionesSource,
+      [COMISIONES_DETALLE_KEY]: detalleSource,
+    } as Record<string, number | { amount: number; note: string }[]>;
+
+    const targetData = data[targetKey];
+    const existingAmounts = targetData?.amounts ?? {};
+    const detalleTarget = Array.isArray(existingAmounts[COMISIONES_DETALLE_KEY])
+      ? [...(existingAmounts[COMISIONES_DETALLE_KEY] as { amount: number; note: string }[])]
+      : [];
+    detalleTarget.push({ amount: entry.amount, note: entry.note || "—" });
+    const newComisionesTarget = detalleTarget.reduce((s, e) => s + e.amount, 0);
+    const amountsTarget = {
+      ...existingAmounts,
+      Comisiones: newComisionesTarget,
+      [COMISIONES_DETALLE_KEY]: detalleTarget,
+    } as Record<string, number | { amount: number; note: string }[]>;
+
+    setSaving(true);
+    try {
+      await salaryDistributionService.upsertMonth(branchId, sourceYear, sourceMonth, sourceData?.profit ?? 0, amountsSource);
+      await salaryDistributionService.upsertMonth(branchId, moveTargetYear, moveTargetMonth, targetData?.profit ?? 0, amountsTarget);
+      setData((prev) => {
+        const next = {
+          ...prev,
+          [sourceKey]: { profit: sourceData?.profit ?? 0, amounts: { ...amountsSource } },
+          [targetKey]: { profit: targetData?.profit ?? 0, amounts: { ...amountsTarget } },
+        };
+        queryClient.setQueryData(["salary-distribution", branchId], next);
+        return next;
+      });
+      setMoveCommissionEntry(null);
+      toast.success("Comisión movida al mes seleccionado.");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "No se pudo mover";
+      console.error("Error moving commission:", e);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const totalsByBeneficiary = useCallback(() => {
     const totals: Record<string, number> = {};
     BENEFICIARIOS.forEach((b) => (totals[b] = 0));
@@ -273,7 +336,7 @@ export default function SalaryDistribution() {
 
   const detailTotal = detailEntries.reduce((sum, e) => sum + e.amount, 0);
 
-  const comisionesDetalleList: { key: string; dateLabel: string; amount: number; note: string }[] = [];
+  const comisionesDetalleList: { key: string; sourceKey: string; entryIndex: number; dateLabel: string; amount: number; note: string }[] = [];
   Object.entries(data).forEach(([key, monthData]) => {
     const detalle = monthData.amounts[COMISIONES_DETALLE_KEY];
     if (!Array.isArray(detalle)) return;
@@ -282,6 +345,8 @@ export default function SalaryDistribution() {
     (detalle as { amount: number; note: string }[]).forEach((entry, idx) => {
       comisionesDetalleList.push({
         key: `${key}-${idx}`,
+        sourceKey: key,
+        entryIndex: idx,
         dateLabel,
         amount: entry.amount,
         note: entry.note || "—",
@@ -472,9 +537,25 @@ export default function SalaryDistribution() {
                 <div className="max-h-[220px] overflow-y-auto space-y-2 rounded-lg border bg-muted/30 p-3">
                   {comisionesDetalleList.map((item) => (
                     <div key={item.key} className="flex flex-col gap-0.5 py-2 border-b border-border/60 last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{item.dateLabel}</span>
-                        <span className="text-sm font-semibold tabular-nums">{formatCurrency(item.amount)}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm font-medium">{item.dateLabel}</span>
+                          <span className="text-sm font-semibold tabular-nums ml-2">{formatCurrency(item.amount)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoveCommissionEntry({ sourceKey: item.sourceKey, entryIndex: item.entryIndex, amount: item.amount, note: item.note });
+                            const [y, m] = item.sourceKey.split("-").map(Number);
+                            if (m === 3) {
+                              setMoveTargetMonth(2);
+                              setMoveTargetYear(y);
+                            }
+                          }}
+                          className="text-xs text-primary hover:underline shrink-0"
+                        >
+                          Cambiar mes
+                        </button>
                       </div>
                       {item.note !== "—" && (
                         <p className="text-xs text-muted-foreground">{item.note}</p>
@@ -552,6 +633,69 @@ export default function SalaryDistribution() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: mover comisión a otro mes */}
+      <Dialog open={moveCommissionEntry != null} onOpenChange={(open) => !open && setMoveCommissionEntry(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mover comisión a otro mes</DialogTitle>
+            <DialogDescription>
+              {moveCommissionEntry && (
+                <>Comisión de {formatCurrency(moveCommissionEntry.amount)} → elige el mes que corresponde.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <div className="space-y-2">
+              <Label>Mes</Label>
+              <Select value={String(moveTargetMonth)} onValueChange={(v) => setMoveTargetMonth(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MESES.map((nombre, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Año</Label>
+              <Select value={String(moveTargetYear)} onValueChange={(v) => setMoveTargetYear(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(() => {
+                    const current = new Date().getFullYear();
+                    const years = new Set([...yearsWithData(), current - 1, current, current + 1]);
+                    return Array.from(years).sort((a, b) => b - a).map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setMoveCommissionEntry(null)}
+              className="px-4 py-2 rounded-md border border-input bg-background hover:bg-accent"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={moveCommissionToMonth}
+              disabled={saving}
+              className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {saving ? "Moviendo…" : "Mover comisión"}
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
