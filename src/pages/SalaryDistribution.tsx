@@ -136,7 +136,15 @@ export default function SalaryDistribution() {
     }
     const profit = Number(profitInput) || 0;
     const key = yearMonthKey(dialogMonth.year, dialogMonth.month);
-    const amounts = computeAmounts(profit);
+    const existingAmounts = data[key]?.amounts ?? {};
+    const computed = computeAmounts(profit);
+    const amounts = {
+      ...computed,
+      Comisiones: typeof existingAmounts.Comisiones === "number" ? existingAmounts.Comisiones : 0,
+      [COMISIONES_DETALLE_KEY]: Array.isArray(existingAmounts[COMISIONES_DETALLE_KEY])
+        ? existingAmounts[COMISIONES_DETALLE_KEY]
+        : [],
+    } as Record<string, number | { amount: number; note: string }[]>;
     setSaving(true);
     try {
       await salaryDistributionService.upsertMonth(
@@ -147,13 +155,13 @@ export default function SalaryDistribution() {
         amounts
       );
       setData((prev) => {
-        const next = { ...prev, [key]: { profit, amounts } };
+        const next = { ...prev, [key]: { profit, amounts: { ...amounts } } };
         queryClient.setQueryData(["salary-distribution", branchId], next);
         return next;
       });
       setDialogOpen(false);
       setDialogMonth(null);
-      toast.success("Reparto guardado. Los montos se sumaron a los cuadros de arriba.");
+      toast.success("Reparto guardado. Comisiones del mes se mantuvieron.");
     } catch (e) {
       const message = e instanceof Error ? e.message : "No se pudo guardar";
       console.error("Error saving salary distribution:", e);
@@ -415,7 +423,8 @@ export default function SalaryDistribution() {
               const month = index + 1;
               const key = yearMonthKey(selectedYear, month);
               const monthData = data[key];
-              const hasData = monthData && monthData.profit > 0;
+              const hasAmounts = monthData && Object.values(monthData.amounts).some((v) => typeof v === "number" && v > 0);
+              const hasData = monthData && (monthData.profit > 0 || hasAmounts);
               return (
                 <button
                   key={month}

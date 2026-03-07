@@ -1,4 +1,4 @@
-import DashboardLoader from "@/components/DashboardLoader";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,16 +10,6 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieCh
 export default function ExecutiveDashboard() {
   const { user } = useAuth();
   const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id);
-
-  console.log('📊 ExecutiveDashboard - user:', user);
-  console.log('📊 ExecutiveDashboard - branch_id:', user?.branch_id);
-  console.log('📊 ExecutiveDashboard - stats:', stats);
-  console.log('📊 ExecutiveDashboard - isLoading:', isLoading);
-  console.log('📊 ExecutiveDashboard - error:', error);
-
-  if (isLoading) {
-    return <DashboardLoader message="Cargando estadísticas ejecutivas" />;
-  }
 
   if (error) {
     return (
@@ -36,7 +26,13 @@ export default function ExecutiveDashboard() {
     ? ((stats.salesThisMonth / stats.activeLeads) * 100).toFixed(1)
     : '0';
 
+  const showSkeleton = isLoading && !stats;
+
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  const COLORS_GASTOS = [
+    '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777',
+    '#0891b2', '#65a30d', '#ea580c', '#4f46e5', '#0d9488', '#ca8a04'
+  ];
 
   const categoryLabels: Record<string, string> = {
     nuevo: 'Nuevos',
@@ -51,7 +47,24 @@ export default function ExecutiveDashboard() {
     arriendo: 'Arriendo',
     sueldos: 'Sueldos',
     mantenimiento: 'Mantenimiento',
+    combustible: 'Combustible',
+    comida: 'Comida',
+    uber: 'Uber',
+    personal: 'Personal',
+    vehiculos: 'Vehículos',
     otros: 'Otros'
+  };
+
+  const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number }) => {
+    if (percent < 0.10) return null;
+    const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+    const x = cx + r * Math.cos(-midAngle * Math.PI / 180);
+    const y = cy + r * Math.sin(-midAngle * Math.PI / 180);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" className="text-[11px] font-semibold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+        {`${Math.round(percent * 100)}%`}
+      </text>
+    );
   };
 
   const statusLabels: Record<string, string> = {
@@ -80,7 +93,7 @@ export default function ExecutiveDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCLP(stats?.salesRevenue || 0)}</div>
+            {showSkeleton ? <Skeleton className="h-8 w-28" /> : <div className="text-2xl font-bold">{formatCLP(stats?.salesRevenue || 0)}</div>}
             <p className="text-xs text-muted-foreground">Este mes</p>
           </CardContent>
         </Card>
@@ -91,7 +104,7 @@ export default function ExecutiveDashboard() {
             <Car className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.salesThisMonth || 0}</div>
+            {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats?.salesThisMonth || 0}</div>}
             <p className="text-xs text-muted-foreground">Este mes</p>
           </CardContent>
         </Card>
@@ -102,7 +115,7 @@ export default function ExecutiveDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{conversionRate}%</div>
+            {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{conversionRate}%</div>}
             <p className="text-xs text-muted-foreground">Leads a ventas</p>
           </CardContent>
         </Card>
@@ -113,7 +126,7 @@ export default function ExecutiveDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.activeLeads || 0}</div>
+            {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats?.activeLeads || 0}</div>}
             <p className="text-xs text-muted-foreground">En conversión</p>
           </CardContent>
         </Card>
@@ -141,8 +154,8 @@ export default function ExecutiveDashboard() {
                 <LineChart data={stats.salesByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorSalesExec" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
@@ -219,59 +232,47 @@ export default function ExecutiveDashboard() {
           <CardContent className="pt-6">
             {stats?.vehiclesByCategory && stats.vehiclesByCategory.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
+                <PieChart margin={{ top: 4, right: 4, bottom: 40, left: 4 }}>
                   <Pie
                     data={stats.vehiclesByCategory.map(item => ({
                       ...item,
                       name: categoryLabels[item.category] || item.category
                     }))}
                     cx="50%"
-                    cy="45%"
+                    cy="48%"
                     labelLine={false}
-                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                      const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
-                      const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
-                      return (
-                        <text
-                          x={x}
-                          y={y}
-                          fill="white"
-                          textAnchor={x > cx ? 'start' : 'end'}
-                          dominantBaseline="central"
-                          className="text-xs font-bold"
-                        >
-                          {`${(percent * 100).toFixed(0)}%`}
-                        </text>
-                      );
-                    }}
-                    outerRadius={100}
+                    label={renderPieLabel}
+                    outerRadius={116}
                     fill="#8884d8"
                     dataKey="count"
                     paddingAngle={0}
                     stroke="none"
                   >
                     {stats.vehiclesByCategory.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                      padding: '12px'
+                      borderRadius: '10px',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
+                      padding: '10px 14px'
+                    }}
+                    formatter={(value: number, name: string) => {
+                      const total = stats!.vehiclesByCategory.reduce((s, i) => s + i.count, 0);
+                      const pct = total ? Math.round((Number(value) / total) * 100) : 0;
+                      return [`${value} vehículos (${pct}%)`, name];
                     }}
                   />
                   <Legend
                     verticalAlign="bottom"
-                    height={36}
+                    height={32}
                     iconType="circle"
-                    formatter={(value) => <span className="text-xs font-medium">{value}</span>}
+                    iconSize={8}
+                    wrapperStyle={{ paddingTop: 4 }}
+                    formatter={(value) => <span className="text-xs font-medium text-muted-foreground">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -302,60 +303,48 @@ export default function ExecutiveDashboard() {
           <CardContent className="pt-6">
             {stats?.expensesByType && stats.expensesByType.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
+                <PieChart margin={{ top: 4, right: 4, bottom: 40, left: 4 }}>
                   <Pie
                     data={stats.expensesByType.map(item => ({
                       ...item,
                       name: expenseTypeLabels[item.type] || item.type.charAt(0).toUpperCase() + item.type.slice(1).toLowerCase()
                     }))}
                     cx="50%"
-                    cy="45%"
+                    cy="48%"
                     labelLine={false}
-                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                      const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                      const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
-                      const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
-                      return (
-                        <text
-                          x={x}
-                          y={y}
-                          fill="white"
-                          textAnchor={x > cx ? 'start' : 'end'}
-                          dominantBaseline="central"
-                          className="text-xs font-bold"
-                        >
-                          {`${(percent * 100).toFixed(0)}%`}
-                        </text>
-                      );
-                    }}
-                    outerRadius={100}
+                    label={renderPieLabel}
+                    outerRadius={116}
                     fill="#8884d8"
                     dataKey="amount"
                     paddingAngle={0}
                     stroke="none"
                   >
                     {stats.expensesByType.map((entry, index) => (
-                      <Cell
-                        key={`cell-exp-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={`cell-exp-${index}`} fill={COLORS_GASTOS[index % COLORS_GASTOS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                      padding: '12px'
+                      borderRadius: '10px',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
+                      padding: '10px 14px'
                     }}
-                    formatter={(value: number) => [formatCLP(value), 'Monto']}
+                    formatter={(value: number, name: string) => {
+                      const total = stats!.expensesByType.reduce((s, i) => s + i.amount, 0);
+                      const pct = total ? Math.round((Number(value) / total) * 100) : 0;
+                      return [`${formatCLP(Number(value))} (${pct}%)`, name];
+                    }}
                   />
                   <Legend
                     verticalAlign="bottom"
-                    height={36}
+                    height={32}
                     iconType="circle"
-                    formatter={(value) => <span className="text-xs font-medium">{value}</span>}
+                    iconSize={8}
+                    layout="horizontal"
+                    wrapperStyle={{ paddingTop: 4, flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px' }}
+                    formatter={(value) => <span className="text-[11px] font-medium text-muted-foreground">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -398,8 +387,8 @@ export default function ExecutiveDashboard() {
                 >
                   <defs>
                     <linearGradient id="colorBarExec" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.6}/>
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.6} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />

@@ -78,10 +78,12 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutos
-      gcTime: 10 * 60 * 1000, // 10 minutos (antes era cacheTime)
+      staleTime: 5 * 60 * 1000, // 5 min: menos refetches, métricas estables
+      gcTime: 10 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: 2,
+      // Mantener datos previos al refetch: las métricas no desaparecen en producción
+      placeholderData: (previousData: unknown) => previousData,
     },
   },
 });

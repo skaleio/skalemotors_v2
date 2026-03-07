@@ -33,6 +33,8 @@ export function usePendingTasks(branchId: string | undefined) {
       return [...list].sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2))
     },
     enabled: !!branchId,
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (previousData: PendingTask[] | undefined) => previousData ?? [],
   })
 
   const urgentCount = (query.data ?? []).filter((t) => t.priority === 'urgent').length

@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -102,7 +102,11 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id);
+  const [selectedMonth, setSelectedMonth] = useState<DashboardSelectedMonth>(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth);
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
 
@@ -177,11 +181,6 @@ export default function Dashboard() {
       setDeletingIncomeId(null);
     }
   };
-
-  console.log('📊 Dashboard - user:', user);
-  console.log('📊 Dashboard - stats:', stats);
-  console.log('📊 Dashboard - isLoading:', isLoading);
-  console.log('📊 Dashboard - error:', error);
 
   const handleTaskAction = (task: PendingTask) => {
     if (task.entity_type === 'lead' && task.entity_id) {
@@ -290,13 +289,42 @@ export default function Dashboard() {
     return ((current - previous) / previous) * 100;
   }, [stats?.salesByMonth]);
 
+  const now = new Date();
+  const isCurrentMonth = selectedMonth.year === now.getFullYear() && selectedMonth.month === now.getMonth();
+  const goPrevMonth = () => {
+    setSelectedMonth((prev) => {
+      if (prev.month === 0) return { year: prev.year - 1, month: 11 };
+      return { year: prev.year, month: prev.month - 1 };
+    });
+  };
+  const goNextMonth = () => {
+    if (isCurrentMonth) return;
+    setSelectedMonth((prev) => {
+      if (prev.month === 11) return { year: prev.year + 1, month: 0 };
+      return { year: prev.year, month: prev.month + 1 };
+    });
+  };
+
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Vista general de tu automotora
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-2">
+            Vista general de tu automotora
+          </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goPrevMonth} title="Mes anterior">
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <span className="min-w-[140px] text-center font-semibold text-sm">
+            {stats?.selectedMonthLabel ?? "Cargando…"}
+          </span>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goNextMonth} disabled={isCurrentMonth} title="Mes siguiente">
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -318,14 +346,14 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? (
+            {!stats ? (
               <Skeleton className="h-9 w-32" />
             ) : (
-              <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.salesRevenue || 0)}</div>
+              <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.salesRevenue || 0)}</div>
             )}
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground font-medium">{isLoading ? <Skeleton className="h-4 w-20" /> : `${stats?.salesThisMonth || 0} vehículos`}</span>
-              {salesChange !== 0 && (
+              <span className="text-muted-foreground font-medium">{!stats ? <Skeleton className="h-4 w-20" /> : `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}`}</span>
+              {stats && salesChange !== 0 && (
                 <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${salesChange > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                   {salesChange > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                   {Math.abs(salesChange).toFixed(1)}%
@@ -352,9 +380,9 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? <Skeleton className="h-9 w-32" /> : <div className="text-3xl font-bold tracking-tight">{formatCLP(stats?.totalIncome ?? 0)}</div>}
+            {!stats ? <Skeleton className="h-9 w-32" /> : <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.totalIncomeMonth ?? 0)}</div>}
             <p className="text-xs text-muted-foreground font-medium">
-              Ventas + otros ingresos (total histórico)
+              Ingresos del mes ({stats?.selectedMonthLabel ?? "—"})
             </p>
           </CardContent>
         </Card>
@@ -376,13 +404,13 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? <Skeleton className="h-9 w-32" /> : (
+            {!stats ? <Skeleton className="h-9 w-32" /> : (
               <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
                 {formatCLP(stats?.balance ?? 0)}
               </div>
             )}
             <p className="text-xs text-muted-foreground font-medium">
-              Ingresos − gastos (mes actual)
+              Ingresos − gastos ({stats?.selectedMonthLabel ?? "mes"})
             </p>
           </CardContent>
         </Card>
@@ -398,9 +426,9 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.totalVehicles || 0}</div>}
+            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.totalVehicles || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
-              {isLoading ? <Skeleton className="h-4 w-24" /> : `${stats?.availableVehicles || 0} disponibles`}
+              {!stats ? <Skeleton className="h-4 w-24" /> : `${stats.availableVehicles || 0} disponibles`}
             </p>
           </CardContent>
         </Card>
@@ -416,7 +444,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.activeLeads || 0}</div>}
+            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.activeLeads || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
               En conversión
             </p>
@@ -434,7 +462,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {isLoading ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats?.scheduledAppointments || 0}</div>}
+            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.scheduledAppointments || 0}</div>}
             <p className="text-xs text-muted-foreground font-medium">
               Programadas
             </p>
@@ -940,7 +968,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-500" />
-              Ventas del mes
+              Ventas del mes {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
               Detalle de ventas completadas en el mes actual
@@ -1111,17 +1139,17 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5 text-sky-500" />
-              Balance
+              Balance {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
-              Resumen del mes actual: ingresos, gastos, balance y pendientes
+              Resumen del mes: ingresos, gastos, balance y pendientes
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total ingresos (mes)</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCLP(stats?.totalIncome ?? 0)}</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCLP(stats?.totalIncomeMonth ?? 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total gastos (mes)</span>

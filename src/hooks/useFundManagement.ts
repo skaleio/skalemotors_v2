@@ -760,8 +760,8 @@ export function useFundManagement(branchId: string | null, options?: UseFundMana
         return EMPTY_FUND_DATA;
       }
     },
-    enabled: true,
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
+    placeholderData: (previousData: FundManagementData | undefined) => previousData,
   });
 }

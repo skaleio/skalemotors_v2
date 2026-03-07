@@ -131,7 +131,7 @@ export default function FinancialTracking() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-              {isLoading ? "…" : formatCLP(data?.totalIncome ?? 0)}
+              {!data ? "…" : formatCLP(data.totalIncome ?? 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {data ? `${data.salesCount} venta(s) · ${formatCLP(data.incomeFromSales)} ganancia` : "En el período seleccionado"}
@@ -160,7 +160,7 @@ export default function FinancialTracking() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-700 dark:text-red-400">
-              {isLoading ? "…" : formatCLP(data?.totalExpenses ?? 0)}
+              {!data ? "…" : formatCLP(data.totalExpenses ?? 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               En el período seleccionado
@@ -189,7 +189,7 @@ export default function FinancialTracking() {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${(data?.balance ?? 0) >= 0 ? "text-sky-700 dark:text-sky-400" : "text-red-700 dark:text-red-400"}`}>
-              {isLoading ? "…" : formatCLP(data?.balance ?? 0)}
+              {!data ? "…" : formatCLP(data.balance ?? 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Ingresos − Gastos
@@ -218,7 +218,7 @@ export default function FinancialTracking() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-violet-700 dark:text-violet-400">
-              {isLoading ? "…" : `${data?.marginPercent ?? 0}%`}
+              {!data ? "…" : `${data.marginPercent ?? 0}%`}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Sobre ingresos del período
@@ -247,7 +247,7 @@ export default function FinancialTracking() {
             <CardDescription>Por mes en el período seleccionado</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.byMonth && data.byMonth.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -292,7 +292,7 @@ export default function FinancialTracking() {
             <CardDescription>Utilidad neta por mes</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.byMonth && data.byMonth.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -338,7 +338,7 @@ export default function FinancialTracking() {
             <CardDescription>Unidades y monto vendido por mes</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[260px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.byMonth && data.byMonth.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
@@ -384,7 +384,7 @@ export default function FinancialTracking() {
             <CardDescription>En el período seleccionado</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[260px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.expensesByCategory && data.expensesByCategory.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
@@ -434,7 +434,7 @@ export default function FinancialTracking() {
             <CardDescription>Monto por inversor</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[260px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.expensesByInversor && data.expensesByInversor.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
@@ -476,7 +476,7 @@ export default function FinancialTracking() {
             <CardDescription>Ventas vs otros ingresos</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[280px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data && (data.incomeFromSales > 0 || data.incomeFromOther > 0) ? (
               (() => {
@@ -535,7 +535,7 @@ export default function FinancialTracking() {
             <CardDescription>Resultado acumulado por mes</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+            {!data ? (
               <div className="h-[280px] flex items-center justify-center text-muted-foreground">Cargando…</div>
             ) : data?.byMonth && data.byMonth.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
@@ -578,7 +578,7 @@ export default function FinancialTracking() {
             </button>
           </CardHeader>
           <CardContent className="pt-4">
-            {isLoading ? (
+            {!data ? (
               <p className="text-muted-foreground py-4">Cargando…</p>
             ) : data?.recentExpenses && data.recentExpenses.length > 0 ? (
               <div className="rounded-md border overflow-hidden">
@@ -636,7 +636,7 @@ export default function FinancialTracking() {
             </button>
           </CardHeader>
           <CardContent className="pt-4">
-            {isLoading ? (
+            {!data ? (
               <p className="text-muted-foreground py-4">Cargando…</p>
             ) : data?.recentIncome && data.recentIncome.length > 0 ? (
               <div className="rounded-md border overflow-hidden">
@@ -690,7 +690,7 @@ export default function FinancialTracking() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {!data ? (
             <p className="text-muted-foreground">Cargando…</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

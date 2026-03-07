@@ -273,7 +273,8 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
       }
     },
     enabled: true,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: (previousData: FinancialTrackingData | undefined) => previousData
   })
 }

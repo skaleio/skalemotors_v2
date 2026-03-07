@@ -15,13 +15,21 @@ type SaleListItem = {
   stock_origin: string | null
 }
 
+/** Mes seleccionado para las métricas (0 = enero, 11 = diciembre). Si no se pasa, se usa el mes actual. */
+export type DashboardSelectedMonth = { year: number; month: number }
+
 interface DashboardStats {
   salesThisMonth: number
   salesRevenue: number
   salesThisMonthList: SaleListItem[]
+  /** Total ingresos histórico (ventas + otros, toda la vida). Para modal. */
   totalIncome: number
+  /** Ingresos del mes seleccionado (ventas + otros). Para tarjeta "Total ingresos". */
+  totalIncomeMonth: number
   totalIncomeFromSales: number
   totalIncomeFromEmpresa: number
+  /** Etiqueta del mes seleccionado, ej. "Febrero 2026" */
+  selectedMonthLabel: string
   recentIngresosEmpresa: Array<{
     id: string
     amount: number
@@ -89,16 +97,21 @@ interface DashboardStats {
   }>
 }
 
-export function useDashboardStats(branchId?: string) {
+const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+export function useDashboardStats(branchId?: string, selectedYearMonth?: DashboardSelectedMonth) {
   return useQuery({
-    queryKey: ['dashboard-stats', branchId],
+    queryKey: ['dashboard-stats', branchId, selectedYearMonth?.year, selectedYearMonth?.month],
     queryFn: async (): Promise<DashboardStats> => {
       try {
         const now = new Date()
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        const year = selectedYearMonth?.year ?? now.getFullYear()
+        const month = selectedYearMonth?.month ?? now.getMonth()
+        const firstDayOfMonth = new Date(year, month, 1)
+        const lastDayOfMonth = new Date(year, month + 1, 0)
         const firstDayStr = firstDayOfMonth.toISOString().split('T')[0]
         const lastDayStr = lastDayOfMonth.toISOString().split('T')[0]
+        const selectedMonthLabel = `${MONTH_NAMES[month]} ${year}`
         const timeoutMs = 15000
 
         const withTimeout = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
@@ -118,7 +131,7 @@ export function useDashboardStats(branchId?: string) {
           }
         }
 
-        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+        const sixMonthsAgo = new Date(year, month - 5, 1)
         const sixMonthsStr = sixMonthsAgo.toISOString().split('T')[0]
 
         let salesQ = supabase.from('sales').select('sale_price, sale_date').gte('sale_date', sixMonthsStr).eq('status', 'completada')
@@ -141,10 +154,6 @@ export function useDashboardStats(branchId?: string) {
         ])
 
         const salesData = salesResult?.data || []
-        const salesThisMonth = salesData.filter((s: any) => new Date(s.sale_date) >= firstDayOfMonth).length
-        const salesRevenue = salesData
-          .filter((s: any) => new Date(s.sale_date) >= firstDayOfMonth)
-          .reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
 
         const vehiclesData = vehiclesResult?.data || []
         const totalVehicles = vehiclesData?.length || 0
@@ -215,6 +224,8 @@ export function useDashboardStats(branchId?: string) {
         ])
 
         const salesThisMonthData = salesThisMonthRes?.data || []
+        const salesThisMonth = salesThisMonthData.length
+        const salesRevenue = (salesThisMonthData as any[]).reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
         const salesThisMonthList: SaleListItem[] = salesThisMonthData.map((sale: any) => {
           const vehicleName = sale.vehicle_description?.trim() ||
             (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
@@ -350,13 +361,13 @@ export function useDashboardStats(branchId?: string) {
         )
         const balance = totalIncomeMonth - totalExpenses
 
-        // Ventas por mes (últimos 6 meses) desde salesData
-        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+        // Ventas por mes (últimos 6 meses) desde salesData; anclado al mes seleccionado o actual
+        const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
         const monthBuckets = Array.from({ length: 6 }).map((_, idx) => {
-          const date = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1)
+          const date = new Date(year, month - (5 - idx), 1)
           return {
             key: `${date.getFullYear()}-${date.getMonth()}`,
-            month: monthNames[date.getMonth()],
+            month: monthNamesShort[date.getMonth()],
             sales: 0,
             revenue: 0,
           }
@@ -415,8 +426,10 @@ export function useDashboardStats(branchId?: string) {
           salesRevenue,
           salesThisMonthList,
           totalIncome,
+          totalIncomeMonth,
           totalIncomeFromSales: incomeFromSalesAllTime,
           totalIncomeFromEmpresa: incomeFromEmpresaAllTime,
+          selectedMonthLabel,
           recentIngresosEmpresa,
           allIncomeList,
           totalExpenses,
@@ -445,8 +458,10 @@ export function useDashboardStats(branchId?: string) {
           salesRevenue: 0,
           salesThisMonthList: [],
           totalIncome: 0,
+          totalIncomeMonth: 0,
           totalIncomeFromSales: 0,
           totalIncomeFromEmpresa: 0,
+          selectedMonthLabel: MONTH_NAMES[new Date().getMonth()] + ' ' + new Date().getFullYear(),
           recentIngresosEmpresa: [],
           allIncomeList: [],
           totalExpenses: 0,
@@ -469,9 +484,10 @@ export function useDashboardStats(branchId?: string) {
       }
     },
     enabled: true,
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    gcTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 3 * 60 * 1000, // 3 min: métricas estables, menos parpadeos
+    gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
-    retry: 1 // Solo reintentar 1 vez
+    retry: 1,
+    placeholderData: (previousData: DashboardStats | undefined) => previousData
   })
 }
