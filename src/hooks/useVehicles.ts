@@ -35,7 +35,7 @@ export function useVehicles(options: UseVehiclesOptions = {}) {
       category,
       search
     }),
-    enabled: enabled && !!branchId, // Solo habilitar si hay branchId
+    enabled, // Cargar siempre que enabled sea true; sin branchId se traen todos los vehículos
     staleTime, // Los datos se consideran frescos (evita refetches innecesarios)
     gcTime, // Mantener en cache
     refetchOnWindowFocus: false, // Evita refetch al cambiar ventana que a veces falla y deja vacío

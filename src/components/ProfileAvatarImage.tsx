@@ -15,15 +15,14 @@ type ProfileAvatarImageProps = React.ComponentPropsWithoutRef<typeof AvatarImage
 
 /**
  * Imagen de avatar optimizada: intenta cargar la versión transformada (más ligera).
- * Si falla (p. ej. plan free sin Image Transform), hace fallback a la URL original.
- * Incluye decoding async y fetchPriority low para no bloquear la carga de la página.
+ * Incluye decoding async. No pasamos fetchPriority al DOM para evitar warning en React 18.
  */
 export function ProfileAvatarImage({
   avatarUrl,
   size = DEFAULT_SIZE,
   cacheKey,
   decoding = "async",
-  fetchPriority = "low",
+  fetchPriority,
   ...props
 }: ProfileAvatarImageProps) {
   const optimizedUrl = useMemo(
@@ -49,7 +48,6 @@ export function ProfileAvatarImage({
       src={src}
       alt=""
       decoding={decoding}
-      fetchPriority={fetchPriority}
       onError={handleError}
       className="object-cover"
       {...props}

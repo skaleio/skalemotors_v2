@@ -4,6 +4,8 @@ export type VehicleDescriptionPayload = {
   make: string;
   model: string;
   year: string;
+  /** Opcional: id del vehículo del inventario para enlazar la descripción. */
+  vehicle_id?: string;
   variant?: string;
   mileage?: string;
   engine?: string;
@@ -60,14 +62,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 }
 
 /**
- * Genera una descripción de vehículo usando IA (Edge Function + OpenAI).
- * Si OPENAI_API_KEY no está configurada en Supabase, la función devuelve error.
+ * Envía los datos del formulario al webhook de n8n vía Edge Function (proxy).
+ * Así se evita CORS: el navegador solo llama a Supabase; la Edge Function reenvía el JSON a n8n.
  */
 export async function generateVehicleDescription(
   payload: VehicleDescriptionPayload
 ): Promise<StudioIaGenerateResult> {
   const invokePromise = supabase.functions.invoke("studio-ia-generate", {
-    body: { type: "vehicle_description", payload },
+    body: { type: "vehicle_description_webhook", payload },
   });
 
   let data: unknown;
@@ -88,16 +90,14 @@ export async function generateVehicleDescription(
   if (error) {
     return { ok: false, error: normalizeInvokeError(error.message ?? "Error desconocido") };
   }
+
   const ok = (data as { ok?: boolean })?.ok;
-  const text = (data as { text?: string })?.text;
+  const text = (data as { text?: string })?.text ?? "";
   const errMsg = (data as { error?: string })?.error;
   if (!ok) {
-    return { ok: false, error: (errMsg as string) || "Error al generar la descripción" };
+    return { ok: false, error: (errMsg as string) || "Error al enviar al webhook" };
   }
-  if (typeof text !== "string") {
-    return { ok: false, error: "Respuesta inválida del servicio" };
-  }
-  return { ok: true, text };
+  return { ok: true, text: typeof text === "string" ? text : "" };
 }
 
 /**

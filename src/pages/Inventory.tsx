@@ -247,9 +247,10 @@ const updateVehicleImages = async (
 
 export default function Inventory() {
   const { user, session } = useAuth();
+  // Sin filtrar por sucursal al cargar: mostrar todos los vehículos (los datos pueden tener branch_id distinto o NULL)
   const { vehicles, loading, isFetching, error: vehiclesError, refetch } = useVehicles({
-    branchId: user?.branch_id ?? undefined,
-    enabled: !!user?.branch_id,
+    branchId: undefined,
+    enabled: true,
   });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -376,7 +377,7 @@ export default function Inventory() {
 
   // Un solo reintento cuando la carga terminó y llegó vacío (p. ej. fallo transitorio), con delay para no pisar la primera petición
   useEffect(() => {
-    if (!user?.branch_id || loading) return;
+    if (loading) return;
     if (vehicles.length > 0) return;
     if (hasRetriedEmpty) return;
     const t = setTimeout(() => {
@@ -384,7 +385,7 @@ export default function Inventory() {
       refetch();
     }, 2200);
     return () => clearTimeout(t);
-  }, [user?.branch_id, loading, vehicles.length, hasRetriedEmpty, refetch]);
+  }, [loading, vehicles.length, hasRetriedEmpty, refetch]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

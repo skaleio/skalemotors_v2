@@ -365,8 +365,9 @@ export default function Consignaciones() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
-    branchId: user?.branch_id ?? undefined,
+    branchId: undefined,
     search: searchQuery || undefined,
     enabled: !!user,
   });

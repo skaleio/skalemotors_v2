@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { sanitizeIntegerInput } from "@/lib/format";
 import { generateVehicleDescription, type VehicleDescriptionPayload } from "@/lib/services/studioIaApi";
+import { useVehicles } from "@/hooks/useVehicles";
 import { Car, CheckCircle2, Copy, Download, FileText, RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -52,6 +53,12 @@ function getFlagForMake(make: string): string {
 
 export default function DescripcionesVehiculos() {
   const { user } = useAuth();
+  const { vehicles, loading: vehiclesLoading } = useVehicles({
+    // Igual que en Inventario: traer todo el inventario sin filtrar por sucursal/estado.
+    branchId: undefined,
+    enabled: true,
+  });
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [generatedDescription, setGeneratedDescription] = useState<string>("");
   const [formData, setFormData] = useState<DescriptionData>(defaultForm);
@@ -60,10 +67,29 @@ export default function DescripcionesVehiculos() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleSelectVehicle = (vehicleId: string) => {
+    setSelectedVehicleId(vehicleId);
+    const v = vehicles.find(vh => vh.id === vehicleId);
+    if (!v) return;
+    setFormData(prev => ({
+      ...prev,
+      make: v.make || "",
+      model: v.model || "",
+      year: String(v.year ?? new Date().getFullYear()),
+      mileage: v.mileage != null ? String(v.mileage) : "",
+      color: v.color || "",
+      engine: v.engine_size || "",
+      transmission: v.transmission || "",
+      price: v.price != null ? String(v.price) : "",
+      highlights: v.condition === "excelente" ? "Vehículo verificado ✅, excelente estado" : prev.highlights,
+    }));
+  };
+
   const buildPayload = (): VehicleDescriptionPayload => ({
     make: formData.make.trim(),
     model: formData.model.trim(),
     year: formData.year.trim(),
+    ...(selectedVehicleId && { vehicle_id: selectedVehicleId }),
     ...(formData.variant?.trim() && { variant: formData.variant.trim() }),
     ...(formData.mileage?.trim() && { mileage: formData.mileage.trim() }),
     ...(formData.engine?.trim() && { engine: formData.engine.trim() }),
@@ -89,17 +115,24 @@ export default function DescripcionesVehiculos() {
     try {
       const result = await generateVehicleDescription(buildPayload());
       if (result.ok) {
-        setGeneratedDescription(result.text);
-        toast.success("Tu descripción está lista para usar.");
+        if (result.text) {
+          setGeneratedDescription(result.text);
+          toast.success("Tu descripción está lista para usar.");
+        } else {
+          setGeneratedDescription(
+            "✅ Datos enviados correctamente al generador de descripciones.\n\nEl resultado se procesa en n8n (no es inmediato)."
+          );
+          toast.success("Datos enviados al webhook correctamente.");
+        }
       } else {
         toast.warning(result.error, { description: "Se usó la plantilla local." });
         setGeneratedDescription(generateDescriptionMock(formData));
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Error de conexión";
-      toast.warning(msg.includes("Edge Function") || msg.includes("fetch")
-        ? "No se pudo conectar con Studio IA. Comprueba que la Edge Function esté desplegada."
-        : "No se pudo conectar con la IA.", { description: "Se usó la plantilla local." });
+      toast.warning(msg.includes("fetch") || msg.includes("webhook")
+        ? "No se pudo conectar con el webhook. Comprueba que el workflow de n8n esté en escucha (Listen for test event) o usa la URL de producción."
+        : "No se pudo conectar con el generador.", { description: "Se usó la plantilla local." });
       setGeneratedDescription(generateDescriptionMock(formData));
     } finally {
       setLoading(false);
@@ -189,10 +222,38 @@ export default function DescripcionesVehiculos() {
               Información del Vehículo
             </CardTitle>
             <CardDescription>
-              Completa los datos para generar la descripción
+              Elige un vehículo del inventario (puedes ajustar los datos si lo necesitas).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="inventory-vehicle">Vehículo del inventario</Label>
+              <Select
+                value={selectedVehicleId}
+                onValueChange={handleSelectVehicle}
+                disabled={vehiclesLoading || vehicles.length === 0}
+              >
+                <SelectTrigger id="inventory-vehicle" className="mt-1">
+                  <SelectValue
+                    placeholder={
+                      vehiclesLoading
+                        ? "Cargando inventario..."
+                        : vehicles.length
+                        ? "Selecciona un vehículo"
+                        : "No hay vehículos disponibles en el inventario"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.year} {v.make} {v.model} · {v.mileage ?? 0} km
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="make">Marca *</Label>

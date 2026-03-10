@@ -61,6 +61,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const PROFILE_FETCH_TIMEOUT_MS = 20 * 1000; // 20 s para redes lentas
+
   const buildFallbackUserFromSession = (sessionUser: Session["user"]): User => {
     const metadata = sessionUser.user_metadata || {};
     return {
@@ -80,25 +82,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
     try {
-      console.log("🔍 Fetching user profile for userId:", userId);
       const { data, error } = await withTimeout(
         supabase
           .from("users")
           .select("*")
           .eq("id", userId)
           .maybeSingle(),
-        10000,
+        PROFILE_FETCH_TIMEOUT_MS,
       );
 
       if (error && error.code !== 'PGRST116') {
-        console.error("❌ Error fetching user profile:", error);
         setLoading(false);
         return false;
       }
 
       if (data) {
-        console.log("✅ User profile fetched successfully:", data);
-        // Crear un nuevo objeto para asegurar que React detecte el cambio
         const updatedUser: User = {
           ...data,
           id: data.id,
@@ -125,7 +123,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("⚠️ Usuario no existe en public.users, intentando crear...");
       return await createUserFromAuth(userId);
     } catch (error) {
-      console.error("❌ Error fetching user profile (catch):", error);
       setLoading(false);
       return false;
     }
@@ -184,10 +181,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
-    console.log("🔧 Inicializando AuthProvider...");
-
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log("📍 Sesión actual:", session ? "existe" : "no existe");
       if (!session?.user) {
         pendingSessionRef.current = null;
         setSession(null);
@@ -210,25 +204,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.warn("⚠️ No se pudo refrescar sesión:", e);
       }
       const ok = await fetchUserProfile(currentSession.user.id);
-      if (ok) {
-        // user ya actualizado por fetchUserProfile
-      } else {
-        console.warn("⚠️ Perfil en segundo plano falló, se mantiene usuario fallback");
+      if (!ok) {
+        // se mantiene usuario fallback ya puesto arriba
       }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 Auth state changed:", event, session ? "con sesión" : "sin sesión");
       setSession(session);
       if (session?.user) {
         const ok = await fetchUserProfile(session.user.id);
-        if (!ok) {
-          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
-          setUser(buildFallbackUserFromSession(session.user));
-          setLoading(false);
-        }
+      if (!ok) {
+        setUser(buildFallbackUserFromSession(session.user));
+        setLoading(false);
+      }
       } else {
         setUser(null);
         setNeedsOnboarding(false);

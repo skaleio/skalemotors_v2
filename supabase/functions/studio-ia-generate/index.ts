@@ -20,6 +20,8 @@ type VehicleDescriptionPayload = {
   make: string;
   model: string;
   year: string;
+  /** Opcional: id del vehículo del inventario para enlazar la descripción. */
+  vehicle_id?: string;
   mileage?: string;
   color?: string;
   price?: string;
@@ -231,6 +233,37 @@ async function callOpenAI(
 
 const LOG_PREFIX = "[studio-ia-generate]";
 
+const N8N_WEBHOOK_DEFAULT =
+  "https://n8n-n8n.obmrlq.easypanel.host/webhook-test/generador-de-descripciones";
+
+/** Reenvía el payload al webhook de n8n (evita CORS: el navegador no llama a n8n directamente). */
+async function forwardToN8nWebhook(payload: unknown): Promise<{ ok: boolean; text?: string; error?: string }> {
+  const webhookUrl = Deno.env.get("N8N_DESCRIPTION_WEBHOOK_URL") || N8N_WEBHOOK_DEFAULT;
+  console.log(`${LOG_PREFIX} forwarding to n8n webhook: ${webhookUrl}`);
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  console.log(`${LOG_PREFIX} n8n webhook responded status=${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    return { ok: false, error: errText || `n8n responded ${res.status}` };
+  }
+  let text = "";
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      const data = (await res.json()) as Record<string, unknown>;
+      const t = typeof data?.text === "string" ? data.text : typeof data?.body === "string" ? data.body : "";
+      if (t) text = t.trim();
+    } catch {
+      // ignore
+    }
+  }
+  return { ok: true, text };
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -238,15 +271,6 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (req.method !== "POST") {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
-  }
-
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) {
-    console.error(`${LOG_PREFIX} OPENAI_API_KEY no configurada`);
-    return jsonResponse(503, {
-      ok: false,
-      error: "OPENAI_API_KEY no configurada. Configura el secret en Supabase (Edge Functions).",
-    });
   }
 
   let body: { type?: string; payload?: unknown };
@@ -258,12 +282,40 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const { type, payload } = body;
-  if (!type || !payload || typeof type !== "string") {
+  if (!type || payload === undefined || typeof type !== "string") {
     return jsonResponse(400, { ok: false, error: "type and payload are required" });
   }
 
-  if (type !== "vehicle_description" && type !== "reel_script") {
-    return jsonResponse(400, { ok: false, error: "type must be vehicle_description or reel_script" });
+  const isWebhookForward = type === "vehicle_description_webhook";
+  if (!isWebhookForward && type !== "vehicle_description" && type !== "reel_script") {
+    return jsonResponse(400, {
+      ok: false,
+      error: "type must be vehicle_description, reel_script or vehicle_description_webhook",
+    });
+  }
+
+  if (isWebhookForward) {
+    console.log(`${LOG_PREFIX} request start type=vehicle_description_webhook`);
+    try {
+      const result = await forwardToN8nWebhook(payload);
+      if (result.ok) {
+        return jsonResponse(200, { ok: true, text: result.text ?? "" });
+      }
+      return jsonResponse(500, { ok: false, error: result.error ?? "n8n webhook error" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      console.error(`${LOG_PREFIX} webhook forward error:`, message);
+      return jsonResponse(500, { ok: false, error: message });
+    }
+  }
+
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.error(`${LOG_PREFIX} OPENAI_API_KEY no configurada`);
+    return jsonResponse(503, {
+      ok: false,
+      error: "OPENAI_API_KEY no configurada. Configura el secret en Supabase (Edge Functions).",
+    });
   }
 
   console.log(`${LOG_PREFIX} request start type=${type}`);

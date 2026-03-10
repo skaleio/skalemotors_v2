@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
+import { gastosEmpresaService } from '@/lib/services/gastosEmpresa'
+import { ingresosEmpresaService } from '@/lib/services/ingresosEmpresa'
 
 type SaleListItem = {
   id: string
@@ -15,20 +17,16 @@ type SaleListItem = {
   stock_origin: string | null
 }
 
-/** Mes seleccionado para las métricas (0 = enero, 11 = diciembre). Si no se pasa, se usa el mes actual. */
 export type DashboardSelectedMonth = { year: number; month: number }
 
 interface DashboardStats {
   salesThisMonth: number
   salesRevenue: number
   salesThisMonthList: SaleListItem[]
-  /** Total ingresos histórico (ventas + otros, toda la vida). Para modal. */
   totalIncome: number
-  /** Ingresos del mes seleccionado (ventas + otros). Para tarjeta "Total ingresos". */
   totalIncomeMonth: number
   totalIncomeFromSales: number
   totalIncomeFromEmpresa: number
-  /** Etiqueta del mes seleccionado, ej. "Febrero 2026" */
   selectedMonthLabel: string
   recentIngresosEmpresa: Array<{
     id: string
@@ -38,7 +36,6 @@ interface DashboardStats {
     etiqueta: string
     payment_status: string
   }>
-  /** Lista unificada de todos los ingresos (ventas + ingresos empresa), ordenada por fecha desc */
   allIncomeList: Array<{
     type: 'sale' | 'other'
     id: string
@@ -76,7 +73,6 @@ interface DashboardStats {
     expense_type: string
     description: string | null
   }>
-  /** Ingresos empresa con pago pendiente (no suman al balance hasta marcarlos realizados) */
   totalIngresosPendientes: number
   ingresosPendientesList: Array<{
     id: string
@@ -85,7 +81,6 @@ interface DashboardStats {
     description: string | null
     etiqueta: string
   }>
-  /** Gastos sin devolver (inversores, no empresa) */
   totalGastosPendientesDevolucion: number
   gastosPendientesDevolucionList: Array<{
     id: string
@@ -98,396 +93,261 @@ interface DashboardStats {
 }
 
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
-export function useDashboardStats(branchId?: string, selectedYearMonth?: DashboardSelectedMonth) {
+function pad2(n: number) { return String(n).padStart(2, '0') }
+
+function monthRange(year: number, month0: number) {
+  const m1 = month0 + 1
+  const firstDayStr = `${year}-${pad2(m1)}-01`
+  const lastDay = new Date(year, m1, 0).getDate()
+  const lastDayStr = `${year}-${pad2(m1)}-${pad2(lastDay)}`
+  return { firstDayStr, lastDayStr }
+}
+
+export function useDashboardStats(branchId?: string, selectedYearMonth?: DashboardSelectedMonth, userId?: string) {
   return useQuery({
-    queryKey: ['dashboard-stats', branchId, selectedYearMonth?.year, selectedYearMonth?.month],
+    queryKey: ['dashboard-stats', branchId ?? 'no-branch', selectedYearMonth?.year, selectedYearMonth?.month],
     queryFn: async (): Promise<DashboardStats> => {
-      try {
-        const now = new Date()
-        const year = selectedYearMonth?.year ?? now.getFullYear()
-        const month = selectedYearMonth?.month ?? now.getMonth()
-        const firstDayOfMonth = new Date(year, month, 1)
-        const lastDayOfMonth = new Date(year, month + 1, 0)
-        const firstDayStr = firstDayOfMonth.toISOString().split('T')[0]
-        const lastDayStr = lastDayOfMonth.toISOString().split('T')[0]
-        const selectedMonthLabel = `${MONTH_NAMES[month]} ${year}`
-        const timeoutMs = 15000
+      const now = new Date()
+      const year = selectedYearMonth?.year ?? now.getFullYear()
+      const month = selectedYearMonth?.month ?? now.getMonth()
+      const { firstDayStr, lastDayStr } = monthRange(year, month)
+      const selectedMonthLabel = `${MONTH_NAMES[month]} ${year}`
 
-        const withTimeout = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
-          return await Promise.race([
-            promise,
-            new Promise<T>((_, reject) =>
-              setTimeout(() => reject(new Error(`Timeout en ${label}`)), timeoutMs)
-            ),
-          ])
-        }
+      // --- Gastos e Ingresos via servicios (mismo patrón que Finance.tsx) ---
+      const m1 = month + 1
+      const fromStr = `${year}-${pad2(m1)}-01`
+      const lastD = new Date(year, m1, 0).getDate()
+      const toStr = `${year}-${pad2(m1)}-${pad2(lastD)}`
 
-        const safeQuery = async <T,>(promise: Promise<T>, label: string, defaultValue: T): Promise<T> => {
-          try {
-            return await withTimeout(promise, label)
-          } catch {
-            return defaultValue
-          }
-        }
+      const [gastosData, ingresosData] = await Promise.all([
+        gastosEmpresaService.getAll({ fromDate: fromStr, toDate: toStr }).catch(err => { console.warn('[Dashboard] gastos:', err); return [] as any[] }),
+        ingresosEmpresaService.getAll({ fromDate: fromStr, toDate: toStr }).catch(err => { console.warn('[Dashboard] ingresos:', err); return [] as any[] }),
+      ])
 
-        const sixMonthsAgo = new Date(year, month - 5, 1)
-        const sixMonthsStr = sixMonthsAgo.toISOString().split('T')[0]
+      // Ingresos empresa: todos los del mes (sin filtro de branch para igualar Finance)
+      const ingresosEmpresaRealizados = (ingresosData as any[]).filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
+      const ingresosEmpresaSoloOtros = ingresosEmpresaRealizados.filter((i: any) => !i.sale_id)
 
-        let salesQ = supabase.from('sales').select('sale_price, sale_date').gte('sale_date', sixMonthsStr).eq('status', 'completada')
-        if (branchId) salesQ = salesQ.eq('branch_id', branchId)
+      // Gastos empresa del mes
+      const recentGastos = (gastosData as any[]).slice(0, 15).map((g: any) => ({
+        id: g.id,
+        amount: Number(g.amount || 0),
+        expense_date: g.expense_date,
+        expense_type: g.expense_type || 'otros',
+        description: g.description ?? null,
+      }))
 
-        let vehiclesQ = supabase.from('vehicles').select('id, status, category')
-        if (branchId) vehiclesQ = vehiclesQ.eq('branch_id', branchId)
-
-        let leadsQ = supabase.from('leads').select('status')
-        if (branchId) leadsQ = leadsQ.eq('branch_id', branchId)
-
-        let appointmentsQ = supabase.from('appointments').select('id').gte('scheduled_at', now.toISOString()).eq('status', 'programada')
-        if (branchId) appointmentsQ = appointmentsQ.eq('branch_id', branchId)
-
-        const [salesResult, vehiclesResult, allLeadsResult, appointmentsResult] = await Promise.all([
-          safeQuery(salesQ.then(res => res), 'salesQuery', { data: null, error: null }),
-          safeQuery(vehiclesQ.then(res => res), 'vehiclesQuery', { data: null, error: null }),
-          safeQuery(leadsQ.then(res => res), 'allLeadsQuery', { data: null, error: null }),
-          safeQuery(appointmentsQ.then(res => res), 'appointmentsQuery', { data: null, error: null }),
-        ])
-
-        const salesData = salesResult?.data || []
-
-        const vehiclesData = vehiclesResult?.data || []
-        const totalVehicles = vehiclesData?.length || 0
-        const availableVehicles = vehiclesData?.filter((v: any) => v.status === 'disponible').length || 0
-
-        const allLeadsData = allLeadsResult?.data || []
-        const leadsByStatus = allLeadsData?.reduce((acc: Array<{ status: string; count: number }>, l) => {
-          const existing = acc.find(item => item.status === l.status)
-          if (existing) existing.count++
-          else acc.push({ status: l.status, count: 1 })
+      const totalExpenses = (gastosData as any[]).reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
+      const expensesByType = (gastosData as any[]).reduce(
+        (acc: Array<{ type: string; amount: number }>, g: any) => {
+          const type = g.expense_type || 'otros'
+          const amount = Number(g.amount || 0)
+          const existing = acc.find(item => item.type === type)
+          if (existing) existing.amount += amount
+          else acc.push({ type, amount })
           return acc
-        }, []) || []
-        const inactiveLeadStatuses = new Set(['vendido', 'perdido'])
-        const activeLeads = allLeadsData.filter((l: any) => !inactiveLeadStatuses.has(l.status)).length
+        }, []
+      )
 
-        const scheduledAppointments = (appointmentsResult?.data || []).length
+      const ingresosPendientesFiltered = (ingresosData as any[]).filter(
+        (i: any) => (i.payment_status ?? 'realizado') === 'pendiente'
+      )
+      const totalIngresosPendientes = ingresosPendientesFiltered.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+      const ingresosPendientesList = ingresosPendientesFiltered.slice(0, 20).map((i: any) => ({
+        id: i.id,
+        amount: Number(i.amount || 0),
+        income_date: i.income_date,
+        description: i.description ?? null,
+        etiqueta: i.etiqueta || 'Otro',
+      }))
 
-        let salesThisMonthQuery = supabase.from('sales').select(`
-          id, sale_price, sale_date, vehicle_description, client_name, margin, status,
-          payment_status, commission_credit_status, stock_origin,
-          vehicle:vehicles (make, model, year),
-          seller:users (full_name)
-        `).gte('sale_date', firstDayStr).lte('sale_date', lastDayStr).eq('status', 'completada').order('sale_date', { ascending: false })
-        if (branchId) salesThisMonthQuery = salesThisMonthQuery.eq('branch_id', branchId)
+      const isGastoInversor = (g: any) =>
+        g.inversor_id != null || (g.inversor_name && String(g.inversor_name).trim() !== '')
+      const gastosPendientesDevolucionFiltered = (gastosData as any[]).filter(
+        (g: any) => !(g.devolucion ?? false) && isGastoInversor(g)
+      )
+      const totalGastosPendientesDevolucion = gastosPendientesDevolucionFiltered.reduce(
+        (sum: number, g: any) => sum + Number(g.amount || 0), 0
+      )
+      const gastosPendientesDevolucionList = gastosPendientesDevolucionFiltered.slice(0, 15).map((g: any) => ({
+        id: g.id,
+        amount: Number(g.amount || 0),
+        expense_date: g.expense_date,
+        expense_type: g.expense_type || 'otros',
+        description: g.description ?? null,
+        inversor_name: g.inversor_name ?? null,
+      }))
 
-        let incomeSalesMonthQ = supabase.from('sales').select('margin, sale_date, payment_status').eq('status', 'completada').eq('payment_status', 'realizado').gte('sale_date', firstDayStr).lte('sale_date', lastDayStr)
-        if (branchId) incomeSalesMonthQ = incomeSalesMonthQ.eq('branch_id', branchId)
+      const recentIngresosEmpresa = ingresosEmpresaSoloOtros.slice(0, 50).map((i: any) => ({
+        id: i.id,
+        amount: Number(i.amount || 0),
+        income_date: i.income_date,
+        description: i.description ?? null,
+        etiqueta: i.etiqueta || 'Otro',
+        payment_status: i.payment_status || 'realizado',
+      }))
 
-        let incomeSalesAllQ = supabase.from('sales').select('margin').eq('status', 'completada').eq('payment_status', 'realizado')
-        if (branchId) incomeSalesAllQ = incomeSalesAllQ.eq('branch_id', branchId)
+      // --- Queries directas a Supabase (ventas, vehículos, leads, citas) ---
+      const safe = async <T,>(p: Promise<{ data: T | null; error: any }>, label: string): Promise<T | null> => {
+        try {
+          const { data, error } = await p
+          if (error) { console.warn(`[Dashboard] ${label} error:`, error); return null }
+          return data
+        } catch (err) { console.warn(`[Dashboard] ${label} catch:`, err); return null }
+      }
 
-        let incomeSalesListQ = supabase.from('sales').select(`
-          id, sale_date, margin, vehicle_description,
-          vehicle:vehicles (make, model, year)
-        `).eq('status', 'completada').eq('payment_status', 'realizado').order('sale_date', { ascending: false }).limit(100)
-        if (branchId) incomeSalesListQ = incomeSalesListQ.eq('branch_id', branchId)
+      const sixMonthsAgo = new Date(year, month - 5, 1)
+      const sixMonthsStr = `${sixMonthsAgo.getFullYear()}-${pad2(sixMonthsAgo.getMonth() + 1)}-01`
 
-        let ingresosEmpresaQ = supabase.from('ingresos_empresa').select('id, amount, income_date, description, etiqueta, payment_status, sale_id').order('income_date', { ascending: false })
-        if (branchId) ingresosEmpresaQ = ingresosEmpresaQ.eq('branch_id', branchId)
+      const salesFields = `id, sale_price, sale_date, vehicle_description, client_name, margin, status,
+        payment_status, commission_credit_status, stock_origin,
+        vehicle:vehicles (make, model, year),
+        seller:users (full_name)`
 
-        let gastosEmpresaQ = supabase.from('gastos_empresa').select('id, amount, expense_date, expense_type, description, devolucion, inversor_id, inversor_name').order('expense_date', { ascending: false })
-        if (branchId) gastosEmpresaQ = gastosEmpresaQ.eq('branch_id', branchId)
+      const buildSalesQ = (extra?: (q: any) => any) => {
+        let q = supabase.from('sales').select(salesFields)
+        if (branchId) q = q.eq('branch_id', branchId)
+        if (extra) q = extra(q)
+        return q
+      }
 
-        let recentSalesQ = supabase.from('sales').select(`
-          id, sale_price, sale_date, vehicle_description, client_name, margin, status,
-          payment_status, commission_credit_status, stock_origin,
-          vehicle:vehicles (make, model, year),
-          seller:users (full_name)
-        `).order('sale_date', { ascending: false }).limit(5)
-        if (branchId) recentSalesQ = recentSalesQ.eq('branch_id', branchId)
+      const [
+        salesThisMonthRaw,
+        incomeSalesMonthRaw,
+        incomeSalesAllRaw,
+        incomeSalesListRaw,
+        vehiclesRaw,
+        leadsRaw,
+        appointmentsRaw,
+        recentSalesRaw,
+      ] = await Promise.all([
+        safe(buildSalesQ(q => q.gte('sale_date', firstDayStr).lte('sale_date', lastDayStr).eq('status', 'completada').order('sale_date', { ascending: false })), 'salesThisMonth'),
+        safe(supabase.from('sales').select('margin').eq('status', 'completada').eq('payment_status', 'realizado').gte('sale_date', firstDayStr).lte('sale_date', lastDayStr).then(r => r), 'incomeSalesMonth'),
+        safe(supabase.from('sales').select('margin').eq('status', 'completada').eq('payment_status', 'realizado').then(r => r), 'incomeSalesAll'),
+        safe(buildSalesQ(q => q.eq('status', 'completada').eq('payment_status', 'realizado').order('sale_date', { ascending: false }).limit(100)), 'incomeSalesList'),
+        safe(supabase.from('vehicles').select('id, status, category').then(r => r), 'vehicles'),
+        safe(supabase.from('leads').select('status').then(r => r), 'leads'),
+        safe(supabase.from('appointments').select('id').gte('scheduled_at', now.toISOString()).eq('status', 'programada').then(r => r), 'appointments'),
+        safe(buildSalesQ(q => q.order('sale_date', { ascending: false }).limit(5)), 'recentSales'),
+      ])
 
-        const [
-          salesThisMonthRes,
-          incomeSalesMonthRes,
-          incomeSalesAllRes,
-          incomeSalesListRes,
-          ingresosEmpresaRes,
-          gastosEmpresaRes,
-          recentSalesRes,
-        ] = await Promise.all([
-          safeQuery(salesThisMonthQuery.then(res => res), 'salesThisMonthQuery', { data: null, error: null }),
-          safeQuery(incomeSalesMonthQ.then(res => res), 'incomeFromSalesQueryMonth', { data: null, error: null }),
-          safeQuery(incomeSalesAllQ.then(res => res), 'incomeFromSalesQueryAll', { data: null, error: null }),
-          safeQuery(incomeSalesListQ.then(res => res), 'incomeSalesListQuery', { data: null, error: null }),
-          safeQuery(ingresosEmpresaQ.then(res => res), 'ingresosEmpresaQuery', { data: null, error: null }),
-          safeQuery(gastosEmpresaQ.then(res => res), 'gastosEmpresaQuery', { data: null, error: null }),
-          safeQuery(recentSalesQ.then(res => res), 'recentSalesQuery', { data: null, error: null }),
-        ])
-
-        const salesThisMonthData = salesThisMonthRes?.data || []
-        const salesThisMonth = salesThisMonthData.length
-        const salesRevenue = (salesThisMonthData as any[]).reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
-        const salesThisMonthList: SaleListItem[] = salesThisMonthData.map((sale: any) => {
-          const vehicleName = sale.vehicle_description?.trim() ||
-            (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
-          return {
-            id: sale.id,
-            vehicle: vehicleName,
-            amount: Number(sale.sale_price || 0),
-            date: sale.sale_date,
-            seller: sale.seller?.full_name || 'N/A',
-            clientName: sale.client_name?.trim() || sale.lead?.full_name || 'PENDIENTE',
-            margin: Number(sale.margin || 0),
-            status: sale.status ?? 'pendiente',
-            payment_status: sale.payment_status ?? null,
-            commission_credit_status: sale.commission_credit_status ?? null,
-            stock_origin: sale.stock_origin ?? null,
-          }
-        })
-
-        const incomeSalesDataMonth = incomeSalesMonthRes?.data || []
-        const incomeSalesDataAll = incomeSalesAllRes?.data || []
-        const incomeSalesListData = incomeSalesListRes?.data || []
-        const incomeFromSalesAllTime = (incomeSalesDataAll || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
-        const incomeFromSalesList = (incomeSalesListData || []).map((s: any) => {
-          const description = s.vehicle_description?.trim() ||
-            (s.vehicle ? [s.vehicle.make, s.vehicle.model, s.vehicle.year].filter(Boolean).join(' ').trim() : '') || 'Venta'
-          return {
-            type: 'sale' as const,
-            id: s.id,
-            date: s.sale_date,
-            description: description || 'Venta',
-            amount: Number(s.margin || 0),
-          }
-        })
-
-        const ingresosEmpresaData = ingresosEmpresaRes?.data || []
-
-        const ingresosEmpresaRealizados = (ingresosEmpresaData || [])
-          .filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
-        // Excluir ingresos ligados a una venta (sale_id) para no duplicar con "Ganancia por ventas"
-        const ingresosEmpresaSoloOtros = ingresosEmpresaRealizados.filter((i: any) => !i.sale_id)
-        // Segunda línea de defensa: no contar ni mostrar "otros" que coincidan con una venta (misma fecha y monto)
-        const saleKeys = new Set(incomeFromSalesList.map((s) => `${s.date}|${s.amount}`))
-        const ingresosEmpresaSoloOtrosSinDuplicados = ingresosEmpresaSoloOtros.filter(
-          (i: any) => !saleKeys.has(`${i.income_date}|${Number(i.amount || 0)}`)
-        )
-        const ingresosEmpresaDelMes = ingresosEmpresaSoloOtrosSinDuplicados.filter(
-          (i: any) => i.income_date >= firstDayStr && i.income_date <= lastDayStr
-        )
-        const recentIngresosEmpresa = ingresosEmpresaSoloOtrosSinDuplicados.slice(0, 50).map((i: any) => ({
-          id: i.id,
-          amount: Number(i.amount || 0),
-          income_date: i.income_date,
-          description: i.description ?? null,
-          etiqueta: i.etiqueta || 'Otro',
-          payment_status: i.payment_status || 'realizado',
-        }))
-
-        const otherIncomeList = ingresosEmpresaSoloOtrosSinDuplicados.slice(0, 100).map((i: any) => ({
-          type: 'other' as const,
-          id: i.id,
-          date: i.income_date,
-          description: [i.etiqueta, i.description].filter(Boolean).join(' · ') || 'Otro ingreso',
-          amount: Number(i.amount || 0),
-        }))
-        const allIncomeList = [...incomeFromSalesList, ...otherIncomeList]
-          .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-          .slice(0, 150)
-
-        const gastosEmpresaData = gastosEmpresaRes?.data || []
-
-        const recentGastos = (gastosEmpresaData || []).slice(0, 15).map((g: any) => ({
-          id: g.id,
-          amount: Number(g.amount || 0),
-          expense_date: g.expense_date,
-          expense_type: g.expense_type || 'otros',
-          description: g.description ?? null,
-        }))
-
-        const ingresosPendientesFiltered = (ingresosEmpresaData || []).filter(
-          (i: any) => (i.payment_status ?? 'realizado') === 'pendiente'
-        )
-        const totalIngresosPendientes = ingresosPendientesFiltered.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
-        const ingresosPendientesList = ingresosPendientesFiltered.slice(0, 20).map((i: any) => ({
-          id: i.id,
-          amount: Number(i.amount || 0),
-          income_date: i.income_date,
-          description: i.description ?? null,
-          etiqueta: i.etiqueta || 'Otro',
-        }))
-
-        const isGastoInversor = (g: any) =>
-          g.inversor_id != null || (g.inversor_name && String(g.inversor_name).trim() !== '')
-        const gastosPendientesDevolucionFiltered = (gastosEmpresaData || []).filter(
-          (g: any) => !(g.devolucion ?? false) && isGastoInversor(g)
-        )
-        const totalGastosPendientesDevolucion = gastosPendientesDevolucionFiltered.reduce(
-          (sum: number, g: any) => sum + Number(g.amount || 0),
-          0
-        )
-        const gastosPendientesDevolucionList = gastosPendientesDevolucionFiltered.slice(0, 15).map((g: any) => ({
-          id: g.id,
-          amount: Number(g.amount || 0),
-          expense_date: g.expense_date,
-          expense_type: g.expense_type || 'otros',
-          description: g.description ?? null,
-          inversor_name: g.inversor_name ?? null,
-        }))
-
-        const incomeFromSalesMonth = (incomeSalesDataMonth || []).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
-        const incomeFromEmpresaMonth = ingresosEmpresaDelMes.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
-        const incomeFromEmpresaAllTime = ingresosEmpresaSoloOtrosSinDuplicados.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
-        const totalIncome = incomeFromSalesAllTime + incomeFromEmpresaAllTime
-        const totalIncomeMonth = incomeFromSalesMonth + incomeFromEmpresaMonth
-        const gastosDelMes = (gastosEmpresaData || []).filter(
-          (g: any) => g.expense_date >= firstDayStr && g.expense_date <= lastDayStr
-        )
-        const totalExpenses = gastosDelMes.reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0)
-
-        // Gastos agrupados por tipo (para gráfico de distribución)
-        const expensesByType = (gastosEmpresaData || []).reduce(
-          (acc: Array<{ type: string; amount: number }>, g: any) => {
-            const type = g.expense_type || 'otros'
-            const amount = Number(g.amount || 0)
-            const existing = acc.find(item => item.type === type)
-            if (existing) {
-              existing.amount += amount
-            } else {
-              acc.push({ type, amount })
-            }
-            return acc
-          },
-          []
-        )
-        const balance = totalIncomeMonth - totalExpenses
-
-        // Ventas por mes (últimos 6 meses) desde salesData; anclado al mes seleccionado o actual
-        const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-        const monthBuckets = Array.from({ length: 6 }).map((_, idx) => {
-          const date = new Date(year, month - (5 - idx), 1)
-          return {
-            key: `${date.getFullYear()}-${date.getMonth()}`,
-            month: monthNamesShort[date.getMonth()],
-            sales: 0,
-            revenue: 0,
-          }
-        })
-
-        const monthBucketMap = new Map(monthBuckets.map(bucket => [bucket.key, bucket]))
-        for (const sale of salesData) {
-          const saleDate = new Date(sale.sale_date)
-          const bucketKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`
-          const bucket = monthBucketMap.get(bucketKey)
-          if (bucket) {
-            bucket.sales += 1
-            bucket.revenue += Number(sale.sale_price || 0)
-          }
-        }
-
-        const salesByMonth = monthBuckets
-
-        // Vehículos por categoría
-        const vehiclesByCategory = vehiclesData?.reduce((acc: Array<{ category: string; count: number }>, v) => {
-          const existing = acc.find(item => item.category === v.category)
-          if (existing) {
-            existing.count++
-          } else {
-            acc.push({ category: v.category, count: 1 })
-          }
-          return acc
-        }, []) || []
-
-        const recentSalesData = recentSalesRes?.data || []
-        const recentSales = (recentSalesData || []).map((sale: any) => {
-          const vehicleName = sale.vehicle_description?.trim() ||
-            (sale.vehicle
-              ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim()
-              : 'Vehículo') || 'Vehículo'
-          const sellerName = sale.seller?.full_name || 'N/A'
-          const clientName = sale.client_name?.trim() || sale.lead?.full_name || 'PENDIENTE'
-
-          return {
-            id: sale.id,
-            vehicle: vehicleName,
-            amount: Number(sale.sale_price || 0),
-            date: sale.sale_date,
-            seller: sellerName,
-            clientName,
-            margin: Number(sale.margin || 0),
-            status: sale.status ?? 'pendiente',
-            payment_status: sale.payment_status ?? null,
-            commission_credit_status: sale.commission_credit_status ?? null,
-            stock_origin: sale.stock_origin ?? null,
-          }
-        })
-
-        const result = {
-          salesThisMonth,
-          salesRevenue,
-          salesThisMonthList,
-          totalIncome,
-          totalIncomeMonth,
-          totalIncomeFromSales: incomeFromSalesAllTime,
-          totalIncomeFromEmpresa: incomeFromEmpresaAllTime,
-          selectedMonthLabel,
-          recentIngresosEmpresa,
-          allIncomeList,
-          totalExpenses,
-          balance,
-          totalVehicles,
-          availableVehicles,
-          activeLeads,
-          scheduledAppointments,
-          salesByMonth,
-          vehiclesByCategory,
-          expensesByType,
-          leadsByStatus,
-          recentSales,
-          recentGastos,
-          totalIngresosPendientes,
-          ingresosPendientesList,
-          totalGastosPendientesDevolucion,
-          gastosPendientesDevolucionList
-        }
-
-        return result
-      } catch {
-        // Retornar datos vacíos en caso de error
+      // Ventas del mes
+      const salesThisMonthData = (salesThisMonthRaw || []) as any[]
+      const salesThisMonth = salesThisMonthData.length
+      const salesRevenue = salesThisMonthData.reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
+      const salesThisMonthList: SaleListItem[] = salesThisMonthData.map((sale: any) => {
+        const vehicleName = sale.vehicle_description?.trim() ||
+          (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
         return {
-          salesThisMonth: 0,
-          salesRevenue: 0,
-          salesThisMonthList: [],
-          totalIncome: 0,
-          totalIncomeMonth: 0,
-          totalIncomeFromSales: 0,
-          totalIncomeFromEmpresa: 0,
-          selectedMonthLabel: MONTH_NAMES[new Date().getMonth()] + ' ' + new Date().getFullYear(),
-          recentIngresosEmpresa: [],
-          allIncomeList: [],
-          totalExpenses: 0,
-          balance: 0,
-          totalVehicles: 0,
-          availableVehicles: 0,
-          activeLeads: 0,
-          scheduledAppointments: 0,
-          salesByMonth: [],
-          vehiclesByCategory: [],
-          expensesByType: [],
-          leadsByStatus: [],
-          recentSales: [],
-          recentGastos: [],
-          totalIngresosPendientes: 0,
-          ingresosPendientesList: [],
-          totalGastosPendientesDevolucion: 0,
-          gastosPendientesDevolucionList: []
+          id: sale.id, vehicle: vehicleName, amount: Number(sale.sale_price || 0), date: sale.sale_date,
+          seller: sale.seller?.full_name || 'N/A',
+          clientName: sale.client_name?.trim() || 'PENDIENTE',
+          margin: Number(sale.margin || 0), status: sale.status ?? 'pendiente',
+          payment_status: sale.payment_status ?? null, commission_credit_status: sale.commission_credit_status ?? null,
+          stock_origin: sale.stock_origin ?? null,
         }
+      })
+
+      // Ingresos ventas
+      const incomeFromSalesMonth = ((incomeSalesMonthRaw || []) as any[]).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
+      const incomeFromSalesAllTime = ((incomeSalesAllRaw || []) as any[]).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
+      const incomeFromSalesList = ((incomeSalesListRaw || []) as any[]).map((s: any) => {
+        const desc = s.vehicle_description?.trim() ||
+          (s.vehicle ? [s.vehicle.make, s.vehicle.model, s.vehicle.year].filter(Boolean).join(' ').trim() : '') || 'Venta'
+        return { type: 'sale' as const, id: s.id, date: s.sale_date, description: desc || 'Venta', amount: Number(s.margin || 0) }
+      })
+
+      // Deduplicar otros ingresos vs ventas (por fecha+monto)
+      const saleKeys = new Set(incomeFromSalesList.map(s => `${s.date}|${s.amount}`))
+      const ingresosEmpresaSinDuplicados = ingresosEmpresaSoloOtros.filter(
+        (i: any) => !saleKeys.has(`${i.income_date}|${Number(i.amount || 0)}`)
+      )
+      const incomeFromEmpresaMonth = ingresosEmpresaSinDuplicados.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+      const incomeFromEmpresaAllTime = incomeFromEmpresaMonth // Solo tenemos data del mes; para histórico sería otra query
+      const totalIncome = incomeFromSalesAllTime + incomeFromEmpresaAllTime
+      const totalIncomeMonth = incomeFromSalesMonth + incomeFromEmpresaMonth
+
+      const otherIncomeList = ingresosEmpresaSinDuplicados.slice(0, 100).map((i: any) => ({
+        type: 'other' as const, id: i.id, date: i.income_date,
+        description: [i.etiqueta, i.description].filter(Boolean).join(' · ') || 'Otro ingreso',
+        amount: Number(i.amount || 0),
+      }))
+      const allIncomeList = [...incomeFromSalesList, ...otherIncomeList]
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        .slice(0, 150)
+
+      const balance = totalIncomeMonth - totalExpenses
+
+      // Vehículos, leads, citas
+      const vehiclesData = (vehiclesRaw || []) as any[]
+      const totalVehicles = vehiclesData.length
+      const availableVehicles = vehiclesData.filter((v: any) => v.status === 'disponible').length
+      const vehiclesByCategory = vehiclesData.reduce((acc: Array<{ category: string; count: number }>, v: any) => {
+        const existing = acc.find(item => item.category === v.category)
+        if (existing) existing.count++
+        else acc.push({ category: v.category, count: 1 })
+        return acc
+      }, [])
+
+      const allLeadsData = (leadsRaw || []) as any[]
+      const leadsByStatus = allLeadsData.reduce((acc: Array<{ status: string; count: number }>, l: any) => {
+        const existing = acc.find(item => item.status === l.status)
+        if (existing) existing.count++
+        else acc.push({ status: l.status, count: 1 })
+        return acc
+      }, [])
+      const inactiveStatuses = new Set(['vendido', 'perdido'])
+      const activeLeads = allLeadsData.filter((l: any) => !inactiveStatuses.has(l.status)).length
+      const scheduledAppointments = ((appointmentsRaw || []) as any[]).length
+
+      // Gráfico ventas por mes (últimos 6 meses)
+      const salesForChart = ((await safe(supabase.from('sales').select('sale_price, sale_date').gte('sale_date', sixMonthsStr).eq('status', 'completada').then(r => r), 'salesChart')) || []) as any[]
+      const monthBuckets = Array.from({ length: 6 }).map((_, idx) => {
+        const d = new Date(year, month - (5 - idx), 1)
+        return { key: `${d.getFullYear()}-${d.getMonth()}`, month: MONTH_SHORT[d.getMonth()], sales: 0, revenue: 0 }
+      })
+      const bucketMap = new Map(monthBuckets.map(b => [b.key, b]))
+      for (const sale of salesForChart) {
+        const sd = new Date(sale.sale_date)
+        const bucket = bucketMap.get(`${sd.getFullYear()}-${sd.getMonth()}`)
+        if (bucket) { bucket.sales += 1; bucket.revenue += Number(sale.sale_price || 0) }
+      }
+
+      // Ventas recientes
+      const recentSalesData = (recentSalesRaw || []) as any[]
+      const recentSales = recentSalesData.map((sale: any) => {
+        const vehicleName = sale.vehicle_description?.trim() ||
+          (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
+        return {
+          id: sale.id, vehicle: vehicleName, amount: Number(sale.sale_price || 0), date: sale.sale_date,
+          seller: sale.seller?.full_name || 'N/A',
+          clientName: sale.client_name?.trim() || 'PENDIENTE',
+          margin: Number(sale.margin || 0), status: sale.status ?? 'pendiente',
+          payment_status: sale.payment_status ?? null, commission_credit_status: sale.commission_credit_status ?? null,
+          stock_origin: sale.stock_origin ?? null,
+        }
+      })
+
+      return {
+        salesThisMonth, salesRevenue, salesThisMonthList,
+        totalIncome, totalIncomeMonth,
+        totalIncomeFromSales: incomeFromSalesAllTime,
+        totalIncomeFromEmpresa: incomeFromEmpresaAllTime,
+        selectedMonthLabel, recentIngresosEmpresa, allIncomeList,
+        totalExpenses, balance,
+        totalVehicles, availableVehicles, activeLeads, scheduledAppointments,
+        salesByMonth: monthBuckets, vehiclesByCategory, expensesByType, leadsByStatus,
+        recentSales, recentGastos,
+        totalIngresosPendientes, ingresosPendientesList,
+        totalGastosPendientesDevolucion, gastosPendientesDevolucionList,
       }
     },
-    enabled: true,
-    staleTime: 3 * 60 * 1000, // 3 min: métricas estables, menos parpadeos
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-    placeholderData: (previousData: DashboardStats | undefined) => previousData
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 2,
   })
 }

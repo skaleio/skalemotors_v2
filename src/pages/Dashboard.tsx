@@ -106,7 +106,7 @@ export default function Dashboard() {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
-  const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth);
+  const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
 

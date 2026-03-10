@@ -211,11 +211,11 @@ export function AppSidebar() {
   };
 
   // Estado para controlar qué categorías están expandidas
-  // Inicializar todas como false
+  // Inventario & Vehículos abierto por defecto para que Inventario y Consignaciones sean visibles
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     "Dashboard": false,
     "CRM": false,
-    "Inventario & Vehículos": false,
+    "Inventario & Vehículos": true,
     "Operaciones": false,
     "Finanzas": false,
     "Post-Venta & Servicios": false,
