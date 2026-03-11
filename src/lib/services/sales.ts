@@ -33,7 +33,7 @@ export const saleService = {
     }
 
     if (filters?.branchId) {
-      query = query.eq('branch_id', filters.branchId)
+      query = query.or(`branch_id.eq.${filters.branchId},branch_id.is.null`)
     }
 
     if (filters?.status) {
@@ -197,7 +197,7 @@ export const saleService = {
     }
 
     if (branchId) {
-      query = query.eq('branch_id', branchId)
+      query = query.or(`branch_id.eq.${branchId},branch_id.is.null`)
     }
 
     query = query.gte('sale_date', dateFrom).lte('sale_date', dateTo)

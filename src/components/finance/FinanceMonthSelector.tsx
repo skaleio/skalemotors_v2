@@ -38,7 +38,7 @@ export interface FinanceMonthSelectorProps {
 export function FinanceMonthSelector({
   period,
   onPeriodChange,
-  minYear = 2026,
+  minYear = 2020,
   maxYear = 2033,
   showDayFilter = false,
   className = "",

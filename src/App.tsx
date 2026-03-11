@@ -61,6 +61,7 @@ const EmailMarketing = lazy(() => import("./pages/studio-ia/EmailMarketing"));
 const AnalisisClientes = lazy(() => import("./pages/studio-ia/AnalisisClientes"));
 const ChatbotAutomotora = lazy(() => import("./pages/studio-ia/ChatbotAutomotora"));
 const ScriptsVideos = lazy(() => import("./pages/studio-ia/ScriptsVideos"));
+const ChatIA = lazy(() => import("./pages/studio-ia/ChatIA"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const Users = lazy(() => import("./pages/Users"));
@@ -325,6 +326,20 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <StudioIA />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/studio-ia/chat" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ChatIA />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/studio-ia/descripcion-vehiculo" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DescripcionesVehiculos />
                   </Layout>
                 </ProtectedRoute>
               } />
