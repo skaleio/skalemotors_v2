@@ -138,12 +138,12 @@ export default function SalesManagement() {
     deleteSale,
     isDeleting,
     refetch,
-  } = useSales({ branchId, enabled: true, period: selectedPeriod });
+  } = useSales({ branchId: undefined, enabled: true, period: selectedPeriod });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formVendor, setFormVendor] = useState<string>("");
-  const [formStockOrigin, setFormStockOrigin] = useState<string>("");
+  const [formVendor, setFormVendor] = useState<string>("HESSENMOTORS");
+  const [formStockOrigin, setFormStockOrigin] = useState<string>("HESSENMOTORS");
   const [formVehicleId, setFormVehicleId] = useState<string>("");
   const [formVehicleCustom, setFormVehicleCustom] = useState("");
   const [formSalePrice, setFormSalePrice] = useState("");
@@ -162,19 +162,12 @@ export default function SalesManagement() {
   const newSaleDialogRef = useRef<HTMLDivElement>(null);
   const [newSaleDialogEl, setNewSaleDialogEl] = useState<HTMLDivElement | null>(null);
 
-  // Misma lista que inventario: todos los vehículos (disponible, reservado, vendido, etc.)
-  const { vehicles: vehiclesByBranch = [] } = useVehicles({
-    branchId: branchId ?? undefined,
-    enabled: !!branchId,
+  // Misma lista que inventario: todos los vehículos (independiente de la sucursal)
+  const { vehicles = [] } = useVehicles({
+    branchId: undefined,
+    enabled: true,
     staleTime: 2 * 60 * 1000,
   });
-  const { data: vehiclesAllBranch = [] } = useQuery({
-    queryKey: ["vehicles", "all"],
-    queryFn: () => vehicleService.getAll({}),
-    enabled: !branchId,
-    staleTime: 2 * 60 * 1000,
-  });
-  const vehicles = branchId ? vehiclesByBranch : vehiclesAllBranch;
 
   const [selectedSale, setSelectedSale] = useState<SaleWithRelations | null>(null);
   const [detailEditMode, setDetailEditMode] = useState(false);
@@ -196,8 +189,8 @@ export default function SalesManagement() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("new") !== "true") return;
-    setFormVendor("");
-    setFormStockOrigin("");
+    setFormVendor("HESSENMOTORS");
+    setFormStockOrigin("HESSENMOTORS");
     setFormVehicleId("");
     setFormVehicleCustom("");
     setFormSalePrice("");
@@ -239,8 +232,8 @@ export default function SalesManagement() {
   }, [sales, searchQuery]);
 
   const handleOpenDialog = () => {
-    setFormVendor("");
-    setFormStockOrigin("");
+    setFormVendor("HESSENMOTORS");
+    setFormStockOrigin("HESSENMOTORS");
     setFormVehicleId("");
     setFormVehicleCustom("");
     setFormSalePrice("");
@@ -425,10 +418,11 @@ export default function SalesManagement() {
 
   const handleSubmitSale = async (e: React.FormEvent) => {
     e.preventDefault();
-    const salePrice = parseFloat(formSalePrice.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+    const salePriceRaw = formSalePrice.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+    const salePrice = salePriceRaw === "" ? 0 : parseFloat(salePriceRaw);
     const margin = parseFloat(formMargin.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
-    if (Number.isNaN(salePrice) || salePrice < 0) {
-      toast({ title: "Error", description: "Monto vendido debe ser un número válido.", variant: "destructive" });
+    if (salePriceRaw !== "" && (Number.isNaN(salePrice) || salePrice < 0)) {
+      toast({ title: "Error", description: "Monto vendido debe ser un número válido (0 o más).", variant: "destructive" });
       return;
     }
     if (Number.isNaN(margin) || margin < 0) {
@@ -1147,6 +1141,18 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                     >
                       <CommandEmpty>Ningún vehículo encontrado.</CommandEmpty>
                       <CommandGroup>
+                        <CommandItem
+                          key="clear-vehicle"
+                          value="ninguno"
+                          onSelect={() => {
+                            setFormVehicleId("");
+                            setFormVehicleCustom("");
+                            setVehiclePopoverOpen(false);
+                          }}
+                        >
+                          <Car className="mr-2 h-4 w-4 shrink-0 opacity-40" />
+                          <span className="min-w-0 flex-1 truncate pr-1">Quitar vehículo seleccionado</span>
+                        </CommandItem>
                         {vehicles.map((v) => (
                           <CommandItem
                             key={v.id}
@@ -1284,14 +1290,13 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
               </>
             )}
             <div className="space-y-2">
-              <Label htmlFor="sale_price">Monto vendido ($)</Label>
+              <Label htmlFor="sale_price">Monto vendido ($) — opcional</Label>
               <Input
                 id="sale_price"
                 type="text"
                 placeholder="Ej: 15000000"
                 value={formSalePrice}
                 onChange={(e) => setFormSalePrice(e.target.value)}
-                required
               />
             </div>
             <div className="space-y-2">

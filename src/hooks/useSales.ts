@@ -67,7 +67,7 @@ export function useSales(options: UseSalesOptions = {}) {
     queryKey: ["sales-stats", branchId, period?.year, period?.month],
     queryFn: () =>
       dateRange
-        ? saleService.getStats(undefined, branchId ?? undefined, { from: dateRange.from, to: dateRange.to })
+        ? saleService.getStats(undefined, undefined, { from: dateRange.from, to: dateRange.to })
         : saleService.getStats(undefined, branchId ?? undefined, 30),
     enabled,
     staleTime,
