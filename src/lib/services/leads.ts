@@ -59,10 +59,6 @@ export const leadService = {
       query = query.eq('assigned_to', filters.assignedTo)
     }
 
-    if (filters?.branchId) {
-      query = query.eq('branch_id', filters.branchId)
-    }
-
     if (filters?.status) {
       query = query.eq('status', filters.status)
     }
@@ -84,7 +80,9 @@ export const leadService = {
   },
 
   // Leads en papelera (clientes "olvidados" / no respondieron)
-  async getDeleted(branchId: string) {
+  // No filtramos por branch_id para que el usuario pueda ver todos los leads
+  // enviados a papelera, incluso si cambiaron su sucursal.
+  async getDeleted() {
     const { data, error } = await supabase
       .from('leads')
       .select(`
@@ -92,7 +90,6 @@ export const leadService = {
         assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
         branch:branches(id, name)
       `)
-      .eq('branch_id', branchId)
       .not('deleted_at', 'is', null)
       .order('deleted_at', { ascending: false })
 

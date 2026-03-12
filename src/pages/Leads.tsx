@@ -486,10 +486,7 @@ export default function Leads() {
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [showPapeleraDialog, setShowPapeleraDialog] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  const { deletedLeads, loading: loadingPapelera, refetch: refetchPapelera } = useDeletedLeads(
-    user?.branch_id ?? undefined,
-    showPapeleraDialog,
-  );
+  const { deletedLeads, loading: loadingPapelera, refetch: refetchPapelera } = useDeletedLeads(showPapeleraDialog);
   const [editForm, setEditForm] = useState({
     full_name: "",
     phone: "",

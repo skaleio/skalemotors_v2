@@ -4,12 +4,61 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
-import { ArrowUpRight, BarChart3, Calendar, Car, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+function ChartEmptyState({
+  icon: Icon,
+  title,
+  description,
+  linkTo,
+  linkLabel,
+  iconBgClass = "bg-muted",
+}: {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  linkTo?: string;
+  linkLabel?: string;
+  iconBgClass?: string;
+}) {
+  return (
+    <div className="h-[320px] flex flex-col items-center justify-center px-6 text-center">
+      <div className={`rounded-2xl p-5 ${iconBgClass} mb-4`}>
+        <Icon className="h-10 w-10 text-muted-foreground" />
+      </div>
+      <p className="text-sm font-semibold text-foreground mb-1">{title}</p>
+      <p className="text-xs text-muted-foreground max-w-[240px] mb-5">{description}</p>
+      {linkTo && linkLabel && (
+        <Link
+          to={linkTo}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          {linkLabel}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="h-[320px] flex flex-col justify-center p-4 space-y-4">
+      <Skeleton className="h-[200px] w-full rounded-lg" />
+      <div className="flex gap-2 justify-center">
+        <Skeleton className="h-4 w-16 rounded" />
+        <Skeleton className="h-4 w-20 rounded" />
+        <Skeleton className="h-4 w-14 rounded" />
+      </div>
+    </div>
+  );
+}
 
 export default function ExecutiveDashboard() {
   const { user } = useAuth();
-  const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id);
+  const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id, undefined, user?.id);
 
   if (error) {
     return (
@@ -77,12 +126,19 @@ export default function ExecutiveDashboard() {
     perdido: 'Perdidos'
   };
 
+  const hasAnyData = Boolean(
+    (stats?.salesByMonth?.length) || (stats?.vehiclesByCategory?.length) || (stats?.expensesByType?.length) ||
+    (stats?.leadsByStatus?.length) || (stats?.recentSales?.length)
+  );
+
   return (
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard Ejecutivo</h1>
         <p className="text-muted-foreground mt-2">
-          Vista ejecutiva de métricas y KPIs
+          {hasAnyData
+            ? "Vista ejecutiva de métricas, gráficos y KPIs en tiempo real."
+            : "Carga ventas, inventario, gastos y leads para ver aquí las métricas y gráficos."}
         </p>
       </div>
 
@@ -93,7 +149,7 @@ export default function ExecutiveDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {showSkeleton ? <Skeleton className="h-8 w-28" /> : <div className="text-2xl font-bold">{formatCLP(stats?.salesRevenue || 0)}</div>}
+            {showSkeleton ? <Skeleton className="h-8 w-28" /> : <div className="text-2xl font-bold">{formatCLP(stats?.totalIncomeMonth ?? 0)}</div>}
             <p className="text-xs text-muted-foreground">Este mes</p>
           </CardContent>
         </Card>
@@ -149,7 +205,9 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.salesByMonth && stats.salesByMonth.length > 0 ? (
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : stats?.salesByMonth && stats.salesByMonth.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={stats.salesByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <defs>
@@ -206,10 +264,14 @@ export default function ExecutiveDashboard() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <BarChart3 className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay datos de ventas disponibles</p>
-              </div>
+              <ChartEmptyState
+                icon={BarChart3}
+                title="Sin datos de ventas"
+                description="Cuando registres ventas completadas, aquí verás la tendencia de los últimos 6 meses."
+                linkTo="/app/sales"
+                linkLabel="Ir a Ventas"
+                iconBgClass="bg-blue-500/10"
+              />
             )}
           </CardContent>
         </Card>
@@ -230,7 +292,9 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.vehiclesByCategory && stats.vehiclesByCategory.length > 0 ? (
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : stats?.vehiclesByCategory && stats.vehiclesByCategory.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
                 <PieChart margin={{ top: 4, right: 4, bottom: 40, left: 4 }}>
                   <Pie
@@ -277,10 +341,14 @@ export default function ExecutiveDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <Car className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay vehículos en inventario</p>
-              </div>
+              <ChartEmptyState
+                icon={Car}
+                title="Sin vehículos en inventario"
+                description="Al cargar vehículos (nuevos, usados o consignados), aquí verás la distribución por categoría."
+                linkTo="/app/inventory"
+                linkLabel="Ir a Inventario"
+                iconBgClass="bg-purple-500/10"
+              />
             )}
           </CardContent>
         </Card>
@@ -301,7 +369,9 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.expensesByType && stats.expensesByType.length > 0 ? (
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : stats?.expensesByType && stats.expensesByType.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
                 <PieChart margin={{ top: 4, right: 4, bottom: 40, left: 4 }}>
                   <Pie
@@ -349,10 +419,14 @@ export default function ExecutiveDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <Receipt className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay gastos registrados</p>
-              </div>
+              <ChartEmptyState
+                icon={Receipt}
+                title="Sin gastos registrados"
+                description="Al cargar gastos por tipo (operación, marketing, etc.), aquí verás la distribución."
+                linkTo="/app/finance"
+                linkLabel="Ir a Gastos/Ingresos"
+                iconBgClass="bg-rose-500/10"
+              />
             )}
           </CardContent>
         </Card>
@@ -376,7 +450,9 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.leadsByStatus && stats.leadsByStatus.length > 0 ? (
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : stats?.leadsByStatus && stats.leadsByStatus.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart
                   data={stats.leadsByStatus.map(item => ({
@@ -427,10 +503,14 @@ export default function ExecutiveDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <Users className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay leads registrados</p>
-              </div>
+              <ChartEmptyState
+                icon={Users}
+                title="Sin leads en el pipeline"
+                description="Cuando tengas leads por estado (contactado, cotizando, etc.), aquí verás el funnel."
+                linkTo="/app/leads"
+                linkLabel="Ir a Leads"
+                iconBgClass="bg-green-500/10"
+              />
             )}
           </CardContent>
         </Card>
@@ -451,7 +531,9 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.recentSales && stats.recentSales.length > 0 ? (
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : stats?.recentSales && stats.recentSales.length > 0 ? (
               <div className="space-y-3 max-h-[320px] overflow-y-auto">
                 {stats.recentSales.map((sale, index) => (
                   <div
@@ -491,10 +573,14 @@ export default function ExecutiveDashboard() {
                 ))}
               </div>
             ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <DollarSign className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay ventas recientes</p>
-              </div>
+              <ChartEmptyState
+                icon={DollarSign}
+                title="Sin ventas recientes"
+                description="Las últimas 5 ventas completadas aparecerán aquí para un vistazo rápido."
+                linkTo="/app/sales"
+                linkLabel="Ir a Ventas"
+                iconBgClass="bg-amber-500/10"
+              />
             )}
           </CardContent>
         </Card>
@@ -514,11 +600,15 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">
-              {stats?.salesThisMonth && stats.salesThisMonth > 0
-                ? formatCLP(Math.round(stats.salesRevenue / stats.salesThisMonth))
-                : formatCLP(0)}
-            </div>
+            {showSkeleton ? (
+              <Skeleton className="h-9 w-32" />
+            ) : (
+              <div className="text-3xl font-bold tracking-tight">
+                {stats?.salesThisMonth && stats.salesThisMonth > 0
+                  ? formatCLP(Math.round(stats.salesRevenue / stats.salesThisMonth))
+                  : formatCLP(0)}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground font-medium">
               Por vehículo vendido
             </p>
@@ -537,9 +627,13 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{stats?.availableVehicles || 0}</div>
+            {showSkeleton ? (
+              <Skeleton className="h-9 w-20" />
+            ) : (
+              <div className="text-3xl font-bold tracking-tight">{stats?.availableVehicles || 0}</div>
+            )}
             <p className="text-xs text-muted-foreground font-medium">
-              De {stats?.totalVehicles || 0} totales
+              De {showSkeleton ? "—" : (stats?.totalVehicles || 0)} totales
             </p>
           </CardContent>
         </Card>
@@ -556,7 +650,11 @@ export default function ExecutiveDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-3xl font-bold tracking-tight">{conversionRate}%</div>
+            {showSkeleton ? (
+              <Skeleton className="h-9 w-16" />
+            ) : (
+              <div className="text-3xl font-bold tracking-tight">{conversionRate}%</div>
+            )}
             <div className="flex items-center gap-1 text-xs">
               <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 <ArrowUpRight className="h-3 w-3 mr-1" />

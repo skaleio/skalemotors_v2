@@ -145,15 +145,6 @@ const menuCategories = [
       { title: "Meta ADS", url: "/app/studio-ia/marketing/facebook-ads", icon: BarChart3 },
       { title: "Studio IA", url: "/app/studio-ia", icon: Brain },
     ]
-  },
-  {
-    title: "Studio IA",
-    icon: Brain,
-    items: [
-      { title: "Chat IA", url: "/app/studio-ia/chat", icon: MessageSquareText },
-      { title: "Descripción de Vehículo", url: "/app/studio-ia/descripcion-vehiculo", icon: FileText },
-      { title: "Guiones para Reels", url: "/app/studio-ia/content/script-generator", icon: ScrollText },
-    ]
   }
 ];
 
@@ -169,7 +160,7 @@ const settingsCategory = {
 
 const ALL_CATEGORY_KEYS = [
   "Dashboard", "CRM", "Inventario & Vehículos", "Operaciones",
-  "Finanzas", "Post-Venta & Servicios", "Analytics & Herramientas", "Studio IA", "Sistema",
+  "Finanzas", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
 ] as const;
 
 export function AppSidebar() {
@@ -232,7 +223,6 @@ export function AppSidebar() {
     "Finanzas": false,
     "Post-Venta & Servicios": false,
     "Analytics & Herramientas": false,
-    "Studio IA": false,
     "Sistema": false,
   });
 
@@ -256,7 +246,6 @@ export function AppSidebar() {
           "Finanzas": false,
           "Post-Venta & Servicios": false,
           "Analytics & Herramientas": false,
-          "Studio IA": false,
           "Sistema": false,
         };
 

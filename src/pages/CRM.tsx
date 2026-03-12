@@ -327,9 +327,17 @@ export default function CRM() {
   );
 
   const filteredLeads = useMemo(() => {
+    // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
+    const onlyLeads = leads.filter((lead) => {
+      const tags = normalizeTags(lead.tags);
+      const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
+      return !isConsignacion;
+    });
+
+    // 2) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter((lead) => {
+    if (!q) return onlyLeads;
+    return onlyLeads.filter((lead) => {
       const name = (lead.full_name || "").toLowerCase();
       const phone = (lead.phone || "").replace(/\D/g, "");
       const phoneQuery = q.replace(/\D/g, "");
