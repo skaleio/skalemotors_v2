@@ -61,6 +61,21 @@
 
 ---
 
+## CEREBRO POR SUCURSAL (SKALEGPT)
+
+Un **cerebro por sucursal** (branch): todos los usuarios de esa sucursal comparten el mismo snapshot del negocio. El agente puede “leer” inventario, consignaciones, ventas, leads, citas y finanzas sin hacer todas las consultas en cada mensaje.
+
+- **Tabla** `ai_branch_brain`: `branch_id`, `snapshot_text` (texto con todas las métricas), `updated_at`.
+- **Flujo**: Al enviar un mensaje a ai-chat con `branchId`, la función intenta leer el cerebro de esa sucursal. Si no existe o tiene más de 15 min, construye el snapshot (consultas a vehicles, consignaciones, sales, leads, appointments, ingresos_empresa, gastos_empresa, finance_month_summary), lo guarda en `ai_branch_brain` y lo usa como contexto para el LLM.
+- **Refresh opcional**: Edge Function `ai-brain-refresh`. POST sin body = refresca todas las sucursales; POST `{ "branchId": "uuid" }` = refresca solo esa. Útil para cron cada 15–30 min.
+
+**Despliegue:**
+1. Aplicar migración `20260802120000_ai_branch_brain.sql`.
+2. Desplegar `ai-chat` y, si quieres refresh programado, `ai-brain-refresh`.
+3. (Opcional) Llamar a `ai-brain-refresh` cada 15 min vía Supabase cron o servicio externo.
+
+---
+
 ## PARTE 2 — MODELO DE DATOS (ver migraciones en supabase/migrations/)
 
 - **ai_conversations**: id, user_id, branch_id, title, created_at, updated_at. RLS: usuario ve las suyas por branch_id o admin ve todo.

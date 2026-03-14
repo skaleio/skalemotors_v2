@@ -5,8 +5,7 @@ interface DashboardLoaderProps {
   barLabel?: string;
 }
 
-export default function DashboardLoader({ message = "Cargando...", barLabel }: DashboardLoaderProps) {
-  const label = barLabel ?? (message.startsWith("Cerrando") ? "Cerrando sesión" : "Cargando");
+export default function DashboardLoader({ message = "Cargando..." }: DashboardLoaderProps) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -31,10 +30,9 @@ export default function DashboardLoader({ message = "Cargando...", barLabel }: D
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         </div>
 
-        {/* Barra de progreso con porcentaje */}
+        {/* Barra de progreso con porcentaje (solo %; el mensaje va arriba) */}
         <div className="space-y-2">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{label}</span>
+          <div className="flex justify-end text-xs text-muted-foreground">
             <span>{Math.round(progress)}%</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">

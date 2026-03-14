@@ -10,12 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAppointments } from "@/hooks/useAppointments";
 import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
+import { addDays, endOfDay, format, isSameDay, isToday, startOfDay } from "date-fns";
+import { es } from "date-fns/locale";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -36,6 +39,15 @@ const statusLabels: Record<string, string> = {
   negociando: 'Negociando',
   vendido: 'Vendidos',
   perdido: 'Perdidos'
+};
+
+/** Etiquetas para tipos de cita (tabla appointments, tipos en DB) */
+const appointmentTypeLabels: Record<string, string> = {
+  test_drive: 'Test Drive',
+  reunion: 'Reunión',
+  entrega: 'Entrega',
+  servicio: 'Servicio',
+  otro: 'Otro',
 };
 
 function TaskIcon({ actionType, urgent }: { actionType: PendingTask['action_type']; urgent: boolean }) {
@@ -109,6 +121,21 @@ export default function Dashboard() {
   const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
   const completeTaskMutation = useCompletePendingTask();
+
+  // Próximas citas: solo las que vienen del módulo Citas, ventana de 3 días para tener tiempo de preparación
+  const appointmentsWindow = useMemo(() => {
+    const now = new Date();
+    const from = startOfDay(now);
+    const to = endOfDay(addDays(now, 3));
+    return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
+  }, []);
+  const { appointments: upcomingAppointments, loading: appointmentsLoading } = useAppointments({
+    branchId: user?.branch_id,
+    dateFrom: appointmentsWindow.dateFrom,
+    dateTo: appointmentsWindow.dateTo,
+    status: 'programada',
+    enabled: !!user?.branch_id,
+  });
 
   // Modales de KPI: Ventas del mes, Total ingresos y Balance (gastos)
   const [showVentasMesModal, setShowVentasMesModal] = useState(false);
@@ -491,53 +518,90 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.scheduledAppointments && stats.scheduledAppointments > 0 ? (
+            {appointmentsLoading ? (
               <div className="space-y-4">
-                {/* Ejemplo de cita - Reemplazar con datos reales */}
-                <div className="flex items-start gap-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                  <div className="flex flex-col items-center gap-1 min-w-[60px]">
-                    <Badge variant="default" className="bg-blue-500">HOY</Badge>
-                    <span className="text-2xl font-bold">14:00</span>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold">Test Drive</h4>
-                      <Badge variant="outline">Programada</Badge>
-                    </div>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        <span>Juan Pérez</span>
+                <Skeleton className="h-24 w-full rounded-lg" />
+                <Skeleton className="h-24 w-full rounded-lg" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : upcomingAppointments.length > 0 ? (
+              <div className="space-y-4">
+                {upcomingAppointments.map((apt) => {
+                  const scheduledAt = new Date(apt.scheduled_at);
+                  const dayLabel = isToday(scheduledAt)
+                    ? "HOY"
+                    : isSameDay(scheduledAt, addDays(new Date(), 1))
+                      ? "MAÑANA"
+                      : format(scheduledAt, "EEE d MMM", { locale: es });
+                  const lead = (apt as { lead?: { full_name?: string | null } | null }).lead;
+                  const vehicle = (apt as { vehicle?: { make: string; model: string; year?: number | null } | null }).vehicle;
+                  const branch = (apt as { branch?: { name: string } | null }).branch;
+                  const typeLabel = appointmentTypeLabels[apt.type] ?? apt.type;
+                  const clientName = lead?.full_name ?? "Sin nombre";
+                  const vehicleStr = vehicle
+                    ? `${vehicle.make} ${vehicle.model} ${vehicle.year ?? ""}`.trim()
+                    : "—";
+                  const branchName = branch?.name ?? "—";
+                  return (
+                    <div
+                      key={apt.id}
+                      className="flex items-start gap-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex flex-col items-center gap-1 min-w-[60px]">
+                        <Badge variant="default" className="bg-blue-500">
+                          {dayLabel}
+                        </Badge>
+                        <span className="text-2xl font-bold">{format(scheduledAt, "HH:mm")}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Car className="h-4 w-4" />
-                        <span>Toyota Corolla 2024</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>Sucursal Providencia</span>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold">{typeLabel}</h4>
+                          <Badge variant="outline">{apt.status === "programada" ? "Programada" : apt.status}</Badge>
+                        </div>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            <span>{clientName}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Car className="h-4 w-4" />
+                            <span>{vehicleStr}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>{branchName}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => navigate(`/appointments?id=${apt.id}`)}
+                          >
+                            Marcar completada
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/appointments?id=${apt.id}`)}
+                          >
+                            Reagendar
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button size="sm" variant="default" onClick={() => setShowCompleteAppointmentDialog(true)}>
-                        Marcar completada
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setShowRescheduleDialog(true)}>
-                        Reagendar
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mensaje si no hay más citas */}
+                  );
+                })}
                 <div className="text-center py-4 text-sm text-muted-foreground">
-                  <p>Tienes {stats.scheduledAppointments} cita(s) programada(s)</p>
+                  <p>
+                    Tienes {upcomingAppointments.length} cita(s) en los próximos 3 días
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground">
                 <Calendar className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No tienes citas programadas</p>
+                <p className="text-sm font-medium">No tienes citas en los próximos 3 días</p>
                 <Button
                   variant="outline"
                   size="sm"

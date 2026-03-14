@@ -1,13 +1,14 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { buildBranchBrain } from "../_shared/brainBuilder.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
 const MAX_TOKENS_CHAT = 1024;
 const TEMPERATURE_CHAT = 0.3;
 const MAX_HISTORY = 10;
-const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const BRAIN_MAX_AGE_MS = 15 * 60 * 1000; // 15 min: si el cerebro es más viejo, se reconstruye
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -39,84 +40,41 @@ Reglas:
 - Sé breve en respuestas cortas; desarrolla más si preguntan análisis o detalle.`;
 }
 
-async function fetchBusinessContext(
+/**
+ * Obtiene el cerebro de la sucursal: si existe y está fresco (< 15 min), lo devuelve;
+ * si no, construye el snapshot completo, lo guarda en ai_branch_brain y lo devuelve.
+ * Un cerebro por branch_id = todos los usuarios de esa sucursal comparten el mismo cerebro.
+ */
+async function getOrBuildBrain(
   supabase: ReturnType<typeof createClient>,
-  branchId: string | null
+  branchId: string
 ): Promise<string> {
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  const from = sixMonthsAgo.toISOString().split("T")[0];
-  const to = now.toISOString().split("T")[0];
-  const dayOfWeek = now.getDay();
-  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - mondayOffset);
-  weekStart.setHours(0, 0, 0, 0);
-  const fromWeek = weekStart.toISOString().split("T")[0];
+  const { data: row } = await supabase
+    .from("ai_branch_brain")
+    .select("snapshot_text, updated_at")
+    .eq("branch_id", branchId)
+    .maybeSingle();
 
-  const eqBranch = (q: any) => (branchId ? q.eq("branch_id", branchId) : q);
+  const now = Date.now();
+  if (row?.snapshot_text && row?.updated_at) {
+    const age = now - new Date(row.updated_at).getTime();
+    if (age < BRAIN_MAX_AGE_MS) {
+      return row.snapshot_text;
+    }
+  }
 
-  const { data: salesData } = await eqBranch(
-    supabase.from("sales").select("sale_price, sale_date, margin").gte("sale_date", from).lte("sale_date", to).eq("status", "completada").limit(2000)
-  );
-  const { data: vehiclesData } = await eqBranch(supabase.from("vehicles").select("id, make, model, year, price, status, created_at").limit(500));
-  const { data: leadsData } = await eqBranch(supabase.from("leads").select("status, full_name").limit(5000));
-  const { data: appointmentsData } = await eqBranch(
-    supabase.from("appointments").select("id, title, scheduled_at, status").gte("scheduled_at", now.toISOString()).eq("status", "programada").limit(500)
-  );
-  const { data: ingresosData } = await eqBranch(supabase.from("ingresos_empresa").select("amount, income_date").limit(2000));
-  const { data: gastosData } = await eqBranch(supabase.from("gastos_empresa").select("amount, expense_type, expense_date").limit(3000));
-  const { data: summaryData } = branchId
-    ? await supabase.from("finance_month_summary").select("year, month, total_income, total_expenses, balance").eq("branch_id", branchId).order("year", { ascending: false }).order("month", { ascending: false }).limit(3)
-    : { data: [] };
-
-  const sales = (salesData ?? []) as any[];
-  const vehicles = (vehiclesData ?? []) as any[];
-  const leads = (leadsData ?? []) as any[];
-  const appointmentsDataArr = (appointmentsData ?? []) as any[];
-  const ingresosDataArr = (ingresosData ?? []) as any[];
-  const gastos = (gastosData ?? []) as any[];
-  const summaryArr = (summaryData ?? []) as any[];
-
-  const salesThisMonth = sales.filter((s: any) => new Date(s.sale_date) >= firstDayOfMonth).length;
-  const salesRevenueThisMonth = sales
-    .filter((s: any) => new Date(s.sale_date) >= firstDayOfMonth)
-    .reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0);
-  const totalIncome = ingresosDataArr.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
-  const totalExpenses = gastos.reduce((sum: number, g: any) => sum + Number(g.amount || 0), 0);
-  const balance = totalIncome - totalExpenses;
-  const totalVehicles = vehicles.length;
-  const availableVehicles = vehicles.filter((v: any) => v.status === "disponible").length;
-  const inactive = new Set(["vendido", "perdido"]);
-  const activeLeads = leads.filter((l: any) => !inactive.has(l.status)).length;
-  const scheduledAppointments = appointmentsDataArr.length;
-
-  const lines: string[] = [
-    "--- CONTEXTO DEL NEGOCIO ---",
-    "",
-    "INVENTARIO",
-    `- Total vehículos: ${totalVehicles}. Disponibles: ${availableVehicles}.`,
-    vehicles.length > 0
-      ? "- Ejemplos (marca, modelo, año, precio, estado): " +
-        vehicles.slice(0, 8).map((v: any) => `${v.make} ${v.model} ${v.year} $${Number(v.price || 0).toLocaleString("es-CL")} (${v.status})`).join("; ")
-      : "",
-    "",
-    "VENTAS Y FINANZAS",
-    `- Ventas este mes: ${salesThisMonth}. Ingresos por ventas este mes: $${salesRevenueThisMonth.toLocaleString("es-CL")}.`,
-    `- Ingresos totales (ingresos_empresa): $${totalIncome.toLocaleString("es-CL")}. Gastos totales: $${totalExpenses.toLocaleString("es-CL")}. Balance: $${balance.toLocaleString("es-CL")}.`,
-    summaryArr.length > 0
-      ? "- Resúmenes de cierre: " +
-        summaryArr.map((s: any) => `${s.year}-${s.month}: ingreso $${Number(s.total_income || 0).toLocaleString("es-CL")}, gastos $${Number(s.total_expenses || 0).toLocaleString("es-CL")}, balance $${Number(s.balance || 0).toLocaleString("es-CL")}`).join("; ")
-      : "",
-    "",
-    "LEADS Y CITAS",
-    `- Leads activos: ${activeLeads}. Citas programadas (próximas): ${scheduledAppointments}.`,
-    "",
-    "--- FIN CONTEXTO ---",
-  ];
-
-  return lines.filter(Boolean).join("\n");
+  const snapshotText = await buildBranchBrain(supabase, branchId);
+  await supabase
+    .from("ai_branch_brain")
+    .upsert(
+      {
+        branch_id: branchId,
+        snapshot_text: snapshotText,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "branch_id" }
+    );
+  return snapshotText;
 }
 
 async function callAnthropic(
@@ -198,7 +156,10 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
-    const context = await fetchBusinessContext(supabase, branchId ?? null);
+    const context =
+      branchId != null
+        ? await getOrBuildBrain(supabase, branchId)
+        : await buildBranchBrain(supabase, null);
     const systemBase = buildSystemPromptBase(branchName);
     const systemContent = systemBase + "\n\n" + context;
 

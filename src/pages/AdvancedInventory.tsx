@@ -12,6 +12,7 @@ import {
     Car,
     Clock,
     DollarSign,
+    Gauge,
     Package,
     PieChart,
     RefreshCcw,
@@ -72,21 +73,22 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function AdvancedInventory() {
   const { user } = useAuth();
+  // Sin filtrar por sucursal: mostrar métricas de todo el inventario (igual que la página Inventario)
   const { vehicles, loading, refetch: refetchVehicles } = useVehicles({
-    branchId: user?.branch_id ?? undefined,
+    branchId: undefined,
     enabled: !!user,
   });
 
   const { consignaciones, loading: loadingConsignaciones, refetch: refetchConsignaciones } = useConsignaciones({
-    branchId: user?.branch_id ?? undefined,
+    branchId: undefined,
     enabled: !!user,
   });
 
   useEffect(() => {
-    if (!user?.branch_id) return;
+    if (!user) return;
     refetchVehicles();
     refetchConsignaciones();
-  }, [user?.branch_id, refetchVehicles, refetchConsignaciones]);
+  }, [user?.id, refetchVehicles, refetchConsignaciones]);
 
   // Calcular métricas
   const metrics = useMemo(() => {
@@ -98,9 +100,15 @@ export default function AdvancedInventory() {
         totalMargin: 0,
         avgMargin: 0,
         avgMarginPercent: 0,
-        byStatus: {},
-        byCategory: {},
-        byMake: {},
+        avgPrice: 0,
+        minPrice: 0,
+        maxPrice: 0,
+        avgMileage: 0,
+        vehiclesWithMileage: 0,
+        byStatus: {} as Record<string, number>,
+        byCategory: {} as Record<string, number>,
+        byMake: {} as Record<string, number>,
+        byYear: {} as Record<number, number>,
         oldestDays: 0,
         avgDaysInInventory: 0,
       };
@@ -112,6 +120,17 @@ export default function AdvancedInventory() {
     const totalMargin = totalValue - totalCost;
     const avgMargin = totalMargin / total;
     const avgMarginPercent = totalValue > 0 ? (totalMargin / totalValue) * 100 : 0;
+    const avgPrice = totalValue / total;
+    const prices = vehicles.map(v => Number(v.price || 0)).filter(Boolean);
+    const minPrice = prices.length ? Math.min(...prices) : 0;
+    const maxPrice = prices.length ? Math.max(...prices) : 0;
+
+    // Kilometraje: solo vehículos con mileage
+    const withMileage = vehicles.filter(v => v.mileage != null && Number(v.mileage) >= 0);
+    const vehiclesWithMileage = withMileage.length;
+    const avgMileage = vehiclesWithMileage > 0
+      ? Math.round(withMileage.reduce((s, v) => s + Number(v.mileage!), 0) / vehiclesWithMileage)
+      : 0;
 
     // Por estado
     const byStatus = vehicles.reduce((acc, v) => {
@@ -125,12 +144,19 @@ export default function AdvancedInventory() {
       return acc;
     }, {} as Record<string, number>);
 
-    // Por marca
+    // Por marca (cantidad)
     const byMake = vehicles.reduce((acc, v) => {
       const make = v.make || "Sin marca";
       acc[make] = (acc[make] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
+
+    // Por año
+    const byYear = vehicles.reduce((acc, v) => {
+      const y = v.year ?? 0;
+      if (y) acc[y] = (acc[y] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
 
     // Días en inventario
     const now = new Date();
@@ -153,9 +179,15 @@ export default function AdvancedInventory() {
       totalMargin,
       avgMargin,
       avgMarginPercent,
+      avgPrice,
+      minPrice,
+      maxPrice,
+      avgMileage,
+      vehiclesWithMileage,
       byStatus,
       byCategory,
       byMake,
+      byYear,
       oldestDays,
       avgDaysInInventory,
     };
@@ -192,6 +224,58 @@ export default function AdvancedInventory() {
         cantidad: count
       }));
   }, [metrics.byMake]);
+
+  // Valor total por marca (top 10)
+  const valueByMakeChartData = useMemo(() => {
+    const byMake = vehicles.reduce((acc, v) => {
+      const make = v.make || "Sin marca";
+      acc[make] = (acc[make] || 0) + Number(v.price || 0);
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(byMake)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([make, valor]) => ({ name: make, valor, valorFormato: formatCLP(valor) }));
+  }, [vehicles]);
+
+  // Top modelos (marca + modelo) por cantidad
+  const topModelsChartData = useMemo(() => {
+    const byModel = vehicles.reduce((acc, v) => {
+      const key = `${v.make || "Sin marca"} ${v.model || "Sin modelo"}`.trim();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(byModel)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, cantidad]) => ({ name, cantidad }));
+  }, [vehicles]);
+
+  // Distribución por kilometraje (rangos en km)
+  const mileageChartData = useMemo(() => {
+    const ranges = [
+      { name: "0-20k km", min: 0, max: 20000 },
+      { name: "20-50k km", min: 20000, max: 50000 },
+      { name: "50-100k km", min: 50000, max: 100000 },
+      { name: "100-200k km", min: 100000, max: 200000 },
+      { name: "200k+ km", min: 200000, max: Infinity },
+    ];
+    return ranges.map(range => ({
+      name: range.name,
+      cantidad: vehicles.filter(v => {
+        const km = v.mileage != null ? Number(v.mileage) : null;
+        if (km == null) return false;
+        return km >= range.min && km < range.max;
+      }).length
+    }));
+  }, [vehicles]);
+
+  // Distribución por año
+  const yearChartData = useMemo(() => {
+    return Object.entries(metrics.byYear)
+      .map(([year, count]) => ({ name: String(year), cantidad: count, year: Number(year) }))
+      .sort((a, b) => a.year - b.year);
+  }, [metrics.byYear]);
 
   // Vehículos más antiguos
   const oldestVehicles = useMemo(() => {
@@ -372,10 +456,12 @@ export default function AdvancedInventory() {
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* KPI Cards - Métricas clave del inventario */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {loading ? (
           <>
+            <KPISkeleton />
+            <KPISkeleton />
             <KPISkeleton />
             <KPISkeleton />
             <KPISkeleton />
@@ -392,58 +478,82 @@ export default function AdvancedInventory() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{metrics.total}</div>
-                <p className="text-xs text-muted-foreground">
-                  en inventario
-                </p>
+                <p className="text-xs text-muted-foreground">en inventario</p>
               </CardContent>
             </Card>
 
-        <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-green-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-            <div className="p-2 bg-green-100 rounded-full">
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCLP(metrics.totalValue)}</div>
-            <p className="text-xs text-muted-foreground">
-              precio de lista
-            </p>
-          </CardContent>
-        </Card>
+            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+                <div className="p-2 bg-green-100 rounded-full">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCLP(metrics.totalValue)}</div>
+                <p className="text-xs text-muted-foreground">precio de lista</p>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-amber-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Margen Total</CardTitle>
-            <div className="p-2 bg-amber-100 rounded-full">
-              <TrendingUp className="h-4 w-4 text-amber-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">
-              {formatCLP(metrics.totalMargin)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {metrics.avgMarginPercent.toFixed(1)}% margen promedio
-            </p>
-          </CardContent>
-        </Card>
+            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-emerald-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Precio Promedio</CardTitle>
+                <div className="p-2 bg-emerald-100 rounded-full">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCLP(metrics.avgPrice)}</div>
+                <p className="text-xs text-muted-foreground">por vehículo</p>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-purple-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Días Promedio</CardTitle>
-            <div className="p-2 bg-purple-100 rounded-full">
-              <Clock className="h-4 w-4 text-purple-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.avgDaysInInventory}</div>
-            <p className="text-xs text-muted-foreground">
-              en inventario
-            </p>
-          </CardContent>
-        </Card>
+            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-amber-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Margen Total</CardTitle>
+                <div className="p-2 bg-amber-100 rounded-full">
+                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-600">{formatCLP(metrics.totalMargin)}</div>
+                <p className="text-xs text-muted-foreground">{metrics.avgMarginPercent.toFixed(1)}% margen promedio</p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Días Promedio</CardTitle>
+                <div className="p-2 bg-purple-100 rounded-full">
+                  <Clock className="h-4 w-4 text-purple-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{metrics.avgDaysInInventory}</div>
+                <p className="text-xs text-muted-foreground">en inventario</p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-cyan-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Kilometraje Promedio</CardTitle>
+                <div className="p-2 bg-cyan-100 rounded-full">
+                  <Gauge className="h-4 w-4 text-cyan-600" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {metrics.vehiclesWithMileage > 0
+                    ? `${(metrics.avgMileage / 1000).toFixed(1)}k km`
+                    : "—"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {metrics.vehiclesWithMileage > 0
+                    ? `${metrics.vehiclesWithMileage} vehículos con km`
+                    : "sin datos"}
+                </p>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
@@ -659,6 +769,196 @@ export default function AdvancedInventory() {
                   <p>No hay datos para mostrar</p>
                 </div>
               </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+
+      {/* Valor por Marca, Kilometraje, Año y Modelos */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {loading ? (
+          <>
+            <ChartSkeleton />
+            <ChartSkeleton />
+          </>
+        ) : (
+          <>
+            {/* Valor total por marca (top 10) */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-primary" />
+                  Valor Total por Marca
+                </CardTitle>
+                <CardDescription>
+                  Suma del valor de venta por marca (top 10)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {valueByMakeChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={valueByMakeChartData} layout="vertical" barSize={22}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                      <XAxis
+                        type="number"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6b7280", fontSize: 12 }}
+                        tickFormatter={(v) => `$${(v / 1000000).toFixed(0)}M`}
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={90}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6b7280", fontSize: 11 }}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload?.[0]) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="bg-background/95 backdrop-blur-sm border border-border p-3 rounded-lg shadow-lg">
+                                <p className="font-medium text-sm">{d.name}</p>
+                                <p className="text-xs text-muted-foreground">Valor total: {d.valorFormato}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                        cursor={{ fill: "transparent" }}
+                      />
+                      <Bar dataKey="valor" fill={COLORS.primary} radius={[0, 4, 4, 0]} name="Valor" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos para mostrar</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Distribución por kilometraje */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gauge className="h-5 w-5 text-primary" />
+                  Distribución por Kilometraje
+                </CardTitle>
+                <CardDescription>
+                  Vehículos por rango de km (solo con kilometraje registrado)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {mileageChartData.some((m) => m.cantidad > 0) ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={mileageChartData} barSize={36}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6b7280", fontSize: 11 }}
+                        dy={10}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#6b7280", fontSize: 12 }} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
+                      <Bar dataKey="cantidad" fill={COLORS.tertiary} radius={[4, 4, 0, 0]} name="Vehículos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos de kilometraje para mostrar</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Distribución por año */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Distribución por Año
+                </CardTitle>
+                <CardDescription>
+                  Cantidad de vehículos por año del modelo
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {yearChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={yearChartData} barSize={28}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6b7280", fontSize: 11 }}
+                        dy={10}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#6b7280", fontSize: 12 }} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
+                      <Bar dataKey="cantidad" fill={COLORS.secondary} radius={[4, 4, 0, 0]} name="Vehículos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos para mostrar</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top 10 Modelos (marca + modelo) */}
+            <Card className="hover:shadow-sm transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  Top 10 Modelos
+                </CardTitle>
+                <CardDescription>
+                  Marcas y modelos con más unidades en inventario
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {topModelsChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={topModelsChartData} layout="vertical" barSize={18}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                      <XAxis type="number" axisLine={false} tickLine={false} hide />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={120}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6b7280", fontSize: 11 }}
+                      />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
+                      <Bar dataKey="cantidad" fill={COLORS.nuevo} radius={[0, 4, 4, 0]} name="Cantidad" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos para mostrar</p>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -989,6 +1289,16 @@ export default function AdvancedInventory() {
               <span className="text-sm font-medium text-slate-600">Costo Total</span>
               <span className="font-bold text-slate-900">{formatCLP(metrics.totalCost)}</span>
             </div>
+            <div className="flex justify-between items-center p-2 rounded hover:bg-slate-50">
+              <span className="text-sm font-medium text-slate-600">Precio Promedio</span>
+              <span className="font-bold text-slate-900">{formatCLP(metrics.avgPrice)}</span>
+            </div>
+            <div className="flex justify-between items-center p-2 rounded hover:bg-slate-50">
+              <span className="text-sm font-medium text-slate-600">Precio Mín / Máx</span>
+              <span className="font-bold text-slate-900 text-right text-xs">
+                {formatCLP(metrics.minPrice)} / {formatCLP(metrics.maxPrice)}
+              </span>
+            </div>
             <div className="border-t pt-2 mt-2">
               <div className="flex justify-between items-center p-2 rounded bg-green-50/50">
                 <span className="text-sm font-medium text-green-700">Margen Total</span>
@@ -999,6 +1309,12 @@ export default function AdvancedInventory() {
               <span className="text-sm text-muted-foreground">Margen Promedio</span>
               <span className="font-semibold text-green-600">{metrics.avgMarginPercent.toFixed(2)}%</span>
             </div>
+            {metrics.vehiclesWithMileage > 0 && (
+              <div className="flex justify-between items-center p-2 border-t">
+                <span className="text-sm text-muted-foreground">Km promedio</span>
+                <span className="font-semibold">{(metrics.avgMileage / 1000).toFixed(1)}k km</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
