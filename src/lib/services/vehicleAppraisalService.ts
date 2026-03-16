@@ -117,57 +117,53 @@ export async function getVehicleAppraisal(
 ): Promise<AppraisalResult> {
   const accessToken = await getAccessToken();
 
-  const valuationInvoke = await supabase.functions.invoke<
-    {
-      tasacion?: AppraisalResult["tasacion"];
-      muestras?: AppraisalResult["muestras"];
-      uf_valor?: number;
-      resumen?: string | null;
+  // Nueva ruta principal: tasación directa vía GetAPI (getapi-appraisal) usando solo la patente.
+  const getapiInvoke = await supabase.functions.invoke<
+    AppraisalResult & {
+      ok?: boolean;
       error?: string;
       blocked?: boolean;
+      vehicle?: Partial<VehicleData>;
+      fuente?: string;
     } & EdgeErrorResponse
-  >("vehicle-valuation", {
+  >("getapi-appraisal", {
     body: {
       patente: vehicle.patente,
-      marca: vehicle.marca,
-      modelo: vehicle.modelo,
-      año: vehicle.año,
-      toleranciaAños,
     },
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
 
-  if (!valuationInvoke.error) {
-    const valuationData = valuationInvoke.data;
-    if (valuationData?.tasacion && Array.isArray(valuationData.muestras)) {
+  if (!getapiInvoke.error) {
+    const payload = getapiInvoke.data;
+    if (payload?.tasacion && Array.isArray(payload.muestras)) {
       return {
-        tasacion: valuationData.tasacion,
-        muestras: valuationData.muestras,
-        uf_valor: Number(valuationData.uf_valor ?? 0),
-        resumen: valuationData.resumen ?? null,
+        tasacion: payload.tasacion,
+        muestras: payload.muestras,
+        uf_valor: Number(payload.uf_valor ?? 0),
+        resumen: payload.resumen ?? null,
       };
     }
-    if (valuationData?.blocked) {
+    if (payload?.blocked) {
       throw new Error(
-        valuationData.error ??
-          "La fuente externa bloqueó la consulta. Intenta nuevamente o usa comparables manuales.",
+        payload.error ??
+          "La fuente externa bloqueó la consulta. Intenta nuevamente o revisa tu API key de GetAPI.",
       );
     }
-    if (valuationData?.error) {
-      throw new Error(valuationData.error);
+    if (payload?.error) {
+      throw new Error(payload.error);
     }
   } else {
-    const rawMessage = (valuationInvoke.error as { message?: string } | null)?.message ?? "";
+    const rawMessage = (getapiInvoke.error as { message?: string } | null)?.message ?? "";
     const missingFunction = /Function not found|404/i.test(rawMessage);
     if (!missingFunction) {
-      const message = await getEdgeErrorMessage(valuationInvoke.error);
+      const message = await getEdgeErrorMessage(getapiInvoke.error);
       throw new Error(message ?? "No fue posible calcular la tasación.");
     }
   }
 
-  // Fallback legacy si vehicle-valuation aún no está desplegada.
+  // Fallback legacy (solo si getapi-appraisal no existe en este proyecto)
   const { data, error } = await supabase.functions.invoke<
     AppraisalResult & EdgeErrorResponse & { source?: string }
   >("vehicle-appraisal", {

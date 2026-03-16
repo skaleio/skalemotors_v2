@@ -423,24 +423,6 @@ Deno.serve(async (req) => {
 
   try {
     try {
-      const boostrResult = await lookupViaBoostr(patente);
-      if (boostrResult) {
-        return jsonResponse(200, boostrResult);
-      }
-    } catch (error) {
-      console.warn("[vehicle-lookup] Boostr falló:", error);
-    }
-
-    try {
-      const autofactResult = await lookupViaAutofactScraper(patente);
-      if (autofactResult) {
-        return jsonResponse(200, autofactResult);
-      }
-    } catch (error) {
-      console.warn("[vehicle-lookup] Autofact scraper falló:", error);
-    }
-
-    try {
       const getApiResult = await lookupViaGetApi(patente);
       if (getApiResult) {
         return jsonResponse(200, getApiResult);
@@ -449,20 +431,10 @@ Deno.serve(async (req) => {
       console.warn("[vehicle-lookup] GetAPI falló:", error);
     }
 
-    let chileautosResult: VehicleLookupResult | null = null;
-    try {
-      chileautosResult = await lookupViaChileAutos(patente);
-    } catch (e) {
-      console.warn("[vehicle-lookup] ChileAutos falló:", e instanceof Error ? e.message : e);
-    }
-    if (chileautosResult) {
-      return jsonResponse(200, chileautosResult);
-    }
-
-    // 200 con found: false para que el cliente reciba data y muestre el formulario manual
     return jsonResponse(200, {
       found: false,
-      error: "No se encontraron datos del vehículo para esa patente. Puedes continuar con datos manuales.",
+      error:
+        "No se encontraron datos del vehículo para esa patente en GetAPI. Puedes continuar con datos manuales.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
