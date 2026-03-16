@@ -97,6 +97,7 @@ const menuCategories = [
       { title: "Inventario", url: "/app/inventory", icon: Car },
       { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
       { title: "Inventario Avanzado", url: "/app/inventory-advanced", icon: Activity },
+      { title: "Tasación", url: "/app/tasacion", icon: Calculator },
       { title: "Publicaciones", url: "/app/listings", icon: Globe },
       { title: "Búsqueda de Autos", url: "/app/chileautos-scraper", icon: Search },
     ]

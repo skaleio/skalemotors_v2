@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/playwright/python:v1.54.0-noble
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY manual_test.py .
+
+ENV PORT=8001
+
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

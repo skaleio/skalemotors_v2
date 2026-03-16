@@ -40,6 +40,7 @@ const TradeIn = lazy(() => import("./pages/TradeIn"));
 const Deliveries = lazy(() => import("./pages/Deliveries"));
 const Listings = lazy(() => import("./pages/Listings"));
 const ChileAutosScraper = lazy(() => import("./pages/ChileAutosScraper"));
+const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
 const Messages = lazy(() => import("./pages/Messages"));
 const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -291,6 +292,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <ChileAutosScraper />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/tasacion" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <VehicleAppraisal />
                   </Layout>
                 </ProtectedRoute>
               } />

@@ -75,3 +75,8 @@ test_*.sql
 DEBUG_*.md
 FIX_*.md
 CHECKPOINT_*.md
+
+# Python services
+.venv/
+__pycache__/
+*.pyc

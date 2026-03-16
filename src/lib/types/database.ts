@@ -827,6 +827,68 @@ export interface Database {
           updated_at?: string
         }
       }
+      vehicle_appraisals: {
+        Row: {
+          id: string
+          branch_id: string | null
+          user_id: string | null
+          patente: string
+          marca: string | null
+          modelo: string | null
+          anio: number | null
+          motor: string | null
+          combustible: string | null
+          precio_minimo: number | null
+          precio_promedio: number | null
+          precio_maximo: number | null
+          precio_mediana: number | null
+          total_muestras: number | null
+          confianza: string | null
+          muestras: Json | null
+          uf_valor: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          patente: string
+          marca?: string | null
+          modelo?: string | null
+          anio?: number | null
+          motor?: string | null
+          combustible?: string | null
+          precio_minimo?: number | null
+          precio_promedio?: number | null
+          precio_maximo?: number | null
+          precio_mediana?: number | null
+          total_muestras?: number | null
+          confianza?: string | null
+          muestras?: Json | null
+          uf_valor?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          user_id?: string | null
+          patente?: string
+          marca?: string | null
+          modelo?: string | null
+          anio?: number | null
+          motor?: string | null
+          combustible?: string | null
+          precio_minimo?: number | null
+          precio_promedio?: number | null
+          precio_maximo?: number | null
+          precio_mediana?: number | null
+          total_muestras?: number | null
+          confianza?: string | null
+          muestras?: Json | null
+          uf_valor?: number | null
+          created_at?: string
+        }
+      }
       messages: {
         Row: {
           id: string
