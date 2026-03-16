@@ -454,9 +454,9 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-2">
             {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.totalVehicles || 0}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
+            <div className="text-xs text-muted-foreground font-medium">
               {!stats ? <Skeleton className="h-4 w-24" /> : `${stats.availableVehicles || 0} disponibles`}
-            </p>
+            </div>
           </CardContent>
         </Card>
 

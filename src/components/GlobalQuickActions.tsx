@@ -32,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
@@ -450,11 +452,14 @@ export function GlobalQuickActions() {
   return (
     <>
     <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-      <DialogContent className={`max-w-4xl min-h-[75vh] max-h-[90vh] border-0 backdrop-blur-sm shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
-        theme === 'dark' 
-          ? 'bg-slate-800/95 border-slate-700' 
-          : 'bg-white/95'
-      }`}>
+      <DialogContent
+        className={`max-w-4xl min-h-[75vh] max-h-[90vh] border-0 backdrop-blur-sm shadow-2xl p-0 overflow-hidden flex flex-col rounded-2xl ${
+          theme === 'dark' 
+            ? 'bg-slate-800/95 border-slate-700' 
+            : 'bg-white/95'
+        }`}
+        aria-describedby={undefined}
+      >
         {/* Header + Buscador compactos en un solo bloque */}
         <div className={`px-4 pt-4 pb-3 flex-shrink-0 border-b ${
           theme === 'dark' ? 'border-slate-600/50' : 'border-gray-100/50'
@@ -464,14 +469,16 @@ export function GlobalQuickActions() {
               <Command className="h-4 w-4 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className={`text-lg font-semibold leading-tight ${
+              <DialogTitle className={`text-lg font-semibold leading-tight ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>Acciones Rápidas</h2>
-              <p className={`text-xs truncate ${
+              }`}>
+                Acciones Rápidas
+              </DialogTitle>
+              <DialogDescription className={`text-xs truncate ${
                 theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
               }`}>
                 Busca y ejecuta funciones rápidamente
-              </p>
+              </DialogDescription>
             </div>
           </div>
           <div className="relative group">

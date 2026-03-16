@@ -30,6 +30,7 @@ export interface AppraisalResult {
     url: string;
   }[];
   uf_valor: number;
+  resumen?: string | null;
 }
 
 type EdgeErrorResponse = {
@@ -48,15 +49,18 @@ function isFreshWithin24Hours(createdAt: string): boolean {
 }
 
 async function getAccessToken(): Promise<string> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const token = session?.access_token;
-  if (!token) {
-    throw new Error("Tu sesión expiró. Vuelve a iniciar sesión para usar la tasación.");
+  // Refrescar y usar solo la sesión nueva; no usar caché (getSession) que puede tener JWT ya inválido en servidor
+  const { data, error } = await supabase.auth.refreshSession();
+  const session = data?.session;
+  if (error || !session?.access_token) {
+    throw new Error("Tu sesión expiró o no es válida. Cierra sesión y vuelve a iniciar sesión para usar la tasación.");
   }
-  return token;
+  // Actualizar sesión en el cliente para que futuras llamadas usen el mismo token
+  await supabase.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token ?? "",
+  });
+  return session.access_token;
 }
 
 async function getEdgeErrorMessage(error: unknown): Promise<string | null> {
@@ -64,9 +68,12 @@ async function getEdgeErrorMessage(error: unknown): Promise<string | null> {
     const edgeError = error as { context?: Response; message?: string };
     const response = edgeError?.context;
     const msg = edgeError?.message ?? "";
+    if (response?.status === 401) {
+      return "Sesión expirada o no válida. Cierra sesión y vuelve a iniciar sesión, luego intenta de nuevo.";
+    }
     // Función no desplegada o URL incorrecta
     if (/Function not found|404|failed to fetch|Load failed|NetworkError/i.test(msg)) {
-      return "La función no está desplegada en Supabase. En la terminal ejecuta: npx supabase functions deploy vehicle-lookup";
+      return "La función no está desplegada en Supabase o no es accesible. Despliega/actualiza funciones con: npx supabase functions deploy <nombre-funcion>";
     }
     if (response) {
       const payload = (await response.json()) as EdgeErrorResponse;
@@ -96,8 +103,9 @@ export async function lookupVehicleByPatente(patente: string): Promise<VehicleDa
     throw new Error(message ?? "No fue posible consultar la patente. Revisa que la función vehicle-lookup esté desplegada.");
   }
 
-  if (!data || "found" in data) {
-    throw new Error("No se encontraron datos para esa patente. Puedes continuar con datos manuales.");
+  if (!data || ("found" in data && !(data as { found?: boolean }).found)) {
+    const msg = (data as { error?: string })?.error ?? "No se encontraron datos para esa patente. Puedes continuar con datos manuales.";
+    throw new Error(msg);
   }
 
   return data;
@@ -108,6 +116,58 @@ export async function getVehicleAppraisal(
   toleranciaAños = 2,
 ): Promise<AppraisalResult> {
   const accessToken = await getAccessToken();
+
+  const valuationInvoke = await supabase.functions.invoke<
+    {
+      tasacion?: AppraisalResult["tasacion"];
+      muestras?: AppraisalResult["muestras"];
+      uf_valor?: number;
+      resumen?: string | null;
+      error?: string;
+      blocked?: boolean;
+    } & EdgeErrorResponse
+  >("vehicle-valuation", {
+    body: {
+      patente: vehicle.patente,
+      marca: vehicle.marca,
+      modelo: vehicle.modelo,
+      año: vehicle.año,
+      toleranciaAños,
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!valuationInvoke.error) {
+    const valuationData = valuationInvoke.data;
+    if (valuationData?.tasacion && Array.isArray(valuationData.muestras)) {
+      return {
+        tasacion: valuationData.tasacion,
+        muestras: valuationData.muestras,
+        uf_valor: Number(valuationData.uf_valor ?? 0),
+        resumen: valuationData.resumen ?? null,
+      };
+    }
+    if (valuationData?.blocked) {
+      throw new Error(
+        valuationData.error ??
+          "La fuente externa bloqueó la consulta. Intenta nuevamente o usa comparables manuales.",
+      );
+    }
+    if (valuationData?.error) {
+      throw new Error(valuationData.error);
+    }
+  } else {
+    const rawMessage = (valuationInvoke.error as { message?: string } | null)?.message ?? "";
+    const missingFunction = /Function not found|404/i.test(rawMessage);
+    if (!missingFunction) {
+      const message = await getEdgeErrorMessage(valuationInvoke.error);
+      throw new Error(message ?? "No fue posible calcular la tasación.");
+    }
+  }
+
+  // Fallback legacy si vehicle-valuation aún no está desplegada.
   const { data, error } = await supabase.functions.invoke<
     AppraisalResult & EdgeErrorResponse & { source?: string }
   >("vehicle-appraisal", {

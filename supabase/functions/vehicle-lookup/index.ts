@@ -237,7 +237,7 @@ async function fetchViaScraperApi(url: string) {
   const apiKey = Deno.env.get("SCRAPER_API_KEY");
   if (!apiKey) return null;
 
-  const proxyUrl = `https://api.scraperapi.com?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}`;
+  const proxyUrl = `https://api.scraperapi.com?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&render=true`;
   const response = await fetchWithTimeout(
     proxyUrl,
     {
@@ -367,11 +367,30 @@ async function lookupViaChileAutos(patente: string): Promise<VehicleLookupResult
       lowered.includes("cloudflare") ||
       lowered.includes("attention required")
     ) {
+      try {
+        const htmlFromProxy = await fetchViaScraperApi(url);
+        if (htmlFromProxy) {
+          const foundViaProxy = extractVehicleFromListing(htmlFromProxy, patente);
+          if (foundViaProxy) return foundViaProxy;
+        }
+      } catch (e) {
+        console.warn("[vehicle-lookup] proxy tras captcha falló:", e);
+      }
       throw new Error("ChileAutos devolvió una página de protección anti-bot");
     }
 
-    const found = extractVehicleFromListing(html, patente);
+    let found = extractVehicleFromListing(html, patente);
     if (found) return found;
+    // Directo no encontró la patente; intentar por proxy por si el HTML era incompleto
+    try {
+      const htmlFromProxy = await fetchViaScraperApi(url);
+      if (htmlFromProxy) {
+        found = extractVehicleFromListing(htmlFromProxy, patente);
+        if (found) return found;
+      }
+    } catch (e) {
+      console.warn("[vehicle-lookup] proxy fallback (sin resultado directo) falló:", e);
+    }
   }
 
   return null;
@@ -430,14 +449,20 @@ Deno.serve(async (req) => {
       console.warn("[vehicle-lookup] GetAPI falló:", error);
     }
 
-    const chileautosResult = await lookupViaChileAutos(patente);
+    let chileautosResult: VehicleLookupResult | null = null;
+    try {
+      chileautosResult = await lookupViaChileAutos(patente);
+    } catch (e) {
+      console.warn("[vehicle-lookup] ChileAutos falló:", e instanceof Error ? e.message : e);
+    }
     if (chileautosResult) {
       return jsonResponse(200, chileautosResult);
     }
 
-    return jsonResponse(404, {
+    // 200 con found: false para que el cliente reciba data y muestre el formulario manual
+    return jsonResponse(200, {
       found: false,
-      error: "No se encontraron datos del vehículo para esa patente.",
+      error: "No se encontraron datos del vehículo para esa patente. Puedes continuar con datos manuales.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";

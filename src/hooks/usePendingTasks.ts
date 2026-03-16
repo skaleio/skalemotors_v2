@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Database } from '@/lib/types/database'
 
 export type PendingTask = Database['public']['Tables']['pending_tasks']['Row']
+const ENABLE_PENDING_TASK_SYNC_RPCS = false
 
 export function usePendingTasks(branchId: string | undefined) {
   const queryClient = useQueryClient()
@@ -11,14 +12,18 @@ export function usePendingTasks(branchId: string | undefined) {
     queryKey: ['pending-tasks', branchId],
     queryFn: async (): Promise<PendingTask[]> => {
       if (!branchId) return []
-      // Sincronizar recordatorios: entran en Tareas pendientes 2 días antes de la fecha
-      await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
-        if (error) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
-      })
-      // Avisos: vehículos mucho tiempo en inventario sin modificar (45+ días, sin cambios 30+ días)
-      await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
-        if (error) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
-      })
+      if (ENABLE_PENDING_TASK_SYNC_RPCS) {
+        // Sincronizar recordatorios (opcional: si la RPC no existe en el proyecto, se omite)
+        await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
+        })
+        // Avisos: vehículos mucho tiempo en inventario (opcional: si la RPC no existe, se omite)
+        await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
+        })
+      }
       const { data, error } = await supabase
         .from('pending_tasks')
         .select('*')

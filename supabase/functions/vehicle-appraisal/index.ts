@@ -302,7 +302,8 @@ async function fetchViaScraperApi(url: string) {
   const apiKey = Deno.env.get("SCRAPER_API_KEY");
   if (!apiKey) return null;
 
-  const proxyUrl = `https://api.scraperapi.com?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}`;
+  // render=true para sitios que cargan listados con JavaScript (ChileAutos/Yapo)
+  const proxyUrl = `https://api.scraperapi.com?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&render=true`;
   const response = await fetchWithTimeout(proxyUrl, {
     headers: {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -345,6 +346,9 @@ Deno.serve(async (req) => {
   const fromYear = año - toleranciaAños;
   const toYear = año + toleranciaAños;
 
+  const hasScraperApi = Boolean(Deno.env.get("SCRAPER_API_KEY"));
+  console.log("[vehicle-appraisal] Solicitud:", { marca, modelo, año, toleranciaAños, hasScraperApi });
+
   try {
     const ufValor = await getUfValue();
     const chileautosUrl = buildChileAutosUrl(marca, modelo, año, toleranciaAños);
@@ -356,7 +360,8 @@ Deno.serve(async (req) => {
       : parseChileAutosListings(directResult.html, fromYear, toYear);
     let source = "chileautos";
 
-    if (parsedListings.length === 0 && directBlocked) {
+    // Si directo no dio resultados (bloqueado o HTML sin listados), intentar ScraperAPI
+    if (parsedListings.length === 0) {
       try {
         const proxyResult = await fetchViaScraperApi(chileautosUrl);
         if (proxyResult && !isBlocked(proxyResult.response.status, proxyResult.html)) {
@@ -366,7 +371,7 @@ Deno.serve(async (req) => {
           }
         }
       } catch (error) {
-        console.warn("[vehicle-appraisal] proxy fallback falló:", error);
+        console.warn("[vehicle-appraisal] ChileAutos proxy fallback falló:", error);
       }
     }
 
@@ -387,17 +392,36 @@ Deno.serve(async (req) => {
     }
 
     if (parsedListings.length === 0) {
+      // Intentar Yapo por proxy si hay API key (ChileAutos ya falló o bloqueó)
+      try {
+        const apiKey = Deno.env.get("SCRAPER_API_KEY");
+        if (apiKey) {
+          const yapoUrl = buildYapoUrl(marca, modelo);
+          const proxyResult = await fetchViaScraperApi(yapoUrl);
+          if (proxyResult && !isBlocked(proxyResult.response.status, proxyResult.html)) {
+            const yapoListings = parseYapoListings(proxyResult.html, fromYear, toYear);
+            if (yapoListings.length > 0) {
+              parsedListings = yapoListings;
+              source = "yapo-proxy";
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[vehicle-appraisal] Yapo proxy fallback falló:", e);
+      }
+    }
+
+    if (parsedListings.length === 0) {
       if (directBlocked) {
         return jsonResponse(200, {
           blocked: true,
           source: "chileautos",
           error:
-            "ChileAutos bloqueó la consulta y no hubo resultados válidos en los respaldos. Reintenta con proxy externo o usa comparables manuales.",
+            "ChileAutos bloqueó la consulta y no hubo resultados válidos en los respaldos. Configura SCRAPER_API_KEY en Supabase o intenta más tarde.",
         });
       }
 
-      return jsonResponse(404, {
-        ok: false,
+      return jsonResponse(200, {
         error:
           "No se encontraron anuncios comparables para ese vehículo. Intenta ampliar la tolerancia de años o usar comparables manuales.",
       });
@@ -420,8 +444,7 @@ Deno.serve(async (req) => {
       .slice(0, 20);
 
     if (muestras.length === 0) {
-      return jsonResponse(404, {
-        ok: false,
+      return jsonResponse(200, {
         error: "Se encontraron anuncios, pero no fue posible extraer precios válidos.",
       });
     }
