@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
 
 export interface VehicleData {
   patente: string;
@@ -88,112 +88,91 @@ async function getEdgeErrorMessage(error: unknown): Promise<string | null> {
   return null;
 }
 
-export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
-  const normalizedPatente = normalizePatente(patente);
-  const accessToken = await getAccessToken();
-  const { data, error } = await supabase.functions.invoke<VehicleData & EdgeErrorResponse>("vehicle-lookup", {
-    body: { patente: normalizedPatente },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+/** Respuesta de una sola petición GetAPI (vehículo + tasación por patente) */
+export interface AppraisalByPatenteResult {
+  vehicle: VehicleData;
+  appraisal: AppraisalResult;
+}
 
-  if (error) {
-    const message = await getEdgeErrorMessage(error);
-    throw new Error(message ?? "No fue posible consultar la patente. Revisa que la función vehicle-lookup esté desplegada.");
+/**
+ * Una sola petición: llama a la Edge Function getapi-appraisal (que hace GET GetAPI appraisal/{patente}).
+ * Usa fetch + anon key para no depender de la sesión del usuario (evita 401).
+ */
+export async function getAppraisalByPatente(patente: string): Promise<AppraisalByPatenteResult> {
+  const normalizedPatente = normalizePatente(patente);
+  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
   }
 
-  if (!data || ("found" in data && !(data as { found?: boolean }).found)) {
-    const msg = (data as { error?: string })?.error ?? "No se encontraron datos para esa patente. Puedes continuar con datos manuales.";
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Faltan variables de Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
+  }
+
+  const url = `${supabaseUrl}/functions/v1/getapi-appraisal`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ patente: normalizedPatente }),
+  });
+
+  const data = (await res.json().catch(() => null)) as
+    | (AppraisalResult & { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse)
+    | null;
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(
+        "La función de tasación rechazó la petición. Revisa en Supabase que getapi-appraisal esté desplegada y que la anon key sea correcta.",
+      );
+    }
+    const msg = data?.error ?? `Error ${res.status} al obtener la tasación.`;
     throw new Error(msg);
   }
 
-  return data;
+  if (!data?.tasacion || !Array.isArray(data.muestras)) {
+    const msg = data?.error ?? "GetAPI no devolvió tasación para esa patente.";
+    throw new Error(msg);
+  }
+
+  const vehicleFromApi = data.vehicle;
+  const vehicle: VehicleData = {
+    patente: normalizedPatente,
+    marca: vehicleFromApi?.marca ?? "",
+    modelo: vehicleFromApi?.modelo ?? "",
+    año: vehicleFromApi?.año ?? 0,
+    motor: vehicleFromApi?.motor ?? null,
+    combustible: vehicleFromApi?.combustible ?? null,
+    transmision: vehicleFromApi?.transmision ?? null,
+    fuente: "getapi",
+  };
+
+  const appraisal: AppraisalResult = {
+    tasacion: data.tasacion,
+    muestras: data.muestras,
+    uf_valor: Number(data.uf_valor ?? 0),
+    resumen: data.resumen ?? null,
+  };
+
+  return { vehicle, appraisal };
 }
 
+/** @deprecated Usar getAppraisalByPatente(patente) para flujo simplificado */
+export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
+  const result = await getAppraisalByPatente(patente);
+  return result.vehicle;
+}
+
+/** @deprecated Usar getAppraisalByPatente(patente) y usar result.appraisal */
 export async function getVehicleAppraisal(
   vehicle: VehicleData,
-  toleranciaAños = 2,
+  _toleranciaAños = 2,
 ): Promise<AppraisalResult> {
-  const accessToken = await getAccessToken();
-
-  // Nueva ruta principal: tasación directa vía GetAPI (getapi-appraisal) usando solo la patente.
-  const getapiInvoke = await supabase.functions.invoke<
-    AppraisalResult & {
-      ok?: boolean;
-      error?: string;
-      blocked?: boolean;
-      vehicle?: Partial<VehicleData>;
-      fuente?: string;
-    } & EdgeErrorResponse
-  >("getapi-appraisal", {
-    body: {
-      patente: vehicle.patente,
-    },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!getapiInvoke.error) {
-    const payload = getapiInvoke.data;
-    if (payload?.tasacion && Array.isArray(payload.muestras)) {
-      return {
-        tasacion: payload.tasacion,
-        muestras: payload.muestras,
-        uf_valor: Number(payload.uf_valor ?? 0),
-        resumen: payload.resumen ?? null,
-      };
-    }
-    if (payload?.blocked) {
-      throw new Error(
-        payload.error ??
-          "La fuente externa bloqueó la consulta. Intenta nuevamente o revisa tu API key de GetAPI.",
-      );
-    }
-    if (payload?.error) {
-      throw new Error(payload.error);
-    }
-  } else {
-    const rawMessage = (getapiInvoke.error as { message?: string } | null)?.message ?? "";
-    const missingFunction = /Function not found|404/i.test(rawMessage);
-    if (!missingFunction) {
-      const message = await getEdgeErrorMessage(getapiInvoke.error);
-      throw new Error(message ?? "No fue posible calcular la tasación.");
-    }
-  }
-
-  // Fallback legacy (solo si getapi-appraisal no existe en este proyecto)
-  const { data, error } = await supabase.functions.invoke<
-    AppraisalResult & EdgeErrorResponse & { source?: string }
-  >("vehicle-appraisal", {
-    body: {
-      marca: vehicle.marca,
-      modelo: vehicle.modelo,
-      año: vehicle.año,
-      toleranciaAños,
-    },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (error) {
-    const message = await getEdgeErrorMessage(error);
-    throw new Error(message ?? "No fue posible calcular la tasación.");
-  }
-
-  if (!data?.tasacion || !Array.isArray(data.muestras)) {
-    if (data?.blocked) {
-      throw new Error(
-        data.error ??
-          "La fuente externa bloqueó la consulta. Intenta nuevamente o usa un flujo manual.",
-      );
-    }
-    throw new Error(data?.error ?? "La función devolvió una respuesta inválida.");
-  }
-
-  return data;
+  const result = await getAppraisalByPatente(vehicle.patente);
+  return result.appraisal;
 }
 
 export async function getCachedAppraisal(

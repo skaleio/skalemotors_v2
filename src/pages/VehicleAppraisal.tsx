@@ -25,9 +25,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCLP } from "@/lib/format";
 import {
+  getAppraisalByPatente,
   getCachedAppraisal,
-  getVehicleAppraisal,
-  lookupVehicleByPatente,
   saveAppraisal,
   type AppraisalResult,
   type VehicleData,
@@ -54,16 +53,12 @@ function isValidPatente(value: string): boolean {
 
 function getFuenteLabel(source: string): string {
   switch (source) {
-    case "autofact":
-      return "Autofact";
-    case "boostr":
-      return "Boostr";
-    case "chileautos":
-      return "ChileAutos";
+    case "getapi":
+      return "Mercado";
     case "manual":
       return "Manual";
     default:
-      return source || "Desconocida";
+      return "Mercado";
   }
 }
 
@@ -191,7 +186,8 @@ export default function VehicleAppraisal() {
     });
   };
 
-  const handleLookup = async () => {
+  // Una sola petición: patente → GetAPI appraisal → vehículo + tasación
+  const handleObtenerTasacion = async () => {
     if (!patenteValida) {
       toast.error("Ingresa una patente chilena válida, por ejemplo ABCD12.");
       return;
@@ -199,17 +195,26 @@ export default function VehicleAppraisal() {
 
     setLookupLoading(true);
     setAppraisal(null);
+    setVehicle(null);
     setUsingCached(false);
     setCachedDate(null);
     setLookupError(null);
+    setManualFormOpen(false);
 
     try {
-      const vehicleData = await lookupVehicleByPatente(normalizedPatente);
-      setVehicle(vehicleData);
-
       if (branchId) {
         const cached = await getCachedAppraisal(normalizedPatente, branchId);
         if (cached) {
+          setVehicle({
+            patente: normalizedPatente,
+            marca: "",
+            modelo: "",
+            año: 0,
+            motor: null,
+            combustible: null,
+            transmision: null,
+            fuente: "getapi",
+          });
           setAppraisal(cached);
           setUsingCached(true);
           setCachedDate(cached.tasacion.fecha_consulta);
@@ -219,44 +224,18 @@ export default function VehicleAppraisal() {
         }
       }
 
-      setStep(2);
-      toast.success("Vehículo encontrado correctamente.");
+      const { vehicle: v, appraisal: a } = await getAppraisalByPatente(normalizedPatente);
+      setVehicle(v);
+      setAppraisal(a);
+      setCachedDate(a.tasacion.fecha_consulta);
+      setStep(3);
+      toast.success("Tasación obtenida correctamente.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo consultar la patente.";
+      const message = error instanceof Error ? error.message : "No se pudo obtener la tasación.";
       setLookupError(message);
       toast.error(message);
-      setVehicle(null);
-      setManualFormOpen(true);
-      setManualMarca("");
-      setManualModelo("");
-      setManualAnio("");
-      setManualMotor("");
-      setManualCombustible("");
     } finally {
       setLookupLoading(false);
-    }
-  };
-
-  const handleAppraise = async () => {
-    if (!vehicle) {
-      toast.error("Primero debes confirmar los datos del vehículo.");
-      return;
-    }
-
-    setAppraisalLoading(true);
-
-    try {
-      const result = await getVehicleAppraisal(vehicle, Number(toleranciaAnios));
-      setAppraisal(result);
-      setUsingCached(false);
-      setCachedDate(result.tasacion.fecha_consulta);
-      setStep(3);
-      toast.success("Tasación calculada con datos del mercado.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo calcular la tasación.";
-      toast.error(message);
-    } finally {
-      setAppraisalLoading(false);
     }
   };
 
@@ -323,57 +302,57 @@ export default function VehicleAppraisal() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="space-y-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
-                <Calculator className="h-6 w-6" />
-              </div>
-              <div>
-                <CardTitle className="text-2xl">Tasación de Vehículos</CardTitle>
-                <CardDescription>
-                  Consulta una patente, confirma los datos del vehículo y calcula una tasación con comparables reales.
-                </CardDescription>
-              </div>
-            </div>
+    <div className="space-y-6 pb-8">
+      <div className="flex flex-col gap-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25">
+            <Calculator className="h-7 w-7" />
           </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tasación de Vehículos</h1>
+            <p className="mt-1 text-slate-600">
+              Ingresa una patente chilena y obtén el valor de mercado estimado al instante.
+            </p>
+          </div>
+        </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            {steps.map((item) => {
-              const active = step === item.id;
-              const done = step > item.id;
-              return (
-                <div
-                  key={item.id}
-                  className={`rounded-xl border px-4 py-3 ${
-                    active
-                      ? "border-blue-300 bg-blue-50"
-                      : done
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-white"
+        <div className="flex gap-2 rounded-xl bg-slate-100/80 p-1.5">
+          {steps.map((item) => {
+            const active = step === item.id;
+            const done = step > item.id;
+            return (
+              <div
+                key={item.id}
+                className={`flex flex-1 items-center gap-2 rounded-lg px-4 py-2.5 transition-colors ${
+                  active
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : done
+                      ? "text-emerald-700"
+                      : "text-slate-500"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                    active ? "bg-blue-600 text-white" : done ? "bg-emerald-100" : "bg-slate-200"
                   }`}
                 >
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Paso {item.id}
-                  </div>
-                  <div className="mt-1 font-semibold text-slate-900">{item.title}</div>
-                </div>
-              );
-            })}
-          </div>
-        </CardHeader>
-      </Card>
+                  {done ? "✓" : item.id}
+                </span>
+                <span className="font-medium">{item.title}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      <Card className="shadow-sm">
+      <Card className="border-slate-200/80 shadow-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5 text-blue-600" />
-            Paso 1: Ingreso de patente
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Search className="h-5 w-5 text-slate-600" />
+            Ingreso de patente
           </CardTitle>
           <CardDescription>
-            Ingresa una patente chilena en formato moderno para buscar automáticamente el vehículo.
+            Patente chilena en formato actual (4 letras y 2 números). Ej: ABCD12
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -395,12 +374,12 @@ export default function VehicleAppraisal() {
               )}
             </div>
             <Button
-              onClick={handleLookup}
-              className="h-12 w-full"
+              onClick={handleObtenerTasacion}
+              className="h-12 w-full bg-blue-600 hover:bg-blue-700"
               disabled={lookupLoading || !patenteValida}
             >
-              {lookupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              Buscar vehículo
+              {lookupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
+              Obtener tasación
             </Button>
 
             {lookupError && (
@@ -472,14 +451,14 @@ export default function VehicleAppraisal() {
       </Card>
 
       {(lookupLoading || (step >= 2 && vehicle)) && (
-        <Card className="shadow-sm">
+        <Card className="border-slate-200/80 shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CarFront className="h-5 w-5 text-blue-600" />
-              Paso 2: Confirmación del vehículo
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <CarFront className="h-5 w-5 text-slate-600" />
+              Datos del vehículo
             </CardTitle>
             <CardDescription>
-              Revisa los datos detectados, corrígelos si hace falta y elige la tolerancia de años.
+              Revisa o corrige los datos si es necesario.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -493,12 +472,12 @@ export default function VehicleAppraisal() {
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="secondary" className="px-3 py-1">
-                    Fuente: {getFuenteLabel(vehicle.fuente)}
+                  <Badge variant="secondary" className="px-3 py-1.5 text-slate-600">
+                    Patente {vehicle.patente}
                   </Badge>
-                  <Badge variant="outline" className="px-3 py-1">
-                    Patente: {vehicle.patente}
-                  </Badge>
+                  <span className="text-sm text-slate-500">
+                    Datos del vehículo
+                  </span>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -599,13 +578,13 @@ export default function VehicleAppraisal() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button onClick={handleAppraise} disabled={appraisalLoading}>
-                    {appraisalLoading ? (
+                  <Button onClick={handleObtenerTasacion} disabled={lookupLoading}>
+                    {lookupLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Calculator className="mr-2 h-4 w-4" />
                     )}
-                    Tasar este vehículo
+                    Actualizar tasación
                   </Button>
                   <Button variant="outline" onClick={resetAll}>
                     Cambiar patente
@@ -619,14 +598,14 @@ export default function VehicleAppraisal() {
 
       {(appraisalLoading || appraisal) && (
         <div className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-blue-600" />
-                Paso 3: Resultado de la tasación
+          <Card className="border-slate-200/80 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calculator className="h-5 w-5 text-slate-600" />
+                Resultado de la tasación
               </CardTitle>
               <CardDescription>
-                Comparables de mercado obtenidos desde fuentes externas y convertidos a CLP.
+                Valor de mercado estimado según datos actuales. Precios en pesos chilenos.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -644,38 +623,38 @@ export default function VehicleAppraisal() {
                       <div className="text-sm text-amber-900">
                         Usando datos del {new Date(cachedDate).toLocaleString("es-CL")}. ¿Actualizar?
                       </div>
-                      <Button variant="outline" onClick={handleAppraise} disabled={appraisalLoading}>
+                      <Button variant="outline" onClick={handleObtenerTasacion} disabled={lookupLoading}>
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        Re-scrapear
+                        Volver a consultar
                       </Button>
                     </div>
                   )}
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <Card className={getKpiTone("min")}>
-                      <CardContent className="pt-6">
-                        <div className="text-sm text-slate-600">Precio mínimo</div>
-                        <div className="mt-2 text-2xl font-bold">{formatCLP(appraisal.tasacion.precio_minimo)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("min")} shadow-sm`}>
+                      <CardContent className="pt-6 pb-6">
+                        <div className="text-sm font-medium text-slate-600">Precio mínimo</div>
+                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_minimo)}</div>
                       </CardContent>
                     </Card>
-                    <Card className={getKpiTone("avg")}>
-                      <CardContent className="pt-6">
-                        <div className="text-sm text-slate-600">Precio promedio</div>
-                        <div className="mt-2 text-3xl font-bold text-blue-700">
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("avg")} shadow-md`}>
+                      <CardContent className="pt-6 pb-6">
+                        <div className="text-sm font-medium text-slate-600">Precio promedio</div>
+                        <div className="mt-2 text-3xl font-bold tracking-tight text-blue-700">
                           {formatCLP(appraisal.tasacion.precio_promedio)}
                         </div>
                       </CardContent>
                     </Card>
-                    <Card className={getKpiTone("max")}>
-                      <CardContent className="pt-6">
-                        <div className="text-sm text-slate-600">Precio máximo</div>
-                        <div className="mt-2 text-2xl font-bold">{formatCLP(appraisal.tasacion.precio_maximo)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("max")} shadow-sm`}>
+                      <CardContent className="pt-6 pb-6">
+                        <div className="text-sm font-medium text-slate-600">Precio máximo</div>
+                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_maximo)}</div>
                       </CardContent>
                     </Card>
-                    <Card className={getKpiTone("median")}>
-                      <CardContent className="pt-6">
-                        <div className="text-sm text-slate-600">Mediana</div>
-                        <div className="mt-2 text-2xl font-bold">{formatCLP(appraisal.tasacion.precio_mediana)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("median")} shadow-sm`}>
+                      <CardContent className="pt-6 pb-6">
+                        <div className="text-sm font-medium text-slate-600">Mediana</div>
+                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_mediana)}</div>
                       </CardContent>
                     </Card>
                   </div>
