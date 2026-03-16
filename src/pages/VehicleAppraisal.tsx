@@ -471,114 +471,143 @@ export default function VehicleAppraisal() {
               </div>
             ) : (
               <>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="secondary" className="px-3 py-1.5 text-slate-600">
-                    Patente {vehicle.patente}
-                  </Badge>
-                  <span className="text-sm text-slate-500">
-                    Datos del vehículo
-                  </span>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="marca">Marca</Label>
-                    <Input
-                      id="marca"
-                      value={vehicle.marca}
-                      onChange={(event) => handleVehicleFieldChange("marca", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="modelo">Modelo</Label>
-                    <Input
-                      id="modelo"
-                      value={vehicle.modelo}
-                      onChange={(event) => handleVehicleFieldChange("modelo", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="anio">Año</Label>
-                    <Input
-                      id="anio"
-                      type="number"
-                      min={1990}
-                      max={2035}
-                      value={vehicle.año}
-                      onChange={(event) => handleVehicleFieldChange("año", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="motor">Motor</Label>
-                    <Input
-                      id="motor"
-                      value={vehicle.motor ?? ""}
-                      onChange={(event) => handleVehicleFieldChange("motor", event.target.value)}
-                      placeholder="Ej: 1.8"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="combustible">Combustible</Label>
-                    <Input
-                      id="combustible"
-                      value={vehicle.combustible ?? ""}
-                      onChange={(event) => handleVehicleFieldChange("combustible", event.target.value)}
-                      placeholder="Ej: Gasolina"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="transmision">Transmisión</Label>
-                    <Input
-                      id="transmision"
-                      value={vehicle.transmision ?? ""}
-                      onChange={(event) => handleVehicleFieldChange("transmision", event.target.value)}
-                      placeholder="Ej: Automática"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="kilometraje">Kilometraje</Label>
-                    <Input
-                      id="kilometraje"
-                      type="number"
-                      min={0}
-                      placeholder="Ej: 45000"
-                      value={kilometraje}
-                      onChange={(e) => setKilometraje(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">Opcional. Se usa para comparar con vehículos similares en el mercado.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Estado general</Label>
-                    <Select value={estadoGeneral} onValueChange={(v) => setEstadoGeneral(v as "excelente" | "bueno" | "regular")}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="excelente">Excelente</SelectItem>
-                        <SelectItem value="bueno">Bueno</SelectItem>
-                        <SelectItem value="regular">Regular</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">Afecta la tasación respecto al promedio de mercado.</p>
+                {/* Resumen del vehículo */}
+                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-lg bg-slate-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-white">
+                      {vehicle.patente}
+                    </span>
+                    <span className="text-lg font-semibold text-slate-800">
+                      {[vehicle.marca, vehicle.modelo, vehicle.año].filter(Boolean).join(" · ") || "Sin datos"}
+                    </span>
                   </div>
                 </div>
 
-                <div className="max-w-xs space-y-2">
-                  <Label>Tolerancia de años</Label>
-                  <Select value={toleranciaAnios} onValueChange={setToleranciaAnios}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona la tolerancia" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 año</SelectItem>
-                      <SelectItem value="2">2 años</SelectItem>
-                      <SelectItem value="3">3 años</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Ficha técnica en bloques */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Identificación</h4>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="marca" className="text-slate-600">Marca</Label>
+                        <Input
+                          id="marca"
+                          className="bg-white"
+                          value={vehicle.marca}
+                          onChange={(event) => handleVehicleFieldChange("marca", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="modelo" className="text-slate-600">Modelo</Label>
+                        <Input
+                          id="modelo"
+                          className="bg-white"
+                          value={vehicle.modelo}
+                          onChange={(event) => handleVehicleFieldChange("modelo", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="anio" className="text-slate-600">Año</Label>
+                        <Input
+                          id="anio"
+                          type="number"
+                          min={1990}
+                          max={2035}
+                          className="bg-white"
+                          value={vehicle.año}
+                          onChange={(event) => handleVehicleFieldChange("año", event.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Motorización</h4>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="motor" className="text-slate-600">Motor</Label>
+                        <Input
+                          id="motor"
+                          className="bg-white"
+                          value={vehicle.motor ?? ""}
+                          onChange={(event) => handleVehicleFieldChange("motor", event.target.value)}
+                          placeholder="Ej: 1.8"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="combustible" className="text-slate-600">Combustible</Label>
+                        <Input
+                          id="combustible"
+                          className="bg-white"
+                          value={vehicle.combustible ?? ""}
+                          onChange={(event) => handleVehicleFieldChange("combustible", event.target.value)}
+                          placeholder="Ej: Gasolina"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="transmision" className="text-slate-600">Transmisión</Label>
+                        <Input
+                          id="transmision"
+                          className="bg-white"
+                          value={vehicle.transmision ?? ""}
+                          onChange={(event) => handleVehicleFieldChange("transmision", event.target.value)}
+                          placeholder="Ej: Automática"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button onClick={handleObtenerTasacion} disabled={lookupLoading}>
+                {/* Ajustes y opciones */}
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ajustes para la tasación</h4>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="min-w-[140px] space-y-1.5">
+                      <Label htmlFor="kilometraje" className="text-slate-600">Kilometraje</Label>
+                      <Input
+                        id="kilometraje"
+                        type="number"
+                        min={0}
+                        placeholder="Ej: 45000"
+                        className="bg-white"
+                        value={kilometraje}
+                        onChange={(e) => setKilometraje(e.target.value)}
+                      />
+                    </div>
+                    <div className="min-w-[160px] space-y-1.5">
+                      <Label className="text-slate-600">Estado general</Label>
+                      <Select value={estadoGeneral} onValueChange={(v) => setEstadoGeneral(v as "excelente" | "bueno" | "regular")}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="excelente">Excelente</SelectItem>
+                          <SelectItem value="bueno">Bueno</SelectItem>
+                          <SelectItem value="regular">Regular</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="min-w-[160px] space-y-1.5">
+                      <Label className="text-slate-600">Tolerancia de años</Label>
+                      <Select value={toleranciaAnios} onValueChange={setToleranciaAnios}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Tolerancia" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 año</SelectItem>
+                          <SelectItem value="2">2 años</SelectItem>
+                          <SelectItem value="3">3 años</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Kilometraje y estado afectan la comparación con el mercado. Tolerancia define el rango de años de los comparables.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row">
+                  <Button onClick={handleObtenerTasacion} disabled={lookupLoading} className="bg-blue-600 hover:bg-blue-700">
                     {lookupLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -630,77 +659,110 @@ export default function VehicleAppraisal() {
                     </div>
                   )}
 
+                  {/* Resumen de rango */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-600">Rango de valor de mercado</span>
+                      <span className="font-semibold text-slate-800">
+                        {formatCLP(appraisal.tasacion.precio_minimo)} — {formatCLP(appraisal.tasacion.precio_maximo)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          background: "linear-gradient(to right, rgb(52 211 153), rgb(59 130 246), rgb(248 113 113))",
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex justify-between text-xs text-slate-500">
+                      <span>Mínimo</span>
+                      <span className="font-medium text-blue-600">Promedio</span>
+                      <span>Máximo</span>
+                    </div>
+                  </div>
+
+                  {/* KPIs */}
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <Card className={`rounded-2xl border-2 ${getKpiTone("min")} shadow-sm`}>
-                      <CardContent className="pt-6 pb-6">
-                        <div className="text-sm font-medium text-slate-600">Precio mínimo</div>
-                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_minimo)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("min")} shadow-sm transition-shadow hover:shadow`}>
+                      <CardContent className="pt-5 pb-5">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Mínimo</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_minimo)}</div>
                       </CardContent>
                     </Card>
-                    <Card className={`rounded-2xl border-2 ${getKpiTone("avg")} shadow-md`}>
-                      <CardContent className="pt-6 pb-6">
-                        <div className="text-sm font-medium text-slate-600">Precio promedio</div>
-                        <div className="mt-2 text-3xl font-bold tracking-tight text-blue-700">
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("avg")} shadow-md transition-shadow hover:shadow-lg`}>
+                      <CardContent className="pt-5 pb-5">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">Promedio</div>
+                        <div className="mt-1.5 text-2xl font-bold tracking-tight text-blue-700">
                           {formatCLP(appraisal.tasacion.precio_promedio)}
                         </div>
                       </CardContent>
                     </Card>
-                    <Card className={`rounded-2xl border-2 ${getKpiTone("max")} shadow-sm`}>
-                      <CardContent className="pt-6 pb-6">
-                        <div className="text-sm font-medium text-slate-600">Precio máximo</div>
-                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_maximo)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("max")} shadow-sm transition-shadow hover:shadow`}>
+                      <CardContent className="pt-5 pb-5">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Máximo</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_maximo)}</div>
                       </CardContent>
                     </Card>
-                    <Card className={`rounded-2xl border-2 ${getKpiTone("median")} shadow-sm`}>
-                      <CardContent className="pt-6 pb-6">
-                        <div className="text-sm font-medium text-slate-600">Mediana</div>
-                        <div className="mt-2 text-2xl font-bold tracking-tight">{formatCLP(appraisal.tasacion.precio_mediana)}</div>
+                    <Card className={`rounded-2xl border-2 ${getKpiTone("median")} shadow-sm transition-shadow hover:shadow`}>
+                      <CardContent className="pt-5 pb-5">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Mediana</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_mediana)}</div>
                       </CardContent>
                     </Card>
                   </div>
 
                   {confidence && (
-                    <Badge className={`px-3 py-1 text-sm ${confidence.className}`}>{confidence.label}</Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-600">Nivel de confianza:</span>
+                      <Badge className={`px-3 py-1.5 text-sm ${confidence.className}`}>{confidence.label}</Badge>
+                    </div>
                   )}
 
-                  <div className="rounded-xl border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Título</TableHead>
-                          <TableHead>Año</TableHead>
-                          <TableHead>Precio</TableHead>
-                          <TableHead>Km</TableHead>
-                          <TableHead>Ver anuncio</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {muestrasOrdenadas.map((muestra) => (
-                          <TableRow key={muestra.url}>
-                            <TableCell className="max-w-[320px] font-medium">
-                              <span className="line-clamp-2">{muestra.titulo}</span>
-                            </TableCell>
-                            <TableCell>{muestra.año}</TableCell>
-                            <TableCell>{formatCLP(muestra.precio)}</TableCell>
-                            <TableCell>
-                              {muestra.kilometros ? muestra.kilometros.toLocaleString("es-CL") : "—"}
-                            </TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" asChild>
-                                <a href={muestra.url} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="mr-2 h-4 w-4" />
-                                  Abrir
-                                </a>
-                              </Button>
-                            </TableCell>
+                  {/* Tabla de comparables */}
+                  <div>
+                    <h4 className="mb-3 text-sm font-semibold text-slate-700">
+                      Comparables en el mercado ({muestrasOrdenadas.length} anuncios)
+                    </h4>
+                    <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
+                            <TableHead className="font-semibold text-slate-700">Vehículo</TableHead>
+                            <TableHead className="font-semibold text-slate-700">Año</TableHead>
+                            <TableHead className="font-semibold text-slate-700">Precio</TableHead>
+                            <TableHead className="font-semibold text-slate-700">Km</TableHead>
+                            <TableHead className="w-[100px] font-semibold text-slate-700">Enlace</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {muestrasOrdenadas.map((muestra) => (
+                            <TableRow key={muestra.url} className="transition-colors hover:bg-slate-50/80">
+                              <TableCell className="max-w-[280px] font-medium text-slate-800">
+                                <span className="line-clamp-2">{muestra.titulo}</span>
+                              </TableCell>
+                              <TableCell className="text-slate-600">{muestra.año}</TableCell>
+                              <TableCell className="font-semibold text-slate-800">{formatCLP(muestra.precio)}</TableCell>
+                              <TableCell className="text-slate-600">
+                                {muestra.kilometros ? muestra.kilometros.toLocaleString("es-CL") : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" asChild>
+                                  <a href={muestra.url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="mr-1.5 h-4 w-4" />
+                                    Ver
+                                  </a>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <Button onClick={handleSave} disabled={saveLoading}>
+                  <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-5">
+                    <Button onClick={handleSave} disabled={saveLoading} className="bg-blue-600 hover:bg-blue-700">
                       {saveLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                       Guardar tasación
                     </Button>
