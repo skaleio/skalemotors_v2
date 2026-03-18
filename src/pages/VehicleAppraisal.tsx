@@ -642,7 +642,9 @@ export default function VehicleAppraisal() {
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Motorización</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Motorización
+                    </h4>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="motor" className="text-muted-foreground">Motor</Label>
@@ -679,8 +681,10 @@ export default function VehicleAppraisal() {
                 </div>
 
                 {/* Ajustes y opciones */}
-                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ajustes para la tasación</h4>
+                <div className="rounded-xl border border-border bg-muted/30 p-4 dark:bg-muted/20">
+                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Ajustes para la tasación
+                  </h4>
                   <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[140px] space-y-1.5">
                       <Label htmlFor="kilometraje" className="text-muted-foreground">Kilometraje</Label>
@@ -721,13 +725,18 @@ export default function VehicleAppraisal() {
                       </Select>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Kilometraje y estado afectan la comparación con el mercado. Tolerancia define el rango de años de los comparables.
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Kilometraje y estado afectan la comparación con el mercado. Tolerancia define el rango de años de los
+                    comparables.
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row">
-                  <Button onClick={handleObtenerTasacion} disabled={lookupLoading} className="bg-blue-600 hover:bg-blue-700">
+                <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row">
+                  <Button
+                    onClick={handleObtenerTasacion}
+                    disabled={lookupLoading}
+                    className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white dark:text-white [&_svg]:text-white"
+                  >
                     {lookupLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -747,10 +756,10 @@ export default function VehicleAppraisal() {
 
       {(appraisalLoading || appraisal) && (
         <div className="space-y-4">
-          <Card className="border-slate-200/80 shadow-sm overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+          <Card className="border-border shadow-sm overflow-hidden">
+            <CardHeader className="border-b border-border bg-muted/40 dark:bg-muted/25">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Calculator className="h-5 w-5 text-slate-600" />
+                <Calculator className="h-5 w-5 text-muted-foreground" />
                 Resultado de la tasación
               </CardTitle>
               <CardDescription>
@@ -768,8 +777,8 @@ export default function VehicleAppraisal() {
               ) : (
                 <>
                   {usingCached && cachedDate && (
-                    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 md:flex-row md:items-center md:justify-between">
-                      <div className="text-sm text-amber-900">
+                    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-950/35 md:flex-row md:items-center md:justify-between">
+                      <div className="text-sm text-amber-900 dark:text-amber-100">
                         Usando datos del {new Date(cachedDate).toLocaleString("es-CL")}. ¿Actualizar?
                       </div>
                       <Button variant="outline" onClick={handleObtenerTasacion} disabled={lookupLoading}>
@@ -780,14 +789,14 @@ export default function VehicleAppraisal() {
                   )}
 
                   {/* Resumen de rango */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3">
+                  <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 dark:bg-muted/20">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-600">Rango de valor de mercado</span>
-                      <span className="font-semibold text-slate-800">
+                      <span className="text-sm font-medium text-muted-foreground">Rango de valor de mercado</span>
+                      <span className="font-semibold text-foreground">
                         {formatCLP(appraisal.tasacion.precio_minimo)} — {formatCLP(appraisal.tasacion.precio_maximo)}
                       </span>
                     </div>
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -795,28 +804,28 @@ export default function VehicleAppraisal() {
                         }}
                       />
                     </div>
-                    <div className="mt-1.5 flex justify-between text-xs text-slate-500">
+                    <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
                       <span>Mínimo</span>
-                      <span className="font-medium text-blue-600">Promedio</span>
+                      <span className="font-medium text-blue-600 dark:text-sky-400">Promedio</span>
                       <span>Máximo</span>
                     </div>
                   </div>
 
                   {/* Precio de retoma sugerido */}
                   {typeof appraisal.precio_retoma === "number" && appraisal.precio_retoma > 0 && (
-                    <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-emerald-50 to-white px-4 py-4 shadow-sm">
-                      <div className="absolute -right-10 -top-8 h-24 w-24 rounded-full bg-emerald-100 opacity-60" />
-                      <div className="absolute -right-4 -bottom-6 h-16 w-16 rounded-full bg-emerald-200 opacity-50" />
+                    <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-emerald-50 to-white px-4 py-4 shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/50 dark:via-emerald-950/40 dark:to-card">
+                      <div className="absolute -right-10 -top-8 h-24 w-24 rounded-full bg-emerald-100 opacity-60 dark:bg-emerald-900/40 dark:opacity-80" />
+                      <div className="absolute -right-4 -bottom-6 h-16 w-16 rounded-full bg-emerald-200 opacity-50 dark:bg-emerald-900/30" />
                       <div className="relative flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                             Precio retoma sugerido
                           </div>
-                          <div className="mt-1 text-2xl font-bold tracking-tight text-emerald-900">
+                          <div className="mt-1 text-2xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">
                             {formatCLP(appraisal.precio_retoma)}
                           </div>
                         </div>
-                        <div className="flex flex-col items-start text-xs text-emerald-900/80 sm:items-end">
+                        <div className="flex flex-col items-start text-xs text-emerald-900/80 dark:text-emerald-200/90 sm:items-end">
                           <span>Referencia para compra en parte de pago.</span>
                         </div>
                       </div>
@@ -827,63 +836,74 @@ export default function VehicleAppraisal() {
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <Card className={`rounded-2xl border-2 ${getKpiTone("min")} shadow-sm transition-shadow hover:shadow`}>
                       <CardContent className="pt-5 pb-5">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Mínimo</div>
-                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_minimo)}</div>
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mínimo</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-foreground">
+                          {formatCLP(appraisal.tasacion.precio_minimo)}
+                        </div>
                       </CardContent>
                     </Card>
                     <Card className={`rounded-2xl border-2 ${getKpiTone("avg")} shadow-md transition-shadow hover:shadow-lg`}>
                       <CardContent className="pt-5 pb-5">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">Promedio</div>
-                        <div className="mt-1.5 text-2xl font-bold tracking-tight text-blue-700">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-sky-400">
+                          Promedio
+                        </div>
+                        <div className="mt-1.5 text-2xl font-bold tracking-tight text-blue-700 dark:text-sky-300">
                           {formatCLP(appraisal.tasacion.precio_promedio)}
                         </div>
                       </CardContent>
                     </Card>
                     <Card className={`rounded-2xl border-2 ${getKpiTone("max")} shadow-sm transition-shadow hover:shadow`}>
                       <CardContent className="pt-5 pb-5">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Máximo</div>
-                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_maximo)}</div>
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Máximo</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-foreground">
+                          {formatCLP(appraisal.tasacion.precio_maximo)}
+                        </div>
                       </CardContent>
                     </Card>
                     <Card className={`rounded-2xl border-2 ${getKpiTone("median")} shadow-sm transition-shadow hover:shadow`}>
                       <CardContent className="pt-5 pb-5">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Mediana</div>
-                        <div className="mt-1.5 text-xl font-bold tracking-tight text-slate-800">{formatCLP(appraisal.tasacion.precio_mediana)}</div>
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mediana</div>
+                        <div className="mt-1.5 text-xl font-bold tracking-tight text-foreground">
+                          {formatCLP(appraisal.tasacion.precio_mediana)}
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
 
                   {confidence && (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-600">Nivel de confianza:</span>
+                      <span className="text-sm text-muted-foreground">Nivel de confianza:</span>
                       <Badge className={`px-3 py-1.5 text-sm ${confidence.className}`}>{confidence.label}</Badge>
                     </div>
                   )}
 
                   {/* Tabla de comparables */}
                   <div>
-                    <h4 className="mb-3 text-sm font-semibold text-slate-700">
+                    <h4 className="mb-3 text-sm font-semibold text-foreground">
                       Comparables en el mercado ({muestrasOrdenadas.length} anuncios)
                     </h4>
-                    <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                    <div className="overflow-hidden rounded-xl border border-border shadow-sm">
                       <Table>
                         <TableHeader>
-                          <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                            <TableHead className="font-semibold text-slate-700">Vehículo</TableHead>
-                            <TableHead className="font-semibold text-slate-700">Año</TableHead>
-                            <TableHead className="font-semibold text-slate-700">Precio</TableHead>
-                            <TableHead className="font-semibold text-slate-700">Km</TableHead>
-                            <TableHead className="w-[100px] font-semibold text-slate-700">Enlace</TableHead>
+                          <TableRow className="border-border bg-muted/50 hover:bg-muted/50 dark:bg-muted/40">
+                            <TableHead className="font-semibold text-foreground">Vehículo</TableHead>
+                            <TableHead className="font-semibold text-foreground">Año</TableHead>
+                            <TableHead className="font-semibold text-foreground">Precio</TableHead>
+                            <TableHead className="font-semibold text-foreground">Km</TableHead>
+                            <TableHead className="w-[100px] font-semibold text-foreground">Enlace</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {muestrasOrdenadas.map((muestra, index) => (
-                            <TableRow key={`${muestra.url || muestra.titulo}-${index}`} className="transition-colors hover:bg-slate-50/80">
-                              <TableCell className="max-w-[280px] font-medium text-slate-800">
+                            <TableRow
+                              key={`${muestra.url || muestra.titulo}-${index}`}
+                              className="transition-colors hover:bg-muted/40"
+                            >
+                              <TableCell className="max-w-[280px] font-medium text-foreground">
                                 <span className="line-clamp-2">{muestra.titulo}</span>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{muestra.año}</TableCell>
-                              <TableCell className="font-semibold text-slate-800">{formatCLP(muestra.precio)}</TableCell>
+                              <TableCell className="font-semibold text-foreground">{formatCLP(muestra.precio)}</TableCell>
                               <TableCell className="text-muted-foreground">
                                 {muestra.kilometros ? muestra.kilometros.toLocaleString("es-CL") : "—"}
                               </TableCell>
@@ -891,7 +911,7 @@ export default function VehicleAppraisal() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                  className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:text-sky-400 dark:hover:bg-sky-950/50 dark:hover:text-sky-300"
                                   onClick={() => handleOpenComparable(muestra)}
                                 >
                                   <ExternalLink className="mr-1.5 h-4 w-4" />
@@ -905,8 +925,12 @@ export default function VehicleAppraisal() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-5">
-                    <Button onClick={handleSave} disabled={saveLoading} className="bg-blue-600 hover:bg-blue-700">
+                  <div className="flex flex-wrap gap-3 border-t border-border pt-5">
+                    <Button
+                      onClick={handleSave}
+                      disabled={saveLoading}
+                      className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white dark:text-white [&_svg]:text-white"
+                    >
                       {saveLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                       Guardar tasación
                     </Button>
