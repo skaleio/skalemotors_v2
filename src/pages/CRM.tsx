@@ -67,6 +67,14 @@ const statusLabels: Record<string, string> = {
   negociando: "Negociando",
 };
 
+const CRM_PIPELINE_KEYS = new Set(["nuevo", "contactado", "interesado", "negociando"]);
+
+/** Valor seguro para <Select>: solo las 4 etapas; si no aplica, "nuevo" (evita crash en móvil/Safari). */
+function safePipelineSelectValue(status: string | null | undefined): string {
+  const s = (status || "").toLowerCase();
+  return CRM_PIPELINE_KEYS.has(s) ? s : "nuevo";
+}
+
 const stageStyles: Record<
   "nuevo" | "contactado" | "interesado" | "negociando",
   { border: string; badge: string; dot?: string }
@@ -183,9 +191,9 @@ const LeadCard = memo(({ lead, onClick }: { lead: Lead; onClick: () => void }) =
 export default function CRM() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { leads, loading, refetch } = useLeads({
+  const { leads, loading, error: leadsError, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
-    enabled: !!user?.branch_id,
+    enabled: !!user,
   });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -207,9 +215,9 @@ export default function CRM() {
   });
 
   useEffect(() => {
-    if (!user?.branch_id) return;
+    if (!user) return;
     refetch();
-  }, [user?.branch_id, refetch]);
+  }, [user?.branch_id, user, refetch]);
 
   // Cerrar diálogo al desmontar (evita error removeChild en producción)
   useEffect(() => {
@@ -221,7 +229,7 @@ export default function CRM() {
 
   const openEditDialog = useCallback((lead: Lead) => {
     setEditingLead(lead);
-    setLeadStatus(lead.status || "nuevo");
+    setLeadStatus(safePipelineSelectValue(lead.status));
     setIsEditingForm(false);
     setShowEditDialog(true);
   }, []);
@@ -272,9 +280,9 @@ export default function CRM() {
       budget: editingLead.budget || "",
       notes: editingLead.notes || "",
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
-      status: editingLead.status || "nuevo",
+      status: safePipelineSelectValue(editingLead.status),
     });
-    setLeadStatus(editingLead.status || "nuevo");
+    setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
   }, [editingLead]);
 
@@ -355,6 +363,18 @@ export default function CRM() {
 
   return (
     <div className="space-y-6">
+      {leadsError && (
+        <div
+          className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          No se pudieron cargar los leads.{" "}
+          {leadsError instanceof Error ? leadsError.message : "Revisa tu conexión e intenta de nuevo."}
+          <Button variant="outline" size="sm" className="ml-3 align-middle" onClick={() => refetch()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
@@ -527,7 +547,7 @@ export default function CRM() {
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select
-                      value={editForm.status}
+                      value={safePipelineSelectValue(editForm.status)}
                       onValueChange={(v) => {
                         setEditForm((f) => ({ ...f, status: v }));
                         setLeadStatus(v);
@@ -614,7 +634,7 @@ export default function CRM() {
                   )}
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
-                    <Select value={leadStatus} onValueChange={setLeadStatus}>
+                    <Select value={safePipelineSelectValue(leadStatus)} onValueChange={setLeadStatus}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona estado" />
                       </SelectTrigger>
