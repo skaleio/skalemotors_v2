@@ -9,6 +9,7 @@ export interface VehicleData {
   combustible: string | null;
   transmision: string | null;
   fuente: string;
+  kilometraje?: number | null;
 }
 
 export interface AppraisalResult {
@@ -31,6 +32,8 @@ export interface AppraisalResult {
   }[];
   uf_valor: number;
   resumen?: string | null;
+  /** Precio de retoma sugerido por la API, si está disponible */
+  precio_retoma?: number | null;
 }
 
 type EdgeErrorResponse = {
@@ -148,6 +151,7 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     combustible: vehicleFromApi?.combustible ?? null,
     transmision: vehicleFromApi?.transmision ?? null,
     fuente: "getapi",
+    kilometraje: typeof (vehicleFromApi as any)?.kilometraje === "number" ? (vehicleFromApi as any).kilometraje : null,
   };
 
   const appraisal: AppraisalResult = {
@@ -155,6 +159,7 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     muestras: data.muestras,
     uf_valor: Number(data.uf_valor ?? 0),
     resumen: data.resumen ?? null,
+    precio_retoma: (data as any).precio_retoma ?? null,
   };
 
   return { vehicle, appraisal };

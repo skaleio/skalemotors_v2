@@ -260,6 +260,7 @@ export interface Database {
           vehicle_year: number | null
           vehicle_vin: string | null
           vehicle_km: number | null
+          patente: string | null
           label: string | null
           status: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
           notes: string | null
@@ -284,6 +285,7 @@ export interface Database {
           vehicle_year?: number | null
           vehicle_vin?: string | null
           vehicle_km?: number | null
+          patente?: string | null
           label?: string | null
           status?: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
           notes?: string | null
@@ -308,6 +310,7 @@ export interface Database {
           vehicle_year?: number | null
           vehicle_vin?: string | null
           vehicle_km?: number | null
+          patente?: string | null
           label?: string | null
           status?: 'nuevo' | 'en_revision' | 'en_venta' | 'negociando' | 'vendido' | 'devuelto'
           notes?: string | null

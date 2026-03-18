@@ -392,6 +392,7 @@ export default function Consignaciones() {
     vehicle_model: "",
     vehicle_year: "",
     vehicle_vin: "",
+    patente: "",
     label: "sin_etiqueta",
     status: "nuevo" as Consignacion["status"],
     notes: "",
@@ -401,10 +402,33 @@ export default function Consignaciones() {
     sale_price: "",
   });
 
+  const applyAppraisalPrefill = () => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") !== "true" || params.get("source") !== "appraisal") return;
+
+    const make = params.get("make") ?? "";
+    const model = params.get("model") ?? "";
+    const year = params.get("year") ?? "";
+    const patente = params.get("patente") ?? "";
+
+    setFormState((prev) => ({
+      ...prev,
+      vehicle_make: make || prev.vehicle_make,
+      vehicle_model: model || prev.vehicle_model,
+      vehicle_year: year || prev.vehicle_year,
+      patente: patente || prev.patente,
+      notes:
+        !prev.notes && patente
+          ? `Patente tasada: ${patente}`
+          : prev.notes,
+    }));
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("new") === "true") {
       setShowCreateDialog(true);
+      applyAppraisalPrefill();
     }
   }, [location.search]);
 
@@ -492,6 +516,7 @@ export default function Consignaciones() {
       vehicle_model: "",
       vehicle_year: "",
       vehicle_vin: "",
+      patente: "",
       label: "sin_etiqueta",
       status: "nuevo",
       notes: "",
@@ -526,6 +551,7 @@ export default function Consignaciones() {
           return raw;
         })(),
         vehicle_vin: formState.vehicle_vin.trim() || null,
+        patente: formState.patente.trim() || null,
         label: normalizeLabelValue(formState.label),
         status: formState.status,
         notes: formState.notes.trim() || null,
@@ -1164,7 +1190,8 @@ export default function Consignaciones() {
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
-                  <TableHead>Vehiculo</TableHead>
+              <TableHead>Vehiculo</TableHead>
+              <TableHead>Patente</TableHead>
                   <TableHead>Etiqueta</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Reunion</TableHead>
@@ -1192,6 +1219,9 @@ export default function Consignaciones() {
                         {vehicleVin ? (
                           <div className="text-xs text-muted-foreground">VIN: {vehicleVin}</div>
                         ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">{item.patente || "—"}</span>
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1367,6 +1397,15 @@ export default function Consignaciones() {
                 id="vehicle_model"
                 value={formState.vehicle_model}
                 onChange={(e) => setFormState({ ...formState, vehicle_model: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="patente">Patente</Label>
+              <Input
+                id="patente"
+                value={formState.patente}
+                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
+                placeholder="Ej: ABCD12"
               />
             </div>
             <div>

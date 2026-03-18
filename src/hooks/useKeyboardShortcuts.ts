@@ -33,14 +33,10 @@ export function useKeyboardShortcuts() {
             break;
           case 'k':
             event.preventDefault();
-            // Aquí podrías abrir un modal con todos los atajos
-            console.log('Mostrar atajos de teclado');
             break;
           case 't':
             if (event.shiftKey) {
               event.preventDefault();
-              // Funcionalidad de nuevo equipo
-              console.log('Crear nuevo equipo');
             }
             break;
           case 'q':

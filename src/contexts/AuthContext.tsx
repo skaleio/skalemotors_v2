@@ -39,7 +39,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadingTimeoutRef = useRef<number | null>(null);
   const pendingSessionRef = useRef<Session | null>(null);
 
-  const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+  const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 horas
   const AUTH_LOADING_TIMEOUT_MS = 20 * 1000; // margen por red lenta; si hay sesión usamos fallback
   const SESSION_STORAGE_KEY_PREFIX = "skale.session_activity";
   const ACTIVITY_STORAGE_THROTTLE_MS = 5 * 1000;
@@ -120,7 +120,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       // Usuario no existe en public.users, intentar crearlo
-      console.log("⚠️ Usuario no existe en public.users, intentando crear...");
       return await createUserFromAuth(userId);
     } catch (error) {
       setLoading(false);
@@ -130,7 +129,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const createUserFromAuth = async (userId: string): Promise<boolean> => {
     try {
-      console.log("🔧 Creando usuario en public.users desde auth.users...");
 
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -162,7 +160,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data) {
-        console.log("✅ Usuario creado exitosamente:", data);
         setUser(data as User);
         // Onboarding desactivado temporalmente
         setNeedsOnboarding(false);
@@ -320,7 +317,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const elapsed = now - lastActivityAt;
     if (elapsed >= SESSION_TIMEOUT_MS) {
-      console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
       supabase.auth.signOut().finally(() => {
         window.localStorage.removeItem(storageKey);
       });
@@ -348,7 +344,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       const remaining = SESSION_TIMEOUT_MS - (Date.now() - timestamp);
       sessionTimeoutRef.current = window.setTimeout(() => {
-        console.log("⏱️ Sesión expirada por inactividad, cerrando sesión...");
         supabase.auth.signOut().finally(() => {
           window.localStorage.removeItem(storageKey);
         });
@@ -386,7 +381,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signIn: AuthContextType["signIn"] = async (email, password) => {
     try {
-      console.log("🔐 Attempting to sign in with email:", email);
       setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -400,9 +394,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.session?.user) {
-        console.log("✅ Sign in successful, fetching user profile...");
-        console.log("Session user ID:", data.session.user.id);
-
         // Intentar obtener el perfil del usuario
         const ok = await fetchUserProfile(data.session.user.id);
         if (!ok) {
@@ -426,7 +417,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signUp: AuthContextType["signUp"] = async (email, password, fullName, phone) => {
     try {
-      console.log("🚀 Iniciando registro para:", email);
       setLoading(true);
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -448,8 +438,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (authData.user) {
-        console.log("✅ Usuario creado en auth.users:", authData.user.id);
-
         // El trigger debería crear el usuario automáticamente en public.users
         // Esperar un momento para que el trigger se ejecute
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -466,7 +454,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         if (!userCheck) {
-          console.log("⚠️ Usuario no creado por trigger, intentando inserción manual...");
           // Intentar crear el usuario manualmente
           const { error: profileError } = await supabase.from("users").insert({
             id: authData.user.id,
@@ -488,9 +475,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             };
           }
 
-          console.log("✅ Usuario creado manualmente en public.users");
-        } else {
-          console.log("✅ Usuario creado automáticamente por trigger");
         }
 
         // Obtener la sesión y el perfil
@@ -548,11 +532,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const completeOnboarding = async () => {
     if (!user) {
-      console.error("❌ No hay usuario para completar onboarding");
       throw new Error("No hay usuario autenticado");
     }
     try {
-      console.log("🔄 Completando onboarding para usuario:", user.id);
       const { data, error } = await supabase
         .from("users")
         .update({ onboarding_completed: true })
@@ -566,7 +548,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data) {
-        console.log("✅ Onboarding completado exitosamente:", data);
         const updatedUser = { ...user, onboarding_completed: true };
         setUser(updatedUser);
         setNeedsOnboarding(false);

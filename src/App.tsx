@@ -13,7 +13,6 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { Layout } from "@/components/Layout";
-import ReloadOnPopState from "@/components/ReloadOnPopState";
 
 // Imports estáticos para evitar "Failed to fetch dynamically imported module" en producción (chunk 404 tras deploy)
 import Dashboard from "./pages/Dashboard";
@@ -101,7 +100,6 @@ const App = () => (
             <Toaster />
             <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <ReloadOnPopState />
             <Suspense fallback={<DashboardLoader message="Cargando..." />}>
             <Routes>
               {/* Rutas públicas */}

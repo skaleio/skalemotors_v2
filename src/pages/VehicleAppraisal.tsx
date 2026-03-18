@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Calculator, CarFront, ExternalLink, FileText, Loader2, RefreshCw, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -94,8 +95,46 @@ function getKpiTone(kind: "min" | "avg" | "max" | "median") {
   }
 }
 
+function buildChileautosUrl({
+  brand,
+  model,
+  year,
+  mileage,
+}: {
+  brand?: string | null;
+  model?: string | null;
+  year?: number | null;
+  mileage?: number | null;
+}) {
+  const cleanBrand = (brand ?? "").trim().replace(/\./g, "");
+  const cleanModel = (model ?? "").trim().replace(/\./g, "").replace(/\s+/g, "+");
+  const filters: string[] = [];
+
+  if (cleanBrand || cleanModel) {
+    filters.push(`(C.Marca.${cleanBrand}._.Modelo.${cleanModel}.)`);
+  }
+
+  if (typeof year === "number" && Number.isFinite(year) && year > 0) {
+    filters.push(`Ano.range(${year - 1}..${year + 1}).`);
+  }
+
+  if (typeof mileage === "number" && Number.isFinite(mileage) && mileage > 0) {
+    const kmMin = Math.max(0, Math.round(mileage - 20000));
+    const kmMax = Math.round(mileage + 20000);
+    filters.push(`Kilometraje.range(${kmMin}..${kmMax}).`);
+  }
+
+  if (filters.length === 0) {
+    return "https://www.chileautos.cl/vehiculos/";
+  }
+
+  const q = `(And.${filters.join("_.")})`;
+  return `https://www.chileautos.cl/vehiculos/?q=${encodeURIComponent(q).replace(/%20/g, "+")}`;
+}
+
 export default function VehicleAppraisal() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const branchId = user?.branch_id ?? "";
 
   const [step, setStep] = useState<Step>(1);
@@ -128,6 +167,45 @@ export default function VehicleAppraisal() {
   const confidence = appraisal
     ? getConfidenceBadge(appraisal.tasacion.confianza, appraisal.tasacion.total_muestras)
     : null;
+
+  const getComparableUrl = (muestra: AppraisalResult["muestras"][number]) => {
+    if (typeof muestra.url === "string" && /^https?:\/\/(www\.)?chileautos\.cl/i.test(muestra.url)) {
+      return muestra.url;
+    }
+
+    return buildChileautosUrl({
+      brand: vehicle?.marca,
+      model: vehicle?.modelo,
+      year: vehicle?.año || muestra.año,
+      mileage:
+        typeof vehicle?.kilometraje === "number" && vehicle.kilometraje > 0
+          ? vehicle.kilometraje
+          : muestra.kilometros,
+    });
+  };
+
+  const handleOpenComparable = (muestra: AppraisalResult["muestras"][number]) => {
+    const url = getComparableUrl(muestra);
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleAgregarConsignacion = () => {
+    if (!vehicle) {
+      toast.error("Primero obtén una tasación para precargar el vehículo.");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      new: "true",
+      source: "appraisal",
+      patente: vehicle.patente || "",
+      make: vehicle.marca || "",
+      model: vehicle.modelo || "",
+      year: vehicle.año ? String(vehicle.año) : "",
+    });
+
+    navigate(`/app/consignaciones?${params.toString()}`);
+  };
 
   const resetAll = () => {
     setStep(1);
@@ -165,6 +243,7 @@ export default function VehicleAppraisal() {
       combustible: manualCombustible.trim() || null,
       transmision: null,
       fuente: "manual",
+      kilometraje: null,
     });
     setStep(2);
     setLookupError(null);
@@ -214,6 +293,7 @@ export default function VehicleAppraisal() {
             combustible: null,
             transmision: null,
             fuente: "getapi",
+            kilometraje: null,
           });
           setAppraisal(cached);
           setUsingCached(true);
@@ -227,6 +307,17 @@ export default function VehicleAppraisal() {
       const { vehicle: v, appraisal: a } = await getAppraisalByPatente(normalizedPatente);
       setVehicle(v);
       setAppraisal(a);
+
+      // Intentar precargar el kilometraje desde los datos enriquecidos
+      const kmFromVehicle = typeof v.kilometraje === "number" ? v.kilometraje : null;
+      const kmFromSamples =
+        Array.isArray(a.muestras) && typeof a.muestras[0]?.kilometros === "number"
+          ? a.muestras[0]?.kilometros
+          : null;
+      const km = kmFromVehicle && kmFromVehicle > 0 ? kmFromVehicle : kmFromSamples && kmFromSamples > 0 ? kmFromSamples : null;
+      if (km) {
+        setKilometraje(String(km));
+      }
       setCachedDate(a.tasacion.fecha_consulta);
       setStep(3);
       toast.success("Tasación obtenida correctamente.");
@@ -360,6 +451,12 @@ export default function VehicleAppraisal() {
             <Input
               value={patente}
               onChange={(event) => setPatente(normalizePatente(event.target.value))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !lookupLoading && patenteValida) {
+                  event.preventDefault();
+                  handleObtenerTasacion();
+                }
+              }}
               placeholder="Ej: ABCD12"
               className="h-14 text-center text-2xl font-semibold tracking-[0.2em] uppercase"
               maxLength={6}
@@ -519,6 +616,14 @@ export default function VehicleAppraisal() {
                         />
                       </div>
                     </div>
+                    {typeof vehicle.kilometraje === "number" && vehicle.kilometraje > 0 && (
+                      <p className="text-xs text-slate-500">
+                        Kilometraje actual registrado:&nbsp;
+                        <span className="font-semibold text-slate-700">
+                          {vehicle.kilometraje.toLocaleString("es-CL")} km
+                        </span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -682,6 +787,27 @@ export default function VehicleAppraisal() {
                     </div>
                   </div>
 
+                  {/* Precio de retoma sugerido */}
+                  {typeof appraisal.precio_retoma === "number" && appraisal.precio_retoma > 0 && (
+                    <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-emerald-50 to-white px-4 py-4 shadow-sm">
+                      <div className="absolute -right-10 -top-8 h-24 w-24 rounded-full bg-emerald-100 opacity-60" />
+                      <div className="absolute -right-4 -bottom-6 h-16 w-16 rounded-full bg-emerald-200 opacity-50" />
+                      <div className="relative flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+                            Precio retoma sugerido
+                          </div>
+                          <div className="mt-1 text-2xl font-bold tracking-tight text-emerald-900">
+                            {formatCLP(appraisal.precio_retoma)}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-start text-xs text-emerald-900/80 sm:items-end">
+                          <span>Referencia para compra en parte de pago.</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* KPIs */}
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <Card className={`rounded-2xl border-2 ${getKpiTone("min")} shadow-sm transition-shadow hover:shadow`}>
@@ -736,8 +862,8 @@ export default function VehicleAppraisal() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {muestrasOrdenadas.map((muestra) => (
-                            <TableRow key={muestra.url} className="transition-colors hover:bg-slate-50/80">
+                          {muestrasOrdenadas.map((muestra, index) => (
+                            <TableRow key={`${muestra.url || muestra.titulo}-${index}`} className="transition-colors hover:bg-slate-50/80">
                               <TableCell className="max-w-[280px] font-medium text-slate-800">
                                 <span className="line-clamp-2">{muestra.titulo}</span>
                               </TableCell>
@@ -747,11 +873,14 @@ export default function VehicleAppraisal() {
                                 {muestra.kilometros ? muestra.kilometros.toLocaleString("es-CL") : "—"}
                               </TableCell>
                               <TableCell>
-                                <Button variant="ghost" size="sm" className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" asChild>
-                                  <a href={muestra.url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="mr-1.5 h-4 w-4" />
-                                    Ver
-                                  </a>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                  onClick={() => handleOpenComparable(muestra)}
+                                >
+                                  <ExternalLink className="mr-1.5 h-4 w-4" />
+                                  Ver
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -765,6 +894,9 @@ export default function VehicleAppraisal() {
                     <Button onClick={handleSave} disabled={saveLoading} className="bg-blue-600 hover:bg-blue-700">
                       {saveLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                       Guardar tasación
+                    </Button>
+                    <Button variant="outline" onClick={handleAgregarConsignacion}>
+                      Agregar consignación
                     </Button>
                     <Button variant="outline" onClick={resetAll}>
                       Nueva tasación

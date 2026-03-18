@@ -9,8 +9,8 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   new_sale: "Ctrl+E",
   appointments: "Ctrl+A",
   financial_calculator: "Ctrl+F",
-  inventory: "Ctrl+V",
-  consignaciones: "Ctrl+C",
+  inventory: "Ctrl+B",
+  consignaciones: "Ctrl+G",
   billing: "Ctrl+I",
 };
 
