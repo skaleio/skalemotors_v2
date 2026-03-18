@@ -484,14 +484,6 @@ export default function Inventory() {
 
     setIsSaving(true);
     try {
-      console.log("🔄 Iniciando creación de vehículo...");
-      console.log("📋 Datos del formulario:", {
-        make: newVehicle.make,
-        model: newVehicle.model,
-        year: newVehicle.year,
-        hasImages: newVehicle.images.length > 0
-      });
-
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
@@ -526,25 +518,18 @@ export default function Inventory() {
         features: features as any,
       };
 
-      console.log("📝 Datos del vehículo a crear:", vehicleData);
-      console.log("📝 Validando datos antes de enviar...");
-
       // Validar que todos los campos requeridos estén presentes
       if (!vehicleData.make || !vehicleData.model || !vehicleData.color || !vehicleData.year) {
         throw new Error("Faltan campos requeridos en los datos del vehículo");
       }
 
-      console.log("✅ Validación pasada, enviando a Supabase...");
-
       // Crear vehículo (incluye timeout interno y verificación)
       const createdVehicle = await vehicleService.create(vehicleData, {
         accessToken: session?.access_token
       }) as any;
-      console.log("✅ Vehículo creado exitosamente con ID:", createdVehicle.id);
 
       // Subir imágenes a Supabase Storage
       if (newVehicle.images.length > 0) {
-        console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es)...`);
         const imageUrls: string[] = [];
         const accessToken = session?.access_token;
         if (!accessToken) {
@@ -556,7 +541,6 @@ export default function Inventory() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${createdVehicle.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-            console.log(`📤 Subiendo imagen: ${fileName}`);
             await uploadVehicleImage(file, fileName, accessToken);
 
             // Obtener URL pública
@@ -565,7 +549,6 @@ export default function Inventory() {
               .getPublicUrl(fileName);
 
             imageUrls.push(publicUrl);
-            console.log(`✅ Imagen subida: ${publicUrl}`);
           } catch (error) {
             console.error("❌ Error procesando imagen:", error);
           }
@@ -573,10 +556,8 @@ export default function Inventory() {
 
         // Actualizar vehículo con las URLs de las imágenes
         if (imageUrls.length > 0) {
-          console.log(`🔄 Actualizando vehículo con ${imageUrls.length} imagen(es)...`);
           try {
             await updateVehicleImages(createdVehicle.id, imageUrls, accessToken);
-            console.log(`✅ ${imageUrls.length} imagen(es) agregada(s) al vehículo`);
           } catch (updateError: any) {
             console.error("❌ Error actualizando vehículo con imágenes:", updateError);
             // No lanzar error, el vehículo ya fue creado
@@ -585,8 +566,6 @@ export default function Inventory() {
         } else {
           console.warn("⚠️ No se pudieron subir las imágenes");
         }
-      } else {
-        console.log("ℹ️ No hay imágenes para subir");
       }
 
       // Cerrar diálogo primero
@@ -612,8 +591,6 @@ export default function Inventory() {
         status: "disponible",
       });
 
-      console.log("✅ Vehículo guardado exitosamente");
-
       // Refetch con timeout para evitar que se quede colgado
       // Usar un solo refetch con manejo robusto de errores
       try {
@@ -623,7 +600,6 @@ export default function Inventory() {
         );
 
         await Promise.race([refetchPromise, timeoutPromise]);
-        console.log("✅ Lista actualizada correctamente");
       } catch (refetchError: any) {
         console.warn("⚠️ Error o timeout en refetch, pero el vehículo fue creado:", refetchError);
         // Intentar refetch en segundo plano sin bloquear
@@ -671,8 +647,6 @@ export default function Inventory() {
 
     setIsSaving(true);
     try {
-      console.log("🔄 Iniciando actualización de vehículo...");
-
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
@@ -702,15 +676,11 @@ export default function Inventory() {
         status: newVehicle.status,
       };
 
-      console.log("📝 Datos del vehículo a actualizar:", updateData);
-
       // Actualizar vehículo
       await vehicleService.update(vehicleToEdit.id, updateData);
-      console.log("✅ Vehículo actualizado exitosamente");
 
       // Si hay nuevas imágenes, subirlas
       if (newVehicle.images.length > 0) {
-        console.log(`📸 Subiendo ${newVehicle.images.length} imagen(es) nuevas...`);
         const imageUrls: string[] = [];
         const existingImages = (vehicleToEdit.images as unknown as string[] | null) || [];
 
@@ -719,7 +689,6 @@ export default function Inventory() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-            console.log(`📤 Subiendo imagen: ${fileName}`);
             const optimizedFile = await optimizeVehicleImage(file);
             const { error: uploadError } = await supabase.storage
               .from('vehicles')
@@ -739,7 +708,6 @@ export default function Inventory() {
               .getPublicUrl(fileName);
 
             imageUrls.push(publicUrl);
-            console.log(`✅ Imagen subida: ${publicUrl}`);
           } catch (error) {
             console.error("❌ Error procesando imagen:", error);
           }
@@ -749,7 +717,6 @@ export default function Inventory() {
         if (imageUrls.length > 0) {
           const allImages = [...existingImages, ...imageUrls];
           await vehicleService.update(vehicleToEdit.id, { images: allImages as any });
-          console.log(`✅ ${imageUrls.length} imagen(es) agregada(s) al vehículo`);
         }
       }
 
@@ -774,8 +741,6 @@ export default function Inventory() {
         status: "disponible",
       });
 
-      console.log("✅ Vehículo actualizado exitosamente");
-
       // Refetch con timeout
       try {
         await Promise.race([
@@ -784,7 +749,6 @@ export default function Inventory() {
             setTimeout(() => reject(new Error('Timeout en refetch')), 10000)
           )
         ]);
-        console.log("✅ Lista actualizada correctamente");
       } catch (refetchError) {
         console.warn("⚠️ Error o timeout en refetch:", refetchError);
         setTimeout(() => {
@@ -822,7 +786,6 @@ export default function Inventory() {
     requestAnimationFrame(async () => {
       try {
         await vehicleService.delete(vehicleToDeleteCopy.id);
-        console.log(`✅ Vehículo eliminado: ${vehicleToDeleteCopy.make} ${vehicleToDeleteCopy.model}`);
       } catch (error: any) {
         console.error("Error eliminando vehículo:", error);
       } finally {
@@ -850,8 +813,6 @@ export default function Inventory() {
 
     setIsSaving(true);
     try {
-      console.log('🔄 Registrando venta...');
-
       const margin = saleData.salePrice - Number(vehicleToSell.cost || 0);
       const commission = margin * 0.15; // 15% de comisión sobre el margen
 
@@ -879,8 +840,6 @@ export default function Inventory() {
 
       // Actualizar el estado del vehículo a vendido
       await vehicleService.update(vehicleToSell.id, { status: 'vendido' });
-
-      console.log('✅ Venta registrada exitosamente');
 
       // Cerrar diálogo y resetear
       setVehicleToSell(null);
@@ -1793,6 +1752,8 @@ export default function Inventory() {
                           src={imageUrl}
                           alt={`Vehículo ${index + 1}`}
                           className="w-24 h-24 object-cover rounded-lg border"
+                          loading="lazy"
+                          decoding="async"
                           onLoad={() => URL.revokeObjectURL(imageUrl)}
                         />
                         <button
@@ -2201,6 +2162,8 @@ export default function Inventory() {
                             src={imageUrl}
                             alt={`Nueva ${index + 1}`}
                             className="w-24 h-24 object-cover rounded-lg border"
+                            loading="lazy"
+                            decoding="async"
                             onLoad={() => URL.revokeObjectURL(imageUrl)}
                           />
                           <button

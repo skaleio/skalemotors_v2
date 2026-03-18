@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
-import { OptimizedStarsBackground } from '@/components/OptimizedStarsBackground'
+import { StaticLoginBackground } from '@/components/StaticLoginBackground'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -21,7 +21,6 @@ export default function Login() {
   // Si el usuario ya está autenticado, redirigir
   useEffect(() => {
     if (user && !authLoading) {
-      console.log('✅ Usuario ya autenticado, redirigiendo...')
       navigate('/app', { replace: true })
     }
   }, [user, authLoading, navigate])
@@ -32,7 +31,6 @@ export default function Login() {
     setError('')
 
     try {
-      console.log('🚀 Iniciando proceso de login...')
       const { error } = await signIn(email, password)
       
       if (error) {
@@ -61,7 +59,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen relative">
-      <OptimizedStarsBackground className="fixed inset-0 z-0" starColor="#87CEEB" factor={0.02} speed={100} transition={{ stiffness: 30, damping: 15 }} />
+      <StaticLoginBackground />
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
         {/* Logo y título */}
@@ -143,9 +141,9 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium py-2.5 transition-colors"
-                disabled={localLoading || authLoading}
+                disabled={localLoading}
               >
-                {(localLoading || authLoading) ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+                {localLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </Button>
             </form>
 

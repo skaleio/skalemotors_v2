@@ -214,10 +214,10 @@ html[data-mobile-app="true"] #root > * {
     background-clip: text;
   }
 
-  /* Sidebar en tema oscuro: logo más luminoso y legible sobre zinc */
+  /* Sidebar en tema oscuro: mantén el azul oficial */
   .dark .app-sidebar .skale-logo {
-    text-shadow: 0 1px 8px rgba(56, 189, 248, 0.25);
-    background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 55%, #0ea5e9 100%);
+    text-shadow: 0 1px 8px rgba(30, 64, 175, 0.25);
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

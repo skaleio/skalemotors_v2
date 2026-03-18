@@ -578,13 +578,11 @@ export default function Consignaciones() {
         ...payloadBase,
         lead_id: payloadBase.lead_id || null,
       } satisfies Database["public"]["Tables"]["consignaciones"]["Insert"];
-      console.log("🟨 Payload consignacion", payload);
 
       const created = await consignacionesService.create(payload);
 
       // Mostrar de inmediato en la lista para evitar bloqueos
       setConsignaciones((prev) => [created, ...prev]);
-      console.log("✅ Consignacion creada", created?.id);
 
       // Sincronizar lead en segundo plano: origen Consignación y vehículo
       if (hasContact || payloadBase.lead_id) {
@@ -651,7 +649,6 @@ export default function Consignaciones() {
       const message = error?.message || error?.error_description || "No se pudo crear la consignación.";
       setCreateError(message);
     } finally {
-      console.log("🟩 handleCreate: fin");
       setIsCreating(false);
     }
   };

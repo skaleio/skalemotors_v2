@@ -311,19 +311,9 @@ export default function Onboarding() {
       // Simular guardado de configuración
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Aquí se guardaría la configuración en la base de datos
-      console.log("💾 Guardando configuración de onboarding:", {
-        businessInfo,
-        selectedIntegrations,
-        teamMembers,
-        preferences
-      });
-      
       // Marcar el onboarding como completado en el contexto
       await completeOnboarding();
-      
-      console.log("✅ Onboarding completado, redirigiendo...");
-      
+
       toast({
         title: "¡Onboarding completado!",
         description: "Tu configuración ha sido guardada exitosamente.",

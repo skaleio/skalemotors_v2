@@ -33,17 +33,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const sessionTimeoutRef = useRef<number | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
-  const lastStorageWriteRef = useRef<number>(0);
   const loadingTimeoutRef = useRef<number | null>(null);
   const pendingSessionRef = useRef<Session | null>(null);
 
-  const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 horas
-  const AUTH_LOADING_TIMEOUT_MS = 20 * 1000; // margen por red lenta; si hay sesión usamos fallback
-  const SESSION_STORAGE_KEY_PREFIX = "skale.session_activity";
-  const ACTIVITY_STORAGE_THROTTLE_MS = 5 * 1000;
-  const sessionStorageKeyRef = useRef<string | null>(null);
+  /** Tiempo máx. esperando getSession (red lenta); no cerrar sesión por esto */
+  const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     let timeoutId: number | null = null;
@@ -190,16 +184,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(currentSession);
       setUser(buildFallbackUserFromSession(currentSession.user));
       setLoading(false);
-      // Refrescar sesión y perfil en segundo plano (no bloquean la primera pantalla)
-      try {
-        const { data } = await supabase.auth.refreshSession();
-        if (data?.session) {
-          setSession(data.session);
-          pendingSessionRef.current = data.session;
-        }
-      } catch (e) {
-        console.warn("⚠️ No se pudo refrescar sesión:", e);
-      }
+      // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
+      // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
       const ok = await fetchUserProfile(currentSession.user.id);
       if (!ok) {
         // se mantiene usuario fallback ya puesto arriba
@@ -209,17 +195,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      if (session?.user) {
-        const ok = await fetchUserProfile(session.user.id);
-      if (!ok) {
-        setUser(buildFallbackUserFromSession(session.user));
-        setLoading(false);
+      setSession(session ?? null);
+
+      // INITIAL_SESSION lo resuelve getSession arriba; evita carreras y doble refresh de perfil
+      if (event === "INITIAL_SESSION") {
+        return;
       }
-      } else {
+
+      if (event === "SIGNED_OUT") {
         setUser(null);
         setNeedsOnboarding(false);
         setLoading(false);
+        return;
+      }
+
+      if (session?.user) {
+        if (
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "USER_UPDATED"
+        ) {
+          const ok = await fetchUserProfile(session.user.id);
+          if (!ok) {
+            setUser(buildFallbackUserFromSession(session.user));
+            setLoading(false);
+          }
+        }
       }
     });
 
@@ -256,129 +257,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [loading]);
 
-  useEffect(() => {
-    if (!session?.user) {
-      if (typeof window !== "undefined" && sessionStorageKeyRef.current) {
-        window.localStorage.removeItem(sessionStorageKeyRef.current);
-        sessionStorageKeyRef.current = null;
-      }
-      if (sessionTimeoutRef.current) {
-        window.clearTimeout(sessionTimeoutRef.current);
-        sessionTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (typeof window === "undefined") return;
-
-    // Clave por sesión: cada dispositivo tiene su propia sesión (su propio session_id en el JWT).
-    // Así el timeout de inactividad es por dispositivo y no se pisan al usar la cuenta en 2 computadoras.
-    const sessionId =
-      (() => {
-        try {
-          const payload = JSON.parse(atob(session.access_token.split(".")[1] ?? "e30="));
-          return (payload as { session_id?: string }).session_id ?? null;
-        } catch {
-          return null;
-        }
-      })() ?? `${session.user.id}-${session.expires_at ?? 0}`;
-    const storageKey = `${SESSION_STORAGE_KEY_PREFIX}.${sessionId}`;
-    sessionStorageKeyRef.current = storageKey;
-
-    const now = Date.now();
-    let lastActivityAt = now;
-    let storedUserId: string | null = null;
-
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { userId?: string; lastActivityAt?: number };
-        if (parsed?.userId) storedUserId = parsed.userId;
-        if (parsed?.lastActivityAt) lastActivityAt = parsed.lastActivityAt;
-      }
-    } catch (error) {
-      console.warn("⚠️ Error leyendo clave de actividad:", error);
-    }
-
-    if (storedUserId !== session.user.id) {
-      lastActivityAt = now;
-    }
-    // Tras recargar o volver atrás, no cerrar sesión por inactividad: contar como actividad reciente
-    try {
-      const navEntry = typeof window !== "undefined" && performance.getEntriesByType?.("navigation")?.[0] as { type?: string } | undefined;
-      if (navEntry && (navEntry.type === "reload" || navEntry.type === "back_forward")) {
-        lastActivityAt = now;
-      }
-    } catch {
-      // ignorar si no está disponible
-    }
-
-    lastActivityRef.current = lastActivityAt;
-
-    const elapsed = now - lastActivityAt;
-    if (elapsed >= SESSION_TIMEOUT_MS) {
-      supabase.auth.signOut().finally(() => {
-        window.localStorage.removeItem(storageKey);
-      });
-      return;
-    }
-
-    const persistActivity = (timestamp: number) => {
-      const shouldWrite = timestamp - lastStorageWriteRef.current >= ACTIVITY_STORAGE_THROTTLE_MS;
-      if (!shouldWrite) return;
-
-      lastStorageWriteRef.current = timestamp;
-      try {
-        window.localStorage.setItem(
-          storageKey,
-          JSON.stringify({ userId: session.user.id, lastActivityAt: timestamp }),
-        );
-      } catch (error) {
-        console.warn("⚠️ Error guardando actividad de sesión:", error);
-      }
-    };
-
-    const scheduleTimeout = (timestamp: number) => {
-      if (sessionTimeoutRef.current) {
-        window.clearTimeout(sessionTimeoutRef.current);
-      }
-      const remaining = SESSION_TIMEOUT_MS - (Date.now() - timestamp);
-      sessionTimeoutRef.current = window.setTimeout(() => {
-        supabase.auth.signOut().finally(() => {
-          window.localStorage.removeItem(storageKey);
-        });
-      }, Math.max(remaining, 0));
-    };
-
-    const handleActivity = () => {
-      const timestamp = Date.now();
-      lastActivityRef.current = timestamp;
-      persistActivity(timestamp);
-      scheduleTimeout(timestamp);
-    };
-
-    persistActivity(lastActivityAt);
-    scheduleTimeout(lastActivityAt);
-
-    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
-    events.forEach((eventName) => window.addEventListener(eventName, handleActivity, { passive: true }));
-
-    // Al volver a la pestaña o tras "atrás" en el navegador, contar como actividad para no cerrar sesión
-    const handlePageShow = () => {
-      handleActivity();
-    };
-    window.addEventListener("pageshow", handlePageShow);
-
-    return () => {
-      events.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
-      window.removeEventListener("pageshow", handlePageShow);
-      if (sessionTimeoutRef.current) {
-        window.clearTimeout(sessionTimeoutRef.current);
-        sessionTimeoutRef.current = null;
-      }
-    };
-  }, [session]);
-
   const signIn: AuthContextType["signIn"] = async (email, password) => {
     try {
       setLoading(true);
@@ -394,13 +272,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.session?.user) {
-        // Intentar obtener el perfil del usuario
-        const ok = await fetchUserProfile(data.session.user.id);
-        if (!ok) {
-          console.warn("⚠️ No se pudo obtener perfil, usando fallback de sesión");
-          setUser(buildFallbackUserFromSession(data.session.user));
-          setLoading(false);
-        }
+        setSession(data.session);
+        setUser(buildFallbackUserFromSession(data.session.user));
+        setLoading(false);
+        // Perfil completo en segundo plano (igual que getSession inicial) — login no espera 20s
+        void fetchUserProfile(data.session.user.id).then((ok) => {
+          if (!ok) {
+            setUser(buildFallbackUserFromSession(data.session.user));
+          }
+        });
       } else {
         console.warn("⚠️ No session or user in sign in response");
         setLoading(false);
@@ -501,14 +381,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setSession(null);
       setNeedsOnboarding(false);
-      if (typeof window !== "undefined" && sessionStorageKeyRef.current) {
-        window.localStorage.removeItem(sessionStorageKeyRef.current);
-        sessionStorageKeyRef.current = null;
-      }
-      if (sessionTimeoutRef.current) {
-        window.clearTimeout(sessionTimeoutRef.current);
-        sessionTimeoutRef.current = null;
-      }
       setLoading(false);
       setIsSigningOut(false);
     };

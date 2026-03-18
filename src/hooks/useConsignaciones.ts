@@ -57,7 +57,6 @@ export function useConsignaciones(options: UseConsignacionesOptions = {}) {
           status,
           search,
         });
-        console.log(`✅ Cargadas ${result.length} consignaciones`);
         return result || [];
       } catch (err) {
         const fetchError = err as Error;

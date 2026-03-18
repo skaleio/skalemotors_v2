@@ -83,9 +83,6 @@ export const vehicleService = {
       Object.entries(vehicle).filter(([_, v]) => v !== undefined)
     ) as VehicleInsert;
 
-    console.log("📤 Insertando vehículo...");
-    console.log("📤 Datos:", JSON.stringify(cleanVehicle, null, 2));
-
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Faltan variables de entorno de Supabase');
     }
@@ -122,7 +119,6 @@ export const vehicleService = {
           .eq('vin', cleanVehicle.vin)
           .maybeSingle();
         if (existing?.data) {
-          console.log('✅ Vehículo encontrado tras timeout:', existing.data.id);
           return existing.data as Vehicle;
         }
         throw new Error('Timeout creando vehículo');
@@ -158,8 +154,6 @@ export const vehicleService = {
     if (!created) {
       throw new Error('No se recibió respuesta válida del servidor');
     }
-
-    console.log("✅ Vehículo creado exitosamente:", created.id);
     return created as Vehicle;
   },
 
