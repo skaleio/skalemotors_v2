@@ -64,8 +64,6 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 const INVERSOR_OPCIONES = ["Mike", "Jota", "Ronald", "HessenMotors", "Pozo Hessen", "Antonio"] as const;
-// Opciones de inversor que se muestran en el formulario de nuevo gasto (HessenMotors no invierte).
-const INVERSOR_FORM_OPCIONES = INVERSOR_OPCIONES.filter((nombre) => nombre !== "HessenMotors");
 
 const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
   Mike: "bg-blue-100 text-blue-800 border-blue-200",
@@ -1412,7 +1410,7 @@ export default function Finance() {
               <Label>Inversor</Label>
               <Select
                 value={
-                  form.inversor_name && INVERSOR_FORM_OPCIONES.includes(form.inversor_name as (typeof INVERSOR_FORM_OPCIONES)[number])
+                  form.inversor_name && INVERSOR_OPCIONES.includes(form.inversor_name as (typeof INVERSOR_OPCIONES)[number])
                     ? form.inversor_name
                     : "none"
                 }
@@ -1429,7 +1427,7 @@ export default function Finance() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— No asignado</SelectItem>
-                  {INVERSOR_FORM_OPCIONES.map((nombre) => (
+                  {INVERSOR_OPCIONES.map((nombre) => (
                     <SelectItem key={nombre} value={nombre}>
                       {nombre}
                     </SelectItem>
