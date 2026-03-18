@@ -66,18 +66,21 @@ function getFuenteLabel(source: string): string {
 function getConfidenceBadge(confianza: AppraisalResult["tasacion"]["confianza"], total: number) {
   if (confianza === "alta") {
     return {
-      className: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+      className:
+        "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-950/60",
       label: `Alta confianza (${total} muestras)`,
     };
   }
   if (confianza === "media") {
     return {
-      className: "bg-amber-100 text-amber-800 hover:bg-amber-100",
+      className:
+        "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-950/50",
       label: `Confianza media (${total} muestras)`,
     };
   }
   return {
-    className: "bg-red-100 text-red-800 hover:bg-red-100",
+    className:
+      "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950/50",
     label: `Baja confianza (${total} muestras)`,
   };
 }
@@ -85,13 +88,13 @@ function getConfidenceBadge(confianza: AppraisalResult["tasacion"]["confianza"],
 function getKpiTone(kind: "min" | "avg" | "max" | "median") {
   switch (kind) {
     case "min":
-      return "border-emerald-200 bg-emerald-50";
+      return "border-emerald-200 bg-emerald-50 dark:border-emerald-800/80 dark:bg-emerald-950/35";
     case "avg":
-      return "border-blue-200 bg-blue-50";
+      return "border-blue-200 bg-blue-50 dark:border-blue-800/80 dark:bg-blue-950/40";
     case "max":
-      return "border-red-200 bg-red-50";
+      return "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/35";
     case "median":
-      return "border-slate-200 bg-slate-50";
+      return "border-border bg-muted/50 dark:bg-muted/30";
   }
 }
 
@@ -400,14 +403,16 @@ export default function VehicleAppraisal() {
             <Calculator className="h-7 w-7" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tasación de Vehículos</h1>
-            <p className="mt-1 text-slate-600">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Tasación de Vehículos
+            </h1>
+            <p className="mt-1 text-muted-foreground">
               Ingresa una patente chilena y obtén el valor de mercado estimado al instante.
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2 rounded-xl bg-slate-100/80 p-1.5">
+        <div className="flex gap-2 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/40">
           {steps.map((item) => {
             const active = step === item.id;
             const done = step > item.id;
@@ -416,15 +421,19 @@ export default function VehicleAppraisal() {
                 key={item.id}
                 className={`flex flex-1 items-center gap-2 rounded-lg px-4 py-2.5 transition-colors ${
                   active
-                    ? "bg-white text-slate-900 shadow-sm"
+                    ? "bg-card text-card-foreground shadow-sm ring-1 ring-border"
                     : done
-                      ? "text-emerald-700"
-                      : "text-slate-500"
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-muted-foreground"
                 }`}
               >
                 <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                    active ? "bg-blue-600 text-white" : done ? "bg-emerald-100" : "bg-slate-200"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    active
+                      ? "bg-blue-600 text-white dark:bg-blue-500"
+                      : done
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300"
+                        : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {done ? "✓" : item.id}
@@ -436,10 +445,10 @@ export default function VehicleAppraisal() {
         </div>
       </div>
 
-      <Card className="border-slate-200/80 shadow-sm">
+      <Card className="border-border shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Search className="h-5 w-5 text-slate-600" />
+            <Search className="h-5 w-5 text-muted-foreground" />
             Ingreso de patente
           </CardTitle>
           <CardDescription>
@@ -463,16 +472,16 @@ export default function VehicleAppraisal() {
             />
             <div className="text-center text-sm">
               {normalizedPatente.length === 0 ? (
-                <span className="text-slate-500">Formato esperado: 4 letras y 2 números.</span>
+                <span className="text-muted-foreground">Formato esperado: 4 letras y 2 números.</span>
               ) : patenteValida ? (
-                <span className="text-emerald-600">Formato válido.</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Formato válido.</span>
               ) : (
-                <span className="text-red-600">Formato inválido. Usa un patrón como `ABCD12`.</span>
+                <span className="text-red-600 dark:text-red-400">Formato inválido. Usa un patrón como `ABCD12`.</span>
               )}
             </div>
             <Button
               onClick={handleObtenerTasacion}
-              className="h-12 w-full bg-blue-600 hover:bg-blue-700"
+              className="h-12 w-full bg-blue-600 text-white hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:text-white dark:hover:bg-blue-500 [&_svg]:text-white"
               disabled={lookupLoading || !patenteValida}
             >
               {lookupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
@@ -480,13 +489,17 @@ export default function VehicleAppraisal() {
             </Button>
 
             {lookupError && (
-              <Card className="mt-4 border-amber-200 bg-amber-50">
+              <Card className="mt-4 border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/40">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-amber-900">No se pudo obtener el vehículo por patente</CardTitle>
-                  <CardDescription className="text-amber-800">{lookupError}</CardDescription>
+                  <CardTitle className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    No se pudo obtener el vehículo por patente
+                  </CardTitle>
+                  <CardDescription className="text-amber-800 dark:text-amber-200/90">{lookupError}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-amber-900">Puedes continuar ingresando los datos del vehículo manualmente:</p>
+                  <p className="text-sm text-amber-900 dark:text-amber-100/95">
+                    Puedes continuar ingresando los datos del vehículo manualmente:
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="manual-marca">Marca *</Label>
@@ -548,10 +561,10 @@ export default function VehicleAppraisal() {
       </Card>
 
       {(lookupLoading || (step >= 2 && vehicle)) && (
-        <Card className="border-slate-200/80 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <CarFront className="h-5 w-5 text-slate-600" />
+              <CarFront className="h-5 w-5 text-muted-foreground" />
               Datos del vehículo
             </CardTitle>
             <CardDescription>
@@ -569,12 +582,12 @@ export default function VehicleAppraisal() {
             ) : (
               <>
                 {/* Resumen del vehículo */}
-                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
+                <div className="rounded-2xl border border-border bg-gradient-to-br from-muted/40 to-card p-5 dark:from-muted/20 dark:to-card">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-lg bg-slate-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-white">
+                    <span className="rounded-lg bg-slate-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-white dark:bg-zinc-700">
                       {vehicle.patente}
                     </span>
-                    <span className="text-lg font-semibold text-slate-800">
+                    <span className="text-lg font-semibold text-foreground">
                       {[vehicle.marca, vehicle.modelo, vehicle.año].filter(Boolean).join(" · ") || "Sin datos"}
                     </span>
                   </div>
@@ -583,43 +596,45 @@ export default function VehicleAppraisal() {
                 {/* Ficha técnica en bloques */}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Identificación</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Identificación
+                    </h4>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="marca" className="text-slate-600">Marca</Label>
+                        <Label htmlFor="marca" className="text-muted-foreground">Marca</Label>
                         <Input
                           id="marca"
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.marca}
                           onChange={(event) => handleVehicleFieldChange("marca", event.target.value)}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="modelo" className="text-slate-600">Modelo</Label>
+                        <Label htmlFor="modelo" className="text-muted-foreground">Modelo</Label>
                         <Input
                           id="modelo"
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.modelo}
                           onChange={(event) => handleVehicleFieldChange("modelo", event.target.value)}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="anio" className="text-slate-600">Año</Label>
+                        <Label htmlFor="anio" className="text-muted-foreground">Año</Label>
                         <Input
                           id="anio"
                           type="number"
                           min={1990}
                           max={2035}
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.año}
                           onChange={(event) => handleVehicleFieldChange("año", event.target.value)}
                         />
                       </div>
                     </div>
                     {typeof vehicle.kilometraje === "number" && vehicle.kilometraje > 0 && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         Kilometraje actual registrado:&nbsp;
-                        <span className="font-semibold text-slate-700">
+                        <span className="font-semibold text-foreground">
                           {vehicle.kilometraje.toLocaleString("es-CL")} km
                         </span>
                       </p>
@@ -630,30 +645,30 @@ export default function VehicleAppraisal() {
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Motorización</h4>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="motor" className="text-slate-600">Motor</Label>
+                        <Label htmlFor="motor" className="text-muted-foreground">Motor</Label>
                         <Input
                           id="motor"
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.motor ?? ""}
                           onChange={(event) => handleVehicleFieldChange("motor", event.target.value)}
                           placeholder="Ej: 1.8"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="combustible" className="text-slate-600">Combustible</Label>
+                        <Label htmlFor="combustible" className="text-muted-foreground">Combustible</Label>
                         <Input
                           id="combustible"
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.combustible ?? ""}
                           onChange={(event) => handleVehicleFieldChange("combustible", event.target.value)}
                           placeholder="Ej: Gasolina"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="transmision" className="text-slate-600">Transmisión</Label>
+                        <Label htmlFor="transmision" className="text-muted-foreground">Transmisión</Label>
                         <Input
                           id="transmision"
-                          className="bg-white"
+                          className="bg-background"
                           value={vehicle.transmision ?? ""}
                           onChange={(event) => handleVehicleFieldChange("transmision", event.target.value)}
                           placeholder="Ej: Automática"
@@ -668,21 +683,21 @@ export default function VehicleAppraisal() {
                   <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ajustes para la tasación</h4>
                   <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[140px] space-y-1.5">
-                      <Label htmlFor="kilometraje" className="text-slate-600">Kilometraje</Label>
+                      <Label htmlFor="kilometraje" className="text-muted-foreground">Kilometraje</Label>
                       <Input
                         id="kilometraje"
                         type="number"
                         min={0}
                         placeholder="Ej: 45000"
-                        className="bg-white"
+                        className="bg-background"
                         value={kilometraje}
                         onChange={(e) => setKilometraje(e.target.value)}
                       />
                     </div>
                     <div className="min-w-[160px] space-y-1.5">
-                      <Label className="text-slate-600">Estado general</Label>
+                      <Label className="text-muted-foreground">Estado general</Label>
                       <Select value={estadoGeneral} onValueChange={(v) => setEstadoGeneral(v as "excelente" | "bueno" | "regular")}>
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="bg-background">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -693,9 +708,9 @@ export default function VehicleAppraisal() {
                       </Select>
                     </div>
                     <div className="min-w-[160px] space-y-1.5">
-                      <Label className="text-slate-600">Tolerancia de años</Label>
+                      <Label className="text-muted-foreground">Tolerancia de años</Label>
                       <Select value={toleranciaAnios} onValueChange={setToleranciaAnios}>
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="bg-background">
                           <SelectValue placeholder="Tolerancia" />
                         </SelectTrigger>
                         <SelectContent>
@@ -867,9 +882,9 @@ export default function VehicleAppraisal() {
                               <TableCell className="max-w-[280px] font-medium text-slate-800">
                                 <span className="line-clamp-2">{muestra.titulo}</span>
                               </TableCell>
-                              <TableCell className="text-slate-600">{muestra.año}</TableCell>
+                              <TableCell className="text-muted-foreground">{muestra.año}</TableCell>
                               <TableCell className="font-semibold text-slate-800">{formatCLP(muestra.precio)}</TableCell>
-                              <TableCell className="text-slate-600">
+                              <TableCell className="text-muted-foreground">
                                 {muestra.kilometros ? muestra.kilometros.toLocaleString("es-CL") : "—"}
                               </TableCell>
                               <TableCell>

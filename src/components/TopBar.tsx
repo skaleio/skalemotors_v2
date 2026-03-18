@@ -3,7 +3,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLeads } from "@/hooks/useLeads";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useVehicles } from "@/hooks/useVehicles";
-import { Bell, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
+import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -411,6 +411,20 @@ export function TopBar() {
                           <div className="text-xs text-gray-500">Calcular cuotas</div>
                         </div>
                         <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+F</div>
+                      </button>
+
+                      <button
+                        onClick={() => navigateWithLoading('/app/tasacion')}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                      >
+                        <div className="p-1.5 bg-cyan-100 group-hover:bg-cyan-200 rounded-md transition-colors">
+                          <Calculator className="h-4 w-4 text-cyan-600" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">Tasación</div>
+                          <div className="text-xs text-gray-500">Valorar vehículo por patente</div>
+                        </div>
+                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+M</div>
                       </button>
                     </div>
                   </div>

@@ -213,6 +213,27 @@ html[data-mobile-app="true"] #root > * {
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  /* Sidebar en tema oscuro: logo más luminoso y legible sobre zinc */
+  .dark .app-sidebar .skale-logo {
+    text-shadow: 0 1px 8px rgba(56, 189, 248, 0.25);
+    background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 55%, #0ea5e9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Recharts: tooltip legible en modo oscuro */
+.dark .recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+.dark .recharts-tooltip-label,
+.dark .recharts-default-tooltip .recharts-tooltip-item-name,
+.dark .recharts-default-tooltip .recharts-tooltip-item-value,
+.dark .recharts-default-tooltip .recharts-tooltip-item-separator {
+  color: hsl(var(--popover-foreground)) !important;
 }
 
 /* Lista de vehículos en combobox: scroll fino y sin superponer al contenido */

@@ -37,6 +37,7 @@ function useShortcutHandlers() {
       else navigateWithLoading("/app/consignaciones?new=true");
     },
     billing: () => navigateWithLoading("/app/billing"),
+    tasacion: () => navigateWithLoading("/app/tasacion"),
   };
   return handlersRef;
 }

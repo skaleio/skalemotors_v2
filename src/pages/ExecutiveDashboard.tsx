@@ -1,12 +1,33 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/FinanceMonthSelector";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
 import { ArrowUpRight, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+/** Tooltip legible en claro y oscuro (Recharts por defecto pinta texto oscuro). */
+const EXEC_TOOLTIP_PROPS = {
+  contentStyle: {
+    backgroundColor: "hsl(var(--popover))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "8px",
+    boxShadow: "0 10px 24px -4px rgb(0 0 0 / 0.2)",
+    padding: "10px 14px",
+  },
+  labelStyle: {
+    color: "hsl(var(--popover-foreground))",
+    fontWeight: 600 as const,
+    marginBottom: 4,
+  },
+  itemStyle: {
+    color: "hsl(var(--popover-foreground))",
+  },
+};
 
 function ChartEmptyState({
   icon: Icon,
@@ -58,7 +79,17 @@ function ChartSkeleton() {
 
 export default function ExecutiveDashboard() {
   const { user } = useAuth();
-  const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id, undefined, user?.id);
+  const [selectedMonth, setSelectedMonth] = useState<DashboardSelectedMonth>(() => {
+    const p = getCurrentPeriod();
+    return { year: p.year, month: p.month - 1 };
+  });
+  const { data: stats, isLoading, error } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
+
+  const financePeriod = { year: selectedMonth.year, month: selectedMonth.month + 1 };
+  const onFinancePeriodChange = (p: { year: number; month: number }) =>
+    setSelectedMonth({ year: p.year, month: p.month - 1 });
+
+  const periodLabel = stats?.selectedMonthLabel ?? "";
 
   if (error) {
     return (
@@ -133,13 +164,19 @@ export default function ExecutiveDashboard() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard Ejecutivo</h1>
-        <p className="text-muted-foreground mt-2">
-          {hasAnyData
-            ? "Vista ejecutiva de métricas, gráficos y KPIs en tiempo real."
-            : "Carga ventas, inventario, gastos y leads para ver aquí las métricas y gráficos."}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard Ejecutivo</h1>
+          <p className="text-muted-foreground mt-2">
+            {hasAnyData
+              ? `Métricas y gráficos del período seleccionado. Inventario y pipeline son estado actual.`
+              : "Elige un mes o carga datos en Ventas, Inventario y Gastos para ver métricas."}
+          </p>
+        </div>
+        <div className="flex flex-col items-stretch sm:items-end gap-1 shrink-0">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Período</span>
+          <FinanceMonthSelector period={financePeriod} onPeriodChange={onFinancePeriodChange} />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -150,7 +187,7 @@ export default function ExecutiveDashboard() {
           </CardHeader>
           <CardContent>
             {showSkeleton ? <Skeleton className="h-8 w-28" /> : <div className="text-2xl font-bold">{formatCLP(stats?.totalIncomeMonth ?? 0)}</div>}
-            <p className="text-xs text-muted-foreground">Este mes</p>
+            <p className="text-xs text-muted-foreground">Ingresos · {periodLabel || "—"}</p>
           </CardContent>
         </Card>
 
@@ -161,7 +198,7 @@ export default function ExecutiveDashboard() {
           </CardHeader>
           <CardContent>
             {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats?.salesThisMonth || 0}</div>}
-            <p className="text-xs text-muted-foreground">Este mes</p>
+            <p className="text-xs text-muted-foreground">Ventas · {periodLabel || "—"}</p>
           </CardContent>
         </Card>
 
@@ -172,7 +209,7 @@ export default function ExecutiveDashboard() {
           </CardHeader>
           <CardContent>
             {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{conversionRate}%</div>}
-            <p className="text-xs text-muted-foreground">Leads a ventas</p>
+            <p className="text-xs text-muted-foreground">Ventas del mes vs leads actuales</p>
           </CardContent>
         </Card>
 
@@ -183,7 +220,7 @@ export default function ExecutiveDashboard() {
           </CardHeader>
           <CardContent>
             {showSkeleton ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats?.activeLeads || 0}</div>}
-            <p className="text-xs text-muted-foreground">En conversión</p>
+            <p className="text-xs text-muted-foreground">Activos hoy (no por mes)</p>
           </CardContent>
         </Card>
       </div>
@@ -200,7 +237,7 @@ export default function ExecutiveDashboard() {
                   </div>
                   Análisis de Ventas
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Tendencia últimos 6 meses</p>
+                <p className="text-xs text-muted-foreground">6 meses hasta {periodLabel || "…"}</p>
               </div>
             </div>
           </CardHeader>
@@ -229,18 +266,12 @@ export default function ExecutiveDashboard() {
                     axisLine={false}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                      padding: '12px'
-                    }}
+                    {...EXEC_TOOLTIP_PROPS}
+                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
                     formatter={(value: any, name: string) => {
                       if (name === 'sales') return [value, 'Ventas'];
                       return [formatCLP(value), 'Ingresos'];
                     }}
-                    labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
                   <Line
                     type="monotone"
@@ -317,13 +348,8 @@ export default function ExecutiveDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '10px',
-                      boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
-                      padding: '10px 14px'
-                    }}
+                    {...EXEC_TOOLTIP_PROPS}
+                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
                     formatter={(value: number, name: string) => {
                       const total = stats!.vehiclesByCategory.reduce((s, i) => s + i.count, 0);
                       const pct = total ? Math.round((Number(value) / total) * 100) : 0;
@@ -364,7 +390,7 @@ export default function ExecutiveDashboard() {
                   </div>
                   Distribución de Gastos
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Por tipo de gasto</p>
+                <p className="text-xs text-muted-foreground">Gastos en {periodLabel || "el período"}</p>
               </div>
             </div>
           </CardHeader>
@@ -394,13 +420,8 @@ export default function ExecutiveDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '10px',
-                      boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
-                      padding: '10px 14px'
-                    }}
+                    {...EXEC_TOOLTIP_PROPS}
+                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
                     formatter={(value: number, name: string) => {
                       const total = stats!.expensesByType.reduce((s, i) => s + i.amount, 0);
                       const pct = total ? Math.round((Number(value) / total) * 100) : 0;
@@ -483,16 +504,10 @@ export default function ExecutiveDashboard() {
                     axisLine={false}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                      padding: '12px'
-                    }}
+                    {...EXEC_TOOLTIP_PROPS}
+                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
                     formatter={(value: any) => [value, 'Leads']}
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.1 }}
-                    labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
                   />
                   <Bar
                     dataKey="count"
@@ -526,7 +541,7 @@ export default function ExecutiveDashboard() {
                   </div>
                   Ventas Recientes
                 </CardTitle>
-                <CardDescription className="text-xs">Últimas 5 transacciones</CardDescription>
+                <CardDescription className="text-xs">Hasta 5 ventas en {periodLabel || "el período"}</CardDescription>
               </div>
             </div>
           </CardHeader>

@@ -24,7 +24,8 @@ import {
   Activity, 
   CheckCircle,
   ClipboardList,
-  CircleDollarSign
+  CircleDollarSign,
+  Calculator
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -237,6 +238,16 @@ export function GlobalQuickActions() {
     color: "bg-green-600",
     category: "Operaciones",
     keywords: ["financiamiento", "crédito", "cuotas", "calcular", "préstamo"]
+  },
+  { 
+    label: "Tasación", 
+    description: "Valorar vehículo por patente",
+    icon: Calculator,
+    shortcut: "Ctrl+M",
+    action: () => navigateWithLoading('/app/tasacion'),
+    color: "bg-cyan-600",
+    category: "Operaciones",
+    keywords: ["tasación", "tasacion", "valorar", "patente", "precio mercado", "appraisal"]
   },
   { 
     label: "Gestión de Citas", 

@@ -45,7 +45,9 @@ import {
   UserCircle,
   UserCog,
   Users,
-  Wallet
+  Wallet,
+  Moon,
+  Sun
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -67,6 +69,7 @@ import {
   SidebarMenuItem,
   useSidebar
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -169,7 +172,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
   const currentPath = location.pathname + location.search;
@@ -283,11 +286,31 @@ export function AppSidebar() {
 
   const getNavCls = (isActiveState: boolean) => {
     if (isActiveState) {
-      return "bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/25 border border-blue-500/30";
+      return "bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/25 border border-blue-500/40 dark:from-blue-500 dark:to-blue-600 dark:border-blue-400/30";
     }
-
-    return "text-slate-700 hover:text-slate-900 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 transition-all duration-300 hover:shadow-md hover:border hover:border-slate-200";
+    return [
+      "text-slate-700 dark:text-zinc-200",
+      "hover:text-slate-900 dark:hover:text-white",
+      "hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50",
+      "dark:hover:from-zinc-800 dark:hover:to-zinc-800/90",
+      "border border-transparent hover:border-slate-200 dark:hover:border-zinc-600/80",
+      "transition-all duration-300 hover:shadow-md",
+    ].join(" ");
   };
+
+  const navIconCls = (active: boolean, withScale = true) =>
+    active
+      ? "text-white"
+      : [
+          "text-slate-600 dark:text-zinc-400",
+          "group-hover:text-blue-600 dark:group-hover:text-sky-400",
+          withScale ? "group-hover:scale-110" : "",
+        ].filter(Boolean).join(" ");
+
+  const navLabelCls = (active: boolean) =>
+    active
+      ? "text-white"
+      : "text-slate-700 dark:text-zinc-200 group-hover:text-slate-900 dark:group-hover:text-white";
 
   const toggleCategory = (categoryTitle: string) => {
     setExpandedCategories(prev => ({
@@ -322,28 +345,63 @@ export function AppSidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <Sidebar
-        className={`${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 border-r border-slate-200 shadow-lg shadow-slate-200/50 transition-[width] duration-200 ease-sidebar [box-shadow:2px_0_12px_-4px_rgba(0,0,0,0.08)]`}
+        className={`app-sidebar ${isCollapsed ? "w-14" : "w-64"} bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 border-r border-slate-200 dark:border-zinc-800 shadow-lg shadow-slate-200/50 dark:shadow-black/40 transition-[width] duration-200 ease-sidebar [box-shadow:2px_0_12px_-4px_rgba(0,0,0,0.08)] dark:[box-shadow:2px_0_16px_-4px_rgba(0,0,0,0.5)]`}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-slate-200 p-3 bg-gradient-to-r from-slate-50 to-white transition-all duration-200 min-w-0 overflow-hidden shrink-0 flex-shrink-0">
+        <SidebarHeader className="border-b border-slate-200 dark:border-zinc-800 p-3 bg-gradient-to-r from-slate-50 to-white dark:from-zinc-900 dark:to-zinc-900/95 transition-all duration-200 min-w-0 overflow-hidden shrink-0 flex-shrink-0">
           {!isCollapsed ? (
-            <div className="flex items-center gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
-              <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <span className="skale-logo text-slate-800 font-bold text-lg tracking-wide truncate min-w-0 animate-in fade-in-0 duration-150 delay-75">
+            <div className="flex items-center justify-between gap-2 min-w-0 w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
+              <span className="skale-logo font-bold text-lg tracking-wide truncate min-w-0 flex-1 animate-in fade-in-0 duration-150 delay-75">
                 SKALEMOTORS
               </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-lg border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-100 hover:text-slate-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-amber-400 dark:hover:bg-zinc-700 dark:hover:text-amber-300"
+                    onClick={toggleTheme}
+                    aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+                  >
+                    {theme === "dark" ? (
+                      <Sun className="h-4 w-4" />
+                    ) : (
+                      <Moon className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700">
+                  {theme === "dark" ? "Tema claro" : "Tema oscuro"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           ) : (
-            <div className="flex items-center justify-center w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
-              <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200">
-                <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
+            <div className="flex flex-col items-center gap-2 w-full animate-in slide-in-from-left-2 duration-150 fade-in-0">
+              <span className="skale-logo font-bold text-lg tracking-wide">
+                SK
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-lg border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-amber-400 dark:hover:bg-zinc-700"
+                    onClick={toggleTheme}
+                    aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+                  >
+                    {theme === "dark" ? (
+                      <Sun className="h-3.5 w-3.5" />
+                    ) : (
+                      <Moon className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700">
+                  {theme === "dark" ? "Tema claro" : "Tema oscuro"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </SidebarHeader>
@@ -358,7 +416,7 @@ export function AppSidebar() {
               <SidebarGroup>
                 <CollapsibleTrigger asChild>
                   <SidebarGroupLabel
-                    className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
+                    className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 dark:hover:from-zinc-800 dark:hover:to-zinc-800/80 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm dark:hover:shadow-none group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
                     onClick={isCollapsed ? () => handleCollapsedCategoryClick(category) : undefined}
                   >
                     <div className="flex items-center justify-between w-full min-w-0 group-data-[collapsible=icon]:justify-center">
@@ -366,22 +424,22 @@ export function AppSidebar() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
-                              <category.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110 shrink-0" />
+                              <category.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-sky-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
                             </div>
                           </TooltipTrigger>
-                          <TooltipContent side="right" className="bg-white text-slate-800 border-slate-200 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
+                          <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100 border-slate-200 dark:border-zinc-700 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
                             <p>{category.title}</p>
                           </TooltipContent>
                         </Tooltip>
                       ) : (
                         <>
-                          <span className="font-bold text-xs tracking-wider uppercase text-slate-600 group-hover:text-slate-800 transition-colors duration-200">
+                          <span className="font-bold text-xs tracking-wider uppercase text-slate-600 dark:text-zinc-300 group-hover:text-slate-800 dark:group-hover:text-zinc-100 transition-colors duration-200">
                             {category.title}
                           </span>
                           <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                             {expandedCategories[category.title] ?
-                              <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
-                              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
+                              <ChevronDown className="h-4 w-4 text-slate-500 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 transition-all duration-200" /> :
+                              <ChevronRight className="h-4 w-4 text-slate-500 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 transition-all duration-200" />
                             }
                           </div>
                         </>
@@ -403,10 +461,8 @@ export function AppSidebar() {
                                     onClick={() => handleNavigation(item.url)}
                                     className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                                   >
-                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
-                                      }`} />
-                                    <span className={`font-medium text-sm transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                      }`}>
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${navIconCls(isActive(item.url))}`} />
+                                    <span className={`font-medium text-sm transition-all duration-200 ${navLabelCls(isActive(item.url))}`}>
                                       {item.title}
                                     </span>
                                   </button>
@@ -419,10 +475,8 @@ export function AppSidebar() {
                                     onTouchStart={isLeadsItem ? prefetchLeads : undefined}
                                     className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                                   >
-                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600 group-hover:scale-110'
-                                      }`} />
-                                    <span className={`font-medium text-sm transition-all duration-200 ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                      }`}>
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-all duration-200 ${navIconCls(isActive(item.url))}`} />
+                                    <span className={`font-medium text-sm transition-all duration-200 ${navLabelCls(isActive(item.url))}`}>
                                       {item.title}
                                     </span>
                                   </NavLink>
@@ -447,7 +501,7 @@ export function AppSidebar() {
             <SidebarGroup>
               <CollapsibleTrigger asChild>
                 <SidebarGroupLabel
-                  className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
+                  className="cursor-pointer transition-all duration-300 hover:bg-gradient-to-r hover:from-slate-100 hover:to-slate-50 dark:hover:from-zinc-800 dark:hover:to-zinc-800/80 rounded-lg mx-2 px-3 py-2 group hover:shadow-sm dark:hover:shadow-none group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-full"
                   onClick={isCollapsed ? () => handleCollapsedCategoryClick(settingsCategory) : undefined}
                 >
                   <div className="flex items-center justify-between w-full min-w-0 group-data-[collapsible=icon]:justify-center">
@@ -455,22 +509,22 @@ export function AppSidebar() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
-                            <settingsCategory.icon className="h-5 w-5 text-slate-600 group-hover:text-blue-600 transition-all duration-200 group-hover:scale-110 shrink-0" />
+                            <settingsCategory.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-sky-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent side="right" className="bg-white text-slate-800 border-slate-200 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
+                        <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100 border-slate-200 dark:border-zinc-700 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
                           <p>{settingsCategory.title}</p>
                         </TooltipContent>
                       </Tooltip>
                     ) : (
                       <>
-                        <span className="font-bold text-xs tracking-wider uppercase text-slate-600 group-hover:text-slate-800 transition-colors duration-200">
+                        <span className="font-bold text-xs tracking-wider uppercase text-slate-600 dark:text-zinc-300 group-hover:text-slate-800 dark:group-hover:text-zinc-100 transition-colors duration-200">
                           {settingsCategory.title}
                         </span>
                         <div className="transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
                           {expandedCategories["Sistema"] ?
-                            <ChevronDown className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" /> :
-                            <ChevronRight className="h-4 w-4 text-slate-500 group-hover:text-slate-700 transition-all duration-200" />
+                            <ChevronDown className="h-4 w-4 text-slate-500 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 transition-all duration-200" /> :
+                            <ChevronRight className="h-4 w-4 text-slate-500 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 transition-all duration-200" />
                           }
                         </div>
                       </>
@@ -492,11 +546,9 @@ export function AppSidebar() {
                                     onClick={() => handleNavigation(item.url)}
                                     className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                                   >
-                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
-                                      }`} />
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${navIconCls(isActive(item.url), false)}`} />
                                     {!isCollapsed && (
-                                      <span className={`font-medium text-sm transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                        }`}>
+                                      <span className={`font-medium text-sm transition-colors ${navLabelCls(isActive(item.url))}`}>
                                         {item.title}
                                       </span>
                                     )}
@@ -515,11 +567,9 @@ export function AppSidebar() {
                                     to={item.url}
                                     className={`${getNavCls(isActive(item.url))} w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left mx-2 group transition-all duration-300 hover:scale-[1.02] hover:shadow-md active:scale-[0.98]`}
                                   >
-                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-600 group-hover:text-blue-600'
-                                      }`} />
+                                    <item.icon className={`h-4 w-4 flex-shrink-0 transition-colors ${navIconCls(isActive(item.url), false)}`} />
                                     {!isCollapsed && (
-                                      <span className={`font-medium text-sm transition-colors ${isActive(item.url) ? 'text-white' : 'text-slate-700 group-hover:text-slate-900'
-                                        }`}>
+                                      <span className={`font-medium text-sm transition-colors ${navLabelCls(isActive(item.url))}`}>
                                         {item.title}
                                       </span>
                                     )}
@@ -544,10 +594,10 @@ export function AppSidebar() {
         </SidebarContent>
 
         {/* Footer con información del usuario */}
-        <SidebarFooter className="border-t border-slate-200 p-4 group-data-[collapsible=icon]:p-2">
+        <SidebarFooter className="border-t border-slate-200 dark:border-zinc-800 p-4 group-data-[collapsible=icon]:p-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
+              <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800/70 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
                 <Avatar className="h-8 w-8 shrink-0">
                   <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
@@ -556,47 +606,47 @@ export function AppSidebar() {
                 </Avatar>
                 {!isCollapsed && (
                   <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">
+                    <p className="text-sm font-medium text-slate-800 dark:text-zinc-100 truncate">
                       {user?.full_name || 'Usuario'}
                     </p>
-                    <p className="text-xs text-slate-500 truncate">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 truncate">
                       {user?.email || 'usuario@ejemplo.com'}
                     </p>
                   </div>
                 )}
-                <MoreVertical className="h-4 w-4 text-slate-500 group-hover:text-slate-700 shrink-0 group-data-[collapsible=icon]:hidden" />
+                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 shrink-0 group-data-[collapsible=icon]:hidden" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 bg-white border border-slate-200 shadow-lg">
+            <DropdownMenuContent align="end" className="w-64 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 shadow-lg">
               {/* Mi Cuenta */}
               <div className="px-3 py-2">
-                <p className="text-sm font-semibold text-slate-800">Mi Cuenta</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">Mi Cuenta</p>
               </div>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => navigate('/app/profile')}
               >
-                <UserCircle className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Perfil</span>
-                <div className="ml-auto text-xs text-slate-400">⇧⌘P</div>
+                <UserCircle className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Perfil</span>
+                <div className="ml-auto text-xs text-slate-400 dark:text-zinc-500">⇧⌘P</div>
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => navigate('/app/billing')}
               >
-                <BillingIcon className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Facturación</span>
+                <BillingIcon className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Facturación</span>
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => navigate('/app/settings')}
               >
-                <Settings className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Configuración</span>
-                <div className="ml-auto text-xs text-slate-400">⌘S</div>
+                <Settings className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Configuración</span>
+                <div className="ml-auto text-xs text-slate-400 dark:text-zinc-500">⌘S</div>
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => {
                   // Aquí podrías abrir un modal con atajos de teclado
                   toast({
@@ -605,27 +655,27 @@ export function AppSidebar() {
                   });
                 }}
               >
-                <Keyboard className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Atajos de teclado</span>
-                <div className="ml-auto text-xs text-slate-400">⌘K</div>
+                <Keyboard className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Atajos de teclado</span>
+                <div className="ml-auto text-xs text-slate-400 dark:text-zinc-500">⌘K</div>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               {/* Equipo */}
               <div className="px-3 py-2">
-                <p className="text-sm font-semibold text-slate-800">Equipo</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">Equipo</p>
               </div>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => navigate('/app/users')}
               >
-                <Users className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Invitar usuarios</span>
-                <ArrowRight className="h-4 w-4 text-slate-400 ml-auto" />
+                <Users className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Invitar usuarios</span>
+                <ArrowRight className="h-4 w-4 text-slate-400 dark:text-zinc-500 ml-auto" />
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-800 focus:bg-slate-50 dark:focus:bg-zinc-800"
                 onClick={() => {
                   toast({
                     title: "Nuevo Equipo",
@@ -633,16 +683,16 @@ export function AppSidebar() {
                   });
                 }}
               >
-                <Plus className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">Nuevo Equipo</span>
-                <div className="ml-auto text-xs text-slate-400">⌘+T</div>
+                <Plus className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
+                <span className="text-sm text-slate-700 dark:text-zinc-200">Nuevo Equipo</span>
+                <div className="ml-auto text-xs text-slate-400 dark:text-zinc-500">⌘+T</div>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               {/* Cerrar Sesión */}
               <DropdownMenuItem
-                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-50 text-red-600"
+                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400"
                 onClick={() => {
                   if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
                     signOut();
@@ -667,14 +717,14 @@ export function AppSidebar() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">
+                    <p className="text-sm font-medium text-slate-800 dark:text-zinc-100">
                       {user?.full_name || 'Usuario'}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
                       {user?.email || 'usuario@ejemplo.com'}
                     </p>
                   </div>
-                  <MoreVertical className="h-4 w-4 text-slate-400" />
+                  <MoreVertical className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
                 </div>
               </div>
             </DropdownMenuContent>

@@ -215,14 +215,11 @@ const Landing = () => {
       <header className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md border-b border-cyan-400/30">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            {/* Logo SKALE */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <span className="text-white font-bold text-xl">SKALEMOTORS</span>
+            {/* Logo SKALE (solo wordmark) */}
+            <div className="flex items-center">
+              <span className="skale-logo text-white font-bold text-xl tracking-[0.18em]">
+                SKALEMOTORS
+              </span>
             </div>
 
             {/* Navigation */}

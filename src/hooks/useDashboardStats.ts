@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
 import { gastosEmpresaService } from '@/lib/services/gastosEmpresa'
 import { ingresosEmpresaService } from '@/lib/services/ingresosEmpresa'
+import { saleService } from '@/lib/services/sales'
 
 type SaleListItem = {
   id: string
@@ -107,7 +108,7 @@ function monthRange(year: number, month0: number) {
 
 export function useDashboardStats(branchId?: string, selectedYearMonth?: DashboardSelectedMonth, userId?: string) {
   return useQuery({
-    queryKey: ['dashboard-stats', branchId ?? 'no-branch', selectedYearMonth?.year, selectedYearMonth?.month],
+    queryKey: ['dashboard-stats-v2', branchId ?? 'no-branch', selectedYearMonth?.year, selectedYearMonth?.month],
     queryFn: async (): Promise<DashboardStats> => {
       const now = new Date()
       const year = selectedYearMonth?.year ?? now.getFullYear()
@@ -201,18 +202,6 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
       const sixMonthsAgo = new Date(year, month - 5, 1)
       const sixMonthsStr = `${sixMonthsAgo.getFullYear()}-${pad2(sixMonthsAgo.getMonth() + 1)}-01`
 
-      const salesFields = `id, sale_price, sale_date, vehicle_description, client_name, margin, status,
-        payment_status, commission_credit_status, stock_origin,
-        vehicle:vehicles (make, model, year),
-        seller:users (full_name)`
-
-      const buildSalesQ = (extra?: (q: any) => any) => {
-        let q = supabase.from('sales').select(salesFields)
-        if (branchId) q = q.eq('branch_id', branchId)
-        if (extra) q = extra(q)
-        return q
-      }
-
       const [
         salesThisMonthRaw,
         incomeSalesMonthRaw,
@@ -223,14 +212,23 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
         appointmentsRaw,
         recentSalesRaw,
       ] = await Promise.all([
-        safe(buildSalesQ(q => q.gte('sale_date', firstDayStr).lte('sale_date', lastDayStr).eq('status', 'completada').order('sale_date', { ascending: false })), 'salesThisMonth'),
+        saleService.getAll({
+          dateFrom: firstDayStr,
+          dateTo: lastDayStr,
+        }).catch(err => { console.warn('[Dashboard] salesThisMonth:', err); return [] as any[] }),
         safe(supabase.from('sales').select('margin').eq('status', 'completada').eq('payment_status', 'realizado').gte('sale_date', firstDayStr).lte('sale_date', lastDayStr).then(r => r), 'incomeSalesMonth'),
         safe(supabase.from('sales').select('margin').eq('status', 'completada').eq('payment_status', 'realizado').then(r => r), 'incomeSalesAll'),
-        safe(buildSalesQ(q => q.eq('status', 'completada').eq('payment_status', 'realizado').order('sale_date', { ascending: false }).limit(100)), 'incomeSalesList'),
+        saleService.getAll({
+          status: 'completada',
+          paymentStatus: 'realizado',
+        }).catch(err => { console.warn('[Dashboard] incomeSalesList:', err); return [] as any[] }),
         safe(supabase.from('vehicles').select('id, status, category').then(r => r), 'vehicles'),
         safe(supabase.from('leads').select('status').then(r => r), 'leads'),
         safe(supabase.from('appointments').select('id').gte('scheduled_at', now.toISOString()).eq('status', 'programada').then(r => r), 'appointments'),
-        safe(buildSalesQ(q => q.order('sale_date', { ascending: false }).limit(5)), 'recentSales'),
+        saleService.getAll({
+          dateFrom: firstDayStr,
+          dateTo: lastDayStr,
+        }).catch(err => { console.warn('[Dashboard] recentSales:', err); return [] as any[] }),
       ])
 
       // Ventas del mes
@@ -303,7 +301,10 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
       const scheduledAppointments = ((appointmentsRaw || []) as any[]).length
 
       // Gráfico ventas por mes (últimos 6 meses)
-      const salesForChart = ((await safe(supabase.from('sales').select('sale_price, sale_date').gte('sale_date', sixMonthsStr).eq('status', 'completada').then(r => r), 'salesChart')) || []) as any[]
+      const salesForChart = await saleService.getAll({
+        dateFrom: sixMonthsStr,
+        dateTo: lastDayStr,
+      }).catch(err => { console.warn('[Dashboard] salesChart:', err); return [] as any[] })
       const monthBuckets = Array.from({ length: 6 }).map((_, idx) => {
         const d = new Date(year, month - (5 - idx), 1)
         return { key: `${d.getFullYear()}-${d.getMonth()}`, month: MONTH_SHORT[d.getMonth()], sales: 0, revenue: 0 }
@@ -316,7 +317,7 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
       }
 
       // Ventas recientes
-      const recentSalesData = (recentSalesRaw || []) as any[]
+      const recentSalesData = ((recentSalesRaw || []) as any[]).slice(0, 5)
       const recentSales = recentSalesData.map((sale: any) => {
         const vehicleName = sale.vehicle_description?.trim() ||
           (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'

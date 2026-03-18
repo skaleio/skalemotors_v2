@@ -12,6 +12,8 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   inventory: "Ctrl+B",
   consignaciones: "Ctrl+G",
   billing: "Ctrl+I",
+  /** M de mercado; evita Ctrl+T (nueva pestaña del navegador) */
+  tasacion: "Ctrl+M",
 };
 
 export type ShortcutActionId = keyof typeof DEFAULT_SHORTCUTS;
@@ -30,6 +32,7 @@ export const SHORTCUT_ACTIONS: ShortcutActionDef[] = [
   { id: "new_sale", label: "Nueva Venta", description: "Registrar venta", category: "CRM" },
   { id: "appointments", label: "Nueva Cita", description: "Programar reunión", category: "Operaciones" },
   { id: "financial_calculator", label: "Financiamiento", description: "Calcular cuotas", category: "Operaciones" },
+  { id: "tasacion", label: "Tasación", description: "Valorar vehículo por patente", category: "Operaciones" },
   { id: "inventory", label: "Agregar Vehículo", description: "Nuevo stock", category: "Inventario" },
   { id: "consignaciones", label: "Agregar Consignación", description: "Nueva consignación", category: "Inventario" },
   { id: "billing", label: "Nueva Factura", description: "Emitir documento", category: "Finanzas" },
