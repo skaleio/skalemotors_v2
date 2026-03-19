@@ -232,34 +232,34 @@ function StatCounter({ end, suffix, label }: { end: number; suffix: string; labe
 /* ─────────────────────────────────────────────
    CRM PIPELINE (animated)
 ───────────────────────────────────────────── */
-type PipelineLead = { id: number; name: string; car: string; price: string; avatar: string; source: string; hot?: boolean };
+type PipelineLead = { id: number; name: string; car: string; avatar: string; source: string; hot?: boolean };
 type PipelineStage = { id: string; label: string; color: string; dot: string; leads: PipelineLead[] };
 
 const INITIAL_PIPELINE: PipelineStage[] = [
   {
     id:"nuevo", label:"Nuevo", color:"border-white/10 bg-white/3", dot:"bg-white/30",
     leads:[
-      { id:1, name:"Carlos M.", car:"Toyota Corolla 2023", price:"$14.900", avatar:"CM", source:"Instagram", hot:true },
-      { id:2, name:"Daniela P.", car:"Hyundai Tucson", price:"$22.500", avatar:"DP", source:"Facebook" },
+      { id:1, name:"Carlos M.", car:"Toyota Corolla 2023", avatar:"CM", source:"Instagram", hot:true },
+      { id:2, name:"Daniela P.", car:"Hyundai Tucson", avatar:"DP", source:"Facebook" },
     ],
   },
   {
     id:"contactado", label:"Contactado", color:"border-pink-500/20 bg-pink-500/5", dot:"bg-pink-400",
     leads:[
-      { id:3, name:"Rodrigo S.", car:"BMW X3 xDrive", price:"$41.000", avatar:"RS", source:"WhatsApp", hot:true },
+      { id:3, name:"Rodrigo S.", car:"BMW X3 xDrive", avatar:"RS", source:"WhatsApp", hot:true },
     ],
   },
   {
     id:"interes", label:"Interesado", color:"border-violet-500/20 bg-violet-500/5", dot:"bg-violet-400",
     leads:[
-      { id:4, name:"Valentina G.", car:"Audi A4 2022", price:"$33.500", avatar:"VG", source:"Chile Autos" },
-      { id:5, name:"Felipe O.", car:"Ford Ranger 4x4", price:"$28.900", avatar:"FO", source:"Mercado Libre" },
+      { id:4, name:"Valentina G.", car:"Audi A4 2022", avatar:"VG", source:"Chile Autos" },
+      { id:5, name:"Felipe O.", car:"Ford Ranger 4x4", avatar:"FO", source:"Mercado Libre" },
     ],
   },
   {
     id:"negociacion", label:"Negociación", color:"border-amber-500/20 bg-amber-500/5", dot:"bg-amber-400",
     leads:[
-      { id:6, name:"Javiera T.", car:"Kia Sportage", price:"$19.800", avatar:"JT", source:"Instagram" },
+      { id:6, name:"Javiera T.", car:"Kia Sportage", avatar:"JT", source:"Instagram" },
     ],
   },
   {
@@ -366,7 +366,6 @@ function CRMPipeline() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-pink-400 text-[10px] font-bold">{lead.price}</span>
                     <span className={`text-[8px] border rounded-full px-1.5 py-0.5 ${sourceColors[lead.source] || "bg-white/10 text-white/40 border-white/10"}`}>{lead.source}</span>
                   </div>
                 </div>
