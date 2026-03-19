@@ -140,7 +140,7 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium py-2.5 transition-colors"
+                className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-medium py-2.5 transition-colors"
                 disabled={localLoading}
               >
                 {localLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}

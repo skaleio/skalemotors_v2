@@ -176,7 +176,7 @@ export function TopBar() {
       case 'sale':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'lead':
-        return <Info className="h-5 w-5 text-blue-500" />;
+        return <Info className="h-5 w-5 text-pink-500" />;
       case 'appointment':
         return <Clock className="h-5 w-5 text-orange-500" />;
       case 'inventory':
@@ -192,7 +192,7 @@ export function TopBar() {
       <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1 md:flex-initial">
         <button
           onClick={() => navigate('/app')}
-          className="skale-logo text-sm md:hidden truncate min-w-0 max-w-[120px] sm:max-w-[180px]"
+          className="skale-logo text-sm md:hidden truncate min-w-0 max-w-[120px] sm:max-w-[180px] top-bar-logo"
         >
           SKALEMOTORS
         </button>
@@ -244,10 +244,10 @@ export function TopBar() {
                       <div className={`w-8 h-8 rounded-md flex items-center justify-center ${theme === 'dark'
                           ? result.type === 'vehicle'
                             ? 'bg-emerald-900/20 text-emerald-300'
-                            : 'bg-blue-900/20 text-blue-300'
+                            : 'bg-pink-900/20 text-pink-300'
                           : result.type === 'vehicle'
                             ? 'bg-emerald-100 text-emerald-600'
-                            : 'bg-blue-100 text-blue-600'
+                            : 'bg-pink-100 text-pink-600'
                         }`}>
                         {result.type === 'vehicle' ? (
                           <Car className="h-4 w-4" />
@@ -275,7 +275,7 @@ export function TopBar() {
       <div className="flex-1 min-w-0 hidden md:flex items-center justify-center">
         <button
           onClick={() => navigate('/app')}
-          className="skale-logo animate-pulse cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap"
+          className="skale-logo top-bar-logo animate-pulse cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap"
         >
           SKALEMOTORS
         </button>
@@ -293,7 +293,7 @@ export function TopBar() {
               }}
             >
               <DropdownMenuTrigger asChild>
-                <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0">
+                <Button className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0">
                   <Command className="h-4 w-4 mr-2" />
                   Acción Rápida
                 </Button>
@@ -318,21 +318,21 @@ export function TopBar() {
                             navigateWithLoading("/app/leads?new=true");
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
-                        <div className="p-1.5 bg-blue-100 group-hover:bg-blue-200 rounded-md transition-colors">
-                          <Users className="h-4 w-4 text-blue-600" />
+                        <div className="p-1.5 bg-pink-100 group-hover:bg-pink-200 rounded-md transition-colors">
+                          <Users className="h-4 w-4 text-pink-600" />
                         </div>
                         <div className="flex-1 text-left">
                           <div className="font-medium">Nuevo Lead</div>
                           <div className="text-xs text-gray-500">Agregar prospecto</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+L</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+L</div>
                       </button>
 
                       <button
                         onClick={() => navigateWithLoading('/app/crm')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-green-100 group-hover:bg-green-200 rounded-md transition-colors">
                           <Target className="h-4 w-4 text-green-600" />
@@ -341,12 +341,12 @@ export function TopBar() {
                           <div className="font-medium">CRM Pipeline</div>
                           <div className="text-xs text-gray-500">Gestionar ventas</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+P</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+P</div>
                       </button>
 
                       <button
                         onClick={() => navigateWithLoading('/app/quotes')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-purple-100 group-hover:bg-purple-200 rounded-md transition-colors">
                           <FileText className="h-4 w-4 text-purple-600" />
@@ -355,7 +355,7 @@ export function TopBar() {
                           <div className="font-medium">Nueva Cotización</div>
                           <div className="text-xs text-gray-500">Crear propuesta</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+Q</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+Q</div>
                       </button>
 
                       <button
@@ -367,7 +367,7 @@ export function TopBar() {
                             navigateWithLoading("/app/sales?new=true");
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-emerald-100 group-hover:bg-emerald-200 rounded-md transition-colors">
                           <CircleDollarSign className="h-4 w-4 text-emerald-600" />
@@ -376,7 +376,7 @@ export function TopBar() {
                           <div className="font-medium">Nueva Venta</div>
                           <div className="text-xs text-gray-500">Registrar venta de vehículo</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+E</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+E</div>
                       </button>
                     </div>
                   </div>
@@ -387,7 +387,7 @@ export function TopBar() {
                     <div className="space-y-1">
                       <button
                         onClick={() => navigateWithLoading('/app/appointments')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-orange-100 group-hover:bg-orange-200 rounded-md transition-colors">
                           <Calendar className="h-4 w-4 text-orange-600" />
@@ -396,12 +396,12 @@ export function TopBar() {
                           <div className="font-medium">Nueva Cita</div>
                           <div className="text-xs text-gray-500">Programar reunión</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+A</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+A</div>
                       </button>
 
                       <button
                         onClick={() => navigateWithLoading('/app/financial-calculator')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-emerald-100 group-hover:bg-emerald-200 rounded-md transition-colors">
                           <CreditCard className="h-4 w-4 text-emerald-600" />
@@ -410,12 +410,12 @@ export function TopBar() {
                           <div className="font-medium">Financiamiento</div>
                           <div className="text-xs text-gray-500">Calcular cuotas</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+F</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+F</div>
                       </button>
 
                       <button
                         onClick={() => navigateWithLoading('/app/tasacion')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-cyan-100 group-hover:bg-cyan-200 rounded-md transition-colors">
                           <Calculator className="h-4 w-4 text-cyan-600" />
@@ -424,7 +424,7 @@ export function TopBar() {
                           <div className="font-medium">Tasación</div>
                           <div className="text-xs text-gray-500">Valorar vehículo por patente</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+M</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+M</div>
                       </button>
                     </div>
                   </div>
@@ -442,7 +442,7 @@ export function TopBar() {
                             navigateWithLoading("/app/inventory?new=true");
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-indigo-100 group-hover:bg-indigo-200 rounded-md transition-colors">
                           <Car className="h-4 w-4 text-indigo-600" />
@@ -451,7 +451,7 @@ export function TopBar() {
                           <div className="font-medium">Agregar Vehículo</div>
                           <div className="text-xs text-gray-500">Nuevo stock</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+V</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+V</div>
                       </button>
 
                       <button
@@ -463,7 +463,7 @@ export function TopBar() {
                             navigateWithLoading("/app/consignaciones?new=true");
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-teal-100 group-hover:bg-teal-200 rounded-md transition-colors">
                           <ClipboardList className="h-4 w-4 text-teal-600" />
@@ -472,7 +472,7 @@ export function TopBar() {
                           <div className="font-medium">Agregar Consignación</div>
                           <div className="text-xs text-gray-500">Nuevo vehículo en consignación</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+C</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+C</div>
                       </button>
                     </div>
                   </div>
@@ -483,7 +483,7 @@ export function TopBar() {
                     <div className="space-y-1">
                       <button
                         onClick={() => navigateWithLoading('/app/billing')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-all duration-150 group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
                       >
                         <div className="p-1.5 bg-rose-100 group-hover:bg-rose-200 rounded-md transition-colors">
                           <Receipt className="h-4 w-4 text-rose-600" />
@@ -492,7 +492,7 @@ export function TopBar() {
                           <div className="font-medium">Nueva Factura</div>
                           <div className="text-xs text-gray-500">Emitir documento</div>
                         </div>
-                        <div className="text-xs text-gray-400 group-hover:text-blue-500">Ctrl+I</div>
+                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+I</div>
                       </button>
                     </div>
                   </div>
@@ -505,7 +505,7 @@ export function TopBar() {
                     </div>
                     <button
                       onClick={() => navigateWithLoading('/app/settings')}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      className="text-xs text-pink-600 hover:text-pink-800 font-medium"
                     >
                       Configuración
                     </button>
@@ -544,8 +544,8 @@ export function TopBar() {
                 <button
                   onClick={markAllAsRead}
                   className={`text-sm font-medium ${theme === 'dark'
-                      ? 'text-blue-400 hover:text-blue-300'
-                      : 'text-blue-600 hover:text-blue-800'
+                      ? 'text-pink-400 hover:text-pink-300'
+                      : 'text-pink-600 hover:text-pink-800'
                     }`}
                 >
                   Marcar todas como leídas
@@ -565,9 +565,9 @@ export function TopBar() {
                   <div
                     key={notification.id}
                     className={`p-4 border-b transition-colors ${theme === 'dark'
-                        ? `border-slate-600 hover:bg-slate-700 ${notification.unread ? 'bg-blue-900/20' : 'bg-slate-800'
+                        ? `border-slate-600 hover:bg-slate-700 ${notification.unread ? 'bg-pink-900/20' : 'bg-slate-800'
                         }`
-                        : `border-gray-100 hover:bg-gray-50 ${notification.unread ? 'bg-blue-50' : 'bg-white'
+                        : `border-gray-100 hover:bg-gray-50 ${notification.unread ? 'bg-pink-50' : 'bg-white'
                         }`
                       }`}
                   >
@@ -596,8 +596,8 @@ export function TopBar() {
                                 <span>{notification.time}</span>
                               </div>
                               <button className={`text-xs font-medium ${theme === 'dark'
-                                  ? 'text-blue-400 hover:text-blue-300'
-                                  : 'text-blue-600 hover:text-blue-800'
+                                  ? 'text-pink-400 hover:text-pink-300'
+                                  : 'text-pink-600 hover:text-pink-800'
                                 }`}>
                                 {notification.action}
                               </button>
@@ -646,8 +646,8 @@ export function TopBar() {
                   : 'border-gray-200 bg-gray-50'
                 }`}>
                 <button className={`w-full text-center text-sm font-medium ${theme === 'dark'
-                    ? 'text-blue-400 hover:text-blue-300'
-                    : 'text-blue-600 hover:text-blue-800'
+                    ? 'text-pink-400 hover:text-pink-300'
+                    : 'text-pink-600 hover:text-pink-800'
                   }`}>
                   Ver todas las notificaciones
                 </button>

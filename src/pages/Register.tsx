@@ -263,7 +263,7 @@ export default function Register() {
 
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 transition-colors"
+                className="w-full bg-pink-600 hover:bg-pink-700 text-white font-medium py-2.5 transition-colors"
                 disabled={loading}
               >
                 {loading ? 'Creando cuenta...' : 'Crear Cuenta'}

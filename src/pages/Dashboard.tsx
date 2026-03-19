@@ -442,13 +442,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-blue-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -mr-16 -mt-16" />
+        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-pink-50/30 dark:from-gray-900 dark:to-pink-950/20">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-500/10 to-transparent rounded-full -mr-16 -mt-16" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div className="space-y-1">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Inventario</CardTitle>
             </div>
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+            <div className="p-3 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg shadow-pink-500/20">
               <Car className="h-5 w-5 text-white" />
             </div>
           </CardHeader>
@@ -505,7 +505,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-blue-500 rounded-lg">
+                  <div className="p-2 bg-pink-500 rounded-lg">
                     <Calendar className="h-4 w-4 text-white" />
                   </div>
                   Próximas Citas
@@ -548,7 +548,7 @@ export default function Dashboard() {
                       className="flex items-start gap-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex flex-col items-center gap-1 min-w-[60px]">
-                        <Badge variant="default" className="bg-blue-500">
+                        <Badge variant="default" className="bg-pink-500">
                           {dayLabel}
                         </Badge>
                         <span className="text-2xl font-bold">{format(scheduledAt, "HH:mm")}</span>
@@ -728,7 +728,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-blue-500 rounded-lg">
+                  <div className="p-2 bg-pink-500 rounded-lg">
                     <TrendingUp className="h-4 w-4 text-white" />
                   </div>
                   Tendencia de Ventas

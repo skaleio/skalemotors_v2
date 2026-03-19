@@ -42,19 +42,19 @@
     --popover: 0 0% 100%;
     --popover-foreground: 210 40% 2%;
 
-    /* Primary - Blue for actions */
-    --primary: 224 76% 48%;       /* #1E40AF - blue-800 */
+    /* Primary - Pink for actions */
+    --primary: 335 85% 55%;       /* #ec4899 - pink-500 */
     --primary-foreground: 0 0% 100%;
 
     /* Secondary - Light backgrounds */
     --secondary: 210 40% 98%;
-    --secondary-foreground: 210 40% 2%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
-    /* Accent - Cyan for highlights */
-    --accent: 188 95% 43%;        /* #06B6D4 - cyan-500 */
+    /* Accent - Dark pink for highlights */
+    --accent: 335 80% 45%;        /* #db2777 - pink-600 */
     --accent-foreground: 0 0% 100%;
 
     /* Status Colors */
@@ -71,28 +71,28 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Borders and inputs */
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 224 76% 48%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 335 85% 55%;
 
     /* Border radius for automotive feel */
-    --radius: 1rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 0 0% 100%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-foreground: 240 5.9% 10%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary: 335 85% 55%;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-primary-foreground: 0 0% 100%;
 
     --sidebar-accent: 240 4.8% 95.9%;
 
     --sidebar-accent-foreground: 240 5.9% 10%;
 
-    --sidebar-border: 220 13% 91%;
+    --sidebar-border: 240 5.9% 90%;
 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 335 85% 55%;
   }
 
   .dark {
@@ -207,20 +207,24 @@ html[data-mobile-app="true"] #root > * {
     font-size: 1.125rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 20px rgba(236, 72, 153, 0.5), 0 0 30px rgba(236, 72, 153, 0.3);
+    color: #fbcfe8; /* Rosa muy pálido */
+    display: inline-block;
   }
 
-  /* Sidebar en tema oscuro: mantén el azul oficial */
-  .dark .app-sidebar .skale-logo {
-    text-shadow: 0 1px 8px rgba(30, 64, 175, 0.25);
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  /* Excepción: en el sidebar y topbar CLARO (fondos blancos), el logo debe ser oscuro */
+  .app-sidebar .skale-logo,
+  .top-bar-logo {
+    text-shadow: 0 0 5px rgba(236, 72, 153, 0.2), 0 0 15px rgba(236, 72, 153, 0.3);
+    color: #0f172a; /* Slate 900 */
+  }
+
+  /* En tema oscuro, todos los logos (incluyendo topbar y sidebar) deben brillar y ser claros */
+  .dark .skale-logo,
+  .dark .app-sidebar .skale-logo,
+  .dark .top-bar-logo {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 20px rgba(236, 72, 153, 0.5), 0 0 30px rgba(236, 72, 153, 0.3);
+    color: #fbcfe8;
   }
 }
 

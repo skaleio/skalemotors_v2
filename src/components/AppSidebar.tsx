@@ -286,7 +286,7 @@ export function AppSidebar() {
 
   const getNavCls = (isActiveState: boolean) => {
     if (isActiveState) {
-      return "bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold shadow-lg shadow-blue-500/25 border border-blue-500/40 dark:from-blue-500 dark:to-blue-600 dark:border-blue-400/30";
+      return "bg-gradient-to-r from-pink-500 to-pink-600 text-white font-semibold shadow-lg shadow-pink-500/25 border border-pink-500/40 dark:from-pink-500 dark:to-pink-600 dark:border-pink-400/30";
     }
     return [
       "text-slate-700 dark:text-zinc-200",
@@ -303,7 +303,7 @@ export function AppSidebar() {
       ? "text-white"
       : [
           "text-slate-600 dark:text-zinc-400",
-          "group-hover:text-blue-600 dark:group-hover:text-sky-400",
+          "group-hover:text-pink-600 dark:group-hover:text-pink-400",
           withScale ? "group-hover:scale-110" : "",
         ].filter(Boolean).join(" ");
 
@@ -424,7 +424,7 @@ export function AppSidebar() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
-                              <category.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-sky-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
+                              <category.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100 border-slate-200 dark:border-zinc-700 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
@@ -509,7 +509,7 @@ export function AppSidebar() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:flex">
-                            <settingsCategory.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-sky-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
+                            <settingsCategory.icon className="h-5 w-5 text-slate-600 dark:text-zinc-400 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-all duration-200 group-hover:scale-110 shrink-0" />
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100 border-slate-200 dark:border-zinc-700 shadow-lg animate-in fade-in-0 zoom-in-95 duration-200">
@@ -600,7 +600,7 @@ export function AppSidebar() {
               <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800/70 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
                 <Avatar className="h-8 w-8 shrink-0">
                   <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
+                  <AvatarFallback className="bg-gradient-to-br from-pink-500 to-pink-700 text-white text-sm font-semibold">
                     {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
@@ -712,7 +712,7 @@ export function AppSidebar() {
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
                     <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
+                    <AvatarFallback className="bg-gradient-to-br from-pink-500 to-pink-700 text-white text-sm font-semibold">
                       {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>

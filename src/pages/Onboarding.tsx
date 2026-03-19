@@ -346,8 +346,8 @@ export default function Onboarding() {
             <div className="relative inline-block">
               <div className={`w-40 h-40 mx-auto rounded-full flex items-center justify-center shadow-2xl ${
                 theme === 'dark' 
-                  ? 'bg-gradient-to-br from-cyan-500 via-blue-500 to-blue-600' 
-                  : 'bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600'
+                  ? 'bg-gradient-to-br from-pink-500 via-pink-500 to-pink-600' 
+                  : 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-600'
               }`}>
                 <svg className="h-20 w-20 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -361,8 +361,8 @@ export default function Onboarding() {
             <div className="space-y-5">
               <h2 className={`text-5xl font-bold bg-gradient-to-r ${
                 theme === 'dark' 
-                  ? 'from-cyan-400 via-blue-400 to-blue-500' 
-                  : 'from-cyan-600 via-blue-600 to-blue-700'
+                  ? 'from-pink-400 via-pink-400 to-pink-500' 
+                  : 'from-pink-600 via-pink-600 to-pink-700'
               } bg-clip-text text-transparent`}>
                 {step.title}
               </h2>
@@ -386,8 +386,8 @@ export default function Onboarding() {
               } shadow-lg hover:shadow-2xl hover:scale-105 hover:-translate-y-1`}>
                 <div className={`w-16 h-16 mx-auto mb-6 rounded-xl flex items-center justify-center ${
                   theme === 'dark' 
-                    ? 'bg-gradient-to-br from-cyan-500/20 to-blue-500/20' 
-                    : 'bg-gradient-to-br from-cyan-100 to-blue-100'
+                    ? 'bg-gradient-to-br from-pink-500/20 to-pink-500/20' 
+                    : 'bg-gradient-to-br from-pink-100 to-pink-100'
                 } group-hover:scale-110 transition-transform duration-300`}>
                   <Target className={`w-8 h-8 ${
                     theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'
@@ -466,8 +466,8 @@ export default function Onboarding() {
             <div className="text-center space-y-4">
               <div className={`w-20 h-20 mx-auto rounded-xl flex items-center justify-center ${
                 theme === 'dark' 
-                  ? 'bg-gradient-to-br from-cyan-500/20 to-blue-500/20' 
-                  : 'bg-gradient-to-br from-cyan-100 to-blue-100'
+                  ? 'bg-gradient-to-br from-pink-500/20 to-pink-500/20' 
+                  : 'bg-gradient-to-br from-pink-100 to-pink-100'
               }`}>
                 <Building2 className={`w-10 h-10 ${
                   theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'
@@ -1173,8 +1173,8 @@ export default function Onboarding() {
                 <div className="flex items-center gap-4 mb-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                     theme === 'dark' 
-                      ? 'bg-gradient-to-br from-cyan-500/20 to-blue-500/20' 
-                      : 'bg-gradient-to-br from-cyan-100 to-blue-100'
+                      ? 'bg-gradient-to-br from-pink-500/20 to-pink-500/20' 
+                      : 'bg-gradient-to-br from-pink-100 to-pink-100'
                   }`}>
                     <CheckCircle className={`w-6 h-6 ${
                       theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'
@@ -1244,7 +1244,7 @@ export default function Onboarding() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg`}>
+              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center shadow-lg`}>
                 <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
@@ -1299,7 +1299,7 @@ export default function Onboarding() {
           </div>
           <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all duration-500 ease-out rounded-full"
+              className="h-full bg-gradient-to-r from-pink-500 to-pink-600 transition-all duration-500 ease-out rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -1337,7 +1337,7 @@ export default function Onboarding() {
                   key={index}
                   className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
                     index === currentStep 
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 w-8' 
+                      ? 'bg-gradient-to-r from-pink-500 to-pink-600 w-8' 
                       : index < currentStep 
                         ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' 
                         : theme === 'dark' 
@@ -1352,7 +1352,7 @@ export default function Onboarding() {
               <Button
                 onClick={handleCompleteOnboarding}
                 disabled={isLoading}
-                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 {isLoading ? (
                   <>
@@ -1369,7 +1369,7 @@ export default function Onboarding() {
             ) : (
               <Button
                 onClick={handleNext}
-                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 Siguiente
                 <ArrowRight className="w-4 h-4" />

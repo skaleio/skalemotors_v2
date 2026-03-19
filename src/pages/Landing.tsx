@@ -212,7 +212,7 @@ const Landing = () => {
         transition={{ stiffness: 30, damping: 15 }}
       />
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md border-b border-cyan-400/30">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md border-b border-pink-400/30">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo SKALE (solo wordmark) */}
@@ -226,31 +226,31 @@ const Landing = () => {
             <nav className="hidden md:flex items-center space-x-8">
               <button 
                 onClick={() => handleScrollToSection('features')}
-                className="text-white hover:text-cyan-400 transition-colors font-medium"
+                className="text-white hover:text-pink-400 transition-colors font-medium"
               >
                 Características
               </button>
               <button 
                 onClick={() => handleScrollToSection('video-demo')}
-                className="text-white hover:text-cyan-400 transition-colors font-medium"
+                className="text-white hover:text-pink-400 transition-colors font-medium"
               >
                 Demo
               </button>
               <button 
                 onClick={() => handleScrollToSection('testimonials')}
-                className="text-white hover:text-cyan-400 transition-colors font-medium"
+                className="text-white hover:text-pink-400 transition-colors font-medium"
               >
                 Clientes
               </button>
               <button 
                 onClick={() => handleScrollToSection('pricing')}
-                className="text-white hover:text-cyan-400 transition-colors font-medium"
+                className="text-white hover:text-pink-400 transition-colors font-medium"
               >
                 Planes
               </button>
               <button 
                 onClick={() => handleScrollToSection('faq')}
-                className="text-white hover:text-cyan-400 transition-colors font-medium"
+                className="text-white hover:text-pink-400 transition-colors font-medium"
               >
                 FAQ
               </button>
@@ -260,13 +260,13 @@ const Landing = () => {
             <div className="hidden md:flex items-center space-x-4">
               <Button 
                 variant="ghost"
-                className="text-white hover:bg-cyan-500/20 hover:text-cyan-400 border border-white/30 hover:border-cyan-400/50"
+                className="text-white hover:bg-pink-500/20 hover:text-pink-400 border border-white/30 hover:border-pink-400/50"
                 onClick={() => window.location.href = '/login'}
               >
                 Login
               </Button>
               <Button 
-                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+                className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white"
                 onClick={() => window.location.href = '/register'}
               >
                 Start Free Trial
@@ -288,44 +288,44 @@ const Landing = () => {
               <div className="space-y-4">
                 <button 
                   onClick={() => handleScrollToSection('features')}
-                  className="block text-white hover:text-cyan-400 w-full text-left font-medium"
+                  className="block text-white hover:text-pink-400 w-full text-left font-medium"
                 >
                   Características
                 </button>
                 <button 
                   onClick={() => handleScrollToSection('video-demo')}
-                  className="block text-white hover:text-cyan-400 w-full text-left font-medium"
+                  className="block text-white hover:text-pink-400 w-full text-left font-medium"
                 >
                   Demo
                 </button>
                 <button 
                   onClick={() => handleScrollToSection('testimonials')}
-                  className="block text-white hover:text-cyan-400 w-full text-left font-medium"
+                  className="block text-white hover:text-pink-400 w-full text-left font-medium"
                 >
                   Clientes
                 </button>
                 <button 
                   onClick={() => handleScrollToSection('pricing')}
-                  className="block text-white hover:text-cyan-400 w-full text-left font-medium"
+                  className="block text-white hover:text-pink-400 w-full text-left font-medium"
                 >
                   Planes
                 </button>
                 <button 
                   onClick={() => handleScrollToSection('faq')}
-                  className="block text-white hover:text-cyan-400 w-full text-left font-medium"
+                  className="block text-white hover:text-pink-400 w-full text-left font-medium"
                 >
                   FAQ
                 </button>
                 <div className="pt-4 space-y-2">
                   <Button 
                     variant="ghost"
-                    className="w-full text-white hover:bg-cyan-500/20 hover:text-cyan-400 border border-white/30 hover:border-cyan-400/50"
+                    className="w-full text-white hover:bg-pink-500/20 hover:text-pink-400 border border-white/30 hover:border-pink-400/50"
                     onClick={() => window.location.href = '/login'}
                   >
                     Login
                   </Button>
                   <Button 
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+                    className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white"
                     onClick={() => window.location.href = '/register'}
                   >
                     Start Free Trial
@@ -348,7 +348,7 @@ const Landing = () => {
             <span className="block text-3xl md:text-4xl lg:text-5xl font-light mb-6">
               La plataforma que
             </span>
-            <span className="block text-cyan-400 font-extrabold text-4xl md:text-5xl lg:text-6xl mb-6 tracking-wider uppercase">
+            <span className="block text-pink-400 font-extrabold text-4xl md:text-5xl lg:text-6xl mb-6 tracking-wider uppercase">
               REVOLUCIONA
             </span>
             <span className="block text-3xl md:text-4xl lg:text-5xl font-light tracking-[0.2em]">
@@ -364,7 +364,7 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
               size="lg"
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-8 py-4 text-lg font-semibold"
+              className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-8 py-4 text-lg font-semibold"
               onClick={() => window.location.href = '/register'}
             >
               Empezar ahora!
@@ -387,12 +387,12 @@ const Landing = () => {
       <section className="py-20 px-4 bg-black relative z-10">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <Badge className="mb-6 bg-cyan-500/20 text-cyan-400 border-cyan-400/30">
+            <Badge className="mb-6 bg-pink-500/20 text-pink-400 border-pink-400/30">
               ⭐ Centraliza tus movimientos
             </Badge>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               Todas tus operaciones
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 en un solo lugar
               </span>
             </h2>
@@ -405,7 +405,7 @@ const Landing = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Gestión de Inventario */}
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Car className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">Gestión de Inventario</h3>
@@ -421,7 +421,7 @@ const Landing = () => {
                       <div className="text-white/60 text-sm">Análisis profundo de inventario, rotación y predicción</div>
                     </div>
                     <div className="flex gap-2">
-                      <div className="bg-cyan-500 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-1">
+                      <div className="bg-pink-500 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-1">
                         <Plus className="h-4 w-4" />
                         Agregar
                       </div>
@@ -439,7 +439,7 @@ const Landing = () => {
                         <div>
                           <div className="text-white/60 text-xs">Total Vehículos</div>
                           <div className="text-white font-bold text-lg">156</div>
-                          <div className="text-cyan-400 text-xs">89 disponibles</div>
+                          <div className="text-pink-400 text-xs">89 disponibles</div>
                         </div>
                         <Car className="h-5 w-5 text-white/40" />
                       </div>
@@ -449,7 +449,7 @@ const Landing = () => {
                         <div>
                           <div className="text-white/60 text-xs">Valor Total</div>
                           <div className="text-white font-bold text-lg">$2.85B</div>
-                          <div className="text-cyan-400 text-xs">En inventario</div>
+                          <div className="text-pink-400 text-xs">En inventario</div>
                         </div>
                         <DollarSign className="h-5 w-5 text-white/40" />
                       </div>
@@ -459,7 +459,7 @@ const Landing = () => {
                         <div>
                           <div className="text-white/60 text-xs">Días Promedio</div>
                           <div className="text-white font-bold text-lg">45</div>
-                          <div className="text-cyan-400 text-xs">En stock</div>
+                          <div className="text-pink-400 text-xs">En stock</div>
                         </div>
                         <Clock className="h-5 w-5 text-white/40" />
                       </div>
@@ -469,7 +469,7 @@ const Landing = () => {
                         <div>
                           <div className="text-white/60 text-xs">Tasa de Rotación</div>
                           <div className="text-white font-bold text-lg">2.3x</div>
-                          <div className="text-cyan-400 text-xs">Por año</div>
+                          <div className="text-pink-400 text-xs">Por año</div>
                         </div>
                         <TrendingUp className="h-5 w-5 text-white/40" />
                       </div>
@@ -509,7 +509,7 @@ const Landing = () => {
 
                   {/* Tabs */}
                   <div className="flex gap-4 mb-4">
-                    <div className="text-cyan-400 font-semibold border-b-2 border-cyan-400 pb-1 text-sm">Resumen</div>
+                    <div className="text-pink-400 font-semibold border-b-2 border-pink-400 pb-1 text-sm">Resumen</div>
                     <div className="text-white/60 pb-1 text-sm">Vehículos</div>
                     <div className="text-white/60 pb-1 text-sm">Análisis</div>
                     <div className="text-white/60 pb-1 text-sm">Predicción</div>
@@ -520,7 +520,7 @@ const Landing = () => {
 
             {/* Seguimiento de Clientes */}
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Users className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">Seguimiento de Clientes</h3>
@@ -529,14 +529,14 @@ const Landing = () => {
               </p>
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-slate-600 shadow-2xl">
                 <div className="text-left">
-                  <div className="text-cyan-400 text-sm mb-2 flex items-center gap-1">
+                  <div className="text-pink-400 text-sm mb-2 flex items-center gap-1">
                     <span>Configuración</span>
                     <span>&gt;</span>
                     <span>Sucursales</span>
                   </div>
                   <div className="text-white font-bold text-lg mb-4">Sucursales</div>
                   <div className="flex gap-4 mb-4">
-                    <div className="text-cyan-400 font-semibold border-b-2 border-cyan-400 pb-1">Sucursales activas</div>
+                    <div className="text-pink-400 font-semibold border-b-2 border-pink-400 pb-1">Sucursales activas</div>
                     <div className="text-white/60 pb-1">Historial</div>
                   </div>
                   <div className="space-y-3">
@@ -544,7 +544,7 @@ const Landing = () => {
                       <div className="text-white font-medium mb-1">Costanera Sur, Las Condes</div>
                       <div className="text-white/60 text-sm mb-2">Región Metropolitana de Santiago</div>
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-cyan-400" />
+                        <Phone className="h-4 w-4 text-pink-400" />
                         <span className="text-white/80 text-sm">+56 2 1234 5678</span>
                       </div>
                     </div>
@@ -552,7 +552,7 @@ const Landing = () => {
                       <div className="text-white font-medium mb-1">Av. Providencia 1234</div>
                       <div className="text-white/60 text-sm mb-2">Providencia, Santiago</div>
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-cyan-400" />
+                        <Phone className="h-4 w-4 text-pink-400" />
                         <span className="text-white/80 text-sm">+56 2 8765 4321</span>
                       </div>
                     </div>
@@ -563,7 +563,7 @@ const Landing = () => {
 
             {/* Dashboard de Ventas */}
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <BarChart3 className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">Dashboard de Ventas</h3>
@@ -578,7 +578,7 @@ const Landing = () => {
                       <div className="text-white font-bold text-lg">Dashboard de Ventas</div>
                       <div className="text-white/60 text-sm">Ventas del mes actual</div>
                     </div>
-                    <div className="text-cyan-400 text-sm font-medium">Actualizado hace 2 min</div>
+                    <div className="text-pink-400 text-sm font-medium">Actualizado hace 2 min</div>
                   </div>
 
                   {/* Metrics Grid */}
@@ -602,7 +602,7 @@ const Landing = () => {
                     <div className="bg-white/10 rounded-lg p-3 border border-white/20">
                       <div className="text-white/60 text-xs mb-1">Conversión</div>
                       <div className="text-white font-bold text-lg">18.5%</div>
-                      <div className="text-cyan-400 text-xs flex items-center gap-1">
+                      <div className="text-pink-400 text-xs flex items-center gap-1">
                         <Target className="h-3 w-3" />
                         Meta: 15%
                       </div>
@@ -623,12 +623,12 @@ const Landing = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between items-center bg-slate-700/50 p-2 rounded">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center">
+                          <div className="w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">1</span>
                           </div>
                           <span className="text-white text-sm">María González</span>
                         </div>
-                        <span className="text-cyan-400 text-sm font-medium">$890K</span>
+                        <span className="text-pink-400 text-sm font-medium">$890K</span>
                       </div>
                       <div className="flex justify-between items-center bg-slate-700/50 p-2 rounded">
                         <div className="flex items-center gap-2">
@@ -637,14 +637,14 @@ const Landing = () => {
                           </div>
                           <span className="text-white text-sm">Carlos Ruiz</span>
                         </div>
-                        <span className="text-cyan-400 text-sm font-medium">$720K</span>
+                        <span className="text-pink-400 text-sm font-medium">$720K</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Action Button */}
                   <div className="text-center">
-                    <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-2 rounded-lg inline-block text-sm font-medium hover:from-cyan-600 hover:to-blue-700 transition-all duration-200 cursor-pointer">
+                    <div className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-2 rounded-lg inline-block text-sm font-medium hover:from-pink-600 hover:to-pink-700 transition-all duration-200 cursor-pointer">
                       Ver Reporte Completo
                     </div>
                   </div>
@@ -654,7 +654,7 @@ const Landing = () => {
 
             {/* Integración con Canales */}
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Globe className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">Integración con Canales de Venta</h3>
@@ -663,7 +663,7 @@ const Landing = () => {
               </p>
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-slate-600 shadow-2xl">
                 <div className="text-left">
-                  <div className="text-cyan-400 text-sm mb-2 flex items-center gap-1">
+                  <div className="text-pink-400 text-sm mb-2 flex items-center gap-1">
                     <span>Configuración</span>
                     <span>&gt;</span>
                     <span>Redes sociales</span>
@@ -679,7 +679,7 @@ const Landing = () => {
                       <span className="text-white font-medium">Instagram</span>
                     </div>
                     <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600 flex items-center gap-3 hover:bg-slate-700/70 transition-colors">
-                      <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-pink-600 rounded-lg flex items-center justify-center">
                         <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                         </svg>
@@ -704,7 +704,7 @@ const Landing = () => {
           <div className="text-center mt-16">
             <Button 
               size="lg"
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-8 py-4 text-lg font-semibold"
+              className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-8 py-4 text-lg font-semibold"
               onClick={() => window.location.href = '/register'}
             >
               Simplifica tu gestión ahora →
@@ -719,7 +719,7 @@ const Landing = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               HERRAMIENTAS QUE
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 TRANSFORMAN
               </span>
               TU NEGOCIO
@@ -733,7 +733,7 @@ const Landing = () => {
             {keyFeatures.map((feature, index) => (
               <Card key={index} className="bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 transition-all duration-300">
                 <CardContent className="p-8 text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <feature.icon className="h-8 w-8 text-white" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-4 tracking-wide">
@@ -753,12 +753,12 @@ const Landing = () => {
       <section id="video-demo" className="py-20 px-4 bg-black relative z-10">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <Badge className="mb-6 bg-cyan-500/20 text-cyan-400 border-cyan-400/30">
+            <Badge className="mb-6 bg-pink-500/20 text-pink-400 border-pink-400/30">
               🎥 Ve SKALE en acción
             </Badge>
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               DESCUBRE CÓMO
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 FUNCIONA SKALE
               </span>
             </h2>
@@ -776,7 +776,7 @@ const Landing = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
                     {/* Play Button */}
-                    <button className="w-20 h-20 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full flex items-center justify-center hover:from-cyan-600 hover:to-blue-700 transition-all duration-300 shadow-2xl mb-4 group">
+                    <button className="w-20 h-20 bg-gradient-to-r from-pink-500 to-pink-600 rounded-full flex items-center justify-center hover:from-pink-600 hover:to-pink-700 transition-all duration-300 shadow-2xl mb-4 group">
                       <svg className="w-8 h-8 text-white ml-1 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M8 5v14l11-7z"/>
                       </svg>
@@ -790,7 +790,7 @@ const Landing = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                 
                 {/* Video Thumbnail/Preview */}
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 flex items-center justify-center">
+                <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-pink-600/20 flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
                       <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -809,14 +809,14 @@ const Landing = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
                   {/* Card 1 - Dashboard */}
-                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-cyan-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-cyan-500/20">
+                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-pink-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-pink-500/20">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                      <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                         <BarChart3 className="h-6 w-6 text-white" />
                       </div>
                       <div>
                         <h4 className="text-white font-bold text-lg">Dashboard Principal</h4>
-                        <p className="text-cyan-400 text-sm font-medium">Métricas en tiempo real</p>
+                        <p className="text-pink-400 text-sm font-medium">Métricas en tiempo real</p>
                       </div>
                     </div>
                     <p className="text-white/85 leading-relaxed">
@@ -829,34 +829,34 @@ const Landing = () => {
                   </div>
                   
                   {/* Card 2 - Inventario */}
-                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-cyan-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-cyan-500/20">
+                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-pink-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-pink-500/20">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                      <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                         <Car className="h-6 w-6 text-white" />
                       </div>
                       <div>
                         <h4 className="text-white font-bold text-lg">Gestión de Inventario</h4>
-                        <p className="text-cyan-400 text-sm font-medium">Control total</p>
+                        <p className="text-pink-400 text-sm font-medium">Control total</p>
                       </div>
                     </div>
                     <p className="text-white/85 leading-relaxed">
                       Cómo agregar vehículos, gestionar stock, configurar alertas automáticas y realizar seguimiento completo de tu flota.
                     </p>
                     <div className="mt-4 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                      <span className="text-blue-400 text-xs font-medium">Alertas automáticas</span>
+                      <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse"></div>
+                      <span className="text-pink-400 text-xs font-medium">Alertas automáticas</span>
                     </div>
                   </div>
                   
                   {/* Card 3 - CRM */}
-                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-cyan-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-cyan-500/20">
+                  <div className="group bg-gradient-to-br from-white/10 to-white/5 rounded-xl p-6 border border-white/20 hover:border-pink-400/50 transition-all duration-300 hover:bg-gradient-to-br hover:from-white/15 hover:to-white/10 hover:shadow-lg hover:shadow-pink-500/20">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                      <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                         <Users className="h-6 w-6 text-white" />
                       </div>
                       <div>
                         <h4 className="text-white font-bold text-lg">CRM y Ventas</h4>
-                        <p className="text-cyan-400 text-sm font-medium">Conversión optimizada</p>
+                        <p className="text-pink-400 text-sm font-medium">Conversión optimizada</p>
                       </div>
                     </div>
                     <p className="text-white/85 leading-relaxed">
@@ -874,7 +874,7 @@ const Landing = () => {
               <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
                   size="lg"
-                  className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-8 py-3 font-semibold"
+                  className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-8 py-3 font-semibold"
                   onClick={() => window.location.href = '/register'}
                 >
                   Probar SKALE Gratis
@@ -900,7 +900,7 @@ const Landing = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               ÉXITOS
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 COMPROBADOS
               </span>
             </h2>
@@ -922,7 +922,7 @@ const Landing = () => {
                     "{testimonial.content}"
                   </p>
                   <div className="flex items-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
                       {testimonial.avatar}
                     </div>
                     <div>
@@ -943,7 +943,7 @@ const Landing = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               PLANES QUE
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 SE ADAPTAN
               </span>
               A TI
@@ -955,10 +955,10 @@ const Landing = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {pricingPlans.map((plan, index) => (
-              <Card key={index} className={`bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 transition-all duration-300 relative ${plan.popular ? 'ring-2 ring-cyan-500' : ''}`}>
+              <Card key={index} className={`bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 transition-all duration-300 relative ${plan.popular ? 'ring-2 ring-pink-500' : ''}`}>
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <Badge className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-1">
+                    <Badge className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 py-1">
                       Más Popular
                     </Badge>
                   </div>
@@ -979,7 +979,7 @@ const Landing = () => {
                     ))}
                   </ul>
                   <Button 
-                    className={`w-full ${plan.popular ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700' : 'bg-white/20 hover:bg-white/30'} text-white`}
+                    className={`w-full ${plan.popular ? 'bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700' : 'bg-white/20 hover:bg-white/30'} text-white`}
                     onClick={() => window.location.href = '/register'}
                   >
                     Empezar Ahora
@@ -997,7 +997,7 @@ const Landing = () => {
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
               PREGUNTAS
-              <span className="block text-cyan-400 font-black">
+              <span className="block text-pink-400 font-black">
                 FRECUENTES
               </span>
             </h2>
@@ -1028,7 +1028,7 @@ const Landing = () => {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6 tracking-tight">
             ¿LISTO PARA
-            <span className="block text-cyan-400 font-black">
+            <span className="block text-pink-400 font-black">
               REVOLUCIONAR
             </span>
             TU NEGOCIO?
@@ -1039,10 +1039,10 @@ const Landing = () => {
           
           {/* Formulario de Contacto Mejorado */}
           <div className="max-w-4xl mx-auto mb-12">
-            <div className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-md border border-white/30 rounded-3xl p-8 md:p-12 shadow-2xl shadow-cyan-500/10">
+            <div className="bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-md border border-white/30 rounded-3xl p-8 md:p-12 shadow-2xl shadow-pink-500/10">
               {/* Header del Formulario */}
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
@@ -1074,7 +1074,7 @@ const Landing = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="group">
                     <label htmlFor="nombre" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                      <User className="h-4 w-4 text-cyan-400" />
+                      <User className="h-4 w-4 text-pink-400" />
                       Nombre Completo *
                     </label>
                     <div className="relative">
@@ -1083,16 +1083,16 @@ const Landing = () => {
                         id="nombre"
                         name="nombre"
                         required
-                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 group-hover:bg-white/15"
+                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 group-hover:bg-white/15"
                         placeholder="Tu nombre completo"
                       />
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-600/0 group-hover:from-cyan-500/5 group-hover:to-blue-600/5 transition-all duration-300 pointer-events-none"></div>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/0 to-pink-600/0 group-hover:from-pink-500/5 group-hover:to-pink-600/5 transition-all duration-300 pointer-events-none"></div>
                     </div>
                   </div>
                   
                   <div className="group">
                     <label htmlFor="email" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-cyan-400" />
+                      <Mail className="h-4 w-4 text-pink-400" />
                       Email Corporativo *
                     </label>
                     <div className="relative">
@@ -1101,10 +1101,10 @@ const Landing = () => {
                         id="email"
                         name="email"
                         required
-                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 group-hover:bg-white/15"
+                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 group-hover:bg-white/15"
                         placeholder="tu@empresa.com"
                       />
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-600/0 group-hover:from-cyan-500/5 group-hover:to-blue-600/5 transition-all duration-300 pointer-events-none"></div>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/0 to-pink-600/0 group-hover:from-pink-500/5 group-hover:to-pink-600/5 transition-all duration-300 pointer-events-none"></div>
                     </div>
                   </div>
                 </div>
@@ -1113,7 +1113,7 @@ const Landing = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="group">
                     <label htmlFor="empresa" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-cyan-400" />
+                      <Building2 className="h-4 w-4 text-pink-400" />
                       Nombre de la Empresa *
                     </label>
                     <div className="relative">
@@ -1122,16 +1122,16 @@ const Landing = () => {
                         id="empresa"
                         name="empresa"
                         required
-                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 group-hover:bg-white/15"
+                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 group-hover:bg-white/15"
                         placeholder="Tu automotora"
                       />
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-600/0 group-hover:from-cyan-500/5 group-hover:to-blue-600/5 transition-all duration-300 pointer-events-none"></div>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/0 to-pink-600/0 group-hover:from-pink-500/5 group-hover:to-pink-600/5 transition-all duration-300 pointer-events-none"></div>
                     </div>
                   </div>
                   
                   <div className="group">
                     <label htmlFor="telefono" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-cyan-400" />
+                      <Phone className="h-4 w-4 text-pink-400" />
                       Teléfono
                     </label>
                     <div className="relative">
@@ -1139,10 +1139,10 @@ const Landing = () => {
                         type="tel"
                         id="telefono"
                         name="telefono"
-                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 group-hover:bg-white/15"
+                        className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 group-hover:bg-white/15"
                         placeholder="+56 9 1234 5678"
                       />
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-600/0 group-hover:from-cyan-500/5 group-hover:to-blue-600/5 transition-all duration-300 pointer-events-none"></div>
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/0 to-pink-600/0 group-hover:from-pink-500/5 group-hover:to-pink-600/5 transition-all duration-300 pointer-events-none"></div>
                     </div>
                   </div>
                 </div>
@@ -1150,14 +1150,14 @@ const Landing = () => {
                 {/* Selector de Tamaño de Empresa */}
                 <div className="group">
                   <label htmlFor="tamano" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-cyan-400" />
+                    <Users className="h-4 w-4 text-pink-400" />
                     Tamaño de tu Automotora
                   </label>
                   <div className="relative">
                     <select
                       id="tamano"
                       name="tamano"
-                      className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 group-hover:bg-white/15 appearance-none cursor-pointer"
+                      className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 group-hover:bg-white/15 appearance-none cursor-pointer"
                     >
                       <option value="" className="bg-slate-800 text-white">Selecciona el tamaño de tu automotora</option>
                       <option value="pequena" className="bg-slate-800 text-white">Pequeña (1-10 vehículos)</option>
@@ -1176,7 +1176,7 @@ const Landing = () => {
                 {/* Mensaje */}
                 <div className="group">
                   <label htmlFor="mensaje" className="block text-white/90 text-sm font-semibold mb-3 flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-cyan-400" />
+                    <FileText className="h-4 w-4 text-pink-400" />
                     ¿En qué podemos ayudarte?
                   </label>
                   <div className="relative">
@@ -1184,10 +1184,10 @@ const Landing = () => {
                       id="mensaje"
                       name="mensaje"
                       rows={4}
-                      className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 resize-none group-hover:bg-white/15"
+                      className="w-full px-4 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 resize-none group-hover:bg-white/15"
                       placeholder="Cuéntanos sobre tu negocio, tus desafíos actuales y cómo podemos ayudarte a crecer..."
                     />
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-600/0 group-hover:from-cyan-500/5 group-hover:to-blue-600/5 transition-all duration-300 pointer-events-none"></div>
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-pink-500/0 to-pink-600/0 group-hover:from-pink-500/5 group-hover:to-pink-600/5 transition-all duration-300 pointer-events-none"></div>
                   </div>
                 </div>
 
@@ -1198,13 +1198,13 @@ const Landing = () => {
                     id="terminos"
                     name="terminos"
                     required
-                    className="mt-1 w-5 h-5 text-cyan-500 bg-white/10 border-white/20 rounded focus:ring-cyan-500 focus:ring-2"
+                    className="mt-1 w-5 h-5 text-pink-500 bg-white/10 border-white/20 rounded focus:ring-pink-500 focus:ring-2"
                   />
                   <label htmlFor="terminos" className="text-white/80 text-sm leading-relaxed">
                     Al enviar este formulario, acepto los{' '}
-                    <a href="#" className="text-cyan-400 hover:text-cyan-300 underline">términos de servicio</a>
+                    <a href="#" className="text-pink-400 hover:text-pink-300 underline">términos de servicio</a>
                     {' '}y{' '}
-                    <a href="#" className="text-cyan-400 hover:text-cyan-300 underline">política de privacidad</a>
+                    <a href="#" className="text-pink-400 hover:text-pink-300 underline">política de privacidad</a>
                     {' '}de SKALEMOTORS.
                   </label>
                 </div>
@@ -1214,7 +1214,7 @@ const Landing = () => {
                   <Button 
                     type="submit"
                     size="lg"
-                    className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-12 py-4 text-lg font-semibold w-full md:w-auto shadow-lg hover:shadow-xl hover:shadow-cyan-500/25 transition-all duration-300 transform hover:scale-105"
+                    className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-12 py-4 text-lg font-semibold w-full md:w-auto shadow-lg hover:shadow-xl hover:shadow-pink-500/25 transition-all duration-300 transform hover:scale-105"
                   >
                     <Rocket className="mr-2 h-5 w-5" />
                     Solicitar Demo Gratuito
@@ -1247,7 +1247,7 @@ const Landing = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="col-span-1 md:col-span-2">
               <div className="flex items-center space-x-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center">
                   <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                   </svg>
