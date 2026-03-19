@@ -348,7 +348,7 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
     enabled: !!userId,
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 2,
   })
 }

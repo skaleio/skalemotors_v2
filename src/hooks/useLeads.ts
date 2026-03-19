@@ -23,8 +23,8 @@ export function useLeads(options: UseLeadsOptions = {}) {
     source,
     search,
     enabled = true,
-    refetchOnWindowFocus = true,
-    refetchOnMount = true,
+    refetchOnWindowFocus = false,
+    refetchOnMount = false,
   } = options
 
   const queryKey = ['leads', branchId, assignedTo, status, source, search]

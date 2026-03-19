@@ -59,7 +59,7 @@ export function useSales(options: UseSalesOptions = {}) {
       }),
     enabled,
     staleTime,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     retry: 2,
   });
 

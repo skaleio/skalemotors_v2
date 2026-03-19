@@ -35,9 +35,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const loadingTimeoutRef = useRef<number | null>(null);
   const pendingSessionRef = useRef<Session | null>(null);
+  const currentUserRef = useRef<User | null>(null);
 
   /** Tiempo máx. esperando getSession (red lenta); no cerrar sesión por esto */
   const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
+  const PROFILE_CACHE_KEY_PREFIX = "skale.user-profile";
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     let timeoutId: number | null = null;
@@ -74,6 +76,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   };
 
+  const getProfileCacheKey = (userId: string) => `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
+
+  const readCachedProfile = (userId: string): User | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(getProfileCacheKey(userId));
+      if (!raw) return null;
+      return JSON.parse(raw) as User;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeCachedProfile = (profile: User) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(getProfileCacheKey(profile.id), JSON.stringify(profile));
+    } catch {
+      // ignorar si localStorage no está disponible
+    }
+  };
+
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
     try {
       const { data, error } = await withTimeout(
@@ -106,6 +130,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           updated_at: data.updated_at,
         };
         setUser(updatedUser);
+        currentUserRef.current = updatedUser;
+        writeCachedProfile(updatedUser);
         // Onboarding desactivado temporalmente
         setNeedsOnboarding(false);
         // setNeedsOnboarding(!data.onboarding_completed);
@@ -172,6 +198,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
+    currentUserRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user) {
         pendingSessionRef.current = null;
@@ -182,7 +212,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const currentSession = session;
       pendingSessionRef.current = currentSession;
       setSession(currentSession);
-      setUser(buildFallbackUserFromSession(currentSession.user));
+      const cachedProfile = readCachedProfile(currentSession.user.id);
+      const initialUser = cachedProfile ?? buildFallbackUserFromSession(currentSession.user);
+      setUser(initialUser);
+      currentUserRef.current = initialUser;
       setLoading(false);
       // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
       // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
@@ -204,12 +237,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (event === "SIGNED_OUT") {
         setUser(null);
+        currentUserRef.current = null;
         setNeedsOnboarding(false);
         setLoading(false);
         return;
       }
 
       if (session?.user) {
+        const sameUserAlreadyLoaded = currentUserRef.current?.id === session.user.id;
+        const cachedProfile = readCachedProfile(session.user.id);
+
+        // Abrir otra pestaña o refrescar token no debe "recargar" la pestaña ya abierta.
+        if (sameUserAlreadyLoaded && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+          return;
+        }
+
+        if (!sameUserAlreadyLoaded) {
+          const nextUser = cachedProfile ?? buildFallbackUserFromSession(session.user);
+          setUser(nextUser);
+          currentUserRef.current = nextUser;
+        }
+
         if (
           event === "SIGNED_IN" ||
           event === "TOKEN_REFRESHED" ||
