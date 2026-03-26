@@ -28,7 +28,7 @@
 |---------|-----------|-----|
 | **studio-ia-generate** | Descripción vehículo (webhook n8n o OpenAI), guión reels (OpenAI) | ✅ OpenAI gpt-4o-mini |
 | **support-chat** | Chat “cerebro del negocio”: métricas (ventas, inventario, leads, finanzas) + OpenAI | ✅ OpenAI gpt-4o-mini |
-| lead-state-update, pending-task-create, whatsapp-*, ycloud-webhook, marketplace-*, etc. | Otros flujos | No IA |
+| lead-state-update, pending-task-create, whatsapp-*, meta-webhook, marketplace-*, etc. | Otros flujos | No IA |
 
 **Conclusión:** Ya hay dos funciones de IA (OpenAI). La misión pide **ai-chat** y **ai-generate** con **Anthropic** (claude-sonnet-4-20250514).
 

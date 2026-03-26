@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildBranchBrain } from "../_shared/brainBuilder.ts";
+import { captureEdgeError } from "../_shared/observability.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -173,7 +174,12 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(200, { ok: true, text });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
-    console.error("[ai-chat] error:", errMsg);
+    captureEdgeError(e, {
+      tenant_id: null,
+      user_id: null,
+      role: null,
+      module: "ai-chat",
+    });
     return jsonResponse(500, { ok: false, error: errMsg });
   }
 }

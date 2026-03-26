@@ -1,6 +1,7 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { captureEdgeError } from "../_shared/observability.ts";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -247,7 +248,12 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(200, { ok: true, text });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
-    console.error("[support-chat] error:", errMsg);
+    captureEdgeError(e, {
+      tenant_id: null,
+      user_id: null,
+      role: null,
+      module: "support-chat",
+    });
     return jsonResponse(500, { ok: false, error: errMsg });
   }
 }

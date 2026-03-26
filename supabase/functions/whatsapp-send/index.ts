@@ -23,7 +23,7 @@ function normalizePhone(phone: unknown): string {
   return cleaned;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -78,45 +78,46 @@ export default async function handler(req: Request): Promise<Response> {
 
   // Determinar inbox
   let resolvedInboxId = inboxId;
+  let resolvedProviderPhoneNumberId: string | null = null;
   if (!resolvedInboxId) {
     const { data: inbox } = await admin
       .from("whatsapp_inboxes")
-      .select("id")
+      .select("id, provider_phone_number_id")
       .eq("branch_id", branchId)
-      .eq("provider", "ycloud")
+      .eq("provider", "meta")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     resolvedInboxId = inbox?.id ?? null;
+    resolvedProviderPhoneNumberId = inbox?.provider_phone_number_id ?? null;
+  } else if (resolvedInboxId) {
+    const { data: inbox } = await admin
+      .from("whatsapp_inboxes")
+      .select("id, provider_phone_number_id")
+      .eq("id", resolvedInboxId)
+      .maybeSingle();
+    resolvedProviderPhoneNumberId = inbox?.provider_phone_number_id ?? null;
   }
 
   // ===========================
-  // Enviar por YCloud
+  // Enviar por Meta WhatsApp
   // ===========================
-  // Nota: Los detalles exactos del endpoint/headers pueden variar según tu cuenta YCloud.
-  // Ajustes por env vars:
-  // - YCLOUD_API_BASE (ej: https://api.ycloud.com)
-  // - YCLOUD_AUTH_HEADER (ej: X-API-Key o Authorization)
-  // - YCLOUD_AUTH_VALUE (ej: tu API key, o 'Bearer xxx')
-  // - YCLOUD_WHATSAPP_FROM (tu número / sender / phone_number_id según requiera YCloud)
-  const ycloudBase = Deno.env.get("YCLOUD_API_BASE") || "https://api.ycloud.com";
-  const ycloudAuthHeader = Deno.env.get("YCLOUD_AUTH_HEADER") || "X-API-Key";
-  const ycloudAuthValue = Deno.env.get("YCLOUD_AUTH_VALUE") || Deno.env.get("YCLOUD_API_KEY") ||
-    "";
-  const ycloudFrom = Deno.env.get("YCLOUD_WHATSAPP_FROM") || "";
-
-  if (!ycloudAuthValue) {
-    return jsonResponse(500, { ok: false, error: "Missing YCLOUD auth env vars" });
+  const metaAccessToken = Deno.env.get("META_ACCESS_TOKEN") || "";
+  if (!metaAccessToken) {
+    return jsonResponse(500, { ok: false, error: "Missing META_ACCESS_TOKEN env var" });
   }
 
-  // Intento de endpoint “razonable”; si tu YCloud usa otro path, lo cambias en env `YCLOUD_SEND_PATH`.
-  const sendPath = Deno.env.get("YCLOUD_SEND_PATH") || "/v2/whatsapp/messages";
-  const url = `${ycloudBase.replace(/\/$/, "")}${sendPath}`;
+  const providerPhoneNumberId =
+    resolvedProviderPhoneNumberId ?? Deno.env.get("META_PHONE_NUMBER_ID") ?? "";
+  if (!providerPhoneNumberId) {
+    return jsonResponse(500, { ok: false, error: "Missing META_PHONE_NUMBER_ID or whatsapp_inboxes.provider_phone_number_id" });
+  }
 
-  const ycloudPayload = {
-    from: ycloudFrom || undefined,
+  const url = `https://graph.facebook.com/v21.0/${providerPhoneNumberId}/messages`;
+  const metaPayload = {
+    messaging_product: "whatsapp",
     to,
     type: "text",
     text: { body: text },
@@ -126,9 +127,9 @@ export default async function handler(req: Request): Promise<Response> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      [ycloudAuthHeader]: ycloudAuthValue,
+      Authorization: `Bearer ${metaAccessToken}`,
     },
-    body: JSON.stringify(ycloudPayload),
+    body: JSON.stringify(metaPayload),
   });
 
   const respText = await resp.text();
@@ -142,18 +143,15 @@ export default async function handler(req: Request): Promise<Response> {
   if (!resp.ok) {
     return jsonResponse(502, {
       ok: false,
-      error: "YCloud send failed",
+      error: "Meta WhatsApp send failed",
       details: respJson ?? respText,
     });
   }
 
-  const r = (typeof respJson === "object" && respJson !== null)
-    ? (respJson as Record<string, unknown>)
-    : ({} as Record<string, unknown>);
-  const rData = (typeof r.data === "object" && r.data !== null)
-    ? (r.data as Record<string, unknown>)
-    : ({} as Record<string, unknown>);
-  const providerMessageId = (r.message_id ?? r.id ?? rData.message_id) ?? null;
+  const providerMessageId =
+    (typeof respJson === "object" && respJson !== null)
+      ? ((respJson as Record<string, unknown>)?.messages?.[0] as any)?.id ?? null
+      : null;
 
   // Guardar en Supabase (saliente)
   const { error: insertErr } = await admin.from("messages").insert({
@@ -170,7 +168,7 @@ export default async function handler(req: Request): Promise<Response> {
     inbox_id: resolvedInboxId,
     contact_phone: to,
     contact_name: null,
-    provider: "ycloud",
+    provider: "meta",
     provider_message_id: providerMessageId ? String(providerMessageId) : null,
     raw_payload: respJson ?? { raw: respText },
   });
@@ -193,5 +191,7 @@ export default async function handler(req: Request): Promise<Response> {
     inbox_id: resolvedInboxId,
   });
 }
+
+Deno.serve((req) => handler(req));
 
 

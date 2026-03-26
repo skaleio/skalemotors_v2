@@ -1,4 +1,6 @@
 import React from "react";
+import { captureAppError, initObservability } from "@/lib/observability";
+import { setupPerformanceObservers } from "@/lib/performance";
 
 // Error Boundary: si algo falla al renderizar, mostramos el error en vez de pantalla negra
 class AppErrorBoundary extends React.Component<
@@ -13,6 +15,7 @@ class AppErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("AppErrorBoundary:", error, errorInfo);
+    captureAppError(error, { componentStack: errorInfo.componentStack });
   }
 
   render() {
@@ -88,6 +91,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
     "Faltan variables de entorno de Supabase. Crea un archivo <strong>.env</strong> en la raíz del proyecto (junto a package.json) con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Puedes copiar env.example a .env y rellenar los valores. Luego reinicia npm run dev."
   );
 } else {
+  initObservability();
+  setupPerformanceObservers();
   import("./index.css");
   Promise.all([
     import("react-dom/client"),

@@ -54,13 +54,9 @@ export const vehicleService = {
 
     try {
       return await withTimeout(run())
-    } catch (err) {
+    } catch {
       // Un solo reintento si fue timeout o fallo de red
-      try {
-        return await withTimeout(run())
-      } catch (retryErr) {
-        throw retryErr
-      }
+      return await withTimeout(run())
     }
   },
 

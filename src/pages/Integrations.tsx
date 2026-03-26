@@ -270,11 +270,11 @@ export default function Integrations() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">YCloud</CardTitle>
+              <CardTitle className="text-lg">Meta WhatsApp Business</CardTitle>
               <Badge variant="outline">No conectado</Badge>
             </div>
             <CardDescription>
-              Sistema de telefonía y llamadas
+              Mensajería WhatsApp vía API oficial de Meta
             </CardDescription>
           </CardHeader>
           <CardContent>

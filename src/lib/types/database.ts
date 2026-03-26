@@ -122,8 +122,18 @@ export interface Database {
           email: string
           full_name: string
           phone: string | null
-          role: 'admin' | 'gerente' | 'vendedor' | 'financiero' | 'servicio' | 'inventario'
+          role:
+            | 'admin'
+            | 'gerente'
+            | 'vendedor'
+            | 'financiero'
+            | 'servicio'
+            | 'inventario'
+            | 'jefe_jefe'
+            | 'jefe_sucursal'
           branch_id: string | null
+          tenant_id: string | null
+          legacy_protected: boolean
           is_active: boolean
           avatar_url: string | null
           onboarding_completed: boolean
@@ -135,8 +145,18 @@ export interface Database {
           email: string
           full_name: string
           phone?: string | null
-          role?: 'admin' | 'gerente' | 'vendedor' | 'financiero' | 'servicio' | 'inventario'
+          role?:
+            | 'admin'
+            | 'gerente'
+            | 'vendedor'
+            | 'financiero'
+            | 'servicio'
+            | 'inventario'
+            | 'jefe_jefe'
+            | 'jefe_sucursal'
           branch_id?: string | null
+          tenant_id?: string | null
+          legacy_protected?: boolean
           is_active?: boolean
           avatar_url?: string | null
           onboarding_completed?: boolean
@@ -148,11 +168,82 @@ export interface Database {
           email?: string
           full_name?: string
           phone?: string | null
-          role?: 'admin' | 'gerente' | 'vendedor' | 'financiero' | 'servicio' | 'inventario'
+          role?:
+            | 'admin'
+            | 'gerente'
+            | 'vendedor'
+            | 'financiero'
+            | 'servicio'
+            | 'inventario'
+            | 'jefe_jefe'
+            | 'jefe_sucursal'
           branch_id?: string | null
+          tenant_id?: string | null
+          legacy_protected?: boolean
           is_active?: boolean
           avatar_url?: string | null
           onboarding_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      tenants: {
+        Row: {
+          id: string
+          slug: string
+          name: string
+          status: string
+          legacy_mode: boolean
+          protected_account_email: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          name: string
+          status?: string
+          legacy_mode?: boolean
+          protected_account_email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          name?: string
+          status?: string
+          legacy_mode?: boolean
+          protected_account_email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      tenant_feature_flags: {
+        Row: {
+          id: string
+          tenant_id: string
+          flag_key: string
+          enabled: boolean
+          payload: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          flag_key: string
+          enabled?: boolean
+          payload?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          flag_key?: string
+          enabled?: boolean
+          payload?: Json
           created_at?: string
           updated_at?: string
         }

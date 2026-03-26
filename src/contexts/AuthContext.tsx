@@ -1,4 +1,6 @@
 import { supabase, type User } from "@/lib/supabase";
+import { setObservabilityUserContext } from "@/lib/observability";
+import { setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 
@@ -67,6 +69,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       full_name: metadata.full_name || sessionUser.email?.split("@")[0] || "Usuario",
       phone: metadata.phone || undefined,
       role: (metadata.role as User["role"]) || "vendedor",
+      tenant_id: metadata.tenant_id || undefined,
+      legacy_protected: Boolean(metadata.legacy_protected),
       branch_id: metadata.branch_id || undefined,
       is_active: true,
       avatar_url: metadata.avatar_url || undefined,
@@ -122,6 +126,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           full_name: data.full_name,
           phone: data.phone || undefined,
           role: data.role,
+          tenant_id: (data as { tenant_id?: string }).tenant_id || undefined,
+          legacy_protected: Boolean((data as { legacy_protected?: boolean }).legacy_protected),
           branch_id: data.branch_id || undefined,
           is_active: data.is_active,
           avatar_url: data.avatar_url || undefined,
@@ -131,6 +137,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
         setUser(updatedUser);
         currentUserRef.current = updatedUser;
+        setTenantContext({
+          tenantId: updatedUser.tenant_id,
+          role: updatedUser.role,
+          userId: updatedUser.id,
+          legacyProtected: updatedUser.legacy_protected,
+        });
+        setObservabilityUserContext({
+          id: updatedUser.id,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          tenantId: updatedUser.tenant_id,
+        });
         writeCachedProfile(updatedUser);
         // Onboarding desactivado temporalmente
         setNeedsOnboarding(false);
@@ -166,6 +184,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Usuario',
           phone: authUser.user_metadata?.phone || null,
           role: authUser.user_metadata?.role || 'admin',
+          tenant_id: authUser.user_metadata?.tenant_id || null,
+          legacy_protected: Boolean(authUser.user_metadata?.legacy_protected),
           branch_id: '550e8400-e29b-41d4-a716-446655440000',
           is_active: true,
           onboarding_completed: true,
@@ -181,6 +201,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (data) {
         setUser(data as User);
+        setTenantContext({
+          tenantId: (data as User).tenant_id,
+          role: (data as User).role,
+          userId: (data as User).id,
+          legacyProtected: (data as User).legacy_protected,
+        });
         // Onboarding desactivado temporalmente
         setNeedsOnboarding(false);
         // setNeedsOnboarding(!data.onboarding_completed);
@@ -216,6 +242,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const initialUser = cachedProfile ?? buildFallbackUserFromSession(currentSession.user);
       setUser(initialUser);
       currentUserRef.current = initialUser;
+      setTenantContext({
+        tenantId: initialUser.tenant_id,
+        role: initialUser.role,
+        userId: initialUser.id,
+        legacyProtected: initialUser.legacy_protected,
+      });
+      setObservabilityUserContext({
+        id: initialUser.id,
+        email: initialUser.email,
+        role: initialUser.role,
+        tenantId: initialUser.tenant_id,
+      });
       setLoading(false);
       // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
       // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).

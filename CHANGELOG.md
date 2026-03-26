@@ -18,7 +18,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Dashboard ejecutivo con métricas en tiempo real
 - CRM para gestión de leads y clientes
 - Sistema de citas integrado con Google Calendar
-- Integración con WhatsApp Business API (YCloud)
+- Integración con WhatsApp Business API (Meta)
 - Studio IA para construcción de agentes con N8N
 - Automatización de workflows
 - Integración con SimpleFACTURA

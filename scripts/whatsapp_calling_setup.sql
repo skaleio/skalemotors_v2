@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_calls (
   inbox_id UUID REFERENCES public.whatsapp_inboxes(id),
   lead_id UUID REFERENCES public.leads(id),
   notes TEXT,
-  provider_call_id TEXT, -- ID del proveedor (YCloud, Twilio, etc.)
+  provider_call_id TEXT, -- ID del proveedor (Meta, Twilio, etc.)
   raw_payload JSONB, -- Payload completo del webhook
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -78,6 +78,6 @@ CREATE TRIGGER update_whatsapp_calls_updated_at
 
 -- Comentarios para documentación
 COMMENT ON TABLE public.whatsapp_calls IS 'Almacena todas las llamadas realizadas y recibidas a través de WhatsApp Business Calling API';
-COMMENT ON COLUMN public.whatsapp_calls.call_id IS 'ID único de la llamada proporcionado por el proveedor (YCloud, Twilio, etc.)';
+COMMENT ON COLUMN public.whatsapp_calls.call_id IS 'ID único de la llamada proporcionado por el proveedor';
 COMMENT ON COLUMN public.whatsapp_calls.provider_call_id IS 'ID adicional del proveedor para referencia';
 COMMENT ON COLUMN public.whatsapp_calls.raw_payload IS 'Payload completo del webhook para auditoría y debugging';

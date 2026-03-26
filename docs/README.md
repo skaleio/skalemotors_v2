@@ -23,8 +23,7 @@
 | Documento | Integración |
 |-----------|-------------|
 | [../GOOGLE_CALENDAR_SETUP.md](../GOOGLE_CALENDAR_SETUP.md) | Google Calendar (citas) |
-| [../WHATSAPP_YCLOUD_SETUP.md](../WHATSAPP_YCLOUD_SETUP.md) | WhatsApp mensajería (YCloud) |
-| [../WHATSAPP_CALLING_API_SETUP.md](../WHATSAPP_CALLING_API_SETUP.md) | WhatsApp llamadas |
+| [../META_WHATSAPP_SETUP.md](../META_WHATSAPP_SETUP.md) | WhatsApp mensajería (Meta) |
 | [../SIMPLEFACTURA_SETUP.md](../SIMPLEFACTURA_SETUP.md) | Facturación electrónica |
 | [MARKETPLACES_SETUP.md](./MARKETPLACES_SETUP.md) | Mercado Libre, Facebook Marketplace, Chile Autos |
 
@@ -60,8 +59,8 @@
 
 - **Supabase** – Auth, PostgreSQL, RLS, Edge Functions, Storage, Realtime
 - **Google Calendar** – Sincronización bidireccional de eventos
-- **WhatsApp (YCloud)** – Mensajería y webhook
-- **WhatsApp Calling** – Llamadas
+- **WhatsApp (Meta)** – Mensajería y webhook
+- **WhatsApp llamadas (voz)** – No disponible con Meta en este momento
 - **N8N** – Workspaces por sucursal, agente IA, automatizaciones, webhooks (lead-state-update, etc.)
 - **SimpleFACTURA** – Facturación electrónica
 - **Marketplaces** – Edge Functions: Mercado Libre, Facebook Marketplace, Chile Autos (connect, publish, sync)

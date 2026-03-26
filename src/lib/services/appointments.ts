@@ -22,6 +22,7 @@ export const appointmentService = {
   // Obtener todas las citas
   async getAll(filters?: {
     userId?: string
+    tenantId?: string
     branchId?: string
     leadId?: string
     status?: string
@@ -41,6 +42,10 @@ export const appointmentService = {
 
     if (filters?.userId) {
       query = query.eq('user_id', filters.userId)
+    }
+
+    if (filters?.tenantId) {
+      query = query.eq('tenant_id', filters.tenantId)
     }
 
     if (filters?.branchId) {

@@ -1,5 +1,5 @@
 -- =====================================================
--- WhatsApp (YCloud) - Centro de Mensajes por Teléfono
+-- WhatsApp (Meta) - Centro de Mensajes por Teléfono
 -- SKALE MOTORS
 -- =====================================================
 -- Objetivo:
@@ -9,7 +9,7 @@
 --
 -- IMPORTANTE:
 -- - Ejecuta este script en el SQL Editor de Supabase.
--- - Luego registra tu inbox (whatsapp_inboxes) con el provider_phone_number_id de YCloud.
+-- - Luego registra tu inbox (whatsapp_inboxes) con el provider_phone_number_id de Meta.
 
 -- =====================================================
 -- 1) Inboxes de WhatsApp
@@ -17,7 +17,7 @@
 
 CREATE TABLE IF NOT EXISTS public.whatsapp_inboxes (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  provider TEXT NOT NULL DEFAULT 'ycloud',
+  provider TEXT NOT NULL DEFAULT 'meta',
   provider_phone_number_id TEXT NOT NULL,
   display_number TEXT,
   branch_id UUID NOT NULL REFERENCES public.branches(id),

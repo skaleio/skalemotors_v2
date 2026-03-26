@@ -266,6 +266,8 @@ export default function SalesManagement() {
   const formMarginNum = Number.isNaN(parseAmount(formMargin)) ? 0 : parseAmount(formMargin);
   const formNetMargin = formMarginNum - formExpensesTotal;
 
+  const isMiamiSale = formVendor === "MIAMIMOTORS" || formStockOrigin === "MIAMIMOTORS";
+
   const handleSelectSale = (sale: SaleWithRelations) => {
     setSelectedSale(sale);
     setDetailEditMode(false);
@@ -437,7 +439,7 @@ export default function SalesManagement() {
       toast({ title: "Error", description: "Selecciona un vehículo de la lista o escribe el vehículo vendido.", variant: "destructive" });
       return;
     }
-    // Con financiamiento, pie/cuotas/saldoprecio son opcionales (ej. Miami Motors maneja eso aparte)
+    // Con financiamiento, pie/cuotas/saldoprecio son opcionales (se pueden completar si aplica)
     if (formPaymentMethod === "financiamiento") {
       if (formDownPayment.trim()) {
         const downPaymentNum = parseFloat(formDownPayment.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
@@ -1077,7 +1079,14 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
             >
             <div className="space-y-2">
               <Label htmlFor="vendor">Vendedor</Label>
-              <Select value={formVendor} onValueChange={setFormVendor} required>
+              <Select
+                value={formVendor}
+                onValueChange={(v) => {
+                  setFormVendor(v);
+                  if (v === "MIAMIMOTORS") setFormSalePrice("");
+                }}
+                required
+              >
                 <SelectTrigger id="vendor">
                   <SelectValue placeholder="Seleccionar vendedor" />
                 </SelectTrigger>
@@ -1092,7 +1101,13 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
             </div>
             <div className="space-y-2">
               <Label htmlFor="stock_origin">Origen Stock</Label>
-              <Select value={formStockOrigin} onValueChange={setFormStockOrigin}>
+              <Select
+                value={formStockOrigin}
+                onValueChange={(v) => {
+                  setFormStockOrigin(v);
+                  if (v === "MIAMIMOTORS") setFormSalePrice("");
+                }}
+              >
                 <SelectTrigger id="stock_origin">
                   <SelectValue placeholder="Seleccionar origen" />
                 </SelectTrigger>
@@ -1289,16 +1304,18 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                 </div>
               </>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="sale_price">Monto vendido ($) — opcional</Label>
-              <Input
-                id="sale_price"
-                type="text"
-                placeholder="Ej: 15000000"
-                value={formSalePrice}
-                onChange={(e) => setFormSalePrice(e.target.value)}
-              />
-            </div>
+            {!isMiamiSale && (
+              <div className="space-y-2">
+                <Label htmlFor="sale_price">Monto vendido ($) — opcional</Label>
+                <Input
+                  id="sale_price"
+                  type="text"
+                  placeholder="Ej: 15000000"
+                  value={formSalePrice}
+                  onChange={(e) => setFormSalePrice(e.target.value)}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="margin">Monto ganado ($)</Label>
               <Input

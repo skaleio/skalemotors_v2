@@ -16,8 +16,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
-import { initiateWhatsappCall, fetchWhatsappCalls, updateCallNotes, type WhatsappCall } from "@/lib/services/whatsappCalls";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
+
+type WhatsappCallStatus = "iniciando" | "en_curso" | "completada" | "fallida" | "cancelada" | "no_contestada";
+type WhatsappCallDirection = "entrante" | "saliente";
+type WhatsappCall = {
+  id: string;
+  call_id: string;
+  contact_phone: string;
+  contact_name: string | null;
+  direction: WhatsappCallDirection;
+  status: WhatsappCallStatus;
+  duration_seconds: number;
+  started_at: string | null;
+  ended_at: string | null;
+  recording_url: string | null;
+  transcript: string | null;
+  user_id: string | null;
+  branch_id: string | null;
+  lead_id: string | null;
+  notes: string | null;
+  created_at: string;
+};
 
 export default function Calls() {
   const { user } = useAuth();
@@ -36,11 +57,17 @@ export default function Calls() {
   const loadCalls = async () => {
     try {
       setLoading(true);
-      const data = await fetchWhatsappCalls({
-        branchId: user?.branch_id ?? undefined,
-        limit: 100,
-      });
-      setCalls(data);
+      let query = supabase
+        .from("whatsapp_calls")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (user?.branch_id) query = query.eq("branch_id", user.branch_id);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setCalls((data || []) as WhatsappCall[]);
     } catch (error) {
       console.error("Error loading calls:", error);
       toast({
@@ -63,34 +90,25 @@ export default function Calls() {
       return;
     }
 
-    try {
-      const result = await initiateWhatsappCall({
-        to: callPhone,
-      });
-      
-      toast({
-        title: "Llamada iniciada",
-        description: `Llamada a ${callPhone} iniciada exitosamente.`,
-      });
-      
-      setShowCallDialog(false);
-      setCallPhone("");
-      loadCalls();
-    } catch (error: any) {
-      console.error("Error initiating call:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "No se pudo iniciar la llamada.",
-        variant: "destructive",
-      });
-    }
+    // Meta WhatsApp Business Cloud API no provee, en este momento, un flujo equivalente
+    // a las "calls" por el proveedor anterior. Mantenemos la pantalla para histórico y notas.
+    toast({
+      title: "No disponible",
+      description: "Las llamadas de voz vía WhatsApp no están disponibles con Meta en este momento.",
+      variant: "destructive",
+    });
   };
 
   const handleSaveNotes = async () => {
     if (!selectedCall) return;
 
     try {
-      await updateCallNotes(selectedCall.id, callNotes);
+      const { error } = await supabase
+        .from("whatsapp_calls")
+        .update({ notes: callNotes })
+        .eq("id", selectedCall.id);
+
+      if (error) throw error;
       toast({
         title: "Notas guardadas",
         description: "Las notas se guardaron exitosamente.",

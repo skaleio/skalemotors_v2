@@ -61,7 +61,7 @@
 ### Integraciones
 - **N8N** - Automatización de workflows
 - **Google Calendar API** - Gestión de citas
-- **WhatsApp Business API** (YCloud) - Mensajería
+- **WhatsApp Business API** (Meta) - Mensajería
 - **SimpleFACTURA** - Facturación electrónica
 
 ## 📦 Requisitos Previos
@@ -201,8 +201,7 @@ Ver [GOOGLE_CALENDAR_SETUP.md](./GOOGLE_CALENDAR_SETUP.md) para configuración c
 Ver [docs/N8N_INTEGRATION_README.md](./docs/N8N_INTEGRATION_README.md) para workflows y configuración.
 
 ### WhatsApp Business
-- [WHATSAPP_YCLOUD_SETUP.md](./WHATSAPP_YCLOUD_SETUP.md) - Mensajería
-- [WHATSAPP_CALLING_API_SETUP.md](./WHATSAPP_CALLING_API_SETUP.md) - Llamadas
+- [META_WHATSAPP_SETUP.md](./META_WHATSAPP_SETUP.md) - Mensajería (Meta)
 
 ### SimpleFACTURA
 Ver [SIMPLEFACTURA_SETUP.md](./SIMPLEFACTURA_SETUP.md) para integración de facturación.

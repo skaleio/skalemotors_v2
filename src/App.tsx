@@ -210,35 +210,35 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/app/finance" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <Finance />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/fund-management" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:write">
                   <Layout>
                     <FundManagement />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/financial-tracking" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <FinancialTracking />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/financial-calculator" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <FinancialCalculator />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/salary-distribution" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <SalaryDistribution />
                   </Layout>

@@ -514,11 +514,6 @@ const Landing = () => {
       {/* ──────────────────── HERO ──────────────────── */}
       <section className="relative z-10 min-h-screen flex items-center justify-center px-4 pt-28 pb-20">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs font-medium mb-8 backdrop-blur-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Plataforma líder para automotoras · Actualizado Marzo 2026
-          </div>
-
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[1.04] tracking-tight mb-7">
             El sistema que hace<br />
             <span className="relative inline-block">
@@ -543,29 +538,14 @@ const Landing = () => {
             </Button>
           </div>
 
-          {/* Social proof */}
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-white/30 text-xs">
-            <div className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" /> Sin tarjeta de crédito</div>
-            <div className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> Setup en 48 horas</div>
-            <div className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5" /> +500 automotoras activas</div>
-          </div>
+          {/* Social proof (removed per request) */}
         </div>
       </section>
 
-      {/* ──────────────────── STATS ──────────────────── */}
-      <section className="relative z-10 py-20 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-0 divide-y-2 md:divide-y-0 md:divide-x divide-white/6">
-            <StatCounter end={500}  suffix="+"  label="Automotoras activas"  />
-            <StatCounter end={40}   suffix="%"  label="Más ventas promedio"  />
-            <StatCounter end={48}   suffix="h"  label="Setup garantizado"    />
-            <StatCounter end={99.9} suffix="%" label="Uptime del sistema"   />
-          </div>
-        </div>
-      </section>
+      {/* STATS removed per request */}
 
       {/* ──────────────────── FEATURES ──────────────────── */}
-      <section id="features" className="relative z-10 py-24 px-4">
+      <section id="features" className="relative z-10 pt-32 pb-24 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <Badge className="mb-5 px-4 py-1.5 text-xs font-medium bg-pink-500/10 text-pink-400 border-pink-400/20 rounded-full">Funcionalidades</Badge>
@@ -777,10 +757,10 @@ const Landing = () => {
       <section id="testimonials" className="relative z-10 py-24 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <Badge className="mb-5 px-4 py-1.5 text-xs font-medium bg-yellow-400/10 text-yellow-300 border-yellow-400/20 rounded-full">Testimonios</Badge>
+            <Badge className="mb-5 px-4 py-1.5 text-xs font-medium bg-pink-500/10 text-pink-400 border-pink-400/20 rounded-full">Testimonios</Badge>
             <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
               Los resultados hablan
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400"> solos.</span>
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-rose-400"> solos.</span>
             </h2>
             <p className="text-white/40 max-w-lg mx-auto">Más de 500 automotoras ya transformaron su operación. Aquí algunos de ellos.</p>
           </div>
@@ -788,7 +768,7 @@ const Landing = () => {
             {testimonials.map((t,i)=>(
               <div key={i} className="relative rounded-3xl p-6 bg-white/3 border border-white/8 hover:border-white/14 hover:bg-white/5 transition-all duration-300 flex flex-col">
                 <div className="flex mb-4">
-                  {[...Array(t.rating)].map((_,j)=><Star key={j} className="h-4 w-4 text-yellow-400 fill-current" />)}
+                  {[...Array(t.rating)].map((_,j)=><Star key={j} className="h-4 w-4 text-pink-400 fill-current" />)}
                 </div>
                 <p className="text-white/70 text-sm leading-relaxed flex-1 mb-6">"{t.content}"</p>
                 <div className="flex items-center gap-3">

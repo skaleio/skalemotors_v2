@@ -1454,31 +1454,6 @@ export default function Finance() {
                 </Select>
               </div>
             )}
-            {user?.role === "admin" && branches.length > 1 && (
-              <div className="space-y-2">
-                <Label>Sucursal</Label>
-                <Select
-                  value={form.branch_id ?? user?.branch_id ?? ""}
-                  onValueChange={(v) =>
-                    setForm((f) => ({
-                      ...f,
-                      branch_id: v ? v : null,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sucursal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             <div className="space-y-2">
               <Label htmlFor="description">Descripción (opcional)</Label>
               <Textarea

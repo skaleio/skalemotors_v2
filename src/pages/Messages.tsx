@@ -32,6 +32,9 @@ function isWhatsappStatus(v: unknown): v is WhatsappMessageRow["status"] {
 
 export default function Messages() {
   const { user } = useAuth();
+  const role = user?.role;
+  const canSeeTenant = role === "admin" || role === "financiero" || role === "jefe_jefe";
+  const scopedBranchId = canSeeTenant ? undefined : user?.branch_id ?? undefined;
   const [loading, setLoading] = useState(true);
   const [allMessages, setAllMessages] = useState<WhatsappMessageRow[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -68,7 +71,7 @@ export default function Messages() {
       try {
         setLoading(true);
         const msgs = await fetchWhatsappMessagesByBranch({
-          branchId: user?.branch_id ?? null,
+          branchId: scopedBranchId,
           limit: 800,
         });
         if (ignore) return;
@@ -90,7 +93,7 @@ export default function Messages() {
       ignore = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.branch_id]);
+  }, [scopedBranchId, canSeeTenant]);
 
   useEffect(() => {
     // Realtime: escuchar inserts/updates y refrescar estado local
@@ -103,7 +106,7 @@ export default function Messages() {
           const next = (payload.new || payload.old) as RealtimeRow | null;
           if (!next) return;
           if (next.type !== "whatsapp") return;
-          if (user?.branch_id && next.branch_id && next.branch_id !== user.branch_id) return;
+          if (!canSeeTenant && user?.branch_id && next.branch_id && next.branch_id !== user.branch_id) return;
 
           setAllMessages((prev) => {
             // Upsert por id
@@ -135,7 +138,7 @@ export default function Messages() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.branch_id]);
+  }, [user?.branch_id, canSeeTenant]);
 
   const getMessageStatusIcon = (status?: string) => {
     switch (status) {
@@ -324,25 +327,9 @@ export default function Messages() {
                       variant="outline" 
                       size="sm" 
                       className="h-8 w-8 p-0"
-                      onClick={async () => {
-                        try {
-                          const { initiateWhatsappCall } = await import("@/lib/services/whatsappCalls");
-                          await initiateWhatsappCall({
-                            to: selectedConversation.phone,
-                          });
-                          toast({
-                            title: "Llamada iniciada",
-                            description: `Llamada a ${selectedConversation.phone} iniciada.`,
-                          });
-                        } catch (error: any) {
-                          toast({
-                            title: "Error",
-                            description: error?.message || "No se pudo iniciar la llamada.",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
                       title="Llamar por WhatsApp"
+                      disabled
+                      onClick={() => {}}
                     >
                       <Phone className="h-4 w-4" />
                     </Button>

@@ -6,6 +6,7 @@ type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 
 interface UseAppointmentsOptions {
   userId?: string;
+  tenantId?: string;
   branchId?: string;
   leadId?: string;
   status?: string;
@@ -17,6 +18,7 @@ interface UseAppointmentsOptions {
 export function useAppointments(options: UseAppointmentsOptions = {}) {
   const {
     userId,
+    tenantId,
     branchId,
     leadId,
     status,
@@ -25,13 +27,14 @@ export function useAppointments(options: UseAppointmentsOptions = {}) {
     enabled = true,
   } = options;
 
-  const queryKey = ["appointments", userId, branchId, leadId, status, dateFrom, dateTo];
+  const queryKey = ["appointments", userId, tenantId, branchId, leadId, status, dateFrom, dateTo];
 
   const { data = [], isLoading: loading, error, refetch } = useQuery({
     queryKey,
     queryFn: () =>
       appointmentService.getAll({
         userId,
+        tenantId,
         branchId,
         leadId,
         status,

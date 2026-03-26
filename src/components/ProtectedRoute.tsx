@@ -1,14 +1,16 @@
 import DashboardLoader from '@/components/DashboardLoader'
 import { useAuth } from '@/contexts/AuthContext'
+import { type AppPermission, hasPermission } from '@/lib/rbac'
 import { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 
 interface ProtectedRouteProps {
   children: ReactNode
   requiredRole?: string[]
+  requiredPermission?: AppPermission
 }
 
-export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requiredRole, requiredPermission }: ProtectedRouteProps) {
   const { user, loading, isSigningOut, needsOnboarding } = useAuth()
   const location = useLocation()
 
@@ -35,6 +37,10 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   }
 
   if (requiredRole && !requiredRole.includes(user.role)) {
+    return <Navigate to="/app" replace />
+  }
+
+  if (requiredPermission && !hasPermission(user.role, requiredPermission)) {
     return <Navigate to="/app" replace />
   }
 

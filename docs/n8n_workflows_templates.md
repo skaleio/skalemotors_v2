@@ -312,7 +312,7 @@ Responde de manera natural y útil:
 
 **Nombre:** `lead-state-classifier`
 
-**Trigger:** Webhook - Recibe evento `message.received` desde `ycloud-webhook`
+**Trigger:** Webhook - Recibe evento `message.received` desde `meta-webhook`
 
 **Flujo:**
 

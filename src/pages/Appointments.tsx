@@ -162,6 +162,15 @@ function setTimeOnDate(date: Date, timeStr: string): Date {
 export default function Appointments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  const role = user?.role;
+  const tenantId = user?.tenant_id ?? undefined;
+  const canSeeSelf = role === "vendedor";
+  const canSeeTeam =
+    role === "gerente" || role === "servicio" || role === "inventario" || role === "jefe_sucursal";
+  const canSeeTenant =
+    role === "admin" || role === "financiero" || role === "jefe_jefe";
+
   const { leads } = useLeads({
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
@@ -171,7 +180,9 @@ export default function Appointments() {
     enabled: !!user,
   });
   const { appointments, loading } = useAppointments({
-    branchId: user?.branch_id ?? undefined,
+    userId: canSeeSelf ? user?.id : undefined,
+    tenantId: canSeeTenant ? tenantId : undefined,
+    branchId: canSeeTeam ? user?.branch_id ?? undefined : undefined,
     enabled: !!user,
   });
   const [view, setView] = useState<View>("month");
@@ -304,6 +315,7 @@ export default function Appointments() {
         vehicle_id: formData.vehicleId ? formData.vehicleId : null,
         user_id: user?.id ?? null,
         branch_id: user?.branch_id ?? null,
+        tenant_id: user?.tenant_id ?? null,
       } as Parameters<typeof appointmentService.update>[1] & {
         title: string;
         scheduled_at: string;
