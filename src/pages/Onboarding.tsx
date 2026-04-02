@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { 
   CheckCircle, 
   ArrowRight, 
@@ -308,27 +309,37 @@ export default function Onboarding() {
     setIsLoading(true);
     
     try {
-      // Simular guardado de configuración
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Marcar el onboarding como completado en el contexto
-      await completeOnboarding();
+      // Guardar nombre de empresa y datos de sucursal via RPC
+      const companyName = businessInfo.name?.trim() || user.full_name + ' Automotora';
+      const { error: rpcError } = await supabase.rpc('complete_tenant_onboarding', {
+        p_company_name:   companyName,
+        p_branch_city:    businessInfo.location?.trim() || null,
+        p_branch_address: null,
+        p_branch_phone:   null,
+        p_branch_region:  null,
+      });
+
+      if (rpcError) {
+        console.error("❌ Error en RPC complete_tenant_onboarding:", rpcError);
+        // Si el RPC falla, igualmente completamos el onboarding localmente
+        await completeOnboarding();
+      } else {
+        // El RPC ya marcó onboarding_completed = true; sincronizar estado local
+        await completeOnboarding();
+      }
 
       toast({
-        title: "¡Onboarding completado!",
-        description: "Tu configuración ha sido guardada exitosamente.",
+        title: "¡Configuración completada!",
+        description: `Bienvenido a SkaléMotors${companyName ? ', ' + companyName : ''}.`,
       });
       
-      // Pequeño delay para asegurar que el estado se actualice y mostrar el toast
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Redirigir al Dashboard General
       navigate("/app");
     } catch (error) {
       console.error("❌ Error completando onboarding:", error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       toast({
-        title: "Error al completar onboarding",
+        title: "Error al completar configuración",
         description: `No se pudo completar el proceso: ${errorMessage}. Por favor, intenta nuevamente.`,
         variant: "destructive",
       });

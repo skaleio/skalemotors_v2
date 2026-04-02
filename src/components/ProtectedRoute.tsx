@@ -27,10 +27,10 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
     return <Navigate to="/" state={{ from: location }} replace />
   }
 
-  // Onboarding desactivado temporalmente
-  // if (needsOnboarding && location.pathname !== '/onboarding') {
-  //   return <Navigate to="/onboarding" replace />
-  // }
+  // Redirigir al onboarding si el usuario no lo ha completado
+  if (needsOnboarding && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />
+  }
 
   if (!needsOnboarding && location.pathname === '/onboarding') {
     return <Navigate to="/app" replace />

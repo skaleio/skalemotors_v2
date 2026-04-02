@@ -68,10 +68,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       email: sessionUser.email || "",
       full_name: metadata.full_name || sessionUser.email?.split("@")[0] || "Usuario",
       phone: metadata.phone || undefined,
-      role: (metadata.role as User["role"]) || "vendedor",
-      tenant_id: metadata.tenant_id || undefined,
-      legacy_protected: Boolean(metadata.legacy_protected),
-      branch_id: metadata.branch_id || undefined,
+      role: "vendedor",
+      tenant_id: undefined,
+      legacy_protected: false,
+      branch_id: undefined,
       is_active: true,
       avatar_url: metadata.avatar_url || undefined,
       onboarding_completed: metadata.onboarding_completed || false,
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         PROFILE_FETCH_TIMEOUT_MS,
       );
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         setLoading(false);
         return false;
       }
@@ -150,9 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           tenantId: updatedUser.tenant_id,
         });
         writeCachedProfile(updatedUser);
-        // Onboarding desactivado temporalmente
-        setNeedsOnboarding(false);
-        // setNeedsOnboarding(!data.onboarding_completed);
+        setNeedsOnboarding(!data.onboarding_completed);
         setLoading(false);
         return true;
       }
@@ -171,7 +169,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
       if (!authUser) {
-        console.error("❌ No se pudo obtener el usuario de auth");
         setLoading(false);
         return false;
       }
@@ -183,18 +180,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
           email: authUser.email || '',
           full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Usuario',
           phone: authUser.user_metadata?.phone || null,
-          role: authUser.user_metadata?.role || 'admin',
-          tenant_id: authUser.user_metadata?.tenant_id || null,
-          legacy_protected: Boolean(authUser.user_metadata?.legacy_protected),
-          branch_id: '550e8400-e29b-41d4-a716-446655440000',
+          role: 'vendedor',
+          tenant_id: null,
+          legacy_protected: false,
+          branch_id: null,
           is_active: true,
-          onboarding_completed: true,
+          onboarding_completed: false,
         })
         .select()
         .single();
 
       if (error) {
-        console.error("❌ Error creando usuario:", error);
         setLoading(false);
         return false;
       }
@@ -207,17 +203,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           userId: (data as User).id,
           legacyProtected: (data as User).legacy_protected,
         });
-        // Onboarding desactivado temporalmente
-        setNeedsOnboarding(false);
-        // setNeedsOnboarding(!data.onboarding_completed);
+        setNeedsOnboarding(!(data as User).onboarding_completed);
         setLoading(false);
         return true;
       }
 
       setLoading(false);
       return false;
-    } catch (error) {
-      console.error("❌ Error en createUserFromAuth:", error);
+    } catch {
       setLoading(false);
       return false;
     }
@@ -352,7 +345,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
       if (error) {
-        console.error("❌ Sign in error:", error);
         setLoading(false);
         return { error };
       }
@@ -368,16 +360,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         });
       } else {
-        console.warn("⚠️ No session or user in sign in response");
         setLoading(false);
         return { error: new Error("No se recibió una sesión válida del servidor") };
       }
 
       return { error: null };
-    } catch (error) {
-      console.error("❌ Sign in exception:", error);
+    } catch {
       setLoading(false);
-      return { error };
+      return { error: new Error("Error inesperado. Intenta nuevamente.") };
     }
   };
 
@@ -392,13 +382,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           data: {
             full_name: fullName,
             phone: phone || null,
-            role: 'vendedor'
+            role: 'admin',
           }
         },
       });
 
       if (authError) {
-        console.error("❌ Error en auth.signUp:", authError);
         setLoading(false);
         return { error: authError };
       }
@@ -416,7 +405,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .maybeSingle();
 
         if (checkError && checkError.code !== 'PGRST116') {
-          console.error("❌ Error verificando usuario en public.users:", checkError);
+          // log silencioso en desarrollo
+          if (import.meta.env.DEV) console.warn("Error verificando usuario en public.users");
         }
 
         if (!userCheck) {
@@ -432,9 +422,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           });
 
           if (profileError) {
-            console.error("❌ Error creando perfil:", profileError);
-            // Si falla, el usuario existe en auth pero no en public.users
-            // El administrador tendrá que arreglarlo
             setLoading(false);
             return {
               error: new Error("Tu cuenta fue creada pero hay un problema de configuración. Por favor, contacta al administrador.")
@@ -452,10 +439,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       return { error: null };
-    } catch (error) {
-      console.error("❌ Error en signUp:", error);
+    } catch {
       setLoading(false);
-      return { error };
+      return { error: new Error("Error inesperado en el registro.") };
     }
   };
 
@@ -472,7 +458,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     // Mostrar "Cerrando sesión..." brevemente y redirigir sin esperar al servidor (signOut en segundo plano)
-    supabase.auth.signOut().catch((err) => console.error("Error signing out:", err));
+    supabase.auth.signOut().catch(() => {});
     setTimeout(clearState, 400);
   };
 
@@ -501,7 +487,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .single();
 
       if (error) {
-        console.error("❌ Error actualizando onboarding:", error);
         throw error;
       }
 
@@ -513,8 +498,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error("No se recibió respuesta del servidor");
       }
     } catch (error) {
-      console.error("❌ Error completing onboarding:", error);
-      throw error; // Re-lanzar el error para que el componente pueda manejarlo
+      throw error;
     }
   };
 

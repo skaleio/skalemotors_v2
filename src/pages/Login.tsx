@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,8 +15,35 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [localLoading, setLocalLoading] = useState(false)
   const [error, setError] = useState('')
+  const [loginCooldown, setLoginCooldown] = useState(0)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { signIn, loading: authLoading, user } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current)
+    }
+  }, [])
+
+  const startCooldown = (seconds: number) => {
+    setLoginCooldown(seconds)
+    cooldownRef.current = setInterval(() => {
+      setLoginCooldown(prev => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  const getGenericErrorMessage = (attempts: number): string => {
+    if (attempts >= 5) return 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.'
+    return 'Credenciales incorrectas. Verifica tu correo y contraseña.'
+  }
   
   // Si el usuario ya está autenticado, redirigir
   useEffect(() => {
@@ -27,6 +54,7 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loginCooldown > 0) return
     setLocalLoading(true)
     setError('')
 
@@ -34,18 +62,17 @@ export default function Login() {
       const { error } = await signIn(email, password)
       
       if (error) {
-        console.error('❌ Error en signIn:', error)
-        const errorMessage = error instanceof Error ? error.message : 
-                            (typeof error === 'object' && error !== null && 'message' in error) 
-                              ? String(error.message) 
-                              : String(error)
-        setError(errorMessage)
+        const newAttempts = failedAttempts + 1
+        setFailedAttempts(newAttempts)
+        const cooldownSeconds = newAttempts >= 5 ? 60 : newAttempts >= 3 ? 15 : 0
+        if (cooldownSeconds > 0) startCooldown(cooldownSeconds)
+        setError(getGenericErrorMessage(newAttempts))
         setLocalLoading(false)
+      } else {
+        setFailedAttempts(0)
       }
-      // Si no hay error, el useEffect redirigirá cuando user esté disponible
-    } catch (error) {
-      console.error('❌ Error en login (catch):', error)
-      setError(error instanceof Error ? error.message : 'Error inesperado. Intenta nuevamente.')
+    } catch {
+      setError('Error inesperado. Intenta nuevamente.')
       setLocalLoading(false)
     }
   }
@@ -141,9 +168,9 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-medium py-2.5 transition-colors"
-                disabled={localLoading}
+                disabled={localLoading || loginCooldown > 0}
               >
-                {localLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+                {localLoading ? 'Iniciando sesión...' : loginCooldown > 0 ? `Espera ${loginCooldown}s` : 'Iniciar Sesión'}
               </Button>
             </form>
 

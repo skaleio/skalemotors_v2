@@ -193,6 +193,7 @@ export interface Database {
           slug: string
           name: string
           status: string
+          plan: string
           legacy_mode: boolean
           protected_account_email: string | null
           created_at: string
@@ -203,6 +204,7 @@ export interface Database {
           slug: string
           name: string
           status?: string
+          plan?: string
           legacy_mode?: boolean
           protected_account_email?: string | null
           created_at?: string
@@ -213,6 +215,7 @@ export interface Database {
           slug?: string
           name?: string
           status?: string
+          plan?: string
           legacy_mode?: boolean
           protected_account_email?: string | null
           created_at?: string
@@ -220,6 +223,66 @@ export interface Database {
         }
       }
       tenant_feature_flags: {
+        Row: {
+          id: string
+          tenant_id: string
+          flag_key: string
+          enabled: boolean
+          payload: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          flag_key: string
+          enabled?: boolean
+          payload?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          flag_key?: string
+          enabled?: boolean
+          payload?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      tenant_billing: {
+        Row: {
+          tenant_id: string
+          billing_mode: 'manual' | 'stripe_pending' | 'stripe_active'
+          provider: string | null
+          external_customer_id: string | null
+          metadata: Json
+          trial_ends_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          tenant_id: string
+          billing_mode?: 'manual' | 'stripe_pending' | 'stripe_active'
+          provider?: string | null
+          external_customer_id?: string | null
+          metadata?: Json
+          trial_ends_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          tenant_id?: string
+          billing_mode?: 'manual' | 'stripe_pending' | 'stripe_active'
+          provider?: string | null
+          external_customer_id?: string | null
+          metadata?: Json
+          trial_ends_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
         Row: {
           id: string
           tenant_id: string
@@ -269,6 +332,7 @@ export interface Database {
           margin: number | null
           status: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
           branch_id: string | null
+          tenant_id: string | null
           location: string | null
           description: string | null
           features: Json
@@ -298,6 +362,7 @@ export interface Database {
           margin?: number | null
           status?: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
           branch_id?: string | null
+          tenant_id?: string | null
           location?: string | null
           description?: string | null
           features?: Json
@@ -327,6 +392,7 @@ export interface Database {
           margin?: number | null
           status?: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
           branch_id?: string | null
+          tenant_id?: string | null
           location?: string | null
           description?: string | null
           features?: Json
@@ -1351,6 +1417,116 @@ export interface Database {
           month?: number
           profit?: number
           amounts?: Record<string, number>
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      documents: {
+        Row: {
+          id: string
+          branch_id: string | null
+          created_by: string | null
+          type: 'contrato_venta' | 'contrato_consignacion'
+          document_number: string | null
+          status: 'borrador' | 'generado' | 'firmado' | 'anulado'
+          vehicle_id: string | null
+          vehicle_make: string | null
+          vehicle_model: string | null
+          vehicle_year: number | null
+          vehicle_vin: string | null
+          vehicle_patente: string | null
+          vehicle_km: number | null
+          vehicle_color: string | null
+          buyer_name: string | null
+          buyer_rut: string | null
+          buyer_phone: string | null
+          buyer_email: string | null
+          buyer_address: string | null
+          owner_name: string | null
+          owner_rut: string | null
+          owner_phone: string | null
+          owner_email: string | null
+          owner_address: string | null
+          sale_price: number | null
+          commission_percentage: number | null
+          commission_amount: number | null
+          payment_method: string | null
+          sale_id: string | null
+          consignacion_id: string | null
+          lead_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          branch_id?: string | null
+          created_by?: string | null
+          type: 'contrato_venta' | 'contrato_consignacion'
+          document_number?: string | null
+          status?: 'borrador' | 'generado' | 'firmado' | 'anulado'
+          vehicle_id?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vehicle_vin?: string | null
+          vehicle_patente?: string | null
+          vehicle_km?: number | null
+          vehicle_color?: string | null
+          buyer_name?: string | null
+          buyer_rut?: string | null
+          buyer_phone?: string | null
+          buyer_email?: string | null
+          buyer_address?: string | null
+          owner_name?: string | null
+          owner_rut?: string | null
+          owner_phone?: string | null
+          owner_email?: string | null
+          owner_address?: string | null
+          sale_price?: number | null
+          commission_percentage?: number | null
+          commission_amount?: number | null
+          payment_method?: string | null
+          sale_id?: string | null
+          consignacion_id?: string | null
+          lead_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          branch_id?: string | null
+          created_by?: string | null
+          type?: 'contrato_venta' | 'contrato_consignacion'
+          document_number?: string | null
+          status?: 'borrador' | 'generado' | 'firmado' | 'anulado'
+          vehicle_id?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vehicle_vin?: string | null
+          vehicle_patente?: string | null
+          vehicle_km?: number | null
+          vehicle_color?: string | null
+          buyer_name?: string | null
+          buyer_rut?: string | null
+          buyer_phone?: string | null
+          buyer_email?: string | null
+          buyer_address?: string | null
+          owner_name?: string | null
+          owner_rut?: string | null
+          owner_phone?: string | null
+          owner_email?: string | null
+          owner_address?: string | null
+          sale_price?: number | null
+          commission_percentage?: number | null
+          commission_amount?: number | null
+          payment_method?: string | null
+          sale_id?: string | null
+          consignacion_id?: string | null
+          lead_id?: string | null
+          notes?: string | null
           created_at?: string
           updated_at?: string
         }

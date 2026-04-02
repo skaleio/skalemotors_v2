@@ -20,6 +20,7 @@ class AppErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError && this.state.error) {
+      const isDev = import.meta.env.DEV;
       return (
         <div
           style={{
@@ -34,19 +35,23 @@ class AppErrorBoundary extends React.Component<
           }}
         >
           <h1 style={{ color: "#f87171", marginTop: 0 }}>Error en la aplicación</h1>
-          <p>{this.state.error.message}</p>
-          <pre
-            style={{
-              background: "#0f172a",
-              padding: "1rem",
-              borderRadius: "8px",
-              overflow: "auto",
-              fontSize: "0.8rem",
-            }}
-          >
-            {this.state.error.stack}
-          </pre>
-          <p>Abre la consola del navegador (F12) para más detalles.</p>
+          <p>Ocurrió un error inesperado. Por favor, recarga la página o contacta al soporte.</p>
+          {isDev && (
+            <pre
+              style={{
+                background: "#0f172a",
+                padding: "1rem",
+                borderRadius: "8px",
+                overflow: "auto",
+                fontSize: "0.8rem",
+              }}
+            >
+              {this.state.error.message}
+              {"\n\n"}
+              {this.state.error.stack}
+            </pre>
+          )}
+          {isDev && <p>Abre la consola del navegador (F12) para más detalles.</p>}
         </div>
       );
     }

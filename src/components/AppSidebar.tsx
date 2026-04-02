@@ -3,41 +3,28 @@ import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { leadService } from "@/lib/services/leads";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
   ArrowRight,
-  Award,
   BarChart3,
-  Bell,
   CreditCard as BillingIcon,
-  Brain,
   Calculator,
   Calendar,
   Car,
   ChevronDown,
   ChevronRight,
-  ClipboardCheck,
   ClipboardList,
   CreditCard,
   DollarSign,
   FileText,
-  Globe,
-  Heart,
   Keyboard,
   LayoutDashboard,
   LogOut,
   MessageCircle,
-  MessageSquareText,
   MoreVertical,
-  Package,
-  Phone,
   PieChart,
   Plug,
   Plus,
   Receipt,
-  RefreshCw,
-  Reply,
   ScrollText,
-  Search,
   Settings,
   Target,
   TrendingUp,
@@ -74,7 +61,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
-// Categorías organizadas del menú
+// Categorías organizadas del menú — Fase 1
 const menuCategories = [
   {
     title: "Dashboard",
@@ -85,12 +72,13 @@ const menuCategories = [
     ]
   },
   {
-    title: "CRM",
+    title: "CRM & Leads",
     icon: Target,
     items: [
       { title: "CRM", url: "/app/crm", icon: Target },
-      { title: "Mensajes", url: "/app/messages", icon: MessageCircle },
       { title: "Leads", url: "/app/leads", icon: Users },
+      { title: "Mensajes", url: "/app/messages", icon: MessageCircle },
+      { title: "Citas", url: "/app/appointments", icon: Calendar },
     ]
   },
   {
@@ -99,57 +87,30 @@ const menuCategories = [
     items: [
       { title: "Inventario", url: "/app/inventory", icon: Car },
       { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
-      { title: "Inventario Avanzado", url: "/app/inventory-advanced", icon: Activity },
       { title: "Tasación", url: "/app/tasacion", icon: Calculator },
-      { title: "Publicaciones", url: "/app/listings", icon: Globe },
-      { title: "Búsqueda de Autos", url: "/app/chileautos-scraper", icon: Search },
+    ]
+  },
+  {
+    title: "Documentos",
+    icon: FileText,
+    items: [
+      { title: "Contratos de Venta", url: "/app/documents/venta", icon: FileText },
+      { title: "Contratos de Consignación", url: "/app/documents/consignacion", icon: ScrollText },
     ]
   },
   {
     title: "Finanzas",
     icon: DollarSign,
     items: [
-      { title: "Gastos/Ingresos", url: "/app/finance", icon: Receipt },
+      { title: "Gastos / Ingresos", url: "/app/finance", icon: Receipt },
       { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
       { title: "Ventas", url: "/app/sales", icon: TrendingUp },
-      { title: "Distribución de salarios", url: "/app/salary-distribution", icon: PieChart },
+      { title: "Distribución de Salarios", url: "/app/salary-distribution", icon: PieChart },
       { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
       { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },
-      { title: "Facturación Electrónica", url: "/app/billing", icon: BillingIcon },
     ]
   },
-  {
-    title: "Operaciones",
-    icon: Settings,
-    items: [
-      { title: "Llamadas", url: "/app/calls", icon: Phone },
-      { title: "Citas", url: "/app/appointments", icon: Calendar },
-      { title: "Cotizaciones", url: "/app/quotes", icon: FileText },
-      { title: "Trámites", url: "/app/tramites", icon: ClipboardCheck },
-      { title: "Permutas", url: "/app/tradein", icon: RefreshCw },
-      { title: "Entregas", url: "/app/deliveries", icon: Package },
-    ]
-  },
-  {
-    title: "Post-Venta & Servicios",
-    icon: Award,
-    items: [
-      { title: "CRM Post-Venta", url: "/app/post-sale", icon: Award },
-      { title: "Facturación Servicios", url: "/app/post-sale?tab=billing", icon: Receipt },
-      { title: "Fidelización", url: "/app/loyalty", icon: Heart },
-    ]
-  },
-  {
-    title: "Analytics & Herramientas",
-    icon: BarChart3,
-    items: [
-      { title: "Reportes", url: "/app/reports", icon: PieChart },
-      { title: "Alertas", url: "/app/alerts", icon: Bell },
-      { title: "Meta ADS", url: "/app/studio-ia/marketing/facebook-ads", icon: BarChart3 },
-      { title: "Studio IA", url: "/app/studio-ia", icon: Brain },
-    ]
-  }
 ];
 
 const settingsCategory = {
@@ -163,8 +124,7 @@ const settingsCategory = {
 };
 
 const ALL_CATEGORY_KEYS = [
-  "Dashboard", "CRM", "Inventario & Vehículos", "Operaciones",
-  "Finanzas", "Post-Venta & Servicios", "Analytics & Herramientas", "Sistema",
+  "Dashboard", "CRM & Leads", "Inventario & Vehículos", "Documentos", "Finanzas", "Sistema",
 ] as const;
 
 export function AppSidebar() {
@@ -218,15 +178,12 @@ export function AppSidebar() {
   };
 
   // Estado para controlar qué categorías están expandidas
-  // Inventario & Vehículos abierto por defecto para que Inventario y Consignaciones sean visibles
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     "Dashboard": false,
-    "CRM": false,
+    "CRM & Leads": false,
     "Inventario & Vehículos": true,
-    "Operaciones": false,
+    "Documentos": false,
     "Finanzas": false,
-    "Post-Venta & Servicios": false,
-    "Analytics & Herramientas": false,
     "Sistema": false,
   });
 
@@ -244,12 +201,10 @@ export function AppSidebar() {
         // Colapsar todas las categorías y expandir solo la actual
         const updated: Record<string, boolean> = {
           "Dashboard": false,
-          "CRM": false,
+          "CRM & Leads": false,
           "Inventario & Vehículos": false,
-          "Operaciones": false,
+          "Documentos": false,
           "Finanzas": false,
-          "Post-Venta & Servicios": false,
-          "Analytics & Herramientas": false,
           "Sistema": false,
         };
 

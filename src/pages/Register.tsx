@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Car, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,11 +26,12 @@ export default function Register() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [branches, setBranches] = useState<any[]>([])
+  const [submitCooldown, setSubmitCooldown] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { signUp } = useAuth()
   const navigate = useNavigate()
 
-  // Cargar sucursales al montar el componente
-  useState(() => {
+  useEffect(() => {
     const fetchBranches = async () => {
       const { data, error } = await supabase
         .from('branches')
@@ -42,23 +43,56 @@ export default function Register() {
       }
     }
     fetchBranches()
-  })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current)
+    }
+  }, [])
+
+  const startCooldown = (seconds: number) => {
+    setSubmitCooldown(seconds)
+    cooldownRef.current = setInterval(() => {
+      setSubmitCooldown(prev => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  const validatePassword = (password: string): string | null => {
+    if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres'
+    if (!/[A-Z]/.test(password)) return 'La contraseña debe contener al menos una mayúscula'
+    if (!/[0-9]/.test(password)) return 'La contraseña debe contener al menos un número'
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitCooldown > 0) return
     setLoading(true)
     setError('')
     setSuccess(false)
 
-    // Validaciones
     if (formData.password !== formData.confirmPassword) {
       setError('Las contraseñas no coinciden')
       setLoading(false)
       return
     }
 
-    if (formData.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres')
+    const passwordError = validatePassword(formData.password)
+    if (passwordError) {
+      setError(passwordError)
+      setLoading(false)
+      return
+    }
+
+    if (!formData.fullName.trim() || formData.fullName.trim().length < 2) {
+      setError('El nombre debe tener al menos 2 caracteres')
       setLoading(false)
       return
     }
@@ -66,12 +100,13 @@ export default function Register() {
     const { error } = await signUp(
       formData.email,
       formData.password,
-      formData.fullName,
+      formData.fullName.trim(),
       formData.phone
     )
     
     if (error) {
-      setError(error.message)
+      startCooldown(30)
+      setError('No fue posible crear la cuenta. Verifica los datos o intenta más tarde.')
     } else {
       setSuccess(true)
       setTimeout(() => {
@@ -264,9 +299,9 @@ export default function Register() {
               <Button
                 type="submit"
                 className="w-full bg-pink-600 hover:bg-pink-700 text-white font-medium py-2.5 transition-colors"
-                disabled={loading}
+                disabled={loading || submitCooldown > 0}
               >
-                {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
+                {loading ? 'Creando cuenta...' : submitCooldown > 0 ? `Espera ${submitCooldown}s` : 'Crear Cuenta'}
               </Button>
             </form>
 

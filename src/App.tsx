@@ -24,50 +24,20 @@ const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Consignaciones = lazy(() => import("./pages/Consignaciones"));
-const Tramites = lazy(() => import("./pages/Tramites"));
 const Appointments = lazy(() => import("./pages/Appointments"));
-const Quotes = lazy(() => import("./pages/Quotes"));
 const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
 const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
 const SalaryDistribution = lazy(() => import("./pages/SalaryDistribution"));
 const Billing = lazy(() => import("./pages/Billing"));
-const PostSaleCRM = lazy(() => import("./pages/PostSaleCRM"));
-const AdvancedInventory = lazy(() => import("./pages/AdvancedInventory"));
-const TradeIn = lazy(() => import("./pages/TradeIn"));
-const Deliveries = lazy(() => import("./pages/Deliveries"));
-const Listings = lazy(() => import("./pages/Listings"));
-const ChileAutosScraper = lazy(() => import("./pages/ChileAutosScraper"));
 const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
 const Messages = lazy(() => import("./pages/Messages"));
-const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
-const Reports = lazy(() => import("./pages/Reports"));
-const Alerts = lazy(() => import("./pages/Alerts"));
-const StudioIA = lazy(() => import("./pages/StudioIA"));
-const GeneradorPosts = lazy(() => import("./pages/studio-ia/GeneradorPosts"));
-const DescripcionesVehiculos = lazy(() => import("./pages/studio-ia/DescripcionesVehiculos"));
-const ScriptsLlamadas = lazy(() => import("./pages/studio-ia/ScriptsLlamadas"));
-const GeneradorGuiones = lazy(() => import("./pages/studio-ia/GeneradorGuiones"));
-const SEOAutomotriz = lazy(() => import("./pages/studio-ia/SEOAutomotriz"));
-const FacebookAds = lazy(() => import("./pages/studio-ia/FacebookAds"));
-const GoogleAds = lazy(() => import("./pages/studio-ia/GoogleAds"));
-const OptimizadorImagenes = lazy(() => import("./pages/studio-ia/OptimizadorImagenes"));
-const GeneradorLogos = lazy(() => import("./pages/studio-ia/GeneradorLogos"));
-const ConstructorAgentes = lazy(() => import("./pages/studio-ia/ConstructorAgentes"));
-const OptimizadorPrecios = lazy(() => import("./pages/studio-ia/OptimizadorPrecios"));
-const IdentidadMarca = lazy(() => import("./pages/studio-ia/IdentidadMarca"));
-const EmailMarketing = lazy(() => import("./pages/studio-ia/EmailMarketing"));
-const AnalisisClientes = lazy(() => import("./pages/studio-ia/AnalisisClientes"));
-const ChatbotAutomotora = lazy(() => import("./pages/studio-ia/ChatbotAutomotora"));
-const ScriptsVideos = lazy(() => import("./pages/studio-ia/ScriptsVideos"));
-const ChatIA = lazy(() => import("./pages/studio-ia/ChatIA"));
+const Documents = lazy(() => import("./pages/Documents"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const Users = lazy(() => import("./pages/Users"));
-const Calls = lazy(() => import("./pages/Calls"));
 const Profile = lazy(() => import("./pages/Profile"));
-const Loyalty = lazy(() => import("./pages/Loyalty"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 // Landing se importa estático: es la ruta principal y evita errores de "Failed to fetch dynamically imported module"
 import Landing from "./pages/Landing";
@@ -181,13 +151,6 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/app/tramites" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Tramites />
-                  </Layout>
-                </ProtectedRoute>
-              } />
               <Route path="/app/appointments" element={
                 <ProtectedRoute>
                   <Layout>
@@ -199,13 +162,6 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Appointments />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/quotes" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Quotes />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -251,48 +207,6 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/app/post-sale" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <PostSaleCRM />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/inventory-advanced" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <AdvancedInventory />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/tradein" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <TradeIn />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/deliveries" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Deliveries />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/listings" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Listings />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/chileautos-scraper" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ChileAutosScraper />
-                  </Layout>
-                </ProtectedRoute>
-              } />
               <Route path="/app/tasacion" element={
                 <ProtectedRoute>
                   <Layout>
@@ -307,157 +221,17 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/app/website" element={
+              <Route path="/app/documents/venta" element={
                 <ProtectedRoute>
                   <Layout>
-                    <WebsiteBuilder />
+                    <Documents />
                   </Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/app/reports" element={
+              <Route path="/app/documents/consignacion" element={
                 <ProtectedRoute>
                   <Layout>
-                    <Reports />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/alerts" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Alerts />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <StudioIA />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/chat" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ChatIA />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/descripcion-vehiculo" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <DescripcionesVehiculos />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/content/posts" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <GeneradorPosts />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/content/descriptions" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <DescripcionesVehiculos />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/content/script-generator" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <GeneradorGuiones />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/content/video-scripts" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ScriptsVideos />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/sales/call-scripts" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ScriptsLlamadas />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/marketing/seo" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <SEOAutomotriz />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/marketing/facebook-ads" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <FacebookAds />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/marketing/google-ads" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <GoogleAds />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/marketing/email" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <EmailMarketing />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/visual/image-optimizer" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <OptimizadorImagenes />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/visual/logo-generator" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <GeneradorLogos />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/visual/brand-identity" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <IdentidadMarca />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/analytics/pricing-optimizer" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <OptimizadorPrecios />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/analytics/customer-insights" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <AnalisisClientes />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/automation/agent-builder" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ConstructorAgentes />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/studio-ia/automation/chatbot" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ChatbotAutomotora />
+                    <Documents />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -482,24 +256,10 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/app/calls" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Calls />
-                  </Layout>
-                </ProtectedRoute>
-              } />
               <Route path="/app/profile" element={
                 <ProtectedRoute>
                   <Layout>
                     <Profile />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/loyalty" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Loyalty />
                   </Layout>
                 </ProtectedRoute>
               } />

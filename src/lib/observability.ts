@@ -18,8 +18,9 @@ export function initObservability() {
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
-        maskAllText: false,
+        maskAllText: true,
         blockAllMedia: true,
+        maskAllInputs: true,
       }),
       Sentry.consoleLoggingIntegration({ levels: ["warn", "error"] }),
     ],
