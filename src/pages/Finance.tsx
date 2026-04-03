@@ -82,7 +82,7 @@ const INVERSOR_EMPRESA = "HessenMotors";
 /** Inversor cuyos gastos se descuentan del Pozo Hessen (tarjeta y lista al hacer clic). */
 const POZO_HESSEN_INVERSOR = "Pozo Hessen";
 
-/** Fecha desde la cual se descuentan gastos Pozo Hessen (solo desde marzo 2026). Gastos anteriores no cuentan. */
+/** Fecha mínima del gasto para contar en Pozo Hessen (histórico antes de marzo 2026 no cuenta). El pozo en pantalla es por mes seleccionado. */
 const POZO_HESSEN_DESDE_FECHA = "2026-03-01";
 
 /** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". Mantenemos las actuales y las que existían antes. */
@@ -344,25 +344,28 @@ export default function Finance() {
       setGastosHessenAllTime([]);
       return;
     }
+    const { from, to } = getMonthDateRange(selectedPeriod.year, selectedPeriod.month);
+    const periodKey = `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, "0")}`;
     setPozoHessenLoading(true);
     Promise.all([
       salaryDistributionService.getByBranch(branchId),
       gastosEmpresaService.getAll(),
     ])
       .then(([data, allGastos]) => {
-        let ahorroTotal = 0;
-        Object.values(data).forEach((monthData) => {
-          const a = monthData?.amounts?.["Ahorro Empresa"];
-          if (typeof a === "number") ahorroTotal += a;
-        });
-        setTotalAhorroEmpresa(ahorroTotal);
+        const monthData = data[periodKey];
+        const a = monthData?.amounts?.["Ahorro Empresa"];
+        const ahorroMes = typeof a === "number" ? a : 0;
+        setTotalAhorroEmpresa(ahorroMes);
         const pozoGastos = allGastos.filter(
           (g) => (g.inversor?.full_name || g.inversor_name || "").trim() === POZO_HESSEN_INVERSOR
         );
-        const pozoDesdeMarzo = pozoGastos.filter((g) => (g.expense_date || "") >= POZO_HESSEN_DESDE_FECHA);
-        setGastosHessenAllTime(pozoDesdeMarzo);
-        const sumHessen = pozoDesdeMarzo.reduce((s, g) => s + Number(g.amount), 0);
-        setTotalGastosHessenAllTime(sumHessen);
+        const pozoEnPeriodo = pozoGastos.filter((g) => {
+          const d = g.expense_date || "";
+          if (d < POZO_HESSEN_DESDE_FECHA) return false;
+          return d >= from && d <= to;
+        });
+        setGastosHessenAllTime(pozoEnPeriodo);
+        setTotalGastosHessenAllTime(pozoEnPeriodo.reduce((s, g) => s + Number(g.amount), 0));
       })
       .catch(() => {
         setTotalAhorroEmpresa(0);
@@ -370,7 +373,7 @@ export default function Finance() {
         setGastosHessenAllTime([]);
       })
       .finally(() => setPozoHessenLoading(false));
-  }, [user?.branch_id]);
+  }, [user?.branch_id, selectedPeriod.year, selectedPeriod.month]);
 
   useEffect(() => {
     loadPozoHessen();
@@ -1007,7 +1010,7 @@ export default function Finance() {
               {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total Ahorro Empresa − Gastos Pozo Hessen (desde marzo 2026)
+              Ahorro Empresa del mes − Gastos Pozo Hessen del mes (mismo período que arriba)
             </p>
           </CardContent>
         </Card>
@@ -2572,14 +2575,14 @@ export default function Finance() {
               Pozo Hessen
             </DialogTitle>
 <DialogDescription>
-              Total Ahorro Empresa (20% desde Distribución de salarios). Solo se descuentan del pozo los gastos con inversor Pozo Hessen desde marzo 2026. Desglose abajo.
+              Pozo del mes seleccionado ({selectedPeriod.month}/{selectedPeriod.year}): Ahorro Empresa de ese mes en Distribución de salarios, menos gastos con inversor Pozo Hessen con fecha en ese mes (fechas anteriores al 01/03/2026 no cuentan).
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4">
             <div className="rounded-lg border-2 border-violet-200 bg-violet-50/50 dark:bg-violet-950/20 dark:border-violet-800 px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Ahorro Empresa (acumulado)</p>
-                <p className="text-xs text-muted-foreground">Suma del 20% de todos los meses en Distribución de salarios</p>
+                <p className="text-sm font-medium text-muted-foreground">Ahorro Empresa (este mes)</p>
+                <p className="text-xs text-muted-foreground">20% asignado a &quot;Ahorro Empresa&quot; en Distribución de salarios para {selectedPeriod.month}/{selectedPeriod.year}</p>
               </div>
               <span className="text-xl font-bold text-violet-600">
                 {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa)}
@@ -2587,8 +2590,8 @@ export default function Finance() {
             </div>
             <div className="rounded-lg border bg-muted/40 px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos Pozo Hessen (desde marzo 2026)</p>
-                <p className="text-xs text-muted-foreground">Solo se descuentan del pozo los gastos con inversor Pozo Hessen desde el 01/03/2026</p>
+                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos Pozo Hessen (este mes)</p>
+                <p className="text-xs text-muted-foreground">Gastos con inversor Pozo Hessen con fecha en {selectedPeriod.month}/{selectedPeriod.year} y ≥ 01/03/2026</p>
               </div>
               <span className="text-lg font-bold text-red-600">
                 {pozoHessenLoading ? "…" : formatCurrency(totalGastosHessenAllTime)}
@@ -2597,7 +2600,7 @@ export default function Finance() {
             <div className="rounded-lg border-2 border-primary/30 bg-muted/50 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Pozo disponible</p>
-                <p className="text-xs text-muted-foreground">Total Ahorro Empresa − Gastos Pozo Hessen (desde marzo 2026)</p>
+                <p className="text-xs text-muted-foreground">Ahorro Empresa del mes − Gastos Pozo Hessen del mes</p>
               </div>
               <span className={`text-xl font-bold ${totalAhorroEmpresa - totalGastosHessenAllTime >= 0 ? "text-violet-600" : "text-red-600"}`}>
                 {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
@@ -2609,12 +2612,12 @@ export default function Finance() {
                 <Receipt className="h-4 w-4 text-red-500" />
                 Gastos que se descuentan del pozo ({gastosHessenAllTime.length})
               </h4>
-              <p className="text-xs text-muted-foreground">Solo gastos con inversor Pozo Hessen desde el 01/03/2026. Los anteriores no se descuentan del pozo.</p>
+              <p className="text-xs text-muted-foreground">Solo gastos con inversor Pozo Hessen en el mes seleccionado (y fecha ≥ 01/03/2026).</p>
               <div className="rounded-md border overflow-hidden">
                 {pozoHessenLoading ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">Cargando…</div>
                 ) : gastosHessenAllTime.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos con inversor Pozo Hessen registrados.</div>
+                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos Pozo Hessen en este mes.</div>
                 ) : (
                   <div className="max-h-64 overflow-auto">
                     <Table>
@@ -2642,11 +2645,11 @@ export default function Finance() {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">Total que se descuenta del pozo (desde marzo 2026): <span className="font-semibold text-red-600">-{formatCurrency(totalGastosHessenAllTime)}</span></p>
+              <p className="text-xs text-muted-foreground">Total que se descuenta del pozo en este mes: <span className="font-semibold text-red-600">-{formatCurrency(totalGastosHessenAllTime)}</span></p>
             </div>
 
             <p className="text-xs text-muted-foreground">
-              El Pozo Hessen solo aumenta cuando en Distribución de salarios se reparte el mes y se asigna el 20% a &quot;Ahorro Empresa&quot;. Los ingresos con etiqueta Hessen Motors en Gastos/Ingresos no suman al pozo.
+              El pozo mostrado corresponde al mes que eliges arriba: sube cuando en Distribución de salarios repartes ese mes y se asigna el 20% a &quot;Ahorro Empresa&quot;. Los ingresos con etiqueta Hessen Motors en Gastos/Ingresos no suman al pozo.
             </p>
           </div>
         </DialogContent>
