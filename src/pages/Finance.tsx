@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -81,6 +82,15 @@ const INVERSOR_EMPRESA = "HessenMotors";
 
 /** Inversor cuyos gastos se descuentan del Pozo Hessen (tarjeta y lista al hacer clic). */
 const POZO_HESSEN_INVERSOR = "Pozo Hessen";
+
+/** Nombre de inversor mostrado y usado en reglas: prioriza `inversor_name` en fila (evita que un `inversor_id` con otro `full_name` oculte "Pozo Hessen"). */
+function nombreInversorGasto(g: GastoEmpresaWithInversor): string {
+  return (g.inversor_name || g.inversor?.full_name || "").trim();
+}
+
+function esGastoPozoHessen(g: GastoEmpresaWithInversor): boolean {
+  return nombreInversorGasto(g).toLowerCase() === POZO_HESSEN_INVERSOR.toLowerCase();
+}
 
 /** Fecha mínima del gasto para contar en Pozo Hessen (histórico antes de marzo 2026 no cuenta). El pozo en pantalla es por mes seleccionado. */
 const POZO_HESSEN_DESDE_FECHA = "2026-03-01";
@@ -268,6 +278,8 @@ export default function Finance() {
     expense_date: new Date().toISOString().slice(0, 10),
     branch_id: null as string | null,
     devolucion: false,
+    /** Si true, al guardar se fuerza inversor Pozo Hessen (descuenta del pozo). */
+    descontar_pozo_hessen: false,
   });
 
   // Cargar gastos e ingresos empresa. Carga en paralelo; si uno falla, se muestra el otro y un aviso.
@@ -366,9 +378,7 @@ export default function Finance() {
         const a = monthData?.amounts?.["Ahorro Empresa"];
         const ahorroMes = typeof a === "number" ? a : 0;
         setTotalAhorroEmpresa(ahorroMes);
-        const pozoGastos = allGastos.filter(
-          (g) => (g.inversor?.full_name || g.inversor_name || "").trim() === POZO_HESSEN_INVERSOR
-        );
+        const pozoGastos = allGastos.filter((g) => esGastoPozoHessen(g));
         const pozoEnPeriodo = pozoGastos.filter((g) => {
           const d = g.expense_date || "";
           if (d < POZO_HESSEN_DESDE_FECHA) return false;
@@ -399,8 +409,10 @@ export default function Finance() {
     return () => { supabase.removeChannel(channel); };
   }, [loadPozoHessen]);
 
-  const displayInversor = (g: GastoEmpresaWithInversor) =>
-    g.inversor?.full_name || g.inversor_name || "—";
+  const displayInversor = (g: GastoEmpresaWithInversor) => {
+    const n = nombreInversorGasto(g);
+    return n || "—";
+  };
 
   const getExpenseTypeLabel = (code: string) =>
     expenseTypes.find((t) => t.code === code)?.label ?? code;
@@ -458,7 +470,7 @@ export default function Finance() {
 
   const montoParaBalance = (row: MovimientoRow): number => {
     if (row.tipo === "gasto") {
-      if (displayInversor(row.data) === POZO_HESSEN_INVERSOR) return 0;
+      if (esGastoPozoHessen(row.data)) return 0;
       return -Number(row.data.amount);
     }
     if (row.tipo === "ingreso") {
@@ -499,13 +511,13 @@ export default function Finance() {
   const pozoHessenDisponible =
     totalAhorroEmpresa + totalIngresosAhorroPozo - totalGastosHessenAllTime;
   /** Gastos que afectan el balance (excluye Pozo Hessen: esos solo descontan del Pozo Hessen). */
-  const gastosParaBalance = gastos.filter((g) => displayInversor(g) !== POZO_HESSEN_INVERSOR);
+  const gastosParaBalance = gastos.filter((g) => !esGastoPozoHessen(g));
   const totalGastos = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) =>
       !(g.devolucion ?? false) &&
       displayInversor(g) !== INVERSOR_EMPRESA &&
-      displayInversor(g) !== POZO_HESSEN_INVERSOR
+      !esGastoPozoHessen(g)
   );
   const totalGastosPendientes = gastosPendientes.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosHessenMotors = gastos.filter((g) => displayInversor(g) === INVERSOR_EMPRESA);
@@ -613,8 +625,16 @@ export default function Finance() {
     }
     // Asegurar que expense_type cumple el CHECK de la BD (evita errores al guardar)
     const expenseType = ALLOWED_EXPENSE_TYPES.has(form.expense_type) ? form.expense_type : "otros";
+    const inversorNombreFinal =
+      form.descontar_pozo_hessen || form.inversor_name.trim() === POZO_HESSEN_INVERSOR
+        ? POZO_HESSEN_INVERSOR
+        : form.inversor_name.trim();
     // HessenMotors y Pozo Hessen: la devolución no aplica, siempre false
-    const devolucion = (form.inversor_name === INVERSOR_EMPRESA || form.inversor_name === POZO_HESSEN_INVERSOR) ? false : form.devolucion;
+    const devolucion =
+      inversorNombreFinal === INVERSOR_EMPRESA || inversorNombreFinal === POZO_HESSEN_INVERSOR
+        ? false
+        : form.devolucion;
+    const inversorNameGuardado = inversorNombreFinal || null;
     try {
       // Gastos: siempre enviar expense_date (nunca income_date)
       if (editingId) {
@@ -623,7 +643,7 @@ export default function Finance() {
           description: form.description.trim() || null,
           expense_type: expenseType,
           inversor_id: null,
-          inversor_name: form.inversor_name.trim() || null,
+          inversor_name: inversorNameGuardado,
           expense_date: form.expense_date,
           devolucion,
         });
@@ -639,8 +659,11 @@ export default function Finance() {
           amount,
           description: form.description.trim() || null,
           expense_type: expenseType,
-          inversor_id: form.inversor_id || null,
-          inversor_name: form.inversor_name.trim() || null,
+          inversor_id:
+            form.descontar_pozo_hessen || inversorNombreFinal === POZO_HESSEN_INVERSOR
+              ? null
+              : form.inversor_id || null,
+          inversor_name: inversorNameGuardado,
           expense_date: form.expense_date,
           devolucion,
           created_by: user?.id ?? null,
@@ -656,9 +679,11 @@ export default function Finance() {
         expense_date: new Date().toISOString().slice(0, 10),
         branch_id: null,
         devolucion: false,
+        descontar_pozo_hessen: false,
       });
       setDialogOpen(false);
       loadGastos();
+      loadPozoHessen();
     } catch (err) {
       console.error(err);
       const msg = err instanceof Error ? err.message : "No se pudo guardar el gasto.";
@@ -668,15 +693,18 @@ export default function Finance() {
 
   const handleEdit = (g: GastoEmpresaWithInversor) => {
     setEditingId(g.id);
+    const inv = nombreInversorGasto(g) || (g.inversor?.full_name ?? g.inversor_name ?? "");
+    const esPozo = esGastoPozoHessen(g);
     setForm({
       amount: String(Number(g.amount)),
       description: g.description ?? "",
       expense_type: g.expense_type,
       inversor_id: null,
-      inversor_name: g.inversor?.full_name ?? g.inversor_name ?? "",
+      inversor_name: esPozo ? POZO_HESSEN_INVERSOR : inv,
       expense_date: g.expense_date, // Solo gastos: fecha del gasto, no modificar con income_date
       branch_id: g.branch_id ?? null,
       devolucion: g.devolucion ?? false,
+      descontar_pozo_hessen: esPozo,
     });
     setDialogOpen(true);
   };
@@ -729,6 +757,7 @@ export default function Finance() {
       setDeleteConfirmId(null);
       toast.success("Gasto eliminado.");
       loadGastos();
+      loadPozoHessen();
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "No se pudo eliminar el gasto.");
@@ -877,6 +906,7 @@ export default function Finance() {
                 expense_date: new Date().toISOString().slice(0, 10),
                 branch_id: null,
                 devolucion: false,
+                descontar_pozo_hessen: false,
               });
               setDialogOpen(true);
             }}
@@ -1243,7 +1273,7 @@ export default function Finance() {
                             })()}
                           </TableCell>
                           <TableCell>
-                            {(displayInversor(row.data) === INVERSOR_EMPRESA || displayInversor(row.data) === POZO_HESSEN_INVERSOR) ? (
+                            {(displayInversor(row.data) === INVERSOR_EMPRESA || esGastoPozoHessen(row.data)) ? (
                               <span className="text-muted-foreground">—</span>
                             ) : (
                               <Badge variant={row.data.devolucion ? "default" : "outline"}>
@@ -1448,6 +1478,7 @@ export default function Finance() {
                     ...f,
                     inversor_id: null,
                     inversor_name: v === "none" ? "" : v,
+                    descontar_pozo_hessen: v === POZO_HESSEN_INVERSOR,
                   }))
                 }
               >
@@ -1464,7 +1495,36 @@ export default function Finance() {
                 </SelectContent>
               </Select>
             </div>
-            {form.inversor_name !== INVERSOR_EMPRESA && form.inversor_name !== POZO_HESSEN_INVERSOR && (
+            <div className="flex items-start gap-3 rounded-md border border-violet-200 bg-violet-50/50 dark:bg-violet-950/20 dark:border-violet-800 px-3 py-2.5">
+              <Checkbox
+                id="descuenta-pozo-hessen"
+                checked={form.descontar_pozo_hessen}
+                onCheckedChange={(c) => {
+                  const on = c === true;
+                  setForm((f) => ({
+                    ...f,
+                    descontar_pozo_hessen: on,
+                    inversor_id: null,
+                    inversor_name: on
+                      ? POZO_HESSEN_INVERSOR
+                      : f.inversor_name === POZO_HESSEN_INVERSOR
+                        ? ""
+                        : f.inversor_name,
+                  }));
+                }}
+              />
+              <div className="grid gap-1 leading-snug">
+                <Label htmlFor="descuenta-pozo-hessen" className="text-sm font-medium cursor-pointer">
+                  Descontar del Pozo Hessen
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Si está marcado, el gasto se guarda como inversor Pozo Hessen y se resta del pozo del mes de la fecha del gasto (no del balance). También puedes elegir &quot;Pozo Hessen&quot; en Inversor.
+                </p>
+              </div>
+            </div>
+            {!form.descontar_pozo_hessen &&
+              form.inversor_name !== INVERSOR_EMPRESA &&
+              form.inversor_name !== POZO_HESSEN_INVERSOR && (
               <div className="space-y-2">
                 <Label>Devolución</Label>
                 <Select
@@ -1668,7 +1728,7 @@ export default function Finance() {
                     <span>{displayInversor(detailMovimiento.data)}</span>
                     <span className="text-muted-foreground">Devolución</span>
                     <span>
-                      {(displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA || displayInversor(detailMovimiento.data) === POZO_HESSEN_INVERSOR) ? (
+                      {(displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA || esGastoPozoHessen(detailMovimiento.data)) ? (
                         "—"
                       ) : (
                         <Badge variant={detailMovimiento.data.devolucion ? "default" : "outline"}>{detailMovimiento.data.devolucion ? "Sí" : "No"}</Badge>
