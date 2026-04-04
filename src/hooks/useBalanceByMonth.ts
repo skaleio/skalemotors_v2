@@ -1,6 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
+/** Mismo criterio que Finanzas: ingresos con esta etiqueta van al Pozo Hessen, no al balance operativo. */
+const INGRESO_ETIQUETA_AHORRO_POZO = "Ahorro pozo";
+
 export interface BalanceMonth {
   income: number;
   expenses: number;
@@ -34,12 +37,16 @@ export function useBalanceByMonth(branchId: string | null | undefined, year: num
       // Ingresos empresa (solo realizados) — igual que Gastos/Ingresos, sin ventas
       let ingresosQuery = supabase
         .from("ingresos_empresa")
-        .select("income_date, amount, payment_status")
+        .select("income_date, amount, payment_status, etiqueta")
         .gte("income_date", from)
         .lte("income_date", to);
       const { data: ingresosData } = await ingresosQuery;
       (ingresosData ?? [])
-        .filter((i: { payment_status?: string }) => (i.payment_status ?? "realizado") === "realizado")
+        .filter((i: { payment_status?: string; etiqueta?: string | null }) => {
+          if ((i.payment_status ?? "realizado") !== "realizado") return false;
+          if ((i.etiqueta || "").trim() === INGRESO_ETIQUETA_AHORRO_POZO) return false;
+          return true;
+        })
         .forEach((i: { income_date: string; amount: number | null }) => {
           const d = parseLocalDate(i.income_date);
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;

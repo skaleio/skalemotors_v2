@@ -85,6 +85,15 @@ const POZO_HESSEN_INVERSOR = "Pozo Hessen";
 /** Fecha mínima del gasto para contar en Pozo Hessen (histórico antes de marzo 2026 no cuenta). El pozo en pantalla es por mes seleccionado. */
 const POZO_HESSEN_DESDE_FECHA = "2026-03-01";
 
+/** Ingreso con esta etiqueta no suma al balance; suma al Pozo Hessen (mismo mes seleccionado). */
+const INGRESO_ETIQUETA_AHORRO_POZO = "Ahorro pozo";
+const INGRESO_ETIQUETA_PAGOS_MIAMI = "Pagos de miami";
+const INGRESO_ETIQUETAS_FORMULARIO = [INGRESO_ETIQUETA_PAGOS_MIAMI, INGRESO_ETIQUETA_AHORRO_POZO, "Hessen Motors"] as const;
+
+function ingresoEtiquetaCuentaEnBalance(etiqueta: string) {
+  return (etiqueta || "").trim() !== INGRESO_ETIQUETA_AHORRO_POZO;
+}
+
 /** Valores permitidos por el CHECK de la tabla gastos_empresa. Si el tipo no está aquí, se envía "otros". Mantenemos las actuales y las que existían antes. */
 const ALLOWED_EXPENSE_TYPES = new Set([
   "operacion", "marketing", "servicios", "mantenimiento", "combustible",
@@ -248,6 +257,7 @@ export default function Finance() {
     description: "",
     income_date: new Date().toISOString().slice(0, 10),
     payment_status: "pendiente" as "pendiente" | "realizado",
+    etiqueta: INGRESO_ETIQUETA_PAGOS_MIAMI,
   });
   const [form, setForm] = useState({
     amount: "",
@@ -452,8 +462,11 @@ export default function Finance() {
       return -Number(row.data.amount);
     }
     if (row.tipo === "ingreso") {
-      if ("source" in row.data && row.data.source === "ingreso_empresa" && row.data.payment_status !== "realizado")
-        return 0;
+      if ("source" in row.data && row.data.source === "ingreso_empresa") {
+        if (row.data.payment_status !== "realizado") return 0;
+        if (!ingresoEtiquetaCuentaEnBalance(row.data.etiqueta)) return 0;
+        return Number(row.data.margin);
+      }
       return Number(row.data.margin);
     }
     return 0;
@@ -473,9 +486,18 @@ export default function Finance() {
   );
 
   const ingresosRealizados = ingresosEmpresa.filter(
-    (i) => (i.payment_status ?? "realizado") === "realizado"
+    (i) =>
+      (i.payment_status ?? "realizado") === "realizado" && ingresoEtiquetaCuentaEnBalance(i.etiqueta)
   );
+  const ingresosAhorroPozoRealizados = ingresosEmpresa.filter(
+    (i) =>
+      (i.payment_status ?? "realizado") === "realizado" &&
+      (i.etiqueta || "").trim() === INGRESO_ETIQUETA_AHORRO_POZO
+  );
+  const totalIngresosAhorroPozo = ingresosAhorroPozoRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
   const totalIngresos = ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
+  const pozoHessenDisponible =
+    totalAhorroEmpresa + totalIngresosAhorroPozo - totalGastosHessenAllTime;
   /** Gastos que afectan el balance (excluye Pozo Hessen: esos solo descontan del Pozo Hessen). */
   const gastosParaBalance = gastos.filter((g) => displayInversor(g) !== POZO_HESSEN_INVERSOR);
   const totalGastos = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
@@ -725,13 +747,14 @@ export default function Finance() {
       amount,
       description: formIngreso.description.trim() || null,
       income_date: formIngreso.income_date,
-      etiqueta: "Hessen Motors",
+      etiqueta: formIngreso.etiqueta.trim() || INGRESO_ETIQUETA_PAGOS_MIAMI,
       payment_status: formIngreso.payment_status,
     };
     const payloadUpdate = {
       amount,
       description: formIngreso.description.trim() || null,
       income_date: formIngreso.income_date,
+      etiqueta: formIngreso.etiqueta.trim() || INGRESO_ETIQUETA_PAGOS_MIAMI,
       payment_status: formIngreso.payment_status,
     };
     try {
@@ -758,6 +781,7 @@ export default function Finance() {
         description: "",
         income_date: new Date().toISOString().slice(0, 10),
         payment_status: "pendiente",
+        etiqueta: INGRESO_ETIQUETA_PAGOS_MIAMI,
       });
       setEditingIngresoId(null);
       setDialogIngresoOpen(false);
@@ -777,6 +801,7 @@ export default function Finance() {
       description: ingreso.description ?? "",
       income_date: ingreso.income_date, // Solo ingresos: fecha del ingreso, no modificar con expense_date
       payment_status: (ingreso.payment_status === "realizado" ? "realizado" : "pendiente") as "pendiente" | "realizado",
+      etiqueta: (ingreso.etiqueta || "").trim() || INGRESO_ETIQUETA_PAGOS_MIAMI,
     });
     setEditingIngresoId(id);
     setDialogIngresoOpen(true);
@@ -831,6 +856,7 @@ export default function Finance() {
                 description: "",
                 income_date: new Date().toISOString().slice(0, 10),
                 payment_status: "pendiente",
+                etiqueta: INGRESO_ETIQUETA_PAGOS_MIAMI,
               });
               setDialogIngresoOpen(true);
             }}
@@ -1006,11 +1032,11 @@ export default function Finance() {
             <Building2 className="h-4 w-4 text-violet-500" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalAhorroEmpresa - totalGastosHessenAllTime >= 0 ? "text-violet-600" : "text-red-600"}`}>
-              {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
+            <div className={`text-2xl font-bold ${pozoHessenDisponible >= 0 ? "text-violet-600" : "text-red-600"}`}>
+              {pozoHessenLoading ? "…" : formatCurrency(pozoHessenDisponible)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Ahorro Empresa del mes − Gastos Pozo Hessen del mes (mismo período que arriba)
+              Ahorro Empresa + ingresos &quot;Ahorro pozo&quot; − gastos Pozo Hessen (mismo mes que arriba)
             </p>
           </CardContent>
         </Card>
@@ -1501,8 +1527,8 @@ export default function Finance() {
             </DialogTitle>
             <DialogDescription>
               {editingIngresoId
-                ? "Modifica el monto, descripción o fecha del ingreso."
-                : "Registra un ingreso de la empresa (siempre Hessen Motors). Se sumará a Total ingresos y aparecerá en la lista."}
+                ? "Modifica monto, descripción, etiqueta, fecha o estado de pago."
+                : "Elige la etiqueta: «Pagos de miami» (u otras) suman al balance al marcar Realizado; «Ahorro pozo» suma al Pozo Hessen del mes, no al balance."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitIngreso} className="space-y-4">
@@ -1542,6 +1568,37 @@ export default function Finance() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Etiqueta</Label>
+              <Select
+                value={formIngreso.etiqueta}
+                onValueChange={(v) => setFormIngreso((f) => ({ ...f, etiqueta: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Etiqueta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INGRESO_ETIQUETAS_FORMULARIO.map((etq) => (
+                    <SelectItem key={etq} value={etq}>
+                      {etq}
+                    </SelectItem>
+                  ))}
+                  {(INGRESO_ETIQUETAS_FORMULARIO as readonly string[]).includes(formIngreso.etiqueta)
+                    ? null
+                    : formIngreso.etiqueta?.trim()
+                      ? (
+                          <SelectItem key={`legacy-${formIngreso.etiqueta}`} value={formIngreso.etiqueta}>
+                            {formIngreso.etiqueta} (actual)
+                          </SelectItem>
+                        )
+                      : null}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">{INGRESO_ETIQUETA_PAGOS_MIAMI}</span> y <span className="font-medium">Hessen Motors</span> → balance (con Realizado).{" "}
+                <span className="font-medium">{INGRESO_ETIQUETA_AHORRO_POZO}</span> → Pozo Hessen del mes (con Realizado), no al balance.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Pago</Label>
               <Select
                 value={formIngreso.payment_status}
@@ -1558,7 +1615,7 @@ export default function Finance() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Solo los ingresos marcados como &quot;Realizado&quot; se suman al balance y total ingresos.
+                Realizado: si la etiqueta es &quot;Ahorro pozo&quot; suma al Pozo Hessen del mes; en caso contrario suma al balance y a Total ingresos.
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -2575,7 +2632,7 @@ export default function Finance() {
               Pozo Hessen
             </DialogTitle>
 <DialogDescription>
-              Pozo del mes seleccionado ({selectedPeriod.month}/{selectedPeriod.year}): Ahorro Empresa de ese mes en Distribución de salarios, menos gastos con inversor Pozo Hessen con fecha en ese mes (fechas anteriores al 01/03/2026 no cuentan).
+              Pozo del mes ({selectedPeriod.month}/{selectedPeriod.year}): Ahorro Empresa del mes + ingresos con etiqueta &quot;Ahorro pozo&quot; realizados en el mes, menos gastos con inversor Pozo Hessen en el mes (gastos con fecha anterior al 01/03/2026 no cuentan).
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4">
@@ -2586,6 +2643,15 @@ export default function Finance() {
               </div>
               <span className="text-xl font-bold text-violet-600">
                 {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa)}
+              </span>
+            </div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 dark:border-emerald-800 px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Más: Ingresos &quot;Ahorro pozo&quot; (este mes)</p>
+                <p className="text-xs text-muted-foreground">Ingresos manuales con etiqueta Ahorro pozo y pago Realizado en {selectedPeriod.month}/{selectedPeriod.year}</p>
+              </div>
+              <span className="text-xl font-bold text-emerald-600">
+                {loading ? "…" : formatCurrency(totalIngresosAhorroPozo)}
               </span>
             </div>
             <div className="rounded-lg border bg-muted/40 px-4 py-3 flex items-center justify-between">
@@ -2600,11 +2666,50 @@ export default function Finance() {
             <div className="rounded-lg border-2 border-primary/30 bg-muted/50 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Pozo disponible</p>
-                <p className="text-xs text-muted-foreground">Ahorro Empresa del mes − Gastos Pozo Hessen del mes</p>
+                <p className="text-xs text-muted-foreground">Ahorro Empresa + ingresos Ahorro pozo − gastos Pozo Hessen (este mes)</p>
               </div>
-              <span className={`text-xl font-bold ${totalAhorroEmpresa - totalGastosHessenAllTime >= 0 ? "text-violet-600" : "text-red-600"}`}>
-                {pozoHessenLoading ? "…" : formatCurrency(totalAhorroEmpresa - totalGastosHessenAllTime)}
+              <span className={`text-xl font-bold ${pozoHessenDisponible >= 0 ? "text-violet-600" : "text-red-600"}`}>
+                {pozoHessenLoading || loading ? "…" : formatCurrency(pozoHessenDisponible)}
               </span>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Ingresos que suman al pozo ({ingresosAhorroPozoRealizados.length})
+              </h4>
+              <p className="text-xs text-muted-foreground">Etiqueta &quot;Ahorro pozo&quot;, estado de pago Realizado. No suman al balance general.</p>
+              <div className="rounded-md border overflow-hidden">
+                {loading ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">Cargando…</div>
+                ) : ingresosAhorroPozoRealizados.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">No hay ingresos &quot;Ahorro pozo&quot; realizados en este mes.</div>
+                ) : (
+                  <div className="max-h-40 overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Fecha</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead className="text-right w-28">Monto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...ingresosAhorroPozoRealizados]
+                          .sort((a, b) => b.income_date.localeCompare(a.income_date))
+                          .map((i) => (
+                            <TableRow key={i.id}>
+                              <TableCell className="text-muted-foreground text-xs whitespace-nowrap">{formatDate(i.income_date)}</TableCell>
+                              <TableCell className="text-sm max-w-[220px] truncate">{i.description || "—"}</TableCell>
+                              <TableCell className="text-right font-medium text-emerald-600 text-sm">+{formatCurrency(Number(i.amount))}</TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Total ingresos al pozo: <span className="font-semibold text-emerald-600">+{formatCurrency(totalIngresosAhorroPozo)}</span></p>
             </div>
 
             <div className="space-y-2">
@@ -2649,7 +2754,7 @@ export default function Finance() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              El pozo mostrado corresponde al mes que eliges arriba: sube cuando en Distribución de salarios repartes ese mes y se asigna el 20% a &quot;Ahorro Empresa&quot;. Los ingresos con etiqueta Hessen Motors en Gastos/Ingresos no suman al pozo.
+              El pozo del mes sube con el reparto en Distribución de salarios (Ahorro Empresa) y con ingresos manuales etiquetados &quot;Ahorro pozo&quot; (Realizado). &quot;Pagos de miami&quot; y otras etiquetas suman al balance, no al pozo. Los ingresos con etiqueta Hessen Motors no suman al pozo salvo que uses explícitamente &quot;Ahorro pozo&quot;.
             </p>
           </div>
         </DialogContent>
