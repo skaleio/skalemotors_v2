@@ -24,7 +24,8 @@ import { Building2, Calendar, DollarSign, Percent, PieChart, User } from "lucide
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const DISTRIBUTION = {
+/** Enero–marzo: reparto histórico (incluye Ronaldo). */
+const DISTRIBUTION_LEGACY = {
   Mike: 0.3,
   Jota: 0.3,
   "Ahorro Empresa": 0.2,
@@ -33,7 +34,52 @@ const DISTRIBUTION = {
   Comisiones: 0,
 } as const;
 
-const BENEFICIARIOS = Object.keys(DISTRIBUTION) as (keyof typeof DISTRIBUTION)[];
+/** Abril en adelante: sin Ronaldo. */
+const DISTRIBUTION_FROM_APRIL = {
+  Mike: 0.38,
+  Jota: 0.38,
+  "Ahorro Empresa": 0.07,
+  Antonio: 0.17,
+  Comisiones: 0,
+} as const;
+
+/** Todas las claves que pueden aparecer en datos guardados (totales y detalle). */
+const ALL_BENEFICIARY_KEYS = [
+  "Mike",
+  "Jota",
+  "Ahorro Empresa",
+  "Antonio",
+  "Ronaldo",
+  "Comisiones",
+] as const;
+
+function getDistribution(month: number): Record<string, number> {
+  return month >= 4 ? { ...DISTRIBUTION_FROM_APRIL } : { ...DISTRIBUTION_LEGACY };
+}
+
+function beneficiariesForCards(monthFilter: string): readonly string[] {
+  if (monthFilter === "all") return ALL_BENEFICIARY_KEYS;
+  const m = Number(monthFilter);
+  if (m >= 4) return ["Mike", "Jota", "Ahorro Empresa", "Antonio", "Comisiones"];
+  return ["Mike", "Jota", "Ahorro Empresa", "Antonio", "Ronaldo", "Comisiones"];
+}
+
+function pctLabelForCard(name: string, monthFilter: string): string {
+  if (monthFilter === "all") {
+    if (name === "Ronaldo") return "5% (ene–mar)";
+    if (name === "Comisiones") return "0%";
+    const leg = DISTRIBUTION_LEGACY[name as keyof typeof DISTRIBUTION_LEGACY];
+    const neo = DISTRIBUTION_FROM_APRIL[name as keyof typeof DISTRIBUTION_FROM_APRIL];
+    if (leg !== undefined && neo !== undefined && leg !== neo) {
+      return `${leg * 100}% / ${neo * 100}%`;
+    }
+    return `${((leg ?? neo) ?? 0) * 100}%`;
+  }
+  const m = Number(monthFilter);
+  const d = getDistribution(m);
+  const pct = d[name];
+  return pct !== undefined ? `${pct * 100}%` : "—";
+}
 
 /** Colores por beneficiario para los cuadros. */
 const BENEFICIARY_CARD_CLASS: Record<string, string> = {
@@ -64,9 +110,9 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function computeAmounts(profit: number): Record<string, number> {
+function computeAmounts(profit: number, month: number): Record<string, number> {
   const amounts: Record<string, number> = {};
-  for (const [name, pct] of Object.entries(DISTRIBUTION)) {
+  for (const [name, pct] of Object.entries(getDistribution(month))) {
     amounts[name] = Math.round(profit * pct);
   }
   return amounts;
@@ -140,7 +186,7 @@ export default function SalaryDistribution() {
     const profit = Number(profitInput) || 0;
     const key = yearMonthKey(dialogMonth.year, dialogMonth.month);
     const existingAmounts = data[key]?.amounts ?? {};
-    const computed = computeAmounts(profit);
+    const computed = computeAmounts(profit, dialogMonth.month);
     const amounts = {
       ...computed,
       Comisiones: typeof existingAmounts.Comisiones === "number" ? existingAmounts.Comisiones : 0,
@@ -282,7 +328,7 @@ export default function SalaryDistribution() {
 
   const totalsByBeneficiary = useCallback(() => {
     const totals: Record<string, number> = {};
-    BENEFICIARIOS.forEach((b) => (totals[b] = 0));
+    ALL_BENEFICIARY_KEYS.forEach((b) => (totals[b] = 0));
     const filterYear = selectedYear;
     const filterMonth = selectedMonthFilter === "all" ? null : Number(selectedMonthFilter);
     Object.entries(data).forEach(([key, monthData]) => {
@@ -290,7 +336,7 @@ export default function SalaryDistribution() {
       if (y !== filterYear) return;
       if (filterMonth != null && m !== filterMonth) return;
       Object.entries(monthData.amounts).forEach(([name, value]) => {
-        if (BENEFICIARIOS.includes(name) && typeof value === "number") {
+        if (ALL_BENEFICIARY_KEYS.includes(name as (typeof ALL_BENEFICIARY_KEYS)[number]) && typeof value === "number") {
           totals[name] = (totals[name] ?? 0) + value;
         }
       });
@@ -367,7 +413,9 @@ export default function SalaryDistribution() {
           Distribución de salarios
         </h1>
         <p className="text-muted-foreground mt-1">
-          Ingresan el monto a repartir por mes; al aceptar se distribuye según los porcentajes: 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo.
+          Ingresan el monto a repartir por mes; al aceptar se distribuye según el mes:{" "}
+          <span className="text-foreground/90">enero–marzo</span> 30% Mike, 30% Jota, 20% Ahorro Empresa, 15% Antonio, 5% Ronaldo;{" "}
+          <span className="text-foreground/90">desde abril</span> 38% Mike, 38% Jota, 7% Ahorro Empresa, 17% Antonio (sin Ronaldo). Las comisiones se suman aparte.
         </p>
       </div>
 
@@ -418,8 +466,12 @@ export default function SalaryDistribution() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {BENEFICIARIOS.map((name) => (
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${
+              beneficiariesForCards(selectedMonthFilter).length <= 5 ? "xl:grid-cols-5" : "xl:grid-cols-6"
+            }`}
+          >
+            {beneficiariesForCards(selectedMonthFilter).map((name) => (
               <Card
                 key={name}
                 className={`border-2 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${BENEFICIARY_CARD_CLASS[name] ?? "bg-muted/40 border-border"}`}
@@ -442,7 +494,7 @@ export default function SalaryDistribution() {
                     {formatCurrency(totals[name] ?? 0)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {DISTRIBUTION[name as keyof typeof DISTRIBUTION] * 100}%
+                    {pctLabelForCard(name, selectedMonthFilter)}
                   </p>
                 </CardContent>
               </Card>
@@ -764,16 +816,19 @@ export default function SalaryDistribution() {
                 onChange={(e) => setProfitInput(e.target.value)}
               />
             </div>
-            {profitInput !== "" && !Number.isNaN(Number(profitInput)) && Number(profitInput) > 0 && (
+            {profitInput !== "" && !Number.isNaN(Number(profitInput)) && Number(profitInput) > 0 && dialogMonth != null && (
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                 <p className="text-sm font-medium">Reparto (al aceptar se guarda en los cuadros):</p>
                 <ul className="space-y-1 text-sm">
-                  {BENEFICIARIOS.map((name) => (
-                    <li key={name} className="flex justify-between tabular-nums">
-                      <span>{name}</span>
-                      <span>{formatCurrency(computeAmounts(Number(profitInput))[name])}</span>
-                    </li>
-                  ))}
+                  {beneficiariesForCards(String(dialogMonth.month)).map((name) => {
+                    const amt = computeAmounts(Number(profitInput), dialogMonth.month)[name] ?? 0;
+                    return (
+                      <li key={name} className="flex justify-between tabular-nums">
+                        <span>{name}</span>
+                        <span>{formatCurrency(amt)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
