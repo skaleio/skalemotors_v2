@@ -182,6 +182,7 @@ const statusLabels: Record<string, string> = {
   interesado: "Interesado",
   cotizando: "Cotizando",
   negociando: "Negociando",
+  para_cierre: "Para cierre",
   vendido: "Cerrado (Vendiendo)",
   perdido: "Cerrado (Perdido)",
 };
@@ -192,6 +193,7 @@ const statusStyles: Record<string, { dot: string; text: string }> = {
   interesado: { dot: "bg-indigo-500", text: "text-indigo-600" },
   cotizando: { dot: "bg-amber-500", text: "text-amber-600" },
   negociando: { dot: "bg-orange-500", text: "text-orange-600" },
+  para_cierre: { dot: "bg-emerald-500", text: "text-emerald-700" },
   vendido: { dot: "bg-emerald-600", text: "text-emerald-700" },
   perdido: { dot: "bg-red-500", text: "text-red-600" },
 };

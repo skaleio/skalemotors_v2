@@ -683,7 +683,7 @@ export interface Database {
           email: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido'
+          status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
           branch_id: string | null
@@ -707,7 +707,7 @@ export interface Database {
           email?: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido'
+          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null
@@ -731,7 +731,7 @@ export interface Database {
           email?: string | null
           phone?: string
           source?: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido'
+          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null

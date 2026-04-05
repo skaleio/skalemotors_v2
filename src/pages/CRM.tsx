@@ -61,28 +61,29 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
 };
 
 const statusLabels: Record<string, string> = {
-  nuevo: "Nuevo",
-  contactado: "Contactado",
-  interesado: "Interesado",
-  negociando: "Negociando",
+  contactado: "CONTACTADO",
+  negociando: "NEGOCIANDO",
+  para_cierre: "PARA CIERRE",
 };
 
-const CRM_PIPELINE_KEYS = new Set(["nuevo", "contactado", "interesado", "negociando"]);
-
-/** Valor seguro para <Select>: solo las 4 etapas; si no aplica, "nuevo" (evita crash en móvil/Safari). */
+/**
+ * Valor seguro para <Select> del pipeline CRM (3 estados).
+ * Mapea estados legacy al bucket correspondiente.
+ */
 function safePipelineSelectValue(status: string | null | undefined): string {
   const s = (status || "").toLowerCase();
-  return CRM_PIPELINE_KEYS.has(s) ? s : "nuevo";
+  if (s === "negociando" || s === "cotizando") return "negociando";
+  if (s === "para_cierre") return "para_cierre";
+  if (s === "contactado" || s === "nuevo" || s === "interesado") return "contactado";
+  return "contactado";
 }
 
-const stageStyles: Record<
-  "nuevo" | "contactado" | "interesado" | "negociando",
-  { border: string; badge: string; dot?: string }
-> = {
-  nuevo: { border: "", badge: "" },
+type CrmStageKey = "contactado" | "negociando" | "para_cierre";
+
+const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
-  interesado: { border: "border-purple-500", badge: "bg-purple-50 text-purple-700", dot: "bg-purple-500" },
   negociando: { border: "border-orange-500", badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
+  para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
 };
 
 const normalizeTags = (tags: unknown) => {
@@ -199,7 +200,7 @@ export default function CRM() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [leadStatus, setLeadStatus] = useState<string>("nuevo");
+  const [leadStatus, setLeadStatus] = useState<string>("contactado");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditingForm, setIsEditingForm] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -211,7 +212,7 @@ export default function CRM() {
     budget: "",
     notes: "",
     vehicle: "",
-    status: "nuevo",
+    status: "contactado",
   });
 
   useEffect(() => {
@@ -326,23 +327,34 @@ export default function CRM() {
 
   const stages = useMemo(
     () => [
-      { key: "nuevo", label: "Nuevo", statuses: ["nuevo"] },
-      { key: "contactado", label: "Contactado", statuses: ["contactado"] },
-      { key: "interesado", label: "Interesado", statuses: ["interesado"] },
-      { key: "negociando", label: "Negociando", statuses: ["negociando"] },
+      {
+        key: "contactado" as const,
+        label: "CONTACTADO",
+        statuses: ["contactado", "nuevo", "interesado"],
+      },
+      {
+        key: "negociando" as const,
+        label: "NEGOCIANDO",
+        statuses: ["negociando", "cotizando"],
+      },
+      { key: "para_cierre" as const, label: "PARA CIERRE", statuses: ["para_cierre"] },
     ],
     [],
   );
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
+    // 2) Excluir cerrados: el tablero CRM es solo pipeline activo (gestión en Leads para vendido/perdido).
     const onlyLeads = leads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
-      return !isConsignacion;
+      if (isConsignacion) return false;
+      const st = (lead.status || "").toLowerCase();
+      if (st === "vendido" || st === "perdido") return false;
+      return true;
     });
 
-    // 2) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
+    // 3) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
     if (!q) return onlyLeads;
     return onlyLeads.filter((lead) => {
@@ -395,42 +407,43 @@ export default function CRM() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         {leadsByStage.map((stage) => {
-          const style = stageStyles[stage.key as keyof typeof stageStyles];
+          const style = stageStyles[stage.key];
 
           return (
-          <Card key={stage.key} className={`border-t-4 ${style?.border || ""}`}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="text-sm flex items-center gap-2">
-                  {style?.dot && <span className={`h-2 w-2 rounded-full ${style.dot}`} />}
-                  {stage.label}
-                </span>
-                <Badge className={style?.badge || ""} variant="secondary">
-                  {stage.leads.length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 min-h-[180px]">
-                {loading ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    Cargando leads...
-                  </p>
-                ) : stage.leads.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    No hay leads en esta etapa
-                  </p>
-                ) : (
-                  stage.leads.map((lead) => (
-                    <LeadCard key={lead.id} lead={lead} onClick={() => openEditDialog(lead)} />
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )        })}
+            <Card key={stage.key} className={`border-t-4 ${style?.border || ""}`}>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="text-sm flex items-center gap-2">
+                    {style?.dot && <span className={`h-2 w-2 rounded-full ${style.dot}`} />}
+                    {stage.label}
+                  </span>
+                  <Badge className={style?.badge || ""} variant="secondary">
+                    {stage.leads.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 min-h-[180px]">
+                  {loading ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      Cargando leads...
+                    </p>
+                  ) : stage.leads.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">
+                      No hay leads en esta etapa
+                    </p>
+                  ) : (
+                    stage.leads.map((lead) => (
+                      <LeadCard key={lead.id} lead={lead} onClick={() => openEditDialog(lead)} />
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <Dialog open={showEditDialog} onOpenChange={(open) => (open ? null : closeEditDialog())}>
