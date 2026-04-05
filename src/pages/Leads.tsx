@@ -176,52 +176,76 @@ const getConsignacionVehicleLabel = (item?: ConsignacionItem | null) => {
   return `${item.vehicle_year || ""} ${item.vehicle_make || ""} ${item.vehicle_model || ""}`.trim();
 };
 
-const statusLabels: Record<string, string> = {
-  nuevo: "Nuevo",
-  contactado: "Contactado",
-  interesado: "Interesado",
-  cotizando: "Cotizando",
-  negociando: "Negociando",
-  para_cierre: "Para cierre",
-  vendido: "Cerrado (Vendiendo)",
-  perdido: "Cerrado (Perdido)",
+/** Estados activos del pipeline (mismo modelo que CRM). */
+const PIPELINE_STATUS_LABELS: Record<string, string> = {
+  contactado: "CONTACTADO",
+  negociando: "NEGOCIANDO",
+  para_cierre: "PARA CIERRE",
 };
 
-const statusStyles: Record<string, { dot: string; text: string }> = {
-  nuevo: { dot: "bg-slate-400", text: "text-slate-700" },
+const CLOSED_STATUS_LABELS: Record<string, string> = {
+  vendido: "Cerrado (vendido)",
+  perdido: "Cerrado (perdido)",
+};
+
+const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
   contactado: { dot: "bg-blue-500", text: "text-blue-600" },
-  interesado: { dot: "bg-indigo-500", text: "text-indigo-600" },
-  cotizando: { dot: "bg-amber-500", text: "text-amber-600" },
   negociando: { dot: "bg-orange-500", text: "text-orange-600" },
   para_cierre: { dot: "bg-emerald-500", text: "text-emerald-700" },
+};
+
+const CLOSED_STYLES: Record<string, { dot: string; text: string }> = {
   vendido: { dot: "bg-emerald-600", text: "text-emerald-700" },
   perdido: { dot: "bg-red-500", text: "text-red-600" },
 };
 
-const normalizeStatusKey = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+type LeadPipelineStage = "contactado" | "negociando" | "para_cierre";
 
-const statusKeyByNormalized = new Map(
-  Object.keys(statusLabels).map((key) => [normalizeStatusKey(key), key]),
-);
+function getLeadPipelineStage(status?: string | null): LeadPipelineStage {
+  const s = (status || "").toLowerCase();
+  if (s === "negociando" || s === "cotizando") return "negociando";
+  if (s === "para_cierre") return "para_cierre";
+  return "contactado";
+}
 
-const isValidStatusKey = (value: string) => statusKeyByNormalized.has(normalizeStatusKey(value));
+/** Bucket para filtro / stats: pipeline activo o cerrado (no mezcla vendido con CONTACTADO). */
+type LeadStatusBucket = LeadPipelineStage | "cerrado";
 
-const getNormalizedStatusKey = (value?: string | null) => {
-  if (!value) return "nuevo";
-  const normalized = normalizeStatusKey(value);
-  return statusKeyByNormalized.get(normalized) ?? "nuevo";
-};
+function getLeadStatusBucket(status?: string | null): LeadStatusBucket {
+  const s = (status || "").toLowerCase();
+  if (s === "vendido" || s === "perdido") return "cerrado";
+  return getLeadPipelineStage(status);
+}
+
+function isClosedLeadStatus(status?: string | null): boolean {
+  const s = (status || "").toLowerCase();
+  return s === "vendido" || s === "perdido";
+}
+
+/** Valor del <Select> en tabla / formularios de pipeline (solo 3). */
+function safePipelineSelectValue(status?: string | null): LeadPipelineStage {
+  return getLeadPipelineStage(status);
+}
+
+/** Estado para el formulario de edición (pipeline o cerrado). */
+function statusForEditForm(status?: string | null): string {
+  const s = (status || "").toLowerCase();
+  if (s === "vendido" || s === "perdido") return s;
+  return getLeadPipelineStage(status);
+}
 
 const getStatusMeta = (value?: string | null) => {
-  const normalized = getNormalizedStatusKey(value);
+  const s = (value || "").toLowerCase();
+  if (s === "vendido") {
+    return { label: CLOSED_STATUS_LABELS.vendido, styles: CLOSED_STYLES.vendido };
+  }
+  if (s === "perdido") {
+    return { label: CLOSED_STATUS_LABELS.perdido, styles: CLOSED_STYLES.perdido };
+  }
+  const stage = getLeadPipelineStage(value);
   return {
-    label: statusLabels[normalized] || normalized,
-    styles: statusStyles[normalized] || statusStyles.nuevo,
+    label: PIPELINE_STATUS_LABELS[stage],
+    styles: PIPELINE_STYLES[stage],
   };
 };
 
@@ -364,24 +388,35 @@ const LeadsTable = memo(function LeadsTable({
                   <TableCell className="hidden xl:table-cell">{lead.budget || "—"}</TableCell>
                   <TableCell>
                     {(() => {
-                      const normalizedStatus = getNormalizedStatusKey(lead.status);
-                      const meta = getStatusMeta(normalizedStatus);
+                      const meta = getStatusMeta(lead.status);
+                      if (isClosedLeadStatus(lead.status)) {
+                        return (
+                          <span
+                            className="inline-flex h-8 items-center gap-2 rounded-full border px-3"
+                            title="Lead cerrado. Puedes cambiar el estado desde Editar."
+                          >
+                            <span className={`h-2 w-2 rounded-full ${meta.styles.dot}`} />
+                            <span className={`text-xs font-medium ${meta.styles.text}`}>{meta.label}</span>
+                          </span>
+                        );
+                      }
+                      const selectValue = safePipelineSelectValue(lead.status);
                       return (
                         <Select
-                          value={normalizedStatus}
+                          value={selectValue}
                           onValueChange={(value) => handleStatusChange(lead.id, value)}
                         >
                           <SelectTrigger
                             className="h-8 w-auto gap-2 rounded-full border px-3"
                             aria-label={`Estado ${meta.label}`}
-                              onClick={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
                           >
                             <span className={`h-2 w-2 rounded-full ${meta.styles.dot}`} />
                             <span className={`text-xs font-medium ${meta.styles.text}`}>{meta.label}</span>
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(statusLabels).map(([key, label]) => {
-                              const styles = statusStyles[key] || statusStyles.nuevo;
+                            {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => {
+                              const styles = PIPELINE_STYLES[key];
                               return (
                                 <SelectItem key={key} value={key}>
                                   <span className="flex items-center gap-2">
@@ -467,7 +502,7 @@ export default function Leads() {
   const [formState, setFormState] = useState({
     full_name: "",
     phone: "",
-    status: "nuevo",
+    status: "contactado",
     vehicle: "",
     region: "",
     payment_type: "",
@@ -493,7 +528,7 @@ export default function Leads() {
     full_name: "",
     phone: "",
     email: "",
-    status: "nuevo",
+    status: "contactado",
     vehicle: "",
     region: "",
     payment_type: "",
@@ -570,7 +605,10 @@ export default function Leads() {
 
   const resolvedStatusFilter = useMemo(() => {
     if (statusFilter === "all") return "all";
-    return isValidStatusKey(statusFilter) ? getNormalizedStatusKey(statusFilter) : "all";
+    if (statusFilter === "contactado" || statusFilter === "negociando" || statusFilter === "para_cierre") {
+      return statusFilter;
+    }
+    return "all";
   }, [statusFilter]);
 
   const filteredLeads = useMemo(() => {
@@ -581,11 +619,11 @@ export default function Leads() {
         || (lead.email || "").toLowerCase().includes(query)
         || (lead.phone || "").toLowerCase().includes(query);
 
-      const leadStatusKey = getNormalizedStatusKey(lead.status);
+      const bucket = getLeadStatusBucket(lead.status);
       const matchesStatus =
         resolvedStatusFilter === "all"
           ? true
-          : leadStatusKey === resolvedStatusFilter;
+          : bucket === resolvedStatusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -593,10 +631,11 @@ export default function Leads() {
 
   const leadStats = useMemo(() => {
     const total = leads.length;
-    const interesados = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "interesado").length;
-    const contactados = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "contactado").length;
-    const negociando = leads.filter((lead) => getNormalizedStatusKey(lead.status) === "negociando").length;
-    return { total, interesados, contactados, negociando };
+    const openLeads = leads.filter((l) => !isClosedLeadStatus(l.status));
+    const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
+    const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
+    const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
+    return { total, contactado, negociando, paraCierre };
   }, [leads]);
 
   const allFilteredSelected = filteredLeads.length > 0
@@ -669,7 +708,7 @@ export default function Leads() {
     setFormState({
       full_name: "",
       phone: "",
-      status: "nuevo",
+      status: "contactado",
       vehicle: "",
       region: "",
       payment_type: "",
@@ -750,7 +789,7 @@ export default function Leads() {
         }
 
         const hasExtraInfo = Boolean(region || city || rut);
-        const status = !responded ? "nuevo" : hasExtraInfo ? "interesado" : "contactado";
+        const status = !responded ? "contactado" : hasExtraInfo ? "negociando" : "contactado";
 
         const tags: string[] = [];
         if (vehicle) {
@@ -873,7 +912,7 @@ export default function Leads() {
       full_name: lead.full_name || "",
       phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
-      status: lead.status || "nuevo",
+      status: statusForEditForm(lead.status),
       vehicle: isConsignacion
         ? consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX)
         : getTagValue(tags, VEHICULO_TAG_PREFIX),
@@ -1077,22 +1116,22 @@ export default function Leads() {
             <CardTitle className="text-2xl text-slate-700">{leadStats.total}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-indigo-500">
-          <CardHeader className="pb-2">
-            <CardDescription>Interesados</CardDescription>
-            <CardTitle className="text-2xl text-indigo-600">{leadStats.interesados}</CardTitle>
-          </CardHeader>
-        </Card>
         <Card className="border-l-4 border-blue-500">
           <CardHeader className="pb-2">
-            <CardDescription>Contactados</CardDescription>
-            <CardTitle className="text-2xl text-blue-600">{leadStats.contactados}</CardTitle>
+            <CardDescription>CONTACTADO</CardDescription>
+            <CardTitle className="text-2xl text-blue-600">{leadStats.contactado}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-l-4 border-orange-500">
           <CardHeader className="pb-2">
-            <CardDescription>Negociando</CardDescription>
+            <CardDescription>NEGOCIANDO</CardDescription>
             <CardTitle className="text-2xl text-orange-600">{leadStats.negociando}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-emerald-500">
+          <CardHeader className="pb-2">
+            <CardDescription>PARA CIERRE</CardDescription>
+            <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -1117,7 +1156,7 @@ export default function Leads() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
-                {Object.entries(statusLabels).map(([key, label]) => (
+                {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => (
                   <SelectItem key={key} value={key}>
                     {label}
                   </SelectItem>
@@ -1272,7 +1311,7 @@ export default function Leads() {
                   <SelectValue placeholder="Selecciona estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(statusLabels).map(([key, label]) => (
+                  {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => (
                     <SelectItem key={key} value={key}>
                       {label}
                     </SelectItem>
@@ -1452,7 +1491,7 @@ export default function Leads() {
                   <SelectValue placeholder="Selecciona estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(statusLabels).map(([key, label]) => (
+                  {Object.entries({ ...PIPELINE_STATUS_LABELS, ...CLOSED_STATUS_LABELS }).map(([key, label]) => (
                     <SelectItem key={key} value={key}>
                       {label}
                     </SelectItem>
