@@ -20,8 +20,8 @@ Un cliente potencial envía su primer mensaje por WhatsApp preguntando por un ve
 4. No existe → Crea nuevo lead:
    - Nombre: (extraído de WhatsApp)
    - Teléfono: +56912345678
-   - Fuente: whatsapp
-   - Estado: nuevo
+   - Fuente: `redes_sociales` u `otro` (valores válidos en BD)
+   - Estado: `contactado` (pipeline CONTACTADO)
    ↓
 5. Guarda mensaje en tabla messages
    ↓
@@ -517,6 +517,76 @@ while (attempt < maxRetries) {
   }
 }
 ```
+
+## Crear lead en CONTACTADO desde n8n (Edge Function `lead-create`)
+
+Tras filtrar o enriquecer datos en tu flujo, puedes crear el lead en SkaleMotors sin exponer la **service role** de Supabase en n8n: llama a la Edge Function con una API key dedicada.
+
+### Despliegue y secretos (Supabase)
+
+1. Despliega la función: `supabase functions deploy lead-create`
+2. Configura el secret (Dashboard → Edge Functions → Secrets o CLI):
+
+```bash
+supabase secrets set LEAD_INGEST_API_KEY=tu_clave_larga_aleatoria
+```
+
+Si `LEAD_INGEST_API_KEY` no está definida, la función **no exige** API key (útil solo en local; en producción define siempre la clave).
+
+### URL
+
+`https://<PROJECT_REF>.supabase.co/functions/v1/lead-create`
+
+### Request
+
+- **Método:** `POST`
+- **Headers:** `Content-Type: application/json`, `x-api-key: <LEAD_INGEST_API_KEY>`
+- **Body JSON (mínimo):**
+
+```json
+{
+  "branch_id": "uuid-de-la-sucursal",
+  "full_name": "Nombre Apellido",
+  "phone": "912345678",
+  "status": "contactado",
+  "source": "otro"
+}
+```
+
+- **`status` opcional:** por defecto `contactado`. Valores permitidos: `contactado`, `negociando`, `para_cierre`.
+- **`source` opcional:** por defecto `otro`. Valores: `web`, `referido`, `walk_in`, `telefono`, `redes_sociales`, `evento`, `otro`.
+- **Campos opcionales:** `email`, `notes`, `region`, `payment_type`, `budget`, `priority` (`baja`|`media`|`alta`), `tags` (array JSON).
+- **`update_existing: true`:** si ya existe un lead con el mismo `phone` en esa `branch_id` (y no está en papelera), **actualiza** en lugar de insertar.
+
+### Respuesta
+
+```json
+{ "ok": true, "created": true, "data": { "id": "...", "full_name": "...", "phone": "+56 ...", "status": "contactado", ... } }
+```
+
+`created: false` cuando aplicó actualización por `update_existing`.
+
+### Nodo HTTP en n8n
+
+1. Añade **HTTP Request**.
+2. Method **POST**, URL la de arriba.
+3. Authentication **Header Auth** o un header manual: nombre `x-api-key`, valor tu `LEAD_INGEST_API_KEY`.
+4. Body **JSON** con expresiones, por ejemplo:
+
+```json
+{
+  "branch_id": "{{ $json.branch_id }}",
+  "full_name": "{{ $json.name }}",
+  "phone": "{{ $json.phone }}",
+  "notes": "{{ $json.notes }}",
+  "source": "redes_sociales",
+  "update_existing": true
+}
+```
+
+### Alternativa: nodo Supabase
+
+Puedes insertar directo en la tabla `leads` con credencial **service role** (ver `workflows/whatsapp-to-crm.example.json`). La Edge Function reduce riesgo y normaliza teléfono (`+56 …`) y `tenant_id` desde la sucursal.
 
 ## 📞 Soporte
 

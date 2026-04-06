@@ -85,7 +85,16 @@ export default async function handler(req: Request): Promise<Response> {
   const stateUpdatedAt = body.state_updated_at?.trim() || new Date().toISOString();
 
   // Sincronizar pipeline: si state es un status válido del CRM, actualizar status para que el lead se mueva en el pipeline
-  const validPipelineStatuses = ["nuevo", "contactado", "interesado", "cotizando", "negociando", "vendido", "perdido"];
+  const validPipelineStatuses = [
+    "nuevo",
+    "contactado",
+    "interesado",
+    "cotizando",
+    "negociando",
+    "para_cierre",
+    "vendido",
+    "perdido",
+  ];
   const syncStatus = validPipelineStatuses.includes(state) ? state : null;
 
   const updatePayload: Record<string, unknown> = {

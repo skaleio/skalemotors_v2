@@ -7,6 +7,24 @@ type LeadUpdate = Database['public']['Tables']['leads']['Update']
 type LeadActivity = Database['public']['Tables']['lead_activities']['Row']
 type LeadActivityInsert = Database['public']['Tables']['lead_activities']['Insert']
 
+/** Debe coincidir con el CHECK leads_status_check en Postgres. */
+const ALLOWED_LEAD_STATUSES = new Set<string>([
+  'nuevo',
+  'contactado',
+  'interesado',
+  'cotizando',
+  'negociando',
+  'vendido',
+  'perdido',
+  'para_cierre',
+])
+
+function coerceLeadStatus(status: unknown, fallback: string): string {
+  const s = typeof status === 'string' ? status.trim().toLowerCase() : ''
+  if (s && ALLOWED_LEAD_STATUSES.has(s)) return s
+  return fallback
+}
+
 export const leadService = {
   // Buscar un lead por contacto (telefono/email) y sucursal
   async findByContact(params: { branchId?: string | null; phone?: string | null; email?: string | null }) {
@@ -133,9 +151,13 @@ export const leadService = {
 
   // Crear un nuevo lead
   async create(lead: LeadInsert) {
+    const row: LeadInsert = {
+      ...lead,
+      status: coerceLeadStatus(lead.status, 'contactado') as LeadInsert['status'],
+    }
     const { data, error } = await supabase
       .from('leads')
-      .insert(lead)
+      .insert(row)
       .select(`
         *,
         assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
@@ -149,9 +171,13 @@ export const leadService = {
 
   // Actualizar un lead
   async update(id: string, updates: LeadUpdate) {
+    const payload: LeadUpdate = { ...updates }
+    if (Object.prototype.hasOwnProperty.call(payload, 'status') && payload.status !== undefined) {
+      payload.status = coerceLeadStatus(payload.status, 'contactado') as LeadUpdate['status']
+    }
     const { data, error } = await supabase
       .from('leads')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
       .select(`
         *,

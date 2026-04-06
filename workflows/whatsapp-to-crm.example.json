@@ -106,11 +106,11 @@
             },
             {
               "column": "source",
-              "value": "whatsapp"
+              "value": "redes_sociales"
             },
             {
               "column": "status",
-              "value": "nuevo"
+              "value": "contactado"
             },
             {
               "column": "branch_id",

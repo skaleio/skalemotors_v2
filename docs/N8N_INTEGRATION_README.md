@@ -190,6 +190,18 @@ Desde la aplicación SKALE Motors:
 - Asigna lead con algoritmo (round-robin o carga)
 - Notifica al vendedor asignado
 
+### 6. Crear lead desde n8n (Edge Function `lead-create`)
+
+**Uso:** flujos que, tras filtrar o calificar a una persona, deben registrarla en el CRM en estado **CONTACTADO** (u otro estado del pipeline permitido) sin guardar la service role de Supabase en n8n.
+
+- **Endpoint:** `POST https://<PROJECT_REF>.supabase.co/functions/v1/lead-create`
+- **Autenticación:** header `x-api-key` con el valor del secret `LEAD_INGEST_API_KEY` (configurar en Supabase Edge Functions → Secrets).
+- **Cuerpo:** JSON con `branch_id`, `full_name`, `phone` como mínimo; opcional `status` (default `contactado`), `source`, `notes`, `update_existing`, etc.
+
+Instrucciones detalladas y ejemplo de nodo **HTTP Request** en [n8n_usage_examples.md](./n8n_usage_examples.md) (sección *Crear lead en CONTACTADO desde n8n*).
+
+El template [workflows/whatsapp-to-crm.example.json](../workflows/whatsapp-to-crm.example.json) inserta por nodo Supabase con `status: contactado` y `source: redes_sociales` (valores alineados con el CHECK de la BD).
+
 ## 🔌 Integraciones
 
 ### WhatsApp Business API

@@ -33,7 +33,7 @@
 |-----------|-----------|
 | [N8N_INTEGRATION_README.md](./N8N_INTEGRATION_README.md) | Arquitectura, multi-tenant, flujos, servicio n8n |
 | [n8n_docker_setup.md](./n8n_docker_setup.md) | Instalación de n8n con Docker |
-| [n8n_usage_examples.md](./n8n_usage_examples.md) | Ejemplos de uso (WhatsApp, leads, etc.) |
+| [n8n_usage_examples.md](./n8n_usage_examples.md) | Ejemplos de uso (WhatsApp, leads, HTTP `lead-create`, etc.) |
 | [n8n_workflows_templates.md](./n8n_workflows_templates.md) | Templates de workflows |
 
 ### Planes y roadmap
@@ -104,7 +104,7 @@ skalemotors_v2/
 - **Tareas pendientes con datos reales**  
   Tarjeta del dashboard alimentada por:
   - Tabla `pending_tasks` en Supabase (diseño en [PLAN_TAREAS_PENDIENTES_LLM.md](./PLAN_TAREAS_PENDIENTES_LLM.md))
-  - Edge Function `pending-task-create` para n8n/WhatsApp
+  - Edge Functions `pending-task-create` y `lead-create` para n8n/WhatsApp
   - Reglas automáticas o LLM para consolidar alertas (leads sin contactar, seguimientos vencidos, citas sin confirmar)
   - Flujo WhatsApp → “recordatorio” → n8n → `pending-task-create`
 
