@@ -130,6 +130,26 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return jsonResponse(500, { ok: false, error: "Supabase no configurado" });
+  }
+
+  // Validar JWT del usuario
+  const authHeader = req.headers.get("authorization") ?? "";
+  const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!jwt) {
+    return jsonResponse(401, { ok: false, error: "Authorization header required" });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !user) {
+    return jsonResponse(401, { ok: false, error: "Invalid or expired token" });
+  }
+
   let body: RequestBody;
   try {
     body = await req.json();
@@ -142,13 +162,28 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(400, { ok: false, error: "message is required" });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return jsonResponse(500, { ok: false, error: "Supabase no configurado" });
-  }
+  // Validar que el branchId solicitado pertenece al tenant del usuario
+  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch
+  if (branchId) {
+    const { data: userProfile } = await supabase
+      .from("users")
+      .select("tenant_id, legacy_protected")
+      .eq("id", user.id)
+      .single();
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    if (userProfile && !userProfile.legacy_protected) {
+      const { data: branch } = await supabase
+        .from("branches")
+        .select("id")
+        .eq("id", branchId)
+        .eq("tenant_id", userProfile.tenant_id)
+        .single();
+
+      if (!branch) {
+        return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
+      }
+    }
+  }
 
   let branchName = "General";
   if (branchId) {

@@ -139,11 +139,17 @@ export default function Register() {
                 <h2 className="text-2xl font-bold text-green-600 mb-2">
                   ¡Cuenta Creada!
                 </h2>
-                <p className="text-muted-foreground mb-4">
-                  Tu cuenta ha sido creada exitosamente. Revisa tu correo para confirmar tu cuenta.
+                <p className="text-muted-foreground mb-3">
+                  Tu cuenta ha sido creada exitosamente.
                 </p>
+                <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4 text-left">
+                  <p className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-1">📧 Confirma tu correo</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    Te enviamos un correo de confirmación. Revisa tu bandeja de entrada (y la carpeta de spam) y haz clic en el enlace para activar tu cuenta antes de iniciar sesión.
+                  </p>
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Redirigiendo al login...
+                  Redirigiendo al login en unos segundos...
                 </p>
               </div>
             </CardContent>

@@ -251,6 +251,7 @@ export default function Inventory() {
   const { vehicles, loading, isFetching, error: vehiclesError, refetch } = useVehicles({
     branchId: undefined,
     enabled: true,
+    mode: "list",
   });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -258,6 +259,8 @@ export default function Inventory() {
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedMake, setSelectedMake] = useState<string>("all");
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [selectedVehicleFull, setSelectedVehicleFull] = useState<Vehicle | null>(null);
+  const [selectedVehicleLoading, setSelectedVehicleLoading] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
   const [vehicleToSell, setVehicleToSell] = useState<Vehicle | null>(null);
@@ -394,6 +397,64 @@ export default function Inventory() {
     }
   }, [location.search]);
 
+  // Sincronizar modal de detalle con la URL (?vehicle=...) para que el botón Atrás
+  // cierre el detalle y no saque al usuario a otra página.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const vehicleId = params.get("vehicle");
+
+    if (!vehicleId) {
+      if (selectedVehicle) {
+        setSelectedVehicle(null);
+        setSelectedVehicleFull(null);
+        setSelectedVehicleLoading(false);
+      }
+      return;
+    }
+
+    if (selectedVehicle?.id === vehicleId) return;
+
+    const found = vehicles.find((v) => v.id === vehicleId);
+    if (found) {
+      setSelectedVehicle(found);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedVehicleLoading(true);
+    vehicleService
+      .getById(vehicleId)
+      .then((full) => {
+        if (cancelled) return;
+        setSelectedVehicle(full as any);
+        setSelectedVehicleFull(full as any);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Si no se puede cargar, limpiar param para no dejar al usuario “atrapado”
+        const next = new URLSearchParams(location.search);
+        next.delete("vehicle");
+        navigate({ pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : "" }, { replace: true });
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setSelectedVehicleLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, location.search, navigate, selectedVehicle, vehicles]);
+
+  useEffect(() => {
+    if (!selectedVehicle?.id) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("vehicle") === selectedVehicle.id) return;
+    params.set("vehicle", selectedVehicle.id);
+    navigate({ pathname: location.pathname, search: `?${params.toString()}` }, { replace: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVehicle?.id]);
+
   useEffect(() => {
     const handleOpenNewVehicleForm = () => setShowAddDialog(true);
     window.addEventListener("openNewVehicleForm", handleOpenNewVehicleForm);
@@ -408,23 +469,52 @@ export default function Inventory() {
   const totalMargin = filteredVehicles.reduce((sum, v) => sum + Number(v.margin || 0), 0);
 
   const selectedVehicleComputed = useMemo(() => {
-    if (!selectedVehicle) return null;
-    const margin = Number(selectedVehicle.margin ?? 0);
-    const price = Number(selectedVehicle.price ?? 0);
+    const base = selectedVehicleFull || selectedVehicle;
+    if (!base) return null;
+    const margin = Number(base.margin ?? 0);
+    const price = Number(base.price ?? 0);
     const minDownPayment = Math.round(price * 0.2);
-    const engine = selectedVehicle.engine_size || "—";
+    const engine = base.engine_size || "—";
 
     return {
       margin,
       minDownPayment,
       engine,
-      ownership: selectedVehicle.category === "consignado" ? "Consignado" : "Propio",
-      location: selectedVehicle.location || "—",
+      ownership: base.category === "consignado" ? "Consignado" : "Propio",
+      location: base.location || "—",
       drivetrain: "—",
       trunkCapacityLiters: "—",
       sunroof: "—",
     };
-  }, [selectedVehicle]);
+  }, [selectedVehicle, selectedVehicleFull]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const id = selectedVehicle?.id;
+    if (!id) {
+      setSelectedVehicleFull(null);
+      setSelectedVehicleLoading(false);
+      return;
+    }
+    setSelectedVehicleLoading(true);
+    vehicleService
+      .getById(id)
+      .then((full) => {
+        if (cancelled) return;
+        setSelectedVehicleFull(full as any);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSelectedVehicleFull(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setSelectedVehicleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVehicle?.id]);
 
   // Pre-llenar formulario cuando se selecciona un vehículo para editar
   useEffect(() => {
@@ -1305,7 +1395,11 @@ export default function Inventory() {
                         title="Editar"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setVehicleToEdit(vehicle);
+                          // Para editar necesitamos los JSON completos
+                          setIsSaving(true);
+                          vehicleService.getById(vehicle.id)
+                            .then((full) => setVehicleToEdit(full as any))
+                            .finally(() => setIsSaving(false));
                         }}
                       >
                         <Edit className="h-4 w-4" />
@@ -1545,7 +1639,24 @@ export default function Inventory() {
       </Dialog>
 
       {/* Modal Detalle Vehículo */}
-      <Dialog open={!!selectedVehicle} onOpenChange={(open) => !open && setSelectedVehicle(null)}>
+      <Dialog
+        open={!!selectedVehicle}
+        onOpenChange={(open) => {
+          if (!open) {
+            const params = new URLSearchParams(location.search);
+            if (params.has("vehicle")) {
+              params.delete("vehicle");
+              navigate(
+                { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" },
+                { replace: true }
+              );
+            }
+            setSelectedVehicle(null);
+            setSelectedVehicleFull(null);
+            setSelectedVehicleLoading(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Detalle del Vehículo</DialogTitle>
@@ -1556,11 +1667,17 @@ export default function Inventory() {
 
           {selectedVehicle && selectedVehicleComputed && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {selectedVehicleLoading && (
+                <div className="lg:col-span-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando detalle completo...
+                </div>
+              )}
               {/* Fotos */}
               <div className="space-y-3">
                 <div className="rounded-xl overflow-hidden border bg-muted">
                   <img
-                    src={(selectedVehicle.images as unknown as string[] | null)?.[0] || "/placeholder.svg"}
+                    src={(((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
                     alt="Foto vehículo"
                     className="w-full h-[280px] object-cover"
                     loading="lazy"
@@ -1568,8 +1685,8 @@ export default function Inventory() {
                   />
                 </div>
                 <div className="grid grid-cols-5 gap-2">
-                  {(((selectedVehicle.images as unknown as string[] | null) ?? []).length
-                    ? (selectedVehicle.images as unknown as string[])
+                  {(((((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? []).length)
+                    ? ((selectedVehicleFull || selectedVehicle).images as unknown as string[])
                     : ["/placeholder.svg"])
                     .slice(0, 5)
                     .map((src, idx) => (
@@ -1579,14 +1696,18 @@ export default function Inventory() {
                         className="rounded-lg overflow-hidden border hover:opacity-90"
                         onClick={() => {
                           // Cambiar imagen principal moviendo la imagen seleccionada a la primera posición
-                          const base = (((selectedVehicle.images as unknown as string[] | null) ?? []).length
-                            ? (selectedVehicle.images as unknown as string[])
+                          const base = (((((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? []).length)
+                            ? ((selectedVehicleFull || selectedVehicle).images as unknown as string[])
                             : ["/placeholder.svg"]);
                           const next = [...base];
                           const picked = next[idx];
                           next.splice(idx, 1);
                           next.unshift(picked);
+                          const baseVeh = (selectedVehicleFull || selectedVehicle);
                           setSelectedVehicle({ ...selectedVehicle, images: next as any });
+                          if (selectedVehicleFull && baseVeh?.id === selectedVehicleFull.id) {
+                            setSelectedVehicleFull({ ...selectedVehicleFull, images: next as any });
+                          }
                         }}
                       >
                         <img src={src} alt="thumb" className="w-full h-14 object-cover" loading="lazy" decoding="async" />
@@ -1599,10 +1720,10 @@ export default function Inventory() {
               <div className="space-y-4">
                 <div>
                   <div className="text-2xl font-bold">
-                    {selectedVehicle.make} {selectedVehicle.model} {selectedVehicle.year}
+                    {(selectedVehicleFull || selectedVehicle).make} {(selectedVehicleFull || selectedVehicle).model} {(selectedVehicleFull || selectedVehicle).year}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {selectedVehicle.engine_size || ""}
+                    {(selectedVehicleFull || selectedVehicle).engine_size || ""}
                   </div>
                 </div>
 
@@ -1631,7 +1752,7 @@ export default function Inventory() {
                     <div>
                       <div className="text-xs text-muted-foreground">Kilometraje y año</div>
                       <div className="font-medium">
-                          {(selectedVehicle.mileage || 0).toLocaleString()} km · {selectedVehicle.year}
+                          {(((selectedVehicleFull || selectedVehicle).mileage || 0) as number).toLocaleString()} km · {(selectedVehicleFull || selectedVehicle).year}
                       </div>
                     </div>
                     <div>
@@ -1640,7 +1761,7 @@ export default function Inventory() {
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Tipo combustible</div>
-                        <div className="font-medium">{selectedVehicle.fuel_type || "—"}</div>
+                        <div className="font-medium">{(selectedVehicleFull || selectedVehicle).fuel_type || "—"}</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Tracción</div>
@@ -1652,7 +1773,7 @@ export default function Inventory() {
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Transmisión</div>
-                      <div className="font-medium">{selectedVehicle.transmission}</div>
+                      <div className="font-medium">{(selectedVehicleFull || selectedVehicle).transmission}</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Capacidad de cajuela (L)</div>
@@ -1662,12 +1783,12 @@ export default function Inventory() {
                       <div className="text-xs text-muted-foreground">Techo corredizo</div>
                       <div className="font-medium">{selectedVehicleComputed.sunroof}</div>
                     </div>
-                    {selectedVehicle.arrival_date && (
+                    {(selectedVehicleFull || selectedVehicle).arrival_date && (
                       <div>
                         <div className="text-xs text-muted-foreground">Fecha de llegada</div>
                         <div className="font-medium">
                           {(() => {
-                            const arrivalDate = new Date(selectedVehicle.arrival_date);
+                            const arrivalDate = new Date((selectedVehicleFull || selectedVehicle).arrival_date as string);
                             const formattedDate = arrivalDate.toLocaleDateString('es-CL', {
                               year: 'numeric',
                               month: 'long',

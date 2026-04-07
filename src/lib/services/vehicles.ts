@@ -12,11 +12,18 @@ export const vehicleService = {
     status?: string
     category?: string
     search?: string
+    mode?: 'full' | 'list'
   }) {
     const run = () => {
+      const mode = filters?.mode ?? 'full'
+      // Para listas grandes evitamos traer JSON pesados (features/documents/description).
+      const selectList =
+        'id, vin, make, model, year, color, mileage, fuel_type, transmission, engine_size, doors, seats, category, condition, price, cost, margin, status, branch_id, tenant_id, location, images, arrival_date, created_at, updated_at, branches(name, city, region)'
+      const selectFull = '*, branches(name, city, region)'
+
       let query = supabase
         .from('vehicles')
-        .select('*, branches(name, city, region)')
+        .select(mode === 'list' ? selectList : selectFull)
         .order('created_at', { ascending: false })
 
       if (filters?.branchId) {

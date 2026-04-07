@@ -27,6 +27,7 @@ export interface Database {
           vehicle_id: string | null
           user_id: string | null
           branch_id: string | null
+          tenant_id: string | null
           created_at: string
           updated_at: string
           notes: string | null
@@ -46,6 +47,7 @@ export interface Database {
           vehicle_id?: string | null
           user_id?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           created_at?: string
           updated_at?: string
           notes?: string | null
@@ -65,6 +67,7 @@ export interface Database {
           vehicle_id?: string | null
           user_id?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           created_at?: string
           updated_at?: string
           notes?: string | null
@@ -84,6 +87,7 @@ export interface Database {
           region: string
           is_active: boolean
           opening_hours: string | null
+          tenant_id: string | null
           created_at: string
           updated_at: string
         }
@@ -98,6 +102,7 @@ export interface Database {
           region: string
           is_active?: boolean
           opening_hours?: string | null
+          tenant_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -112,6 +117,7 @@ export interface Database {
           region?: string
           is_active?: boolean
           opening_hours?: string | null
+          tenant_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -407,6 +413,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string | null
+          tenant_id: string | null
           lead_id: string | null
           vehicle_id: string | null
           owner_name: string
@@ -432,6 +439,7 @@ export interface Database {
         Insert: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           lead_id?: string | null
           vehicle_id?: string | null
           owner_name: string
@@ -457,6 +465,7 @@ export interface Database {
         Update: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           lead_id?: string | null
           vehicle_id?: string | null
           owner_name?: string
@@ -687,6 +696,7 @@ export interface Database {
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
           branch_id: string | null
+          tenant_id: string | null
           region: string | null
           payment_type: string | null
           budget: string | null
@@ -711,6 +721,7 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           region?: string | null
           payment_type?: string | null
           budget?: string | null
@@ -735,6 +746,7 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           region?: string | null
           payment_type?: string | null
           budget?: string | null
@@ -824,6 +836,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string
+          tenant_id: string | null
           assigned_to: string | null
           priority: 'urgent' | 'today' | 'later'
           title: string
@@ -842,6 +855,7 @@ export interface Database {
         Insert: {
           id?: string
           branch_id: string
+          tenant_id?: string | null
           assigned_to?: string | null
           priority?: 'urgent' | 'today' | 'later'
           title: string
@@ -860,6 +874,7 @@ export interface Database {
         Update: {
           id?: string
           branch_id?: string
+          tenant_id?: string | null
           assigned_to?: string | null
           priority?: 'urgent' | 'today' | 'later'
           title?: string
@@ -1052,6 +1067,7 @@ export interface Database {
       messages: {
         Row: {
           id: string
+          tenant_id: string | null
           lead_id: string | null
           user_id: string | null
           type: 'whatsapp' | 'email' | 'sms' | 'chat'
@@ -1073,6 +1089,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          tenant_id?: string | null
           lead_id?: string | null
           user_id?: string | null
           type: 'whatsapp' | 'email' | 'sms' | 'chat'
@@ -1094,6 +1111,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          tenant_id?: string | null
           lead_id?: string | null
           user_id?: string | null
           type?: 'whatsapp' | 'email' | 'sms' | 'chat'
@@ -1156,6 +1174,7 @@ export interface Database {
           seller_name: string | null
           client_name: string | null
           branch_id: string | null
+          tenant_id: string | null
           sale_price: number
           down_payment: number | null
           financing_amount: number | null
@@ -1182,6 +1201,7 @@ export interface Database {
           seller_name?: string | null
           client_name?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           sale_price?: number
           down_payment?: number | null
           financing_amount?: number | null
@@ -1208,6 +1228,7 @@ export interface Database {
           seller_name?: string | null
           client_name?: string | null
           branch_id?: string | null
+          tenant_id?: string | null
           sale_price?: number
           down_payment?: number | null
           financing_amount?: number | null
@@ -1279,6 +1300,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string | null
+          tenant_id: string | null
           amount: number
           description: string | null
           expense_type: string
@@ -1293,6 +1315,7 @@ export interface Database {
         Insert: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           amount: number
           description?: string | null
           expense_type: string
@@ -1307,6 +1330,7 @@ export interface Database {
         Update: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           amount?: number
           description?: string | null
           expense_type?: string
@@ -1322,6 +1346,7 @@ export interface Database {
       ingresos_empresa: {
         Row: {
           id: string
+          tenant_id: string | null
           amount: number
           description: string | null
           etiqueta: string
@@ -1334,6 +1359,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          tenant_id?: string | null
           amount: number
           description?: string | null
           etiqueta: string
@@ -1346,6 +1372,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          tenant_id?: string | null
           amount?: number
           description?: string | null
           etiqueta?: string
@@ -1393,6 +1420,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string
+          tenant_id: string | null
           year: number
           month: number
           profit: number
@@ -1403,6 +1431,7 @@ export interface Database {
         Insert: {
           id?: string
           branch_id: string
+          tenant_id?: string | null
           year: number
           month: number
           profit?: number
@@ -1413,6 +1442,7 @@ export interface Database {
         Update: {
           id?: string
           branch_id?: string
+          tenant_id?: string | null
           year?: number
           month?: number
           profit?: number
@@ -1425,6 +1455,7 @@ export interface Database {
         Row: {
           id: string
           branch_id: string | null
+          tenant_id: string | null
           created_by: string | null
           type: 'contrato_venta' | 'contrato_consignacion'
           document_number: string | null
@@ -1461,6 +1492,7 @@ export interface Database {
         Insert: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           created_by?: string | null
           type: 'contrato_venta' | 'contrato_consignacion'
           document_number?: string | null
@@ -1497,6 +1529,7 @@ export interface Database {
         Update: {
           id?: string
           branch_id?: string | null
+          tenant_id?: string | null
           created_by?: string | null
           type?: 'contrato_venta' | 'contrato_consignacion'
           document_number?: string | null

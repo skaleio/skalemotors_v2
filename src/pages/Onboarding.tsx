@@ -333,7 +333,8 @@ export default function Onboarding() {
         description: `Bienvenido a SkaléMotors${companyName ? ', ' + companyName : ''}.`,
       });
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      setIsLoading(false);
+      await new Promise(resolve => setTimeout(resolve, 400));
       navigate("/app");
     } catch (error) {
       console.error("❌ Error completando onboarding:", error);

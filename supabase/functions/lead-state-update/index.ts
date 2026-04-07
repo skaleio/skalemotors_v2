@@ -48,11 +48,12 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const expectedKey = Deno.env.get("LEAD_STATE_API_KEY");
-  if (expectedKey) {
-    const provided = getApiKey(req);
-    if (!provided || !provided.includes(expectedKey)) {
-      return jsonResponse(401, { ok: false, error: "Invalid API key" });
-    }
+  if (!expectedKey) {
+    return jsonResponse(500, { ok: false, error: "Server misconfiguration: API key not set" });
+  }
+  const provided = getApiKey(req);
+  if (!provided || !provided.includes(expectedKey)) {
+    return jsonResponse(401, { ok: false, error: "Invalid API key" });
   }
 
   let body: Payload;

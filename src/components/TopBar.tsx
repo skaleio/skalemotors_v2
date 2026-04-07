@@ -48,7 +48,9 @@ export function TopBar() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Función de búsqueda
   const performSearch = (query: string) => {
@@ -117,11 +119,22 @@ export function TopBar() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Abrir dropdown cuando hay query y el buscador está expandido
+  useEffect(() => {
+    if (!isSearchExpanded) return;
+    if (!searchQuery.trim()) {
+      setIsSearchOpen(false);
+      return;
+    }
+    // `performSearch` maneja isSearchOpen cuando hay resultados
+  }, [isSearchExpanded, searchQuery]);
+
   // Cerrar búsqueda al hacer click fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setIsSearchOpen(false);
+        setIsSearchExpanded(false);
       }
     };
 
@@ -188,82 +201,116 @@ export function TopBar() {
 
   return (
     <header className="relative h-16 flex items-center border-b bg-background px-3 md:px-6 gap-4">
-      {/* Izquierda: botón acoplar (lado izquierdo de la lupa) + búsqueda */}
-      <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1 md:flex-initial">
+      {/* Izquierda: hamburguesa pegada + branding + lupa */}
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 md:flex-initial">
+        {/* Menú lateral (hamburguesa) - pegado a la izquierda */}
+        <SidebarTrigger className="h-8 w-8 shrink-0" />
+
+        {/* Branding (mobile) */}
         <button
           onClick={() => navigate('/app')}
-          className="skale-logo text-sm md:hidden truncate min-w-0 max-w-[120px] sm:max-w-[180px] top-bar-logo"
+          className="skale-logo text-sm md:hidden whitespace-nowrap top-bar-logo"
+          aria-label="Ir al dashboard"
         >
           SKALEMOTORS
         </button>
 
-        {/* Botón acoplar/desacoplar: a la izquierda de la lupa */}
-        <SidebarTrigger className="h-8 w-8 shrink-0 relative z-10" />
+        {/* Search: icono cuadrado + input solo al hacer click */}
+        <div ref={searchRef} className="relative">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 rounded-xl border-white/15 bg-white/4 hover:bg-white/8"
+            onClick={() => {
+              setIsSearchExpanded(true);
+              setTimeout(() => searchInputRef.current?.focus(), 0);
+            }}
+            aria-label="Abrir búsqueda"
+          >
+            <Search className={`h-4 w-4 ${theme === 'dark' ? 'text-slate-300' : 'text-muted-foreground'}`} />
+          </Button>
 
-        {/* Search Bar */}
-        <div ref={searchRef} className="relative w-full max-w-[200px] md:max-w-md">
-          <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme === 'dark' ? 'text-slate-400' : 'text-muted-foreground'
-            }`} />
-          <Input
-            placeholder="Buscar vehículos, leads, PPU, RUT..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`pl-10 ${theme === 'dark'
-                ? 'bg-slate-700 border-slate-600 text-white placeholder:text-slate-400'
-                : 'bg-background border-input'
-              }`}
-          />
+          {isSearchExpanded && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 ml-[calc(100%+8px)] w-[240px] md:w-[360px]">
+              <div className="relative">
+                <Input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchOpen(searchResults.length > 0)}
+                  className={`pr-9 ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-400'
+                      : 'bg-background border-input'
+                    }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setIsSearchOpen(false);
+                    setIsSearchExpanded(false);
+                  }}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/10 ${theme === 'dark' ? 'text-slate-300' : 'text-muted-foreground'}`}
+                  aria-label="Cerrar búsqueda"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-          {/* Search Results Dropdown */}
-          {isSearchOpen && (
-            <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg shadow-lg border z-50 max-h-80 overflow-y-auto ${theme === 'dark'
-                ? 'bg-slate-800 border-slate-700'
-                : 'bg-white border-gray-200'
-              }`}>
-              {isSearching ? (
-                <div className="flex items-center justify-center p-4 text-sm text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Buscando...
-                </div>
-              ) : searchResults.length === 0 ? (
-                <div className={`p-4 text-center text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
+              {/* Search Results Dropdown */}
+              {isSearchOpen && (
+                <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg shadow-lg border z-50 max-h-80 overflow-y-auto ${theme === 'dark'
+                    ? 'bg-slate-800 border-slate-700'
+                    : 'bg-white border-gray-200'
                   }`}>
-                  No se encontraron resultados para "{searchQuery}"
-                </div>
-              ) : (
-                <div className="py-2">
-                  {searchResults.map((result) => (
-                    <button
-                      key={result.id}
-                      onClick={() => navigateToSearchResult(result)}
-                      className={`w-full flex items-center gap-3 p-3 text-left hover:bg-opacity-80 transition-colors ${theme === 'dark'
-                          ? 'hover:bg-slate-700 text-white'
-                          : 'hover:bg-gray-50 text-gray-900'
-                        }`}
-                    >
-                      <div className={`w-8 h-8 rounded-md flex items-center justify-center ${theme === 'dark'
-                          ? result.type === 'vehicle'
-                            ? 'bg-emerald-900/20 text-emerald-300'
-                            : 'bg-pink-900/20 text-pink-300'
-                          : result.type === 'vehicle'
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'bg-pink-100 text-pink-600'
-                        }`}>
-                        {result.type === 'vehicle' ? (
-                          <Car className="h-4 w-4" />
-                        ) : (
-                          <Users className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{result.title}</div>
-                        <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
-                          }`}>
-                          {result.description}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                  {isSearching ? (
+                    <div className="flex items-center justify-center p-4 text-sm text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Buscando...
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className={`p-4 text-center text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
+                      }`}>
+                      No se encontraron resultados para "{searchQuery}"
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      {searchResults.map((result) => (
+                        <button
+                          key={result.id}
+                          onClick={() => navigateToSearchResult(result)}
+                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-opacity-80 transition-colors ${theme === 'dark'
+                              ? 'hover:bg-slate-700 text-white'
+                              : 'hover:bg-gray-50 text-gray-900'
+                            }`}
+                        >
+                          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${theme === 'dark'
+                              ? result.type === 'vehicle'
+                                ? 'bg-emerald-900/20 text-emerald-300'
+                                : 'bg-pink-900/20 text-pink-300'
+                              : result.type === 'vehicle'
+                                ? 'bg-emerald-100 text-emerald-600'
+                                : 'bg-pink-100 text-pink-600'
+                            }`}>
+                            {result.type === 'vehicle' ? (
+                              <Car className="h-4 w-4" />
+                            ) : (
+                              <Users className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{result.title}</div>
+                            <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
+                              }`}>
+                              {result.description}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

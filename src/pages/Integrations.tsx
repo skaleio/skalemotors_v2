@@ -139,10 +139,10 @@ export default function Integrations() {
             {metaConnected ? (
               <>
                 <Button variant="outline" className="w-full" asChild>
-                  <Link to="/app/studio-ia/marketing/facebook-ads">
+                  <a href="https://business.facebook.com" target="_blank" rel="noopener noreferrer">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Ver campañas y métricas
-                  </Link>
+                  </a>
                 </Button>
                 <AlertDialog open={metaAdsDisconnectOpen} onOpenChange={setMetaAdsDisconnectOpen}>
                   <AlertDialogContent>

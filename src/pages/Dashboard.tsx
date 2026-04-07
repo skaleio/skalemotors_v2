@@ -14,6 +14,7 @@ import { useAppointments } from "@/hooks/useAppointments";
 import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { formatCLP } from "@/lib/format";
+import { appointmentService } from "@/lib/services/appointments";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
@@ -160,6 +161,9 @@ export default function Dashboard() {
     stock_origin: string | null
   } | null>(null);
 
+  const [isSavingAppointment, setIsSavingAppointment] = useState(false);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+
   // Estados para los diálogos
   const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
@@ -223,7 +227,7 @@ export default function Dashboard() {
     } else if (task.entity_type === 'appointment' && task.entity_id) {
       navigate(`/appointments?id=${task.entity_id}`);
     } else if (task.entity_type === 'vehicle' && task.entity_id) {
-      navigate(`/listings?vehicle=${task.entity_id}`);
+      navigate(`/app/inventory?vehicle=${task.entity_id}`);
     } else if (task.action_type === 'enviar_cotizacion') {
       setQuoteData({
         ...quoteData,
@@ -239,13 +243,36 @@ export default function Dashboard() {
   };
 
   // Funciones para manejar las acciones
-  const handleCreateAppointment = () => {
-    // TODO: Integrar con Supabase
-    toast({
-      title: "✅ Cita agendada",
-      description: `Cita con ${newAppointment.clientName} agendada para ${newAppointment.date} a las ${newAppointment.time}`,
-    });
-    setShowNewAppointmentDialog(false);
+  const handleCreateAppointment = async () => {
+    if (!newAppointment.date || !newAppointment.time) {
+      toast({ title: "Faltan datos", description: "Ingresa fecha y hora para la cita.", variant: "destructive" });
+      return;
+    }
+    setIsSavingAppointment(true);
+    try {
+      const scheduledAt = new Date(`${newAppointment.date}T${newAppointment.time}`).toISOString();
+      await appointmentService.create({
+        title: newAppointment.clientName
+          ? `${appointmentTypeLabels[newAppointment.appointmentType] ?? newAppointment.appointmentType} - ${newAppointment.clientName}`
+          : appointmentTypeLabels[newAppointment.appointmentType] ?? 'Cita',
+        type: newAppointment.appointmentType,
+        scheduled_at: scheduledAt,
+        notes: newAppointment.notes || null,
+        branch_id: user?.branch_id ?? null,
+        user_id: user?.id ?? null,
+        status: 'programada',
+      });
+      toast({
+        title: "✅ Cita agendada",
+        description: `Cita con ${newAppointment.clientName || 'cliente'} agendada para ${newAppointment.date} a las ${newAppointment.time}`,
+      });
+      setShowNewAppointmentDialog(false);
+      setNewAppointment({ clientName: '', clientPhone: '', clientEmail: '', appointmentType: 'test_drive', date: '', time: '', vehicle: '', notes: '' });
+    } catch (err) {
+      toast({ title: "Error al agendar", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
     setNewAppointment({
       clientName: '',
       clientPhone: '',
@@ -267,12 +294,23 @@ export default function Dashboard() {
     setShowQuoteDialog(false);
   };
 
-  const handleCompleteAppointment = () => {
-    // TODO: Integrar con Supabase
-    toast({
-      title: "✅ Cita completada",
-      description: "La cita ha sido marcada como completada",
-    });
+  const handleCompleteAppointment = async () => {
+    if (!selectedAppointmentId) {
+      toast({ title: "Error", description: "No se seleccionó ninguna cita", variant: "destructive" });
+      return;
+    }
+    setIsSavingAppointment(true);
+    try {
+      await appointmentService.update(selectedAppointmentId, { status: 'completada' });
+      toast({
+        title: "✅ Cita completada",
+        description: "La cita ha sido marcada como completada",
+      });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
     setShowCompleteAppointmentDialog(false);
   };
 
@@ -576,7 +614,10 @@ export default function Dashboard() {
                           <Button
                             size="sm"
                             variant="default"
-                            onClick={() => navigate(`/appointments?id=${apt.id}`)}
+                            onClick={() => {
+                              setSelectedAppointmentId(apt.id);
+                              setShowCompleteAppointmentDialog(true);
+                            }}
                           >
                             Marcar completada
                           </Button>
@@ -1489,9 +1530,9 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setShowNewAppointmentDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateAppointment}>
+            <Button onClick={handleCreateAppointment} disabled={isSavingAppointment}>
               <Calendar className="h-4 w-4 mr-2" />
-              Agendar Cita
+              {isSavingAppointment ? "Agendando..." : "Agendar Cita"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1593,9 +1634,9 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setShowCompleteAppointmentDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleCompleteAppointment}>
+            <Button onClick={handleCompleteAppointment} disabled={isSavingAppointment}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
-              Marcar como Completada
+              {isSavingAppointment ? "Guardando..." : "Marcar como Completada"}
             </Button>
           </DialogFooter>
         </DialogContent>

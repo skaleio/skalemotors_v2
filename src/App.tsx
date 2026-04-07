@@ -263,6 +263,7 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="*" element={<NotFound />} />
             </Routes>
             </Suspense>
           </BrowserRouter>
