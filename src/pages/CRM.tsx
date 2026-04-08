@@ -17,9 +17,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
+import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Search, Trash2 } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import type { DragEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
@@ -79,6 +81,16 @@ function safePipelineSelectValue(status: string | null | undefined): string {
 }
 
 type CrmStageKey = "contactado" | "negociando" | "para_cierre";
+
+/** MIME para DataTransfer (evita colisiones con texto plano). */
+const DRAG_LEAD_MIME = "application/x-skale-lead-id";
+
+/** Valor `leads.status` al soltar en una columna del pipeline. */
+function pipelineDbStatusForStage(stageKey: CrmStageKey): string {
+  if (stageKey === "contactado") return "contactado";
+  if (stageKey === "negociando") return "negociando";
+  return "para_cierre";
+}
 
 const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
@@ -142,18 +154,70 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   }
 }
 
-const LeadCard = memo(({ lead, onClick }: { lead: Lead; onClick: () => void }) => {
+const LeadCard = memo(function LeadCard({
+  lead,
+  onClick,
+  draggable,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onExternalDragOver,
+  onExternalDrop,
+  justLanded,
+}: {
+  lead: Lead;
+  onClick: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  onDragStart?: (e: DragEvent) => void;
+  onDragEnd?: (e: DragEvent) => void;
+  /** Permite soltar sobre otra tarjeta (el drop no llega al contenedor de columna). */
+  onExternalDragOver?: (e: DragEvent) => void;
+  onExternalDrop?: (e: DragEvent) => void;
+  /** Breve feedback visual tras soltar en otra columna (sin toast). */
+  justLanded?: boolean;
+}) {
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
+  const lastDragEndRef = useRef(0);
+
+  const handleClick = () => {
+    if (Date.now() - lastDragEndRef.current < 400) return;
+    onClick();
+  };
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
-      className="rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      draggable={!!draggable}
+      onDragStart={(e) => {
+        onDragStart?.(e);
+      }}
+      onDragEnd={(e) => {
+        lastDragEndRef.current = Date.now();
+        onDragEnd?.(e);
+      }}
+      onDragOver={(e) => {
+        onExternalDragOver?.(e);
+      }}
+      onDrop={(e) => {
+        onExternalDrop?.(e);
+      }}
+      onClick={handleClick}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleClick()}
+      aria-grabbed={isDragging ? true : undefined}
+      title={draggable ? "Arrastra a otra columna o haz clic para abrir" : undefined}
+      className={cn(
+        "rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
+        "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
+        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        draggable ? "cursor-grab touch-none active:cursor-grabbing hover:bg-muted/40 hover:shadow-md" : "cursor-pointer hover:bg-muted/50",
+        isDragging &&
+          "scale-[0.97] border-dashed border-primary/50 bg-muted/50 opacity-[0.42] shadow-none ring-0",
+        justLanded && "animate-in zoom-in-95 fade-in duration-300 ring-2 ring-emerald-500/35 shadow-md",
+      )}
     >
       <div className="font-medium">
         {lead.full_name || "Sin nombre"}
@@ -373,6 +437,120 @@ export default function CRM() {
     }));
   }, [filteredLeads, stages]);
 
+  const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
+  const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
+  const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
+  const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
+  const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
+    };
+  }, []);
+
+  const handleLeadDragStart = useCallback((e: DragEvent, leadId: string) => {
+    const el = e.currentTarget as HTMLElement;
+    const w = el.offsetWidth;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.cssText = [
+      "position:fixed",
+      "left:-9999px",
+      "top:0",
+      `width:${w}px`,
+      "opacity:0.94",
+      "box-shadow:0 22px 50px -14px rgba(0,0,0,0.32)",
+      "border-radius:0.5rem",
+      "pointer-events:none",
+      "z-index:100000",
+    ].join(";");
+    document.body.appendChild(clone);
+    e.dataTransfer.setDragImage(clone, Math.round(Math.min(w / 2, 140)), 32);
+    window.setTimeout(() => clone.remove(), 0);
+
+    e.dataTransfer.setData(DRAG_LEAD_MIME, leadId);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", leadId);
+    } catch {
+      /* algunos navegadores son estrictos con tipos MIME */
+    }
+    setDraggingLeadId(leadId);
+  }, []);
+
+  const handleLeadDragEnd = useCallback(() => {
+    setDraggingLeadId(null);
+    setDragOverStageKey(null);
+  }, []);
+
+  const handleStageDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleStageDrop = useCallback(
+    async (e: DragEvent, stageKey: CrmStageKey, stageStatuses: string[]) => {
+      e.preventDefault();
+      setDragOverStageKey(null);
+      const leadId =
+        e.dataTransfer.getData(DRAG_LEAD_MIME) || e.dataTransfer.getData("text/plain").trim();
+      if (!leadId) {
+        setDraggingLeadId(null);
+        return;
+      }
+
+      const lead = filteredLeads.find((l) => l.id === leadId);
+      if (!lead) {
+        setDraggingLeadId(null);
+        return;
+      }
+
+      if (stageStatuses.includes(lead.status)) {
+        setDraggingLeadId(null);
+        return;
+      }
+
+      const nextStatus = pipelineDbStatusForStage(stageKey);
+      if (lead.status === nextStatus) {
+        setDraggingLeadId(null);
+        return;
+      }
+
+      setMovingLeadId(leadId);
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((l: Lead) => (l.id === leadId ? { ...l, status: nextStatus } : l));
+      });
+
+      try {
+        const updated = await leadService.update(leadId, { status: nextStatus as Lead["status"] });
+        queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
+        });
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
+        setLandedLeadId(leadId);
+        landHighlightTimerRef.current = setTimeout(() => {
+          setLandedLeadId(null);
+          landHighlightTimerRef.current = null;
+        }, 700);
+      } catch (err) {
+        console.error(err);
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        toast({
+          title: "No se pudo mover el lead",
+          description: err instanceof Error ? err.message : "Intenta de nuevo.",
+          variant: "destructive",
+        });
+      } finally {
+        setMovingLeadId(null);
+        setDraggingLeadId(null);
+      }
+    },
+    [filteredLeads, queryClient],
+  );
+
   return (
     <div className="space-y-6">
       {leadsError && (
@@ -393,6 +571,9 @@ export default function CRM() {
           <p className="text-muted-foreground mt-2">
             Gestión de clientes y relaciones
           </p>
+          <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+            Arrastra una tarjeta a otra columna para cambiar el estado del pipeline.
+          </p>
         </div>
         <div className="relative w-full sm:w-72 shrink-0">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -412,7 +593,15 @@ export default function CRM() {
           const style = stageStyles[stage.key];
 
           return (
-            <Card key={stage.key} className={`border-t-4 ${style?.border || ""}`}>
+            <Card
+              key={stage.key}
+              className={cn(
+                `border-t-4 transition-shadow duration-200 ${style?.border || ""}`,
+                dragOverStageKey === stage.key &&
+                  draggingLeadId &&
+                  "shadow-lg shadow-primary/10 ring-1 ring-primary/25",
+              )}
+            >
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="text-sm flex items-center gap-2">
@@ -425,18 +614,57 @@ export default function CRM() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 min-h-[180px]">
+                <div
+                  className={cn(
+                    "space-y-3 min-h-[180px] rounded-xl p-1 transition-all duration-200",
+                    dragOverStageKey === stage.key &&
+                      draggingLeadId &&
+                      "bg-primary/[0.06] outline outline-2 outline-dashed outline-primary/30 -outline-offset-2",
+                  )}
+                  onDragOver={(e) => {
+                    handleStageDragOver(e);
+                    if (draggingLeadId) setDragOverStageKey(stage.key);
+                  }}
+                  onDrop={(e) => void handleStageDrop(e, stage.key, stage.statuses)}
+                >
                   {loading ? (
                     <p className="text-sm text-muted-foreground text-center py-6">
                       Cargando leads...
                     </p>
                   ) : stage.leads.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      No hay leads en esta etapa
+                    <p
+                      className={cn(
+                        "text-sm text-center py-8 rounded-lg pointer-events-none select-none transition-colors",
+                        draggingLeadId
+                          ? "text-primary/80 font-medium bg-primary/[0.04] border border-dashed border-primary/25"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {draggingLeadId ? "Suelta aquí" : "No hay leads en esta etapa"}
                     </p>
                   ) : (
                     stage.leads.map((lead) => (
-                      <LeadCard key={lead.id} lead={lead} onClick={() => openEditDialog(lead)} />
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        draggable={!loading && movingLeadId !== lead.id}
+                        isDragging={draggingLeadId === lead.id}
+                        justLanded={landedLeadId === lead.id}
+                        onDragStart={(e) => handleLeadDragStart(e, lead.id)}
+                        onDragEnd={handleLeadDragEnd}
+                        onClick={() => openEditDialog(lead)}
+                        onExternalDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = "move";
+                          if (draggingLeadId) setDragOverStageKey(stage.key);
+                        }}
+                        onExternalDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleStageDrop(e, stage.key, stage.statuses);
+                        }}
+                      />
                     ))
                   )}
                 </div>
