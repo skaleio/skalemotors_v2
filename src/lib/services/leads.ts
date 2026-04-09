@@ -87,7 +87,7 @@ export const leadService = {
 
     if (filters?.search) {
       query = query.or(
-        `full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`
+        `full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,rut.ilike.%${filters.search}%`
       )
     }
 

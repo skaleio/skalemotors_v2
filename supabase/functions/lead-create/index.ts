@@ -58,6 +58,7 @@ type Payload = {
   full_name?: string;
   phone?: string;
   email?: string | null;
+  rut?: string | null;
   status?: string;
   source?: string;
   priority?: string;
@@ -180,6 +181,7 @@ export default async function handler(req: Request): Promise<Response> {
         source,
         priority,
         region: body.region !== undefined ? (body.region?.trim() || null) : undefined,
+        rut: body.rut !== undefined ? (body.rut === null ? null : String(body.rut).trim() || null) : undefined,
         payment_type: body.payment_type !== undefined ? (body.payment_type?.trim() || null) : undefined,
         budget: body.budget !== undefined ? (body.budget?.trim() || null) : undefined,
         notes: body.notes !== undefined ? (body.notes?.trim() || null) : undefined,
@@ -218,6 +220,10 @@ export default async function handler(req: Request): Promise<Response> {
     priority,
     branch_id: branchId,
     region: body.region?.trim() || null,
+    rut:
+      body.rut !== undefined && body.rut !== null && String(body.rut).trim()
+        ? String(body.rut).trim()
+        : null,
     payment_type: body.payment_type?.trim() || null,
     budget: body.budget?.trim() || null,
     notes: body.notes?.trim() || null,

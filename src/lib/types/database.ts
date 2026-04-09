@@ -690,6 +690,7 @@ export interface Database {
           id: string
           full_name: string
           email: string | null
+          rut: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
@@ -715,6 +716,7 @@ export interface Database {
           id?: string
           full_name: string
           email?: string | null
+          rut?: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
@@ -740,6 +742,7 @@ export interface Database {
           id?: string
           full_name?: string
           email?: string | null
+          rut?: string | null
           phone?: string
           source?: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'

@@ -300,6 +300,7 @@ const LeadsTable = memo(function LeadsTable({
                   />
                 </TableHead>
                 <TableHead className="min-w-[120px]">Nombre</TableHead>
+                <TableHead className="hidden min-w-[100px] sm:table-cell">RUT</TableHead>
                 <TableHead className="min-w-[130px]">Contacto</TableHead>
                 <TableHead className="hidden min-w-[90px] sm:table-cell">Origen</TableHead>
                 <TableHead className="hidden min-w-[100px] md:table-cell">Vehiculo</TableHead>
@@ -314,13 +315,13 @@ const LeadsTable = memo(function LeadsTable({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                   Cargando leads...
                 </TableCell>
               </TableRow>
             ) : filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                   No hay leads registrados
                 </TableCell>
               </TableRow>
@@ -339,6 +340,9 @@ const LeadsTable = memo(function LeadsTable({
                     />
                   </TableCell>
                   <TableCell className="font-medium">{lead.full_name || "Sin nombre"}</TableCell>
+                  <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                    {lead.rut?.trim() ? lead.rut : "—"}
+                  </TableCell>
                   <TableCell>
                     <div className="space-y-1 text-sm">
                       <div className="flex items-center gap-2">
@@ -501,6 +505,7 @@ export default function Leads() {
 
   const [formState, setFormState] = useState({
     full_name: "",
+    rut: "",
     phone: "",
     status: "contactado",
     vehicle: "",
@@ -526,6 +531,7 @@ export default function Leads() {
   const { deletedLeads, loading: loadingPapelera, refetch: refetchPapelera } = useDeletedLeads(showPapeleraDialog);
   const [editForm, setEditForm] = useState({
     full_name: "",
+    rut: "",
     phone: "",
     email: "",
     status: "contactado",
@@ -617,7 +623,8 @@ export default function Leads() {
       const matchesSearch = !query
         || (lead.full_name || "").toLowerCase().includes(query)
         || (lead.email || "").toLowerCase().includes(query)
-        || (lead.phone || "").toLowerCase().includes(query);
+        || (lead.phone || "").toLowerCase().includes(query)
+        || (lead.rut || "").toLowerCase().includes(query);
 
       const bucket = getLeadStatusBucket(lead.status);
       const matchesStatus =
@@ -707,6 +714,7 @@ export default function Leads() {
   const resetForm = () => {
     setFormState({
       full_name: "",
+      rut: "",
       phone: "",
       status: "contactado",
       vehicle: "",
@@ -806,6 +814,7 @@ export default function Leads() {
             source: "telefono",
             priority: "media",
             branch_id: resolvedBranchId,
+            rut: rut?.trim() || null,
             region: region || null,
             payment_type: paymentType || null,
             notes,
@@ -852,6 +861,7 @@ export default function Leads() {
         source: formState.phone.trim() ? "telefono" : "otro",
         priority: "media",
         branch_id: user.branch_id,
+        rut: formState.rut.trim() ? formState.rut.trim() : null,
         region: formState.region.trim() ? formState.region.trim() : null,
         payment_type: formState.payment_type ? formState.payment_type : null,
         budget: formState.budget.trim() ? formState.budget.trim() : null,
@@ -910,6 +920,7 @@ export default function Leads() {
     setEditingLead(lead);
     setEditForm({
       full_name: lead.full_name || "",
+      rut: lead.rut || "",
       phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
       status: statusForEditForm(lead.status),
@@ -939,6 +950,7 @@ export default function Leads() {
         full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
         phone: normalizePhoneWithChilePrefix(editForm.phone) || "sin_telefono",
         email: editForm.email.trim() ? editForm.email.trim() : null,
+        rut: editForm.rut.trim() ? editForm.rut.trim() : null,
         status: editForm.status as any,
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
@@ -1248,6 +1260,15 @@ export default function Leads() {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="lead_rut">RUT</Label>
+              <Input
+                id="lead_rut"
+                value={formState.rut}
+                onChange={(e) => setFormState({ ...formState, rut: e.target.value })}
+                placeholder="Ej: 12.345.678-9"
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="lead_phone">Telefono</Label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -1426,6 +1447,15 @@ export default function Leads() {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="edit_lead_rut">RUT</Label>
+              <Input
+                id="edit_lead_rut"
+                value={editForm.rut}
+                onChange={(e) => setEditForm({ ...editForm, rut: e.target.value })}
+                placeholder="Ej: 12.345.678-9"
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="edit_lead_vehicle">Vehiculo</Label>
               <Input
                 id="edit_lead_vehicle"
@@ -1524,6 +1554,10 @@ export default function Leads() {
               <div>
                 <p className="text-sm text-muted-foreground">Nombre</p>
                 <p className="text-base font-medium">{detailsLead.full_name || "Sin nombre"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">RUT</p>
+                <p className="text-base">{detailsLead.rut?.trim() ? detailsLead.rut : "—"}</p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
