@@ -254,6 +254,7 @@ export default function Inventory() {
     mode: "list",
   });
 
+  const [quickStatusKey, setQuickStatusKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -468,6 +469,36 @@ export default function Inventory() {
   const totalValue = filteredVehicles.reduce((sum, v) => sum + Number(v.price || 0), 0);
   const totalMargin = filteredVehicles.reduce((sum, v) => sum + Number(v.margin || 0), 0);
 
+  const vehicleStatusOrder = useMemo(
+    () =>
+      ["disponible", "reservado", "en_reparacion", "fuera_de_servicio", "vendido"] as const,
+    []
+  );
+
+  const handleQuickCycleVehicleStatus = async (vehicle: Vehicle) => {
+    const current = (vehicle.status || "disponible") as (typeof vehicleStatusOrder)[number];
+    const idx = vehicleStatusOrder.indexOf(current);
+    const next = vehicleStatusOrder[(idx + 1) % vehicleStatusOrder.length];
+    const key = `${vehicle.id}:${next}`;
+    setQuickStatusKey(key);
+    try {
+      await vehicleService.update(vehicle.id, { status: next });
+      toast({
+        title: "Estado actualizado",
+        description: `${vehicle.make} ${vehicle.model}: ${statusLabels[next] || next}`,
+      });
+      refetch();
+    } catch (e) {
+      toast({
+        title: "No se pudo cambiar el estado",
+        description: e instanceof Error ? e.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setQuickStatusKey(null);
+    }
+  };
+
   const selectedVehicleComputed = useMemo(() => {
     const base = selectedVehicleFull || selectedVehicle;
     if (!base) return null;
@@ -566,12 +597,6 @@ export default function Inventory() {
       return;
     }
 
-    // Validar campos requeridos
-    if (!newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
-      alert("Por favor completa todos los campos requeridos (marcados con *)");
-      return;
-    }
-
     setIsSaving(true);
     try {
       // Calcular margen
@@ -587,18 +612,19 @@ export default function Inventory() {
       // Crear el vehículo primero (sin imágenes)
       // Asegurar que los números sean del tipo correcto para Supabase
       const vinToCreate = generateVin();
+      const fallbackYear = new Date().getFullYear();
       const vehicleData = {
         vin: vinToCreate,
-        make: newVehicle.make.trim(),
-        model: newVehicle.model.trim(),
-        year: Number(newVehicle.year),
-        color: newVehicle.color.trim(),
+        make: newVehicle.make.trim() || "Sin marca",
+        model: newVehicle.model.trim() || "Sin modelo",
+        year: newVehicle.year && Number(newVehicle.year) > 0 ? Number(newVehicle.year) : fallbackYear,
+        color: newVehicle.color.trim() || "Sin color",
         mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
         fuel_type: newVehicle.fuel_type,
         transmission: newVehicle.transmission,
         engine_size: newVehicle.engine_size?.trim() || null,
         category: newVehicle.category,
-        price: Number(newVehicle.price),
+        price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
         status: "disponible" as const,
@@ -607,11 +633,6 @@ export default function Inventory() {
         images: [], // Inicialmente vacío, se llenará después de subir las imágenes
         features: features as any,
       };
-
-      // Validar que todos los campos requeridos estén presentes
-      if (!vehicleData.make || !vehicleData.model || !vehicleData.color || !vehicleData.year) {
-        throw new Error("Faltan campos requeridos en los datos del vehículo");
-      }
 
       // Crear vehículo (incluye timeout interno y verificación)
       const createdVehicle = await vehicleService.create(vehicleData, {
@@ -729,12 +750,6 @@ export default function Inventory() {
       return;
     }
 
-    // Validar campos requeridos
-    if (!newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0) {
-      alert("Por favor completa todos los campos requeridos (marcados con *)");
-      return;
-    }
-
     setIsSaving(true);
     try {
       // Calcular margen
@@ -748,17 +763,18 @@ export default function Inventory() {
       };
 
       // Preparar datos de actualización
+      const fallbackYear = new Date().getFullYear();
       const updateData = {
-        make: newVehicle.make.trim(),
-        model: newVehicle.model.trim(),
-        year: parseInt(String(newVehicle.year), 10),
-        color: newVehicle.color.trim(),
+        make: newVehicle.make.trim() || "Sin marca",
+        model: newVehicle.model.trim() || "Sin modelo",
+        year: newVehicle.year && Number(newVehicle.year) > 0 ? parseInt(String(newVehicle.year), 10) : fallbackYear,
+        color: newVehicle.color.trim() || "Sin color",
         mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
         fuel_type: newVehicle.fuel_type,
         transmission: newVehicle.transmission,
         engine_size: newVehicle.engine_size?.trim() || null,
         category: newVehicle.category,
-        price: Number(newVehicle.price),
+        price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
         location: newVehicle.location?.trim() || null,
@@ -1059,7 +1075,7 @@ export default function Inventory() {
       } else {
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Consignaciones");
         const workbookArray = XLSX.write(workbook, {
           bookType: "xlsx",
           type: "array",
@@ -1074,8 +1090,8 @@ export default function Inventory() {
 
       setShowExportDialog(false);
     } catch (error) {
-      console.error("Error exportando inventario:", error);
-      alert("No se pudo exportar el inventario. Revisa la consola para más detalles.");
+      console.error("Error exportando:", error);
+      alert("No se pudo exportar. Revisa la consola para más detalles.");
     } finally {
       setIsExporting(false);
     }
@@ -1086,9 +1102,9 @@ export default function Inventory() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Consignaciones</h1>
           <p className="text-muted-foreground">
-            Gestiona el stock de vehículos de tu automotora
+            Gestiona el stock de vehículos (propios y consignados) en un solo lugar
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1098,7 +1114,7 @@ export default function Inventory() {
             disabled={isExporting || !user?.branch_id}
           >
             <Download className="h-4 w-4 mr-2" />
-            {isExporting ? "Exportando..." : "Exportar inventario"}
+            {isExporting ? "Exportando..." : "Exportar"}
           </Button>
           <Button
             onClick={() => {
@@ -1123,7 +1139,7 @@ export default function Inventory() {
               });
               setShowAddDialog(true);
             }}
-            className="bg-black hover:bg-gray-900 text-white"
+            className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
           >
             <Plus className="h-4 w-4 mr-2" />
             Agregar Vehículo
@@ -1353,8 +1369,27 @@ export default function Inventory() {
                     <Badge
                       variant="outline"
                       className={statusColors[vehicle.status]}
+                      role="button"
+                      tabIndex={0}
+                      title="Click para cambiar estado"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuickCycleVehicleStatus(vehicle);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleQuickCycleVehicleStatus(vehicle);
+                        }
+                      }}
                     >
-                      {statusLabels[vehicle.status]}
+                      <span className="inline-flex items-center gap-2">
+                        {statusLabels[vehicle.status]}
+                        {quickStatusKey?.startsWith(`${vehicle.id}:`) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : null}
+                      </span>
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -1553,7 +1588,7 @@ export default function Inventory() {
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Exportar inventario</DialogTitle>
+            <DialogTitle>Exportar</DialogTitle>
             <DialogDescription>
               Elige el formato, alcance y nivel de detalle del archivo a exportar.
             </DialogDescription>
@@ -1901,31 +1936,29 @@ export default function Inventory() {
 
             {/* Nombre del vehículo (Marca) */}
             <div>
-              <Label htmlFor="make">Marca *</Label>
+              <Label htmlFor="make">Marca</Label>
               <Input
                 id="make"
                 value={newVehicle.make}
                 onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
                 placeholder="Ej: Toyota"
-                required
               />
             </div>
 
             {/* Modelo */}
             <div>
-              <Label htmlFor="model">Modelo *</Label>
+              <Label htmlFor="model">Modelo</Label>
               <Input
                 id="model"
                 value={newVehicle.model}
                 onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
                 placeholder="Ej: Corolla Cross"
-                required
               />
             </div>
 
             {/* Año */}
             <div>
-              <Label htmlFor="year">Año *</Label>
+              <Label htmlFor="year">Año</Label>
               <Input
                 id="year"
                 type="text"
@@ -1942,19 +1975,17 @@ export default function Inventory() {
                   }
                 }}
                 placeholder="Ej: 2024"
-                required
               />
             </div>
 
             {/* Color */}
             <div>
-              <Label htmlFor="color">Color *</Label>
+              <Label htmlFor="color">Color</Label>
               <Input
                 id="color"
                 value={newVehicle.color}
                 onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
                 placeholder="Ej: Blanco"
-                required
               />
             </div>
 
@@ -1985,7 +2016,7 @@ export default function Inventory() {
 
             {/* Propio o Consignado */}
             <div>
-              <Label htmlFor="category">Propio o Consignado *</Label>
+              <Label htmlFor="category">Propio o Consignado</Label>
               <Select
                 value={newVehicle.category}
                 onValueChange={(value: "nuevo" | "usado" | "consignado") =>
@@ -2005,7 +2036,7 @@ export default function Inventory() {
 
             {/* Valor por vender */}
             <div>
-              <Label htmlFor="price">Valor por vender (CLP) *</Label>
+              <Label htmlFor="price">Valor por vender (CLP)</Label>
               <Input
                 id="price"
                 type="text"
@@ -2025,7 +2056,6 @@ export default function Inventory() {
                   setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
                 }}
                 placeholder="Ej: 15.990.000"
-                required
               />
             </div>
 
@@ -2056,7 +2086,7 @@ export default function Inventory() {
 
             {/* Pie mínimo */}
             <div>
-              <Label htmlFor="minDownPayment">Pie mínimo *</Label>
+              <Label htmlFor="minDownPayment">Pie mínimo</Label>
               <Input
                 id="minDownPayment"
                 type="text"
@@ -2076,7 +2106,6 @@ export default function Inventory() {
                   setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
                 }}
                 placeholder="Ej: 3.000.000"
-                required
               />
             </div>
 
@@ -2316,31 +2345,29 @@ export default function Inventory() {
             {/* Resto de campos - reutilizando los mismos del formulario de agregar */}
             {/* Marca */}
             <div>
-              <Label htmlFor="edit-make">Marca *</Label>
+              <Label htmlFor="edit-make">Marca</Label>
               <Input
                 id="edit-make"
                 value={newVehicle.make}
                 onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
                 placeholder="Ej: Toyota"
-                required
               />
             </div>
 
             {/* Modelo */}
             <div>
-              <Label htmlFor="edit-model">Modelo *</Label>
+              <Label htmlFor="edit-model">Modelo</Label>
               <Input
                 id="edit-model"
                 value={newVehicle.model}
                 onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
                 placeholder="Ej: Corolla Cross"
-                required
               />
             </div>
 
             {/* Año */}
             <div>
-              <Label htmlFor="edit-year">Año *</Label>
+              <Label htmlFor="edit-year">Año</Label>
               <Input
                 id="edit-year"
                 type="text"
@@ -2357,19 +2384,17 @@ export default function Inventory() {
                   }
                 }}
                 placeholder="Ej: 2024"
-                required
               />
             </div>
 
             {/* Color */}
             <div>
-              <Label htmlFor="edit-color">Color *</Label>
+              <Label htmlFor="edit-color">Color</Label>
               <Input
                 id="edit-color"
                 value={newVehicle.color}
                 onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
                 placeholder="Ej: Blanco"
-                required
               />
             </div>
 
@@ -2425,7 +2450,7 @@ export default function Inventory() {
 
             {/* Propio o Consignado */}
             <div>
-              <Label htmlFor="edit-category">Propio o Consignado *</Label>
+              <Label htmlFor="edit-category">Propio o Consignado</Label>
               <Select
                 value={newVehicle.category}
                 onValueChange={(value: "nuevo" | "usado" | "consignado") =>
@@ -2445,7 +2470,7 @@ export default function Inventory() {
 
             {/* Valor por vender */}
             <div>
-              <Label htmlFor="edit-price">Valor por vender (CLP) *</Label>
+              <Label htmlFor="edit-price">Valor por vender (CLP)</Label>
               <Input
                 id="edit-price"
                 type="text"
@@ -2465,7 +2490,6 @@ export default function Inventory() {
                   setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
                 }}
                 placeholder="Ej: 15.990.000"
-                required
               />
             </div>
 
@@ -2496,7 +2520,7 @@ export default function Inventory() {
 
             {/* Pie mínimo */}
             <div>
-              <Label htmlFor="minDownPayment">Pie mínimo *</Label>
+              <Label htmlFor="minDownPayment">Pie mínimo</Label>
               <Input
                 id="minDownPayment"
                 type="text"
@@ -2516,7 +2540,6 @@ export default function Inventory() {
                   setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
                 }}
                 placeholder="Ej: 3.000.000"
-                required
               />
             </div>
 

@@ -78,7 +78,7 @@ export function TopBar() {
           type: 'vehicle',
           title: `${vehicle.make} ${vehicle.model} (${vehicle.year})`,
           description: `VIN: ${vehicle.vin} | Color: ${vehicle.color} | $${Number(vehicle.price || 0).toLocaleString()}`,
-          url: '/app/inventory',
+          url: '/app/consignaciones',
           highlightId: vehicle.id,
         });
       }
@@ -482,11 +482,11 @@ export function TopBar() {
                     <div className="space-y-1">
                       <button
                         onClick={() => {
-                          const onInventoryPage = location.pathname === "/app/inventory";
+                          const onInventoryPage = location.pathname === "/app/consignaciones";
                           if (onInventoryPage) {
                             window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
                           } else {
-                            navigateWithLoading("/app/inventory?new=true");
+                            navigateWithLoading("/app/consignaciones?new=true");
                           }
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"

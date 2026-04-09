@@ -10,7 +10,7 @@ import { ChatProvider } from "@/contexts/ChatContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "@/components/Layout";
 
@@ -23,7 +23,6 @@ const LeadsBoard = lazy(() => import("./pages/LeadsBoard"));
 const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
 const Inventory = lazy(() => import("./pages/Inventory"));
-const Consignaciones = lazy(() => import("./pages/Consignaciones"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
@@ -32,7 +31,6 @@ const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
 const SalaryDistribution = lazy(() => import("./pages/SalaryDistribution"));
 const Billing = lazy(() => import("./pages/Billing"));
 const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
-const Messages = lazy(() => import("./pages/Messages"));
 const Documents = lazy(() => import("./pages/Documents"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
@@ -140,14 +138,14 @@ const App = () => (
               <Route path="/app/inventory" element={
                 <ProtectedRoute>
                   <Layout>
-                    <Inventory />
+                    <Navigate to="/app/consignaciones" replace />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/consignaciones" element={
                 <ProtectedRoute>
                   <Layout>
-                    <Consignaciones />
+                    <Inventory />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -211,13 +209,6 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <VehicleAppraisal />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/app/messages" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Messages />
                   </Layout>
                 </ProtectedRoute>
               } />

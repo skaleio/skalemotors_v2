@@ -27,9 +27,9 @@ function useShortcutHandlers() {
     appointments: () => navigateWithLoading("/app/appointments"),
     financial_calculator: () => navigateWithLoading("/app/financial-calculator"),
     inventory: () => {
-      const onInventoryPage = window.location.pathname === "/app/inventory";
+      const onInventoryPage = window.location.pathname === "/app/consignaciones";
       if (onInventoryPage) window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
-      else navigateWithLoading("/app/inventory?new=true");
+      else navigateWithLoading("/app/consignaciones?new=true");
     },
     consignaciones: () => {
       const onConsignacionesPage = window.location.pathname === "/app/consignaciones";
@@ -84,7 +84,7 @@ export function useGlobalShortcuts() {
         }
         if (key === "3") {
           event.preventDefault();
-          navigateWithLoading("/app/inventory");
+          navigateWithLoading("/app/consignaciones");
           return;
         }
         if (key === "4") {

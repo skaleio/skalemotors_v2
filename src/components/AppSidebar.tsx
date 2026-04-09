@@ -18,7 +18,6 @@ import {
   Keyboard,
   LayoutDashboard,
   LogOut,
-  MessageCircle,
   MoreVertical,
   PieChart,
   Plug,
@@ -77,7 +76,6 @@ const menuCategories = [
     items: [
       { title: "CRM", url: "/app/crm", icon: Target },
       { title: "Leads", url: "/app/leads", icon: Users },
-      { title: "Mensajes", url: "/app/messages", icon: MessageCircle },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
     ]
   },
@@ -85,7 +83,6 @@ const menuCategories = [
     title: "Inventario & Vehículos",
     icon: Car,
     items: [
-      { title: "Inventario", url: "/app/inventory", icon: Car },
       { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
       { title: "Tasación", url: "/app/tasacion", icon: Calculator },
     ]

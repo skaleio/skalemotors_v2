@@ -276,10 +276,10 @@ export function GlobalQuickActions() {
     icon: CarIcon,
     shortcut: "Ctrl+V",
     action: () => {
-      if (window.location.pathname === "/app/inventory") {
+      if (window.location.pathname === "/app/consignaciones") {
         window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
       } else {
-        navigateWithLoading("/app/inventory?new=true");
+        navigateWithLoading("/app/consignaciones?new=true");
       }
     },
     color: "bg-emerald-600",
@@ -306,7 +306,7 @@ export function GlobalQuickActions() {
     label: "Gestión de Inventario", 
     description: "Administrar stock de vehículos",
     icon: Car,
-    action: () => navigateWithLoading('/app/inventory'),
+    action: () => navigateWithLoading('/app/consignaciones'),
     color: "bg-blue-600",
     category: "Inventario",
     keywords: ["inventario", "stock", "vehículos", "administrar", "gestión"]
@@ -315,7 +315,7 @@ export function GlobalQuickActions() {
     label: "Actualizar Precios", 
     description: "Modificar precios de vehículos",
     icon: DollarSign,
-    action: () => navigateWithLoading('/app/inventory'),
+    action: () => navigateWithLoading('/app/consignaciones'),
     color: "bg-yellow-600",
     category: "Inventario",
     keywords: ["precios", "actualizar", "modificar", "vehículos", "costos"]
@@ -324,7 +324,7 @@ export function GlobalQuickActions() {
     label: "Estados de Vehículos", 
     description: "Cambiar estado de vehículos",
     icon: CheckCircle,
-    action: () => navigateWithLoading('/app/inventory'),
+    action: () => navigateWithLoading('/app/consignaciones'),
     color: "bg-green-600",
     category: "Inventario",
     keywords: ["estado", "vehículos", "disponible", "vendido", "reservado"]

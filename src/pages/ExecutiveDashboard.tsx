@@ -371,8 +371,8 @@ export default function ExecutiveDashboard() {
                 icon={Car}
                 title="Sin vehículos en inventario"
                 description="Al cargar vehículos (nuevos, usados o consignados), aquí verás la distribución por categoría."
-                linkTo="/app/inventory"
-                linkLabel="Ir a Inventario"
+                linkTo="/app/consignaciones"
+                linkLabel="Ir a Consignaciones"
                 iconBgClass="bg-purple-500/10"
               />
             )}
