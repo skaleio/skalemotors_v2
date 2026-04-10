@@ -345,6 +345,9 @@ export interface Database {
           images: Json
           documents: Json
           arrival_date: string | null
+          owner_name: string | null
+          owner_phone: string | null
+          consignment_type: 'fisica' | 'digital'
           created_at: string
           updated_at: string
         }
@@ -375,6 +378,9 @@ export interface Database {
           images?: Json
           documents?: Json
           arrival_date?: string | null
+          owner_name?: string | null
+          owner_phone?: string | null
+          consignment_type?: 'fisica' | 'digital'
           created_at?: string
           updated_at?: string
         }
@@ -405,6 +411,9 @@ export interface Database {
           images?: Json
           documents?: Json
           arrival_date?: string | null
+          owner_name?: string | null
+          owner_phone?: string | null
+          consignment_type?: 'fisica' | 'digital'
           created_at?: string
           updated_at?: string
         }

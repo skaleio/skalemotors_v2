@@ -83,10 +83,17 @@ const statusLabels = {
   fuera_de_servicio: "Fuera de servicio",
 };
 
-const typeLabels = {
-  nuevo: "Nuevo",
-  usado: "Usado",
-  consignado: "Consignado"
+type ConsignmentType = "fisica" | "digital";
+
+const consignmentTypeLabels: Record<ConsignmentType, string> = {
+  fisica: "Física",
+  digital: "Digital",
+};
+
+const getVehicleConsignmentType = (vehicle: Vehicle): ConsignmentType => {
+  const t = vehicle.consignment_type;
+  if (t === "digital" || t === "fisica") return t;
+  return "fisica";
 };
 
 // Funciones helper para formatear números con puntos (formato chileno)
@@ -142,6 +149,45 @@ const generateVin = () => {
   const rnd = Math.random().toString(36).substring(2, 7).toUpperCase();
   const raw = `SK${ts}${rnd}`.replace(/[^A-Z0-9]/g, '');
   return raw.substring(0, 17).padEnd(17, '0');
+};
+
+const PLACEHOLDER_VEHICLE_IMAGE = "/placeholder.svg";
+
+/** Evita http en sitios https (iOS puede bloquear mixed content) y descarta URLs vacías. */
+const normalizeVehicleImageUrl = (raw: string | null | undefined): string | null => {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "https://localhost";
+    const u = new URL(s, base);
+    if (u.protocol === "http:") u.protocol = "https:";
+    return u.toString();
+  } catch {
+    return s || null;
+  }
+};
+
+const firstVehicleImageUrl = (images: unknown): string => {
+  const list = images as string[] | null | undefined;
+  if (!Array.isArray(list)) return PLACEHOLDER_VEHICLE_IMAGE;
+  for (const item of list) {
+    const n = normalizeVehicleImageUrl(typeof item === "string" ? item : null);
+    if (n) return n;
+  }
+  return PLACEHOLDER_VEHICLE_IMAGE;
+};
+
+const vehicleImageUrlList = (images: unknown): string[] => {
+  const list = images as string[] | null | undefined;
+  if (!Array.isArray(list)) return [PLACEHOLDER_VEHICLE_IMAGE];
+  const out: string[] = [];
+  for (const item of list) {
+    const n = normalizeVehicleImageUrl(typeof item === "string" ? item : null);
+    if (n) out.push(n);
+  }
+  return out.length ? out : [PLACEHOLDER_VEHICLE_IMAGE];
 };
 
 const allowedImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -293,7 +339,9 @@ export default function Inventory() {
     year: 0,
     color: "",
     mileage: 0,
-    category: "nuevo" as "nuevo" | "usado" | "consignado",
+    owner_name: "",
+    owner_phone: "",
+    consignment_type: "fisica" as ConsignmentType,
     price: 0,
     cost: 0,
     minDownPayment: 0,
@@ -373,7 +421,8 @@ export default function Inventory() {
         (vehicle.vin || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus = selectedStatus === "all" || vehicle.status === selectedStatus;
-      const matchesType = selectedType === "all" || vehicle.category === selectedType;
+      const matchesType =
+        selectedType === "all" || getVehicleConsignmentType(vehicle) === selectedType;
       const matchesMake = selectedMake === "all" || vehicle.make === selectedMake;
       return matchesSearch && matchesStatus && matchesType && matchesMake;
     });
@@ -511,7 +560,9 @@ export default function Inventory() {
       margin,
       minDownPayment,
       engine,
-      ownership: base.category === "consignado" ? "Consignado" : "Propio",
+      consignmentLabel: consignmentTypeLabels[getVehicleConsignmentType(base)],
+      ownerName: (base.owner_name || "").trim() || "—",
+      ownerPhone: (base.owner_phone || "").trim() || "—",
       location: base.location || "—",
       drivetrain: "—",
       trunkCapacityLiters: "—",
@@ -557,7 +608,9 @@ export default function Inventory() {
         year: vehicleToEdit.year || new Date().getFullYear(),
         color: vehicleToEdit.color || "",
         mileage: vehicleToEdit.mileage || 0,
-        category: vehicleToEdit.category || "nuevo",
+        owner_name: vehicleToEdit.owner_name || "",
+        owner_phone: vehicleToEdit.owner_phone || "",
+        consignment_type: getVehicleConsignmentType(vehicleToEdit),
         price: Number(vehicleToEdit.price || 0),
         cost: Number(vehicleToEdit.cost || 0),
         minDownPayment: Number(features.min_down_payment || 0),
@@ -623,7 +676,10 @@ export default function Inventory() {
         fuel_type: newVehicle.fuel_type,
         transmission: newVehicle.transmission,
         engine_size: newVehicle.engine_size?.trim() || null,
-        category: newVehicle.category,
+        category: "consignado" as const,
+        owner_name: newVehicle.owner_name?.trim() || null,
+        owner_phone: newVehicle.owner_phone?.trim() || null,
+        consignment_type: newVehicle.consignment_type,
         price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
@@ -689,7 +745,9 @@ export default function Inventory() {
         year: 0,
         color: "",
         mileage: 0,
-        category: "nuevo",
+        owner_name: "",
+        owner_phone: "",
+        consignment_type: "fisica",
         price: 0,
         cost: 0,
         minDownPayment: 0,
@@ -773,7 +831,10 @@ export default function Inventory() {
         fuel_type: newVehicle.fuel_type,
         transmission: newVehicle.transmission,
         engine_size: newVehicle.engine_size?.trim() || null,
-        category: newVehicle.category,
+        category: "consignado" as const,
+        owner_name: newVehicle.owner_name?.trim() || null,
+        owner_phone: newVehicle.owner_phone?.trim() || null,
+        consignment_type: newVehicle.consignment_type,
         price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
@@ -834,7 +895,9 @@ export default function Inventory() {
         year: 0,
         color: "",
         mileage: 0,
-        category: "nuevo",
+        owner_name: "",
+        owner_phone: "",
+        consignment_type: "fisica",
         price: 0,
         cost: 0,
         minDownPayment: 0,
@@ -977,7 +1040,9 @@ export default function Inventory() {
         Modelo: vehicle.model || "",
         Año: vehicle.year || "",
         Estado: statusLabels[vehicle.status] || vehicle.status || "",
-        Tipo: typeLabels[vehicle.category] || vehicle.category || "",
+        Consignación: consignmentTypeLabels[getVehicleConsignmentType(vehicle)],
+        "Dueño": vehicle.owner_name || "",
+        Teléfono: vehicle.owner_phone || "",
         Precio: Number(vehicle.price || 0),
       }));
     }
@@ -989,7 +1054,9 @@ export default function Inventory() {
       Año: vehicle.year || "",
       Color: vehicle.color || "",
       Kilometraje: vehicle.mileage ?? "",
-      Tipo: typeLabels[vehicle.category] || vehicle.category || "",
+      Consignación: consignmentTypeLabels[getVehicleConsignmentType(vehicle)],
+      "Dueño": vehicle.owner_name || "",
+      Teléfono: vehicle.owner_phone || "",
       Estado: statusLabels[vehicle.status] || vehicle.status || "",
       Precio: Number(vehicle.price || 0),
       Costo: Number(vehicle.cost || 0),
@@ -1104,7 +1171,7 @@ export default function Inventory() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Consignaciones</h1>
           <p className="text-muted-foreground">
-            Gestiona el stock de vehículos (propios y consignados) en un solo lugar
+            Gestiona consignaciones físicas y digitales en un solo lugar
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1125,7 +1192,9 @@ export default function Inventory() {
                 year: 0,
                 color: "",
                 mileage: 0,
-                category: "nuevo",
+                owner_name: "",
+                owner_phone: "",
+                consignment_type: "fisica",
                 price: 0,
                 cost: 0,
                 minDownPayment: 0,
@@ -1173,11 +1242,11 @@ export default function Inventory() {
 
         <Select value={selectedType} onValueChange={setSelectedType}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filtrar por tipo" />
+            <SelectValue placeholder="Consignación" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos los tipos</SelectItem>
-            {Object.entries(typeLabels).map(([key, label]) => (
+            <SelectItem value="all">Todas</SelectItem>
+            {(Object.entries(consignmentTypeLabels) as [ConsignmentType, string][]).map(([key, label]) => (
               <SelectItem key={key} value={key}>{label}</SelectItem>
             ))}
           </SelectContent>
@@ -1271,7 +1340,7 @@ export default function Inventory() {
                 <TableHead>Precio</TableHead>
                 <TableHead>Margen</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Tipo</TableHead>
+                <TableHead>Consignación</TableHead>
                 <TableHead className="w-[140px]">Portales</TableHead>
                 <TableHead className="w-[100px]">Acciones</TableHead>
               </TableRow>
@@ -1304,16 +1373,18 @@ export default function Inventory() {
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img
-                        src={((vehicle.images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
-                        alt={`${vehicle.make} ${vehicle.model}`}
-                        className="w-12 h-12 rounded-lg object-cover"
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "/placeholder.svg";
-                        }}
-                      />
+                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+                        <img
+                          src={firstVehicleImageUrl(vehicle.images)}
+                          alt={`${vehicle.make} ${vehicle.model}`}
+                          className="h-full w-full object-cover"
+                          loading="eager"
+                          decoding="sync"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
+                          }}
+                        />
+                      </div>
                       <div>
                         <div className="font-medium">
                           {vehicle.make} {vehicle.model}
@@ -1394,7 +1465,7 @@ export default function Inventory() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {typeLabels[vehicle.category]}
+                      {consignmentTypeLabels[getVehicleConsignmentType(vehicle)]}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -1712,42 +1783,53 @@ export default function Inventory() {
               <div className="space-y-3">
                 <div className="rounded-xl overflow-hidden border bg-muted">
                   <img
-                    src={(((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null)?.[0]) || "/placeholder.svg"}
+                    src={firstVehicleImageUrl((selectedVehicleFull || selectedVehicle).images)}
                     alt="Foto vehículo"
                     className="w-full h-[280px] object-cover"
-                    loading="lazy"
-                    decoding="async"
+                    loading="eager"
+                    decoding="sync"
+                    fetchPriority="high"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
+                    }}
                   />
                 </div>
                 <div className="grid grid-cols-5 gap-2">
-                  {(((((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? []).length)
-                    ? ((selectedVehicleFull || selectedVehicle).images as unknown as string[])
-                    : ["/placeholder.svg"])
-                    .slice(0, 5)
-                    .map((src, idx) => (
+                  {(() => {
+                    const raw = ((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? [];
+                    const base = raw.length ? raw : [PLACEHOLDER_VEHICLE_IMAGE];
+                    return base.slice(0, 5).map((src, idx) => (
                       <button
                         key={`${src}-${idx}`}
                         type="button"
-                        className="rounded-lg overflow-hidden border hover:opacity-90"
+                        className="rounded-lg overflow-hidden border bg-muted hover:opacity-90"
                         onClick={() => {
-                          // Cambiar imagen principal moviendo la imagen seleccionada a la primera posición
-                          const base = (((((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? []).length)
-                            ? ((selectedVehicleFull || selectedVehicle).images as unknown as string[])
-                            : ["/placeholder.svg"]);
-                          const next = [...base];
+                          const full = ((selectedVehicleFull || selectedVehicle).images as unknown as string[] | null) ?? [];
+                          const list = full.length ? [...full] : [PLACEHOLDER_VEHICLE_IMAGE];
+                          const next = [...list];
                           const picked = next[idx];
                           next.splice(idx, 1);
                           next.unshift(picked);
-                          const baseVeh = (selectedVehicleFull || selectedVehicle);
+                          const baseVeh = selectedVehicleFull || selectedVehicle;
                           setSelectedVehicle({ ...selectedVehicle, images: next as any });
                           if (selectedVehicleFull && baseVeh?.id === selectedVehicleFull.id) {
                             setSelectedVehicleFull({ ...selectedVehicleFull, images: next as any });
                           }
                         }}
                       >
-                        <img src={src} alt="thumb" className="w-full h-14 object-cover" loading="lazy" decoding="async" />
+                        <img
+                          src={normalizeVehicleImageUrl(src) || PLACEHOLDER_VEHICLE_IMAGE}
+                          alt="thumb"
+                          className="h-14 w-full object-cover"
+                          loading="eager"
+                          decoding="sync"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
+                          }}
+                        />
                       </button>
-                    ))}
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -1764,8 +1846,16 @@ export default function Inventory() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Propio o Consignado</div>
-                    <div className="font-semibold">{selectedVehicleComputed.ownership}</div>
+                    <div className="text-xs text-muted-foreground">Consignación</div>
+                    <div className="font-semibold">{selectedVehicleComputed.consignmentLabel}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Dueño</div>
+                    <div className="font-semibold">{selectedVehicleComputed.ownerName}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground">Teléfono dueño</div>
+                    <div className="font-semibold">{selectedVehicleComputed.ownerPhone}</div>
                   </div>
                   <div className="rounded-xl border p-3">
                     <div className="text-xs text-muted-foreground">Valor por vender</div>
@@ -1871,7 +1961,9 @@ export default function Inventory() {
               year: 0,
               color: "",
               mileage: 0,
-              category: "nuevo",
+              owner_name: "",
+              owner_phone: "",
+              consignment_type: "fisica",
               price: 0,
               cost: 0,
               minDownPayment: 0,
@@ -1907,9 +1999,9 @@ export default function Inventory() {
                         <img
                           src={imageUrl}
                           alt={`Vehículo ${index + 1}`}
-                          className="w-24 h-24 object-cover rounded-lg border"
-                          loading="lazy"
-                          decoding="async"
+                          className="w-24 h-24 object-cover rounded-lg border bg-muted"
+                          loading="eager"
+                          decoding="sync"
                           onLoad={() => URL.revokeObjectURL(imageUrl)}
                         />
                         <button
@@ -2014,22 +2106,40 @@ export default function Inventory() {
               />
             </div>
 
-            {/* Propio o Consignado */}
+            {/* Dueño y consignación */}
             <div>
-              <Label htmlFor="category">Propio o Consignado</Label>
+              <Label htmlFor="owner_name">Nombre del dueño</Label>
+              <Input
+                id="owner_name"
+                value={newVehicle.owner_name}
+                onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
+                placeholder="Ej: Juan Pérez"
+              />
+            </div>
+            <div>
+              <Label htmlFor="owner_phone">Teléfono del dueño</Label>
+              <Input
+                id="owner_phone"
+                type="tel"
+                value={newVehicle.owner_phone}
+                onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
+                placeholder="Ej: +56 9 1234 5678"
+              />
+            </div>
+            <div>
+              <Label htmlFor="consignment_type">Consignación</Label>
               <Select
-                value={newVehicle.category}
-                onValueChange={(value: "nuevo" | "usado" | "consignado") =>
-                  setNewVehicle({ ...newVehicle, category: value })
+                value={newVehicle.consignment_type}
+                onValueChange={(value: ConsignmentType) =>
+                  setNewVehicle({ ...newVehicle, consignment_type: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="consignment_type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="nuevo">Nuevo (Propio)</SelectItem>
-                  <SelectItem value="usado">Usado (Propio)</SelectItem>
-                  <SelectItem value="consignado">Consignado</SelectItem>
+                  <SelectItem value="fisica">Física</SelectItem>
+                  <SelectItem value="digital">Digital</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2215,7 +2325,9 @@ export default function Inventory() {
                   year: 0,
                   color: "",
                   mileage: 0,
-                  category: "nuevo",
+                  owner_name: "",
+                  owner_phone: "",
+                  consignment_type: "fisica",
                   price: 0,
                   cost: 0,
                   minDownPayment: 0,
@@ -2225,6 +2337,7 @@ export default function Inventory() {
                   location: "",
                   drivetrain: "",
                   images: [],
+                  status: "disponible",
                 });
               }}
               disabled={isSaving}
@@ -2233,7 +2346,7 @@ export default function Inventory() {
             </Button>
             <Button
               onClick={handleCreateVehicle}
-              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              disabled={isSaving}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               {isSaving ? "Guardando..." : "Guardar Vehículo"}
@@ -2255,7 +2368,9 @@ export default function Inventory() {
               year: 0,
               color: "",
               mileage: 0,
-              category: "nuevo",
+              owner_name: "",
+              owner_phone: "",
+              consignment_type: "fisica",
               price: 0,
               cost: 0,
               minDownPayment: 0,
@@ -2290,11 +2405,14 @@ export default function Inventory() {
                     {((vehicleToEdit.images as unknown as string[]) || []).map((img, index) => (
                       <div key={index} className="relative">
                         <img
-                          src={img}
+                          src={normalizeVehicleImageUrl(img) || PLACEHOLDER_VEHICLE_IMAGE}
                           alt={`Vehículo ${index + 1}`}
-                          className="w-24 h-24 object-cover rounded-lg border"
-                          loading="lazy"
-                          decoding="async"
+                          className="w-24 h-24 object-cover rounded-lg border bg-muted"
+                          loading="eager"
+                          decoding="sync"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
+                          }}
                         />
                       </div>
                     ))}
@@ -2311,9 +2429,9 @@ export default function Inventory() {
                           <img
                             src={imageUrl}
                             alt={`Nueva ${index + 1}`}
-                            className="w-24 h-24 object-cover rounded-lg border"
-                            loading="lazy"
-                            decoding="async"
+                            className="w-24 h-24 object-cover rounded-lg border bg-muted"
+                            loading="eager"
+                            decoding="sync"
                             onLoad={() => URL.revokeObjectURL(imageUrl)}
                           />
                           <button
@@ -2448,22 +2566,40 @@ export default function Inventory() {
               />
             </div>
 
-            {/* Propio o Consignado */}
+            {/* Dueño y consignación */}
             <div>
-              <Label htmlFor="edit-category">Propio o Consignado</Label>
+              <Label htmlFor="edit-owner_name">Nombre del dueño</Label>
+              <Input
+                id="edit-owner_name"
+                value={newVehicle.owner_name}
+                onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
+                placeholder="Ej: Juan Pérez"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-owner_phone">Teléfono del dueño</Label>
+              <Input
+                id="edit-owner_phone"
+                type="tel"
+                value={newVehicle.owner_phone}
+                onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
+                placeholder="Ej: +56 9 1234 5678"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-consignment_type">Consignación</Label>
               <Select
-                value={newVehicle.category}
-                onValueChange={(value: "nuevo" | "usado" | "consignado") =>
-                  setNewVehicle({ ...newVehicle, category: value })
+                value={newVehicle.consignment_type}
+                onValueChange={(value: ConsignmentType) =>
+                  setNewVehicle({ ...newVehicle, consignment_type: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="edit-consignment_type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="nuevo">Nuevo (Propio)</SelectItem>
-                  <SelectItem value="usado">Usado (Propio)</SelectItem>
-                  <SelectItem value="consignado">Consignado</SelectItem>
+                  <SelectItem value="fisica">Física</SelectItem>
+                  <SelectItem value="digital">Digital</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2649,7 +2785,9 @@ export default function Inventory() {
                   year: 0,
                   color: "",
                   mileage: 0,
-                  category: "nuevo",
+                  owner_name: "",
+                  owner_phone: "",
+                  consignment_type: "fisica",
                   price: 0,
                   cost: 0,
                   minDownPayment: 0,
@@ -2659,6 +2797,7 @@ export default function Inventory() {
                   location: "",
                   drivetrain: "",
                   images: [],
+                  status: "disponible",
                 });
               }}
               disabled={isSaving}
@@ -2667,7 +2806,7 @@ export default function Inventory() {
             </Button>
             <Button
               onClick={handleUpdateVehicle}
-              disabled={isSaving || !newVehicle.make || !newVehicle.model || !newVehicle.color || !newVehicle.year || newVehicle.year === 0}
+              disabled={isSaving}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               {isSaving ? "Guardando..." : "Guardar Cambios"}
