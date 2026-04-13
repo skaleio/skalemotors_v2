@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Car, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
 import { OptimizedStarsBackground } from '@/components/OptimizedStarsBackground'
 
 export default function Register() {
@@ -18,32 +16,16 @@ export default function Register() {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'vendedor'
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [branches, setBranches] = useState<any[]>([])
   const [submitCooldown, setSubmitCooldown] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { signUp } = useAuth()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    const fetchBranches = async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name')
-        .eq('is_active', true)
-      
-      if (!error && data) {
-        setBranches(data)
-      }
-    }
-    fetchBranches()
-  }, [])
 
   useEffect(() => {
     return () => {
@@ -238,22 +220,6 @@ export default function Register() {
                     className="pl-10"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role">Rol</Label>
-                <Select value={formData.role} onValueChange={(value) => handleInputChange('role', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tu rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vendedor">Vendedor</SelectItem>
-                    <SelectItem value="gerente">Gerente</SelectItem>
-                    <SelectItem value="financiero">Financiero</SelectItem>
-                    <SelectItem value="servicio">Servicio</SelectItem>
-                    <SelectItem value="inventario">Inventario</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">

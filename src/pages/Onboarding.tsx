@@ -297,7 +297,6 @@ export default function Onboarding() {
 
   const handleCompleteOnboarding = async () => {
     if (!user) {
-      console.error("❌ No hay usuario autenticado");
       toast({
         title: "Error de autenticación",
         description: "No hay usuario autenticado. Por favor, inicia sesión nuevamente.",
@@ -309,7 +308,6 @@ export default function Onboarding() {
     setIsLoading(true);
     
     try {
-      // Guardar nombre de empresa y datos de sucursal via RPC
       const companyName = businessInfo.name?.trim() || user.full_name + ' Automotora';
       const { error: rpcError } = await supabase.rpc('complete_tenant_onboarding', {
         p_company_name:   companyName,
@@ -320,12 +318,36 @@ export default function Onboarding() {
       });
 
       if (rpcError) {
-        console.error("❌ Error en RPC complete_tenant_onboarding:", rpcError);
-        // Si el RPC falla, igualmente completamos el onboarding localmente
         await completeOnboarding();
       } else {
-        // El RPC ya marcó onboarding_completed = true; sincronizar estado local
         await completeOnboarding();
+      }
+
+      // Persistir integraciones seleccionadas como feature flags del tenant
+      if (selectedIntegrations.length > 0 && user.tenant_id) {
+        const flagRows = selectedIntegrations.map((key) => ({
+          tenant_id: user.tenant_id,
+          flag_key: `integration_${key}`,
+          enabled: true,
+          payload: {},
+        }));
+        await supabase.from("tenant_feature_flags").upsert(flagRows, {
+          onConflict: "tenant_id,flag_key",
+        });
+      }
+
+      // Enviar invitaciones de equipo pendientes
+      const validMembers = teamMembers.filter((m) => m.email.trim() && m.name.trim());
+      for (const member of validMembers) {
+        try {
+          await supabase.rpc("invite_team_member", {
+            p_email: member.email.trim(),
+            p_full_name: member.name.trim(),
+            p_role: member.role,
+          });
+        } catch {
+          // No bloquear el onboarding si una invitacion falla
+        }
       }
 
       toast({
@@ -337,7 +359,6 @@ export default function Onboarding() {
       await new Promise(resolve => setTimeout(resolve, 400));
       navigate("/app");
     } catch (error) {
-      console.error("❌ Error completando onboarding:", error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       toast({
         title: "Error al completar configuración",

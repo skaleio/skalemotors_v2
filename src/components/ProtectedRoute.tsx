@@ -1,7 +1,7 @@
 import DashboardLoader from '@/components/DashboardLoader'
 import { useAuth } from '@/contexts/AuthContext'
 import { type AppPermission, hasPermission } from '@/lib/rbac'
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 
 interface ProtectedRouteProps {
@@ -11,8 +11,14 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredRole, requiredPermission }: ProtectedRouteProps) {
-  const { user, loading, isSigningOut, needsOnboarding } = useAuth()
+  const { user, loading, isSigningOut, needsOnboarding, signOut } = useAuth()
   const location = useLocation()
+
+  useEffect(() => {
+    if (user && !user.is_active) {
+      void signOut()
+    }
+  }, [user, signOut])
 
   if (loading) {
     return (
@@ -23,11 +29,10 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
     )
   }
 
-  if (!user) {
+  if (!user || !user.is_active) {
     return <Navigate to="/" state={{ from: location }} replace />
   }
 
-  // Redirigir al onboarding si el usuario no lo ha completado
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }

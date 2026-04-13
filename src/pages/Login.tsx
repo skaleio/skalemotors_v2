@@ -40,21 +40,27 @@ export default function Login() {
     }, 1000)
   }
 
-  const getGenericErrorMessage = (attempts: number): string => {
+  const [loginAttempted, setLoginAttempted] = useState(false)
+
+  const getErrorMessage = (attempts: number, err?: unknown): string => {
+    if (err instanceof Error && err.message === 'ACCOUNT_DISABLED') {
+      return 'Tu cuenta ha sido desactivada. Contacta al administrador.'
+    }
     if (attempts >= 5) return 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.'
     return 'Credenciales incorrectas. Verifica tu correo y contraseña.'
   }
   
-  // Si el usuario ya está autenticado, redirigir
+  // Solo redirigir si el usuario tiene sesion valida Y no estamos en medio de un intento de login
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && !authLoading && !localLoading && !loginAttempted) {
       navigate('/app', { replace: true })
     }
-  }, [user, authLoading, navigate])
+  }, [user, authLoading, localLoading, loginAttempted, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loginCooldown > 0) return
+    setLoginAttempted(true)
     setLocalLoading(true)
     setError('')
 
@@ -62,27 +68,33 @@ export default function Login() {
       const { error } = await signIn(email, password)
       
       if (error) {
-        const newAttempts = failedAttempts + 1
+        const isDisabled = error instanceof Error && error.message === 'ACCOUNT_DISABLED'
+        const newAttempts = isDisabled ? failedAttempts : failedAttempts + 1
         setFailedAttempts(newAttempts)
-        const cooldownSeconds = newAttempts >= 5 ? 60 : newAttempts >= 3 ? 15 : 0
-        if (cooldownSeconds > 0) startCooldown(cooldownSeconds)
-        setError(getGenericErrorMessage(newAttempts))
+        if (!isDisabled) {
+          const cooldownSeconds = newAttempts >= 5 ? 60 : newAttempts >= 3 ? 15 : 0
+          if (cooldownSeconds > 0) startCooldown(cooldownSeconds)
+        }
+        setError(getErrorMessage(newAttempts, error))
         setLocalLoading(false)
+        setLoginAttempted(false)
       } else {
         setFailedAttempts(0)
+        // Login exitoso: navegar explicitamente
+        navigate('/app', { replace: true })
       }
     } catch {
       setError('Error inesperado. Intenta nuevamente.')
       setLocalLoading(false)
+      setLoginAttempted(false)
     }
   }
   
-  // Resetear loading cuando el usuario esté disponible o authLoading cambie
   useEffect(() => {
-    if (user || !authLoading) {
+    if (!authLoading && !localLoading) {
       setLocalLoading(false)
     }
-  }, [user, authLoading])
+  }, [authLoading])
 
   return (
     <div className="min-h-screen relative">

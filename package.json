@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "create:user": "node scripts/create_user.mjs",
-    "provision:tenant": "node scripts/provision_tenant.mjs"
+    "provision:tenant": "node scripts/provision_tenant.mjs",
+    "lead-ingest:key": "node scripts/generate_lead_ingest_key.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -45,6 +46,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/react": "^10.45.0",
+    "@supabase/sentry-js-integration": "^0.3.0",
     "@supabase/supabase-js": "^2.57.4",
     "@tanstack/react-query": "^5.83.0",
     "cheerio": "^1.0.0",

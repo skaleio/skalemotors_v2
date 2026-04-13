@@ -1,4 +1,4 @@
-import { captureEdgeException } from "./sentryEdge.ts";
+import { captureEdgeException, flushSentryEdge } from "./sentryEdge.ts";
 
 export type ObservabilityContext = {
   tenant_id?: string | null;
@@ -7,7 +7,7 @@ export type ObservabilityContext = {
   module?: string;
 };
 
-export function captureEdgeError(error: unknown, context: ObservabilityContext) {
+export async function captureEdgeError(error: unknown, context: ObservabilityContext) {
   const err = error instanceof Error ? error : new Error(String(error));
   const line = JSON.stringify({
     level: "error",
@@ -24,4 +24,5 @@ export function captureEdgeError(error: unknown, context: ObservabilityContext) 
     role: context.role ?? undefined,
     module: context.module ?? undefined,
   });
+  await flushSentryEdge(2000);
 }

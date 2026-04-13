@@ -1,4 +1,6 @@
 import * as Sentry from "@sentry/react";
+import { supabaseIntegration } from "@supabase/sentry-js-integration";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 interface UserScope {
   id?: string;
@@ -7,16 +9,34 @@ interface UserScope {
   tenantId?: string;
 }
 
+function supabaseRestUrlPrefix(): string {
+  const raw = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!raw) return "";
+  return `${raw.replace(/\/$/, "")}/rest`;
+}
+
 export function initObservability() {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
   if (!dsn) return;
+
+  const restPrefix = supabaseRestUrlPrefix();
 
   Sentry.init({
     dsn,
     environment: (import.meta.env.VITE_APP_ENV as string) || "development",
     enableLogs: true,
     integrations: [
-      Sentry.browserTracingIntegration(),
+      supabaseIntegration(SupabaseClient, Sentry, {
+        tracing: true,
+        breadcrumbs: true,
+        errors: true,
+      }),
+      Sentry.browserTracingIntegration({
+        shouldCreateSpanForRequest: (url) => {
+          if (!restPrefix) return true;
+          return !url.startsWith(restPrefix);
+        },
+      }),
       Sentry.replayIntegration({
         maskAllText: true,
         blockAllMedia: true,
@@ -31,6 +51,7 @@ export function initObservability() {
 }
 
 export function setObservabilityUserContext(user: UserScope) {
+  if (!import.meta.env.VITE_SENTRY_DSN) return;
   Sentry.setUser({ id: user.id, email: user.email });
   Sentry.setTags({
     role: user.role ?? "unknown",
@@ -39,5 +60,6 @@ export function setObservabilityUserContext(user: UserScope) {
 }
 
 export function captureAppError(error: unknown, context?: Record<string, unknown>) {
+  if (!import.meta.env.VITE_SENTRY_DSN) return;
   Sentry.captureException(error, { extra: context });
 }

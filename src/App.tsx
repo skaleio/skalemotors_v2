@@ -42,6 +42,7 @@ import Landing from "./pages/Landing";
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 const queryClient = new QueryClient({
@@ -76,7 +77,12 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/onboarding" element={
+                <ProtectedRoute>
+                  <Onboarding />
+                </ProtectedRoute>
+              } />
 
               {/* Rutas protegidas: rutas más específicas primero para que /app/executive no sea capturada por /app */}
               <Route path="/app/executive" element={

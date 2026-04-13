@@ -209,7 +209,7 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(200, { ok: true, text });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
-    captureEdgeError(e, {
+    await captureEdgeError(e, {
       tenant_id: null,
       user_id: null,
       role: null,
