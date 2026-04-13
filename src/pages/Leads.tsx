@@ -7,6 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     Table,
     TableBody,
     TableCell,
@@ -24,7 +32,7 @@ import { leadService } from "@/lib/services/leads";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
+import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -167,29 +175,6 @@ const downloadBlob = (blob: Blob, filename: string) => {
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
-};
-
-/** Separador `;` + UTF-8 BOM: Excel en español abre columnas bien en Windows. */
-const CSV_SEP = ";";
-
-const escapeCsvCell = (value: string, sep: string): string => {
-  if (value.includes(sep) || value.includes('"') || /[\r\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-};
-
-const rowsToCsvBlob = (rows: Record<string, string>[]): Blob | null => {
-  if (rows.length === 0) return null;
-  const headers = Object.keys(rows[0]);
-  const lines = [
-    headers.map((h) => escapeCsvCell(h, CSV_SEP)).join(CSV_SEP),
-    ...rows.map((row) =>
-      headers.map((h) => escapeCsvCell(row[h] ?? "", CSV_SEP)).join(CSV_SEP),
-    ),
-  ];
-  const csv = `\uFEFF${lines.join("\r\n")}`;
-  return new Blob([csv], { type: "text/csv;charset=utf-8" });
 };
 
 type ConsignacionItem = {
@@ -886,17 +871,30 @@ export default function Leads() {
   };
 
   const handleExportLeads = useCallback(
-    (format: "xlsx" | "csv") => {
-      if (filteredLeads.length === 0) {
+    (pipelineStage: LeadPipelineStage) => {
+      const query = deferredSearchQuery.trim().toLowerCase();
+      const toExport = leads.filter((lead) => {
+        if (isClosedLeadStatus(lead.status)) return false;
+        if (getLeadPipelineStage(lead.status) !== pipelineStage) return false;
+        if (!query) return true;
+        return (
+          (lead.full_name || "").toLowerCase().includes(query)
+          || (lead.email || "").toLowerCase().includes(query)
+          || (lead.phone || "").toLowerCase().includes(query)
+          || (lead.rut || "").toLowerCase().includes(query)
+        );
+      });
+
+      if (toExport.length === 0) {
         toast({
           title: "Nada que exportar",
-          description: "No hay leads en la vista actual. Quita filtros o la búsqueda e inténtalo de nuevo.",
+          description: `No hay leads en «${PIPELINE_STATUS_LABELS[pipelineStage]}» con la búsqueda actual.`,
           variant: "destructive",
         });
         return;
       }
 
-      const rows: Record<string, string>[] = filteredLeads.map((lead) => {
+      const rows: Record<string, string>[] = toExport.map((lead) => {
         const tags = normalizeTags(lead.tags);
         const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
         const tipoOrigen = isConsignacion ? "Consignación" : "Lead";
@@ -928,29 +926,23 @@ export default function Leads() {
       });
 
       const dateStr = new Date().toISOString().slice(0, 10);
-      const ext = format === "csv" ? "csv" : "xlsx";
-
-      if (format === "csv") {
-        const blob = rowsToCsvBlob(rows);
-        if (!blob) return;
-        downloadBlob(blob, `leads-export-${dateStr}.${ext}`);
-      } else {
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
-        const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: false });
-        const blob = new Blob([wbout], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-        downloadBlob(blob, `leads-export-${dateStr}.${ext}`);
-      }
+      const stageSlug =
+        pipelineStage === "para_cierre" ? "para-cierre" : pipelineStage;
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
+      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: false });
+      const blob = new Blob([wbout], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      downloadBlob(blob, `leads-${stageSlug}-${dateStr}.xlsx`);
 
       toast({
-        title: format === "csv" ? "CSV descargado" : "Excel descargado",
-        description: `Archivo .${ext} con ${rows.length} fila${rows.length === 1 ? "" : "s"}.`,
+        title: "Excel descargado",
+        description: `${PIPELINE_STATUS_LABELS[pipelineStage]}: ${rows.length} fila${rows.length === 1 ? "" : "s"}.`,
       });
     },
-    [filteredLeads, consignacionByLeadId],
+    [leads, deferredSearchQuery, consignacionByLeadId],
   );
 
   const handleCreateLead = async () => {
@@ -1223,31 +1215,32 @@ export default function Leads() {
           <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? "Importando..." : "Importar leads"}
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleExportLeads("xlsx")}
-            disabled={loading || isImporting || filteredLeads.length === 0}
-            title={
-              filteredLeads.length === 0
-                ? "No hay leads en la vista actual para exportar"
-                : "Descargar .xlsx (leads visibles con filtros y búsqueda)"
-            }
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Excel (.xlsx)
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleExportLeads("csv")}
-            disabled={loading || isImporting || filteredLeads.length === 0}
-            title={
-              filteredLeads.length === 0
-                ? "No hay leads en la vista actual para exportar"
-                : "Descargar .csv con separador ; y UTF-8 (abre bien en Excel)"
-            }
-          >
-            CSV (.csv)
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={loading || isImporting}
+                title="Exportar a Excel por etapa del pipeline (respeta la búsqueda)"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Exportar
+                <ChevronDown className="h-4 w-4 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Exportar por estado</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => handleExportLeads("contactado")}>
+                {PIPELINE_STATUS_LABELS.contactado}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportLeads("negociando")}>
+                {PIPELINE_STATUS_LABELS.negociando}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportLeads("para_cierre")}>
+                {PIPELINE_STATUS_LABELS.para_cierre}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo Lead
