@@ -731,10 +731,9 @@ export default function Leads() {
 
   const vehicleLabel = formState.vehicle.trim();
 
-  const canSubmit = Boolean(
-    formState.full_name.trim()
-      && formState.phone.trim()
-      && formState.status
+  const normalizedCreatePhone = useMemo(
+    () => normalizePhoneWithChilePrefix(formState.phone),
+    [formState.phone],
   );
 
   const resetForm = () => {
@@ -839,6 +838,7 @@ export default function Leads() {
             status: status as any,
             source: "telefono",
             priority: "media",
+            tenant_id: user?.tenant_id ?? null,
             branch_id: resolvedBranchId,
             rut: rut?.trim() || null,
             region: region || null,
@@ -946,7 +946,45 @@ export default function Leads() {
   );
 
   const handleCreateLead = async () => {
-    if (!user || !canSubmit) return;
+    if (!user) {
+      toast({
+        title: "Sesión no disponible",
+        description: "Inicia sesión de nuevo para crear leads.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const missing: string[] = [];
+    if (!formState.full_name.trim()) missing.push("nombre");
+    if (!formState.phone.trim()) missing.push("teléfono");
+    else if (!normalizedCreatePhone) {
+      toast({
+        title: "Teléfono no válido",
+        description: "Ingresa un número válido (ej: 9 1234 5678).",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!formState.status) missing.push("estado");
+    if (missing.length > 0) {
+      toast({
+        title: "Faltan datos obligatorios",
+        description: `Completa: ${missing.join(", ")}. Están al inicio del formulario (arriba de Vehículo).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user.tenant_id && !user.branch_id) {
+      toast({
+        title: "Falta sucursal o empresa",
+        description:
+          "Tu usuario no tiene sucursal ni tenant asignados. Configúralos en Ajustes / perfil o pide ayuda a un administrador.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsCreating(true);
 
     try {
@@ -957,10 +995,11 @@ export default function Leads() {
 
       const created = await leadService.create({
         full_name: toTitleCase(formState.full_name.trim()),
-        phone: normalizePhoneWithChilePrefix(formState.phone),
+        phone: normalizedCreatePhone,
         status: formState.status as any,
         source: formState.phone.trim() ? "telefono" : "otro",
         priority: "media",
+        tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id,
         rut: formState.rut.trim() ? formState.rut.trim() : null,
         region: formState.region.trim() ? formState.region.trim() : null,
@@ -1007,7 +1046,15 @@ export default function Leads() {
       setShowCreateDialog(false);
     } catch (error: any) {
       console.error("Error creando lead:", error);
-      alert(error?.message || "No se pudo crear el lead.");
+      const msg =
+        error?.message || error?.error_description || "No se pudo crear el lead.";
+      toast({
+        title: "Error al crear el lead",
+        description: msg.includes("row-level security") || msg.includes("RLS")
+          ? "Permisos denegados (RLS). Verifica sucursal/tenant en tu perfil o que la migración de políticas de leads esté aplicada."
+          : msg,
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -1520,13 +1567,19 @@ export default function Leads() {
               )}
             </div>
           </div>
-          <DialogFooter className="shrink-0">
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateLead} disabled={!canSubmit || isCreating}>
-              {isCreating ? "Guardando..." : "Crear lead"}
-            </Button>
+          <DialogFooter className="shrink-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <p className="text-xs text-muted-foreground order-last sm:order-first sm:mr-auto sm:text-left w-full sm:w-auto">
+              Obligatorios: <span className="font-medium text-foreground">nombre</span> y{" "}
+              <span className="font-medium text-foreground">teléfono</span> (campos al inicio del formulario).
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={() => void handleCreateLead()} disabled={isCreating}>
+                {isCreating ? "Guardando..." : "Crear lead"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

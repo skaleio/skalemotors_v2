@@ -122,6 +122,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      branch_sales_staff: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          full_name: string
+          role_label: string
+          base_salary_clp: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          full_name: string
+          role_label?: string
+          base_salary_clp?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          full_name?: string
+          role_label?: string
+          base_salary_clp?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       users: {
         Row: {
           id: string
@@ -705,6 +740,7 @@ export interface Database {
           status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
+          closed_by_staff_id: string | null
           branch_id: string | null
           tenant_id: string | null
           region: string | null
@@ -731,6 +767,7 @@ export interface Database {
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
+          closed_by_staff_id?: string | null
           branch_id?: string | null
           tenant_id?: string | null
           region?: string | null
@@ -757,6 +794,7 @@ export interface Database {
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
+          closed_by_staff_id?: string | null
           branch_id?: string | null
           tenant_id?: string | null
           region?: string | null

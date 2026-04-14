@@ -613,6 +613,7 @@ export default function Consignaciones() {
                   source: payloadBase.owner_phone ? "telefono" : "otro",
                   status: "nuevo",
                   priority: "media",
+                  tenant_id: user?.tenant_id ?? null,
                   branch_id: user?.branch_id ?? null,
                   tags: leadTagsFromConsignacion as any,
                 });

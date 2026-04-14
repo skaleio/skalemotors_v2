@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
 
 const AVATAR_BUCKET = 'avatars';
 const AVATAR_MAX_SIZE_MB = 2;
@@ -403,7 +404,7 @@ export default function Settings() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configuración</h1>
         <p className="text-muted-foreground mt-2">
-          Gestiona tu información personal y preferencias de cuenta
+          Gestiona tu perfil, sucursal y la API de ingesta de leads para n8n
         </p>
       </div>
 
@@ -856,6 +857,8 @@ export default function Settings() {
             </form>
           </CardContent>
         </Card>
+
+        <LeadIngestApiKeysSection showLinkToIntegrationsPage />
       </div>
     </div>
   );

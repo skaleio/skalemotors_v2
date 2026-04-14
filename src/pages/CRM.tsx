@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
 import { leadService } from "@/lib/services/leads";
+import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +26,22 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
+
+type CloseDealSellerOption = { key: string; label: string };
+
+function closeDealSellerKeyUser(userId: string) {
+  return `u:${userId}`;
+}
+
+function closeDealSellerKeyStaff(staffId: string) {
+  return `s:${staffId}`;
+}
+
+function parseCloseDealSellerKey(key: string): { kind: "user" | "staff"; id: string } | null {
+  if (key.startsWith("u:")) return { kind: "user", id: key.slice(2) };
+  if (key.startsWith("s:")) return { kind: "staff", id: key.slice(2) };
+  return null;
+}
 
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
@@ -66,7 +83,7 @@ const statusLabels: Record<string, string> = {
   contactado: "CONTACTADO",
   negociando: "NEGOCIANDO",
   para_cierre: "PARA CIERRE",
-  negocio_cerrado: "NEGOCIO CERRADO",
+  negocio_cerrado: "NEGOCIO CONCRETADO",
 };
 
 /**
@@ -406,14 +423,14 @@ export default function CRM() {
         statuses: ["negociando", "cotizando"],
       },
       { key: "para_cierre" as const, label: "PARA CIERRE", statuses: ["para_cierre"] },
-      { key: "negocio_cerrado" as const, label: "NEGOCIO CERRADO", statuses: ["vendido"] },
+      { key: "negocio_cerrado" as const, label: "NEGOCIO CONCRETADO", statuses: ["vendido"] },
     ],
     [],
   );
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
-    // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CERRADO".
+    // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
     const onlyLeads = leads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
@@ -448,11 +465,121 @@ export default function CRM() {
   const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [showCloseDealDialog, setShowCloseDealDialog] = useState(false);
+  const [closeDealLead, setCloseDealLead] = useState<Lead | null>(null);
+  const [closeDealVehicle, setCloseDealVehicle] = useState("");
+  const [closeDealSaleType, setCloseDealSaleType] = useState<"financiado" | "contado">("contado");
+  const [closeDealSellerKey, setCloseDealSellerKey] = useState("");
+  const [closeDealSellerOptions, setCloseDealSellerOptions] = useState<CloseDealSellerOption[]>([]);
+  const [loadingBranchSellers, setLoadingBranchSellers] = useState(false);
+  const [isSubmittingCloseDeal, setIsSubmittingCloseDeal] = useState(false);
+
+  const closeCloseDealDialog = useCallback(() => {
+    setShowCloseDealDialog(false);
+    setCloseDealLead(null);
+    setCloseDealVehicle("");
+    setCloseDealSaleType("contado");
+    setCloseDealSellerKey("");
+    setCloseDealSellerOptions([]);
+  }, []);
+
+  const openCloseDealForLead = useCallback(
+    (lead: Lead) => {
+      setCloseDealLead(lead);
+      setCloseDealVehicle(getTagValue(lead.tags, VEHICULO_TAG_PREFIX) || "");
+      const pt = (lead.payment_type || "").toLowerCase();
+      setCloseDealSaleType(pt.includes("financ") ? "financiado" : "contado");
+      const aid = lead.assigned_to;
+      if (aid) setCloseDealSellerKey(closeDealSellerKeyUser(aid));
+      else setCloseDealSellerKey("");
+      setShowCloseDealDialog(true);
+    },
+    [],
+  );
+
   useEffect(() => {
     return () => {
       if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showCloseDealDialog || !user) return;
+
+    let cancelled = false;
+    setLoadingBranchSellers(true);
+    const assignedId = closeDealLead?.assigned_to;
+
+    void (async () => {
+      const merged: CloseDealSellerOption[] = [];
+
+      if (user.branch_id) {
+        const { data, error } = await supabase
+          .from("users")
+          .select("id, full_name")
+          .eq("branch_id", user.branch_id)
+          .eq("is_active", true)
+          .order("full_name", { ascending: true });
+
+        if (cancelled) return;
+
+        if (error) {
+          console.error("CRM: vendedores sucursal", error);
+          if (assignedId && assignedId !== user.id) {
+            merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
+          }
+        } else {
+          const rows = data || [];
+          for (const r of rows) {
+            if (user.id && r.id === user.id) continue;
+            merged.push({ key: closeDealSellerKeyUser(r.id), label: r.full_name });
+          }
+          if (assignedId && assignedId !== user.id && !merged.some((r) => r.key === closeDealSellerKeyUser(assignedId))) {
+            merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
+          }
+        }
+      } else if (assignedId && assignedId !== user.id) {
+        merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
+      }
+
+      if (user.tenant_id) {
+        let staffQ = supabase
+          .from("branch_sales_staff")
+          .select("id, full_name")
+          .eq("tenant_id", user.tenant_id)
+          .eq("is_active", true);
+        if (user.branch_id) {
+          staffQ = staffQ.or(`branch_id.eq.${user.branch_id},branch_id.is.null`);
+        }
+        const { data: staffRows, error: staffErr } = await staffQ.order("full_name", { ascending: true });
+        if (cancelled) return;
+        if (!staffErr && staffRows?.length) {
+          for (const s of staffRows) {
+            merged.push({ key: closeDealSellerKeyStaff(s.id), label: s.full_name });
+          }
+        }
+      }
+
+      if (cancelled) return;
+      const withoutSelf = user.id
+        ? merged.filter((o) => o.key !== closeDealSellerKeyUser(user.id))
+        : merged;
+      setCloseDealSellerOptions(withoutSelf);
+      setLoadingBranchSellers(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showCloseDealDialog, user, closeDealLead?.assigned_to]);
+
+  useEffect(() => {
+    if (!showCloseDealDialog || loadingBranchSellers || closeDealSellerOptions.length === 0) return;
+    const valid = closeDealSellerOptions.some((o) => o.key === closeDealSellerKey);
+    if (!closeDealSellerKey || !valid) {
+      setCloseDealSellerKey(closeDealSellerOptions[0].key);
+    }
+  }, [showCloseDealDialog, loadingBranchSellers, closeDealSellerOptions, closeDealSellerKey]);
 
   const handleLeadDragStart = useCallback((e: DragEvent, leadId: string) => {
     const el = e.currentTarget as HTMLElement;
@@ -521,6 +648,12 @@ export default function CRM() {
         return;
       }
 
+      if (stageKey === "negocio_cerrado") {
+        openCloseDealForLead(lead);
+        setDraggingLeadId(null);
+        return;
+      }
+
       setMovingLeadId(leadId);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
@@ -553,8 +686,100 @@ export default function CRM() {
         setDraggingLeadId(null);
       }
     },
-    [filteredLeads, queryClient],
+    [filteredLeads, queryClient, openCloseDealForLead],
   );
+
+  const handleConfirmCloseDeal = useCallback(async () => {
+    if (!closeDealLead) return;
+    const vehicle = closeDealVehicle.trim();
+    if (!vehicle) {
+      toast({
+        title: "Falta el vehículo",
+        description: "Indica qué vehículo se vendió antes de cerrar el negocio.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const sellerParsed = parseCloseDealSellerKey(closeDealSellerKey);
+    if (!sellerParsed) {
+      toast({
+        title: "Falta el vendedor",
+        description: "Selecciona quién cerró la venta.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const paymentLabel = closeDealSaleType === "financiado" ? "Financiado" : "Contado";
+    const leadId = closeDealLead.id;
+    const nextTags = buildTagsWithVehicle(closeDealLead.tags, vehicle);
+
+    setIsSubmittingCloseDeal(true);
+    setMovingLeadId(leadId);
+    const assignedToAfter =
+      sellerParsed.kind === "user" ? sellerParsed.id : closeDealLead.assigned_to ?? null;
+    const closedByStaffAfter = sellerParsed.kind === "staff" ? sellerParsed.id : null;
+
+    queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+      if (!Array.isArray(current)) return current;
+      return current.map((l: Lead) =>
+        l.id === leadId
+          ? {
+              ...l,
+              status: "vendido",
+              payment_type: paymentLabel,
+              assigned_to: assignedToAfter,
+              closed_by_staff_id: closedByStaffAfter,
+              tags: nextTags,
+            }
+          : l,
+      );
+    });
+
+    try {
+      const updated = await leadService.update(leadId, {
+        status: "vendido",
+        payment_type: paymentLabel,
+        assigned_to: assignedToAfter,
+        closed_by_staff_id: closedByStaffAfter,
+        tags: nextTags,
+      });
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
+      });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
+      setLandedLeadId(leadId);
+      landHighlightTimerRef.current = setTimeout(() => {
+        setLandedLeadId(null);
+        landHighlightTimerRef.current = null;
+      }, 700);
+      closeCloseDealDialog();
+      toast({
+        title: "Negocio concretado",
+        description: "El lead pasó a vendido con los datos registrados.",
+      });
+    } catch (err) {
+      console.error(err);
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast({
+        title: "No se pudo cerrar el negocio",
+        description: err instanceof Error ? err.message : "Intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingCloseDeal(false);
+      setMovingLeadId(null);
+    }
+  }, [
+    closeCloseDealDialog,
+    closeDealLead,
+    closeDealSaleType,
+    closeDealSellerKey,
+    closeDealVehicle,
+    queryClient,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -577,7 +802,8 @@ export default function CRM() {
             Gestión de clientes y relaciones
           </p>
           <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-            Arrastra una tarjeta a otra columna para cambiar el estado del pipeline.
+            Arrastra una tarjeta a otra columna para cambiar el estado. Al mover a{" "}
+            <span className="font-medium">NEGOCIO CONCRETADO</span> se pedirán datos de la venta antes de guardar.
           </p>
         </div>
         <div className="relative w-full sm:w-72 shrink-0">
@@ -678,6 +904,94 @@ export default function CRM() {
           );
         })}
       </div>
+
+      <Dialog
+        open={showCloseDealDialog}
+        onOpenChange={(open) => {
+          if (!open && !isSubmittingCloseDeal) closeCloseDealDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Cerrar negocio</DialogTitle>
+            <DialogDescription>
+              {closeDealLead
+                ? `Completa la venta para ${closeDealLead.full_name || "este lead"} antes de moverlo a NEGOCIO CONCRETADO.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {closeDealLead && (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="close-deal-vehicle">Vehículo vendido</Label>
+                <Input
+                  id="close-deal-vehicle"
+                  value={closeDealVehicle}
+                  onChange={(e) => setCloseDealVehicle(e.target.value)}
+                  placeholder="Ej: Toyota Corolla 2020"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Forma de venta</Label>
+                <Select value={closeDealSaleType} onValueChange={(v) => setCloseDealSaleType(v as "financiado" | "contado")}>
+                  <SelectTrigger id="close-deal-sale-type">
+                    <SelectValue placeholder="Selecciona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contado">Contado</SelectItem>
+                    <SelectItem value="financiado">Financiado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Vendedor</Label>
+                <Select
+                  value={closeDealSellerKey || undefined}
+                  onValueChange={setCloseDealSellerKey}
+                  disabled={loadingBranchSellers || closeDealSellerOptions.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        loadingBranchSellers
+                          ? "Cargando vendedores..."
+                          : closeDealSellerOptions.length === 0
+                            ? "Sin vendedores disponibles"
+                            : "Selecciona vendedor"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {closeDealSellerOptions.map((s) => (
+                      <SelectItem key={s.key} value={s.key}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={closeCloseDealDialog} disabled={isSubmittingCloseDeal}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmCloseDeal()}
+              disabled={
+                isSubmittingCloseDeal ||
+                !closeDealVehicle.trim() ||
+                !closeDealSellerKey ||
+                loadingBranchSellers
+              }
+            >
+              {isSubmittingCloseDeal ? "Guardando..." : "Confirmar y cerrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showEditDialog} onOpenChange={(open) => (open ? null : closeEditDialog())}>
         <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
