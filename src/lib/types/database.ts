@@ -1618,6 +1618,25 @@ export interface Database {
           total_commission: number
         }[]
       }
+      mint_lead_ingest_key: {
+        Args: {
+          p_branch_id: string
+          p_label?: string
+        }
+        Returns: Json
+      }
+      list_lead_ingest_keys: {
+        Args: {
+          p_branch_id: string
+        }
+        Returns: Json
+      }
+      revoke_lead_ingest_key: {
+        Args: {
+          p_key_id: string
+        }
+        Returns: Json
+      }
     }
   }
 }
