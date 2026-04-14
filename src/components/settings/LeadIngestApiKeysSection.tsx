@@ -122,6 +122,12 @@ export function LeadIngestApiKeysSection({
     enabled: !!effectiveBranchId,
   });
 
+  /** Solo activas; la RPC ya excluye revocadas tras migrar, esto cubre respuestas antiguas. */
+  const activeKeys = useMemo(
+    () => n8nKeys.filter((k) => !k.revoked_at),
+    [n8nKeys],
+  );
+
   const handleMintN8nKey = async () => {
     if (!effectiveBranchId) {
       toast.error("No hay sucursal asignada para crear la clave.");
@@ -142,7 +148,12 @@ export function LeadIngestApiKeysSection({
       queryClient.invalidateQueries({ queryKey: ["lead-ingest-keys", effectiveBranchId] });
     } catch (e) {
       const msg = (e as Error).message;
-      if (msg.includes("gen_random_bytes") || msg.includes("pgcrypto")) {
+      if (msg.includes("lead_ingest_keys") && msg.includes("does not exist")) {
+        toast.error(
+          "Falta la tabla lead_ingest_keys en Supabase. Ejecuta supabase db push o aplica la migración 20260413120000_lead_ingest_keys_table.sql / lead_ingest_keys_table_and_rpcs.",
+          { duration: 10000 },
+        );
+      } else if (msg.includes("gen_random_bytes") || msg.includes("pgcrypto")) {
         toast.error(
           "En Supabase falta la extensión pgcrypto o el search_path de la función. En Dashboard → Database → Extensions activa «pgcrypto», luego ejecuta supabase db push o pega scripts/sql/fix_lead_ingest_pgcrypto.sql en SQL Editor.",
           { duration: 12000 },
@@ -247,21 +258,14 @@ export function LeadIngestApiKeysSection({
                     <>
                       <DialogHeader>
                         <DialogTitle>Tu clave API</DialogTitle>
-                        <DialogDescription>
-                          Cópiala ahora: no se volverá a mostrar. En n8n úsala como cabecera{" "}
-                          <code className="text-xs rounded bg-muted px-1">x-api-key</code>.
-                        </DialogDescription>
                       </DialogHeader>
                       {n8nRevealedKey ? (
                         <div className="space-y-4 py-2">
                           <div
                             className="rounded-xl border-2 border-primary/25 bg-muted/60 p-4 shadow-inner"
                             role="region"
-                            aria-label="Secreto API"
+                            aria-label="Clave API"
                           >
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
-                              Secreto (un solo uso en pantalla)
-                            </p>
                             <code className="block font-mono text-xs sm:text-sm leading-relaxed break-all text-foreground select-all">
                               {n8nRevealedKey}
                             </code>
@@ -326,54 +330,42 @@ export function LeadIngestApiKeysSection({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando…
                 </div>
-              ) : n8nKeys.length === 0 ? (
+              ) : activeKeys.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
-                  Aún no hay claves. Pulsa <strong>Generar clave</strong> para crear la primera.
+                  Aún no hay claves activas. Pulsa <strong>Generar clave</strong> para crear una.
                 </p>
               ) : (
                 <ul className="divide-y">
-                  {n8nKeys.map((k) => {
-                    const active = !k.revoked_at;
-                    return (
-                      <li
-                        key={k.id}
-                        className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <div className="font-medium text-sm">{k.label || "—"}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            Creada: {new Date(k.created_at).toLocaleString("es-CL")}
-                            {k.last_used_at
-                              ? ` · último uso: ${new Date(k.last_used_at).toLocaleString("es-CL")}`
-                              : ""}
-                            {k.revoked_at
-                              ? ` · Revocada: ${new Date(k.revoked_at).toLocaleString("es-CL")}`
-                              : ""}
-                          </div>
+                  {activeKeys.map((k) => (
+                    <li
+                      key={k.id}
+                      className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <div className="font-medium text-sm">{k.label || "—"}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Creada: {new Date(k.created_at).toLocaleString("es-CL")}
+                          {k.last_used_at
+                            ? ` · último uso: ${new Date(k.last_used_at).toLocaleString("es-CL")}`
+                            : ""}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {active ? (
-                            <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400">
-                              Activa
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Revocada</Badge>
-                          )}
-                          {active ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                              onClick={() => setN8nRevokeId(k.id)}
-                            >
-                              Revocar
-                            </Button>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400">
+                          Activa
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                          onClick={() => setN8nRevokeId(k.id)}
+                        >
+                          Revocar
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>

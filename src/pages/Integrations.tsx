@@ -292,60 +292,6 @@ export default function Integrations() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">SII (Chile)</CardTitle>
-              <Badge variant="outline">No conectado</Badge>
-            </div>
-            <CardDescription>
-              Integración con Servicio de Impuestos Internos
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Portales Web</CardTitle>
-              <Badge variant="outline">No conectado</Badge>
-            </div>
-            <CardDescription>
-              Sincronización con portales de vehículos
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Stripe</CardTitle>
-              <Badge variant="outline">No conectado</Badge>
-            </div>
-            <CardDescription>
-              Procesamiento de pagos en línea
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Google Analytics</CardTitle>
               <Badge variant="outline">No conectado</Badge>
             </div>
