@@ -66,21 +66,23 @@ const statusLabels: Record<string, string> = {
   contactado: "CONTACTADO",
   negociando: "NEGOCIANDO",
   para_cierre: "PARA CIERRE",
+  negocio_cerrado: "NEGOCIO CERRADO",
 };
 
 /**
- * Valor seguro para <Select> del pipeline CRM (3 estados).
+ * Valor seguro para <Select> del pipeline CRM (4 estados).
  * Mapea estados legacy al bucket correspondiente.
  */
 function safePipelineSelectValue(status: string | null | undefined): string {
   const s = (status || "").toLowerCase();
   if (s === "negociando" || s === "cotizando") return "negociando";
   if (s === "para_cierre") return "para_cierre";
+  if (s === "vendido") return "negocio_cerrado";
   if (s === "contactado" || s === "nuevo" || s === "interesado") return "contactado";
   return "contactado";
 }
 
-type CrmStageKey = "contactado" | "negociando" | "para_cierre";
+type CrmStageKey = "contactado" | "negociando" | "para_cierre" | "negocio_cerrado";
 
 /** MIME para DataTransfer (evita colisiones con texto plano). */
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
@@ -89,13 +91,15 @@ const DRAG_LEAD_MIME = "application/x-skale-lead-id";
 function pipelineDbStatusForStage(stageKey: CrmStageKey): string {
   if (stageKey === "contactado") return "contactado";
   if (stageKey === "negociando") return "negociando";
-  return "para_cierre";
+  if (stageKey === "para_cierre") return "para_cierre";
+  return "vendido";
 }
 
 const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
   negociando: { border: "border-orange-500", badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
   para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
+  negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
 };
 
 const normalizeTags = (tags: unknown) => {
@@ -402,19 +406,20 @@ export default function CRM() {
         statuses: ["negociando", "cotizando"],
       },
       { key: "para_cierre" as const, label: "PARA CIERRE", statuses: ["para_cierre"] },
+      { key: "negocio_cerrado" as const, label: "NEGOCIO CERRADO", statuses: ["vendido"] },
     ],
     [],
   );
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
-    // 2) Excluir cerrados: el tablero CRM es solo pipeline activo (gestión en Leads para vendido/perdido).
+    // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CERRADO".
     const onlyLeads = leads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
       if (isConsignacion) return false;
       const st = (lead.status || "").toLowerCase();
-      if (st === "vendido" || st === "perdido") return false;
+      if (st === "perdido") return false;
       return true;
     });
 
@@ -588,7 +593,7 @@ export default function CRM() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
 
