@@ -24,6 +24,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import { AlertTriangle, Calendar, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -353,6 +354,139 @@ const MeetingDateInput = ({
   );
 };
 
+type VehicleFuel = Database["public"]["Tables"]["vehicles"]["Row"]["fuel_type"];
+type VehicleTransmission = Database["public"]["Tables"]["vehicles"]["Row"]["transmission"];
+
+const fuelTypeToDisplay = (v: VehicleFuel) => {
+  if (!v) return "";
+  const map: Record<string, string> = {
+    gasolina: "Gasolina",
+    diesel: "Diésel",
+    híbrido: "Híbrido",
+    eléctrico: "Eléctrico",
+  };
+  return map[v] ?? v;
+};
+
+const transmissionToDisplay = (v: VehicleTransmission) => {
+  if (!v) return "";
+  const map: Record<string, string> = {
+    manual: "Manual",
+    automático: "Automático",
+    cvt: "CVT",
+  };
+  return map[v] ?? v;
+};
+
+const getConsignacionModel = (item: ConsignacionWithRelations) =>
+  item.vehicle?.model ?? item.vehicle_model ?? "";
+
+const getConsignacionYear = (item: ConsignacionWithRelations) =>
+  item.vehicle?.year ?? item.vehicle_year ?? null;
+
+const getConsignacionKm = (item: ConsignacionWithRelations) => item.vehicle_km ?? null;
+
+const ConsignacionTextCell = ({
+  value,
+  onSave,
+  className,
+  placeholder = "—",
+}: {
+  value: string | null;
+  onSave: (next: string | null) => void | Promise<void>;
+  className?: string;
+  placeholder?: string;
+}) => {
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const trimmed = draft.trim();
+        const prev = (value ?? "").trim();
+        const nextVal = trimmed === "" ? null : trimmed;
+        const prevVal = prev === "" ? null : prev;
+        if (nextVal !== prevVal) void onSave(nextVal);
+      }}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+};
+
+const ConsignacionYearCell = ({
+  value,
+  onSave,
+  className,
+}: {
+  value: number | null;
+  onSave: (next: number | null) => void | Promise<void>;
+  className?: string;
+}) => {
+  const [draft, setDraft] = useState(value != null ? String(value) : "");
+  useEffect(() => setDraft(value != null ? String(value) : ""), [value]);
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 4))}
+      onBlur={() => {
+        if (!draft.trim()) {
+          if (value !== null) void onSave(null);
+          return;
+        }
+        const n = Number(draft);
+        if (!Number.isFinite(n) || n < 1900 || n > 2100) {
+          setDraft(value != null ? String(value) : "");
+          return;
+        }
+        if (n !== value) void onSave(n);
+      }}
+      className={className}
+      placeholder="—"
+    />
+  );
+};
+
+const ConsignacionKmCell = ({
+  value,
+  onSave,
+  className,
+}: {
+  value: number | null;
+  onSave: (next: number | null) => void | Promise<void>;
+  className?: string;
+}) => {
+  const [draft, setDraft] = useState(value != null ? String(value) : "");
+  useEffect(() => setDraft(value != null ? String(value) : ""), [value]);
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+      onBlur={() => {
+        if (!draft.trim()) {
+          if (value !== null) void onSave(null);
+          return;
+        }
+        const n = Number(draft);
+        if (!Number.isFinite(n) || n < 0) {
+          setDraft(value != null ? String(value) : "");
+          return;
+        }
+        const rounded = Math.round(n);
+        if (rounded !== value) void onSave(rounded);
+      }}
+      className={className}
+      placeholder="—"
+    />
+  );
+};
+
 export default function Consignaciones() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -392,6 +526,11 @@ export default function Consignaciones() {
     vehicle_model: "",
     vehicle_year: "",
     vehicle_vin: "",
+    vehicle_km: "",
+    carroceria: "",
+    motor: "",
+    transmision: "",
+    combustible: "",
     patente: "",
     label: "sin_etiqueta",
     status: "nuevo" as Consignacion["status"],
@@ -400,6 +539,7 @@ export default function Consignaciones() {
     fecha: "",
     consignacion_price: "",
     sale_price: "",
+    publicado: false,
   });
 
   const applyAppraisalPrefill = () => {
@@ -483,6 +623,10 @@ export default function Consignaciones() {
   const isFilterActive = statusFilter !== "all" || labelFilter !== "all" || searchQuery.trim() !== "";
 
   const handleLeadChange = (leadId: string) => {
+    if (!leadId) {
+      setFormState((prev) => ({ ...prev, lead_id: "" }));
+      return;
+    }
     const lead = leads.find((l) => l.id === leadId);
     setFormState((prev) => ({
       ...prev,
@@ -494,6 +638,10 @@ export default function Consignaciones() {
   };
 
   const handleVehicleChange = (vehicleId: string) => {
+    if (!vehicleId) {
+      setFormState((prev) => ({ ...prev, vehicle_id: "" }));
+      return;
+    }
     const vehicle = vehicles.find((v) => v.id === vehicleId);
     setFormState((prev) => ({
       ...prev,
@@ -502,6 +650,11 @@ export default function Consignaciones() {
       vehicle_model: prev.vehicle_model || vehicle?.model || "",
       vehicle_year: prev.vehicle_year || (vehicle?.year ? `${vehicle.year}` : ""),
       vehicle_vin: prev.vehicle_vin || vehicle?.vin || "",
+      vehicle_km:
+        prev.vehicle_km || (vehicle?.mileage != null ? String(vehicle.mileage) : ""),
+      motor: prev.motor || vehicle?.engine_size || "",
+      transmision: prev.transmision || transmissionToDisplay(vehicle?.transmission ?? null) || "",
+      combustible: prev.combustible || fuelTypeToDisplay(vehicle?.fuel_type ?? null) || "",
     }));
   };
 
@@ -516,6 +669,11 @@ export default function Consignaciones() {
       vehicle_model: "",
       vehicle_year: "",
       vehicle_vin: "",
+      vehicle_km: "",
+      carroceria: "",
+      motor: "",
+      transmision: "",
+      combustible: "",
       patente: "",
       label: "sin_etiqueta",
       status: "nuevo",
@@ -524,6 +682,7 @@ export default function Consignaciones() {
       fecha: "",
       consignacion_price: "",
       sale_price: "",
+      publicado: false,
     });
   };
 
@@ -551,7 +710,17 @@ export default function Consignaciones() {
           return raw;
         })(),
         vehicle_vin: formState.vehicle_vin.trim() || null,
+        vehicle_km: (() => {
+          const raw = formState.vehicle_km ? Number(formState.vehicle_km) : null;
+          if (raw == null || !Number.isFinite(raw) || raw < 0) return null;
+          return Math.round(raw);
+        })(),
+        carroceria: formState.carroceria.trim() || null,
+        motor: formState.motor.trim() || null,
+        transmision: formState.transmision.trim() || null,
+        combustible: formState.combustible.trim() || null,
         patente: formState.patente.trim() || null,
+        publicado: formState.publicado,
         label: normalizeLabelValue(formState.label),
         status: formState.status,
         notes: formState.notes.trim() || null,
@@ -753,6 +922,31 @@ export default function Consignaciones() {
       await refetch();
       alert(error?.message || "No se pudo actualizar el precio.");
     }
+  };
+
+  const patchConsignacionRow = async (
+    item: ConsignacionWithRelations,
+    updates: Database["public"]["Tables"]["consignaciones"]["Update"],
+  ) => {
+    setConsignaciones((prev) =>
+      prev.map((row) => (row.id === item.id ? { ...row, ...updates } : row)),
+    );
+    try {
+      const updated = await consignacionesService.update(item.id, updates);
+      setConsignaciones((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, ...updated } : row)),
+      );
+      await refetch();
+    } catch (error: any) {
+      console.error("Error actualizando consignación:", error);
+      await refetch();
+      alert(error?.message || "No se pudo guardar el cambio.");
+    }
+  };
+
+  const handlePublicadoChange = async (item: ConsignacionWithRelations, publicado: boolean) => {
+    if (publicado === item.publicado) return;
+    await patchConsignacionRow(item, { publicado });
   };
 
   const handleDelete = async (item: ConsignacionWithRelations) => {
@@ -1023,21 +1217,22 @@ export default function Consignaciones() {
             // Vista móvil: Cards
             <div className="space-y-3">
               {filteredConsignaciones.map((item) => {
-                const vehicleLabel = item.vehicle
-                  ? `${item.vehicle.year || ""} ${item.vehicle.make || ""} ${item.vehicle.model || ""}`.trim()
-                  : `${item.vehicle_year || ""} ${item.vehicle_make || ""} ${item.vehicle_model || ""}`.trim();
                 const vehicleVin = item.vehicle?.vin || item.vehicle_vin;
                 const labelMeta = getLabelMeta(item.label || "sin_etiqueta");
                 const statusMeta = getStatusMeta(item.status);
+                const model = getConsignacionModel(item);
+                const year = getConsignacionYear(item);
 
                 return (
                   <Card key={item.id} className="border-l-4" style={{ borderLeftColor: getLabelBorderColor(item.label) }}>
                     <CardContent className="pt-4">
                       <div className="space-y-3">
-                        {/* Header con nombre y acciones */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-base">{item.owner_name}</h3>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-base truncate">
+                              {model || item.vehicle_make || "Sin modelo"}
+                              {year ? ` · ${year}` : ""}
+                            </h3>
                             <div className="flex flex-wrap gap-2 mt-2">
                               <Select
                                 value={item.label || "sin_etiqueta"}
@@ -1098,7 +1293,61 @@ export default function Consignaciones() {
                           </Button>
                         </div>
 
-                        {/* Contacto */}
+                        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Consignatario</dt>
+                            <dd className="font-medium truncate">{item.owner_name}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Patente</dt>
+                            <dd>{item.patente || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Carrocería</dt>
+                            <dd className="truncate">{item.carroceria || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Kilometraje</dt>
+                            <dd>{getConsignacionKm(item) != null ? `${getConsignacionKm(item)?.toLocaleString("es-CL")} km` : "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Motor</dt>
+                            <dd className="truncate">{item.motor || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Transmisión</dt>
+                            <dd className="truncate">{item.transmision || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-muted-foreground">Combustible</dt>
+                            <dd className="truncate">{item.combustible || "—"}</dd>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
+                            <div>
+                              <dt className="text-xs text-muted-foreground">Publicado</dt>
+                              <dd className="pt-1">
+                                <Switch
+                                  checked={item.publicado}
+                                  onCheckedChange={(v) => handlePublicadoChange(item, v)}
+                                  aria-label="Publicado"
+                                />
+                              </dd>
+                            </div>
+                            <div className="flex-1 text-right">
+                              <div className="text-xs text-muted-foreground">Precio</div>
+                              <PriceInput
+                                value={item.consignacion_price ?? null}
+                                onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
+                                className="w-full max-w-[140px] ml-auto text-sm"
+                              />
+                            </div>
+                          </div>
+                        </dl>
+
+                        {vehicleVin ? (
+                          <div className="text-xs text-muted-foreground">VIN: {vehicleVin}</div>
+                        ) : null}
+
                         <div className="space-y-1.5">
                           {item.owner_phone && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1114,50 +1363,28 @@ export default function Consignaciones() {
                           )}
                         </div>
 
-                        {/* Vehículo */}
-                        {vehicleLabel && (
-                          <div>
-                            <div className="font-medium text-sm">{vehicleLabel}</div>
-                            {vehicleVin && (
-                              <div className="text-xs text-muted-foreground mt-0.5">VIN: {vehicleVin}</div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Precios */}
                         <div className="grid grid-cols-2 gap-3 pt-2 border-t">
                           <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">Consignación</Label>
-                            <PriceInput
-                              value={item.consignacion_price ?? null}
-                              onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
-                              className="w-full text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">Venta</Label>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Precio venta</Label>
                             <PriceInput
                               value={item.sale_price ?? null}
                               onBlur={(value) => handlePriceChange(item, "sale_price", value)}
                               className="w-full text-sm"
                             />
                           </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
+                              <Calendar className="h-3 w-3" />
+                              Reunión
+                            </Label>
+                            <MeetingDateInput
+                              value={item.meeting_at}
+                              onChange={(value) => handleMeetingChange(item, value)}
+                              className="w-full text-sm"
+                            />
+                          </div>
                         </div>
 
-                        {/* Reunión */}
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3" />
-                            Reunión
-                          </Label>
-                          <MeetingDateInput
-                            value={item.meeting_at}
-                            onChange={(value) => handleMeetingChange(item, value)}
-                            className="w-full text-sm"
-                          />
-                        </div>
-
-                        {/* Fecha de subida */}
                         <div>
                           <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
                             <Calendar className="h-3 w-3" />
@@ -1182,46 +1409,149 @@ export default function Consignaciones() {
               })}
             </div>
           ) : (
-            // Vista desktop: Tabla
+            <div className="overflow-x-auto -mx-2 px-2">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Contacto</TableHead>
-              <TableHead>Vehiculo</TableHead>
-              <TableHead>Patente</TableHead>
-                  <TableHead>Etiqueta</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Reunion</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Consignacion</TableHead>
-                  <TableHead>Venta</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Modelo</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide w-[5rem]">Año</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Carrocería</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6.5rem]">Kilometraje</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Motor</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Transmisión</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Combustible</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[5.5rem]">Patente</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Precio</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Consignatario</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-center w-[5.5rem]">Publicado</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Estado</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Etiqueta</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Reunión</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Venta</TableHead>
+                  <TableHead className="text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredConsignaciones.map((item) => {
-                  const vehicleLabel = item.vehicle
-                    ? `${item.vehicle.year || ""} ${item.vehicle.make || ""} ${item.vehicle.model || ""}`.trim()
-                    : `${item.vehicle_year || ""} ${item.vehicle_make || ""} ${item.vehicle_model || ""}`.trim();
                   const vehicleVin = item.vehicle?.vin || item.vehicle_vin;
                   return (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.owner_name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        <div>{item.owner_phone || "Sin telefono"}</div>
-                        {item.owner_email ? <div>{item.owner_email}</div> : null}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{vehicleLabel || "Vehiculo sin detalle"}</div>
+                      <TableCell className="p-2 align-top min-w-[8rem]">
+                        <ConsignacionTextCell
+                          value={getConsignacionModel(item) || null}
+                          onSave={(next) => patchConsignacionRow(item, { vehicle_model: next })}
+                          className="h-8 text-xs"
+                        />
                         {vehicleVin ? (
-                          <div className="text-xs text-muted-foreground">VIN: {vehicleVin}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">VIN {vehicleVin}</div>
                         ) : null}
                       </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">{item.patente || "—"}</span>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionYearCell
+                          value={getConsignacionYear(item)}
+                          onSave={(next) => patchConsignacionRow(item, { vehicle_year: next })}
+                          className="h-8 text-xs w-[4.5rem]"
+                        />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionTextCell
+                          value={item.carroceria}
+                          onSave={(next) => patchConsignacionRow(item, { carroceria: next })}
+                          className="h-8 text-xs min-w-[6rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionKmCell
+                          value={getConsignacionKm(item)}
+                          onSave={(next) => patchConsignacionRow(item, { vehicle_km: next })}
+                          className="h-8 text-xs min-w-[5.5rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionTextCell
+                          value={item.motor}
+                          onSave={(next) => patchConsignacionRow(item, { motor: next })}
+                          className="h-8 text-xs min-w-[5rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionTextCell
+                          value={item.transmision}
+                          onSave={(next) => patchConsignacionRow(item, { transmision: next })}
+                          className="h-8 text-xs min-w-[5rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionTextCell
+                          value={item.combustible}
+                          onSave={(next) => patchConsignacionRow(item, { combustible: next })}
+                          className="h-8 text-xs min-w-[5rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <ConsignacionTextCell
+                          value={item.patente}
+                          onSave={(next) => patchConsignacionRow(item, { patente: next ? next.toUpperCase() : null })}
+                          className="h-8 text-xs min-w-[4.5rem]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        <PriceInput
+                          value={item.consignacion_price ?? null}
+                          onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
+                          className="h-8 text-xs w-[120px]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top min-w-[7rem]">
+                        <ConsignacionTextCell
+                          value={item.owner_name}
+                          onSave={(next) =>
+                            patchConsignacionRow(item, { owner_name: (next && next.trim()) || "Sin nombre" })
+                          }
+                          className="h-8 text-xs"
+                        />
+                        <div className="text-[10px] text-muted-foreground space-y-0.5 mt-0.5">
+                          {item.owner_phone ? <div>{item.owner_phone}</div> : null}
+                          {item.owner_email ? <div className="truncate max-w-[10rem]">{item.owner_email}</div> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 align-top text-center">
+                        <Switch
+                          checked={item.publicado}
+                          onCheckedChange={(v) => handlePublicadoChange(item, v)}
+                          aria-label="Publicado"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
+                        {(() => {
+                          const meta = getStatusMeta(item.status);
+                          return (
+                            <Select
+                              value={item.status}
+                              onValueChange={(value) => handleStatusChange(item, value as Consignacion["status"])}
+                            >
+                              <SelectTrigger className="h-8 w-auto gap-1.5 rounded-full border px-2.5" aria-label={`Estado ${meta.label}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${meta.styles.dot}`} />
+                                <span className={`text-xs font-medium ${meta.styles.text}`}>{meta.label}</span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(statusLabels).map(([key, label]) => {
+                                  const styles = statusStyles[key as Consignacion["status"]];
+                                  return (
+                                    <SelectItem key={key} value={key}>
+                                      <span className="flex items-center gap-2">
+                                        <span className={`h-2.5 w-2.5 rounded-full ${styles.dot}`} />
+                                        <span className={styles.text}>{label}</span>
+                                      </span>
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="p-2 align-top">
                         {(() => {
                           const meta = getLabelMeta(item.label || "sin_etiqueta");
                           return (
@@ -1229,8 +1559,8 @@ export default function Consignaciones() {
                               value={item.label || "sin_etiqueta"}
                               onValueChange={(value) => handleLabelChange(item, value)}
                             >
-                              <SelectTrigger className="h-8 w-auto gap-2 rounded-full border px-3" aria-label={`Etiqueta ${meta.label}`}>
-                                <span className={`h-2 w-2 rounded-full ${meta.styles.dot}`} />
+                              <SelectTrigger className="h-8 w-auto gap-1.5 rounded-full border px-2.5" aria-label={`Etiqueta ${meta.label}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${meta.styles.dot}`} />
                                 <span className={`text-xs font-medium ${meta.styles.text}`}>
                                   {meta.label}
                                 </span>
@@ -1252,75 +1582,27 @@ export default function Consignaciones() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const meta = getStatusMeta(item.status);
-                          return (
-                            <Select
-                              value={item.status}
-                              onValueChange={(value) => handleStatusChange(item, value as Consignacion["status"])}
-                            >
-                              <SelectTrigger className="h-8 w-auto gap-2 rounded-full border px-3" aria-label={`Estado ${meta.label}`}>
-                                <span className={`h-2 w-2 rounded-full ${meta.styles.dot}`} />
-                                <span className={`text-xs font-medium ${meta.styles.text}`}>{meta.label}</span>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(statusLabels).map(([key, label]) => {
-                                  const styles = statusStyles[key as Consignacion["status"]];
-                                  return (
-                                    <SelectItem key={key} value={key}>
-                                      <span className="flex items-center gap-2">
-                                        <span className={`h-2.5 w-2.5 rounded-full ${styles.dot}`} />
-                                        <span className={styles.text}>{label}</span>
-                                      </span>
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 align-top">
                         <MeetingDateInput
                           value={item.meeting_at}
                           onChange={(value) => handleMeetingChange(item, value)}
-                          className="w-[200px]"
+                          className="w-[160px] h-8 text-xs"
                         />
                       </TableCell>
-                      <TableCell>
-                        {item.fecha ? (
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(item.fecha).toLocaleDateString('es-CL', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            })}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <PriceInput
-                          value={item.consignacion_price ?? null}
-                          onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
-                          className="w-[140px]"
-                        />
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 align-top">
                         <PriceInput
                           value={item.sale_price ?? null}
                           onBlur={(value) => handlePriceChange(item, "sale_price", value)}
-                          className="w-[140px]"
+                          className="h-8 text-xs w-[120px]"
                         />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="p-2 align-top text-right">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDelete(item)}
                           title="Eliminar consignacion"
+                          className="h-8 w-8"
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -1330,6 +1612,7 @@ export default function Consignaciones() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1363,17 +1646,36 @@ export default function Consignaciones() {
             className="space-y-4"
           >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <Label htmlFor="vehicle_id_form">Vehículo en stock (opcional)</Label>
+              <Select
+                value={formState.vehicle_id || "__none__"}
+                onValueChange={(v) => handleVehicleChange(v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger id="vehicle_id_form">
+                  <SelectValue placeholder="Sin vincular a inventario" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin vincular a inventario</SelectItem>
+                  {vehicles.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.year} {v.make} {v.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
-              <Label htmlFor="owner_name">Nombre</Label>
+              <Label htmlFor="owner_name">Consignatario</Label>
               <Input
                 id="owner_name"
                 value={formState.owner_name}
                 onChange={(e) => setFormState({ ...formState, owner_name: e.target.value })}
-                placeholder="Nombre del cliente"
+                placeholder="Nombre del consignatario"
               />
             </div>
             <div>
-              <Label htmlFor="owner_phone">Numero</Label>
+              <Label htmlFor="owner_phone">Teléfono</Label>
               <Input
                 id="owner_phone"
                 value={formState.owner_phone}
@@ -1382,11 +1684,41 @@ export default function Consignaciones() {
               />
             </div>
             <div>
+              <Label htmlFor="owner_email">Correo</Label>
+              <Input
+                id="owner_email"
+                type="email"
+                value={formState.owner_email}
+                onChange={(e) => setFormState({ ...formState, owner_email: e.target.value })}
+                placeholder="correo@ejemplo.cl"
+              />
+            </div>
+            <div>
+              <Label htmlFor="lead_id_form">Lead existente (opcional)</Label>
+              <Select
+                value={formState.lead_id || "__none__"}
+                onValueChange={(v) => handleLeadChange(v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger id="lead_id_form">
+                  <SelectValue placeholder="Sin lead vinculado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin lead vinculado</SelectItem>
+                  {leads.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.full_name || l.phone || l.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label htmlFor="vehicle_make">Marca</Label>
               <Input
                 id="vehicle_make"
                 value={formState.vehicle_make}
                 onChange={(e) => setFormState({ ...formState, vehicle_make: e.target.value })}
+                placeholder="Ej: Toyota"
               />
             </div>
             <div>
@@ -1395,15 +1727,7 @@ export default function Consignaciones() {
                 id="vehicle_model"
                 value={formState.vehicle_model}
                 onChange={(e) => setFormState({ ...formState, vehicle_model: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="patente">Patente</Label>
-              <Input
-                id="patente"
-                value={formState.patente}
-                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
-                placeholder="Ej: ABCD12"
+                placeholder="Ej: Corolla"
               />
             </div>
             <div>
@@ -1419,7 +1743,83 @@ export default function Consignaciones() {
               />
             </div>
             <div>
-              <Label>Precio consignacion</Label>
+              <Label htmlFor="carroceria">Carrocería</Label>
+              <Input
+                id="carroceria"
+                value={formState.carroceria}
+                onChange={(e) => setFormState({ ...formState, carroceria: e.target.value })}
+                placeholder="SUV, sedán, hatchback…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vehicle_km">Kilometraje</Label>
+              <Input
+                id="vehicle_km"
+                inputMode="numeric"
+                value={formState.vehicle_km}
+                onChange={(e) =>
+                  setFormState({ ...formState, vehicle_km: e.target.value.replace(/\D/g, "") })
+                }
+                placeholder="Ej: 45000"
+              />
+            </div>
+            <div>
+              <Label htmlFor="motor">Motor</Label>
+              <Input
+                id="motor"
+                value={formState.motor}
+                onChange={(e) => setFormState({ ...formState, motor: e.target.value })}
+                placeholder="Ej: 1.8, 2.0 turbo…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="transmision">Transmisión</Label>
+              <Input
+                id="transmision"
+                value={formState.transmision}
+                onChange={(e) => setFormState({ ...formState, transmision: e.target.value })}
+                placeholder="Manual, automático…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="combustible">Combustible</Label>
+              <Input
+                id="combustible"
+                value={formState.combustible}
+                onChange={(e) => setFormState({ ...formState, combustible: e.target.value })}
+                placeholder="Gasolina, diésel…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="patente">Patente</Label>
+              <Input
+                id="patente"
+                value={formState.patente}
+                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
+                placeholder="Ej: ABCD12"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vehicle_vin">VIN (opcional)</Label>
+              <Input
+                id="vehicle_vin"
+                value={formState.vehicle_vin}
+                onChange={(e) => setFormState({ ...formState, vehicle_vin: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-row items-center justify-between rounded-lg border p-3 md:col-span-2">
+              <div>
+                <Label htmlFor="publicado_form" className="text-base">Publicado</Label>
+                <p className="text-xs text-muted-foreground">Marcar si el auto está publicado en portales u oferta.</p>
+              </div>
+              <Switch
+                id="publicado_form"
+                checked={formState.publicado}
+                onCheckedChange={(v) => setFormState({ ...formState, publicado: v })}
+              />
+            </div>
+            <div>
+              <Label>Precio (consignación)</Label>
               <Input
                 value={formState.consignacion_price}
                 onChange={(e) =>
@@ -1429,7 +1829,7 @@ export default function Consignaciones() {
               />
             </div>
             <div>
-              <Label>Precio venta</Label>
+              <Label>Precio venta objetivo</Label>
               <Input
                 value={formState.sale_price}
                 onChange={(e) => setFormState({ ...formState, sale_price: e.target.value })}
@@ -1437,11 +1837,20 @@ export default function Consignaciones() {
               />
             </div>
             <div>
-              <Label>Fecha reunion</Label>
+              <Label>Fecha reunión</Label>
               <Input
                 type="datetime-local"
                 value={formState.meeting_at}
                 onChange={(e) => setFormState({ ...formState, meeting_at: e.target.value })}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="notes_form">Notas</Label>
+              <Input
+                id="notes_form"
+                value={formState.notes}
+                onChange={(e) => setFormState({ ...formState, notes: e.target.value })}
+                placeholder="Observaciones internas"
               />
             </div>
           </div>

@@ -383,6 +383,8 @@ export interface Database {
           owner_name: string | null
           owner_phone: string | null
           consignment_type: 'fisica' | 'digital'
+          patente: string | null
+          consignatario_staff_id: string | null
           created_at: string
           updated_at: string
         }
@@ -416,6 +418,8 @@ export interface Database {
           owner_name?: string | null
           owner_phone?: string | null
           consignment_type?: 'fisica' | 'digital'
+          patente?: string | null
+          consignatario_staff_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -449,6 +453,8 @@ export interface Database {
           owner_name?: string | null
           owner_phone?: string | null
           consignment_type?: 'fisica' | 'digital'
+          patente?: string | null
+          consignatario_staff_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -477,6 +483,11 @@ export interface Database {
           consignacion_price: number | null
           sale_price: number | null
           fecha: string | null
+          carroceria: string | null
+          motor: string | null
+          transmision: string | null
+          combustible: string | null
+          publicado: boolean
           created_at: string
           updated_at: string
         }
@@ -503,6 +514,11 @@ export interface Database {
           consignacion_price?: number | null
           sale_price?: number | null
           fecha?: string | null
+          carroceria?: string | null
+          motor?: string | null
+          transmision?: string | null
+          combustible?: string | null
+          publicado?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -529,6 +545,11 @@ export interface Database {
           consignacion_price?: number | null
           sale_price?: number | null
           fecha?: string | null
+          carroceria?: string | null
+          motor?: string | null
+          transmision?: string | null
+          combustible?: string | null
+          publicado?: boolean
           created_at?: string
           updated_at?: string
         }

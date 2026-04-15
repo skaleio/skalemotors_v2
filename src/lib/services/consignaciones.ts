@@ -52,8 +52,9 @@ export const consignacionesService = {
     }
 
     if (filters?.search) {
+      const q = filters.search;
       query = query.or(
-        `owner_name.ilike.%${filters.search}%,owner_phone.ilike.%${filters.search}%,owner_email.ilike.%${filters.search}%,vehicle_make.ilike.%${filters.search}%,vehicle_model.ilike.%${filters.search}%,vehicle_vin.ilike.%${filters.search}%`
+        `owner_name.ilike.%${q}%,owner_phone.ilike.%${q}%,owner_email.ilike.%${q}%,vehicle_make.ilike.%${q}%,vehicle_model.ilike.%${q}%,vehicle_vin.ilike.%${q}%,patente.ilike.%${q}%,carroceria.ilike.%${q}%,motor.ilike.%${q}%,transmision.ilike.%${q}%,combustible.ilike.%${q}%`
       );
     }
 

@@ -18,7 +18,7 @@ export const vehicleService = {
       const mode = filters?.mode ?? 'full'
       // Para listas grandes evitamos traer JSON pesados (features/documents/description).
       const selectList =
-        'id, vin, make, model, year, color, mileage, fuel_type, transmission, engine_size, doors, seats, category, condition, price, cost, margin, status, branch_id, tenant_id, location, images, arrival_date, owner_name, owner_phone, consignment_type, created_at, updated_at, branches(name, city, region)'
+        'id, vin, make, model, year, color, mileage, fuel_type, transmission, engine_size, doors, seats, category, condition, price, cost, margin, status, branch_id, tenant_id, location, images, arrival_date, owner_name, owner_phone, consignment_type, patente, consignatario_staff_id, created_at, updated_at, branches(name, city, region)'
       const selectFull = '*, branches(name, city, region)'
 
       let query = supabase
@@ -39,8 +39,9 @@ export const vehicleService = {
       }
 
       if (filters?.search) {
+        const s = filters.search
         query = query.or(
-          `make.ilike.%${filters.search}%,model.ilike.%${filters.search}%,vin.ilike.%${filters.search}%`
+          `make.ilike.%${s}%,model.ilike.%${s}%,vin.ilike.%${s}%,patente.ilike.%${s}%`
         )
       }
 

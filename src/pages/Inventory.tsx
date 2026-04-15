@@ -53,6 +53,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
+import { useQuery } from "@tanstack/react-query";
 import { formatCLP } from "@/lib/format";
 import { vehicleService } from "@/lib/services/vehicles";
 import {
@@ -342,6 +343,8 @@ export default function Inventory() {
     owner_name: "",
     owner_phone: "",
     consignment_type: "fisica" as ConsignmentType,
+    patente: "",
+    consignatario_staff_id: "",
     price: 0,
     cost: 0,
     minDownPayment: 0,
@@ -359,6 +362,25 @@ export default function Inventory() {
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
 
   const branchId = user?.branch_id ?? null;
+
+  const { data: salesStaff = [] } = useQuery({
+    queryKey: ["inventory_branch_sales_staff", user?.tenant_id, user?.branch_id],
+    enabled: !!user?.tenant_id,
+    queryFn: async () => {
+      let q = supabase
+        .from("branch_sales_staff")
+        .select("id, full_name, role_label")
+        .eq("tenant_id", user!.tenant_id!)
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+      if (user!.branch_id) {
+        q = q.or(`branch_id.eq.${user.branch_id},branch_id.is.null`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as { id: string; full_name: string; role_label: string }[];
+    },
+  });
 
   useEffect(() => {
     if (!branchId || !vehicles.length) {
@@ -418,7 +440,8 @@ export default function Inventory() {
         searchQuery === "" ||
         vehicle.make.toLowerCase().includes(searchQuery.toLowerCase()) ||
         vehicle.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (vehicle.vin || "").toLowerCase().includes(searchQuery.toLowerCase());
+        (vehicle.vin || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (vehicle.patente || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus = selectedStatus === "all" || vehicle.status === selectedStatus;
       const matchesType =
@@ -611,6 +634,8 @@ export default function Inventory() {
         owner_name: vehicleToEdit.owner_name || "",
         owner_phone: vehicleToEdit.owner_phone || "",
         consignment_type: getVehicleConsignmentType(vehicleToEdit),
+        patente: vehicleToEdit.patente || "",
+        consignatario_staff_id: vehicleToEdit.consignatario_staff_id || "",
         price: Number(vehicleToEdit.price || 0),
         cost: Number(vehicleToEdit.cost || 0),
         minDownPayment: Number(features.min_down_payment || 0),
@@ -680,6 +705,8 @@ export default function Inventory() {
         owner_name: newVehicle.owner_name?.trim() || null,
         owner_phone: newVehicle.owner_phone?.trim() || null,
         consignment_type: newVehicle.consignment_type,
+        patente: newVehicle.patente.trim() ? newVehicle.patente.trim().toUpperCase() : null,
+        consignatario_staff_id: newVehicle.consignatario_staff_id.trim() || null,
         price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
