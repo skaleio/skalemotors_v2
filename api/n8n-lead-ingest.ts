@@ -1,5 +1,20 @@
+/**
+ * Ingesta con Supabase service role (bypass RLS).
+ * Opcional: `assigned_to` (UUID de public.users) para asignar el lead a un vendedor
+ * al crearlo; así aparece en su CRM bajo las políticas por rol.
+ */
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function optionalAssignedToUuid(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const s = String(value).trim();
+  if (!s || !UUID_RE.test(s)) return undefined;
+  return s;
+}
 
 interface VercelRequest {
   method?: string;
@@ -33,6 +48,8 @@ type Payload = {
   state_confidence?: number | string | null;
   state_reason?: string | null;
   update_existing?: boolean;
+  /** UUID de usuario vendedor (public.users) para asignar el lead al crear/actualizar. */
+  assigned_to?: string | null;
 };
 
 type KeyResolution =
@@ -299,6 +316,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatePayload.state_updated_at = new Date().toISOString();
       }
 
+      const ingestAssigned = optionalAssignedToUuid(body.assigned_to);
+      if (ingestAssigned) updatePayload.assigned_to = ingestAssigned;
+
       const { data: updated, error: updError } = await supabase
         .from("leads")
         .update(updatePayload)
@@ -347,6 +367,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     insertPayload.state_reason = stateReason;
     insertPayload.state_updated_at = new Date().toISOString();
   }
+
+  const ingestAssignedInsert = optionalAssignedToUuid(body.assigned_to);
+  if (ingestAssignedInsert) insertPayload.assigned_to = ingestAssignedInsert;
 
   const { data: created, error: insertError } = await supabase
     .from("leads")

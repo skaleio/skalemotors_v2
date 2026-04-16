@@ -13,10 +13,10 @@
 
 ### 1. Variables de Entorno
 
-Crea un archivo `.env` en la raíz del proyecto basado en `env.example`:
+Crea un archivo `.env` en la raíz del proyecto basado en `.env.example`:
 
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
 Edita `.env` con tus credenciales de Supabase:

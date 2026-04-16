@@ -35,6 +35,7 @@ import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { consignacionesService } from "@/lib/services/consignaciones";
+import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 
@@ -508,6 +509,7 @@ export default function Consignaciones() {
 
   const { leads } = useLeads({
     branchId: user?.branch_id ?? undefined,
+    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });
 
@@ -784,6 +786,7 @@ export default function Consignaciones() {
                   priority: "media",
                   tenant_id: user?.tenant_id ?? null,
                   branch_id: user?.branch_id ?? null,
+                  assigned_to: user?.role === "vendedor" ? user.id : null,
                   tags: leadTagsFromConsignacion as any,
                 });
                 resolvedLeadId = createdLead.id;

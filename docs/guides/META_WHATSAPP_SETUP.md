@@ -18,7 +18,7 @@ Guía para configurar la integración oficial de WhatsApp Business Cloud API usa
 
 ## 2) Variables de entorno (Supabase Secrets)
 
-Configura en Supabase (Edge Functions → Secrets) las variables indicadas en `env.example`:
+Configura en Supabase (Edge Functions → Secrets) las variables indicadas en `.env.example` (sección Edge Functions / Meta):
 
 - `META_ACCESS_TOKEN`
 - `META_PHONE_NUMBER_ID` (o asegúrate de que exista `whatsapp_inboxes.provider_phone_number_id`)

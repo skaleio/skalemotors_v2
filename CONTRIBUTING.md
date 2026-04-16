@@ -36,7 +36,7 @@ cd skale-motors
 npm install
 
 # Copiar variables de entorno
-cp env.example .env
+cp .env.example .env
 
 # Iniciar desarrollo
 npm run dev

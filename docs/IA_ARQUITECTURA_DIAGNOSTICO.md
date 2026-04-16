@@ -36,8 +36,8 @@
 
 | Dónde | Variable | Estado |
 |-------|----------|--------|
-| env.example | OPENAI_API_KEY (comentada) | 🟡 Documentada para Supabase Secrets |
-| env.example | N8N_DESCRIPTION_WEBHOOK_URL (opcional) | 🟡 |
+| .env.example | OPENAI_API_KEY (comentada en Secrets) | 🟡 Documentada para Supabase Secrets |
+| .env.example | N8N_DESCRIPTION_WEBHOOK_URL (opcional) | 🟡 |
 | Supabase Edge Functions | OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY | Usadas por studio-ia-generate y support-chat |
 | Frontend | Ninguna key de IA | ✅ Correcto (keys en backend) |
 

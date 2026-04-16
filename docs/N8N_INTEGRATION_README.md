@@ -57,7 +57,7 @@ SKALE MOTORS/
 │   ├── N8N_INTEGRATION_README.md         # Este archivo
 │   ├── n8n_workflows_templates.md        # Templates de workflows
 │   └── n8n_docker_setup.md               # Guía de instalación Docker
-└── env.example.txt                        # Variables de entorno
+└── .env.example (raíz)                    # Variables de entorno (plantilla)
 ```
 
 ## 🚀 Instalación

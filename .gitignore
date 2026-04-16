@@ -80,3 +80,6 @@ CHECKPOINT_*.md
 .venv/
 __pycache__/
 *.pyc
+
+# Supabase CLI (caché local; no versionar)
+supabase/.temp/

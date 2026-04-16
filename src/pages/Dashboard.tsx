@@ -20,7 +20,7 @@ import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, Ch
 import type { PendingTask } from "@/hooks/usePendingTasks";
 import { addDays, endOfDay, format, isSameDay, isToday, startOfDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -115,6 +115,13 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (user?.role === "vendedor") {
+      navigate("/app/crm", { replace: true });
+    }
+  }, [user?.role, navigate]);
+
   const [selectedMonth, setSelectedMonth] = useState<DashboardSelectedMonth>(() => {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };

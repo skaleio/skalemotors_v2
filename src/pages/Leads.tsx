@@ -24,10 +24,12 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
+import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
@@ -505,9 +507,24 @@ export default function Leads() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const vendorMode = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("vendor") === "1";
+  }, [location.search]);
+
+  if (vendorMode && user?.role !== "vendedor") {
+    return (
+      <VendorLoginGate
+        title="Leads bloqueado"
+        description="Inicia sesión con tu usuario de vendedor para ver tus leads."
+        afterLoginPath="/app/leads"
+      />
+    );
+  }
   const queryClient = useQueryClient();
   const { leads, loading, isFetching, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
+    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });
   const { consignaciones } = useConsignaciones({
@@ -840,6 +857,7 @@ export default function Leads() {
             priority: "media",
             tenant_id: user?.tenant_id ?? null,
             branch_id: resolvedBranchId,
+            assigned_to: user?.role === "vendedor" ? user.id : null,
             rut: rut?.trim() || null,
             region: region || null,
             payment_type: paymentType || null,
@@ -1001,6 +1019,7 @@ export default function Leads() {
         priority: "media",
         tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id,
+        assigned_to: user.role === "vendedor" ? user.id : null,
         rut: formState.rut.trim() ? formState.rut.trim() : null,
         region: formState.region.trim() ? formState.region.trim() : null,
         payment_type: formState.payment_type ? formState.payment_type : null,

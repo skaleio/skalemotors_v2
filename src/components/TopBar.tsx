@@ -1,6 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLeads } from "@/hooks/useLeads";
+import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useVehicles } from "@/hooks/useVehicles";
 import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
@@ -38,7 +39,11 @@ export function TopBar() {
   const { theme } = useTheme();
   const { user, signOut } = useAuth();
   const { vehicles } = useVehicles({ branchId: user?.branch_id ?? undefined, enabled: !!user });
-  const { leads } = useLeads({ branchId: user?.branch_id ?? undefined, enabled: !!user });
+  const { leads } = useLeads({
+    branchId: user?.branch_id ?? undefined,
+    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
+    enabled: !!user,
+  });
 
   // Verificar si estamos en Dashboard Principal
   const isDashboardPrincipal = location.pathname === '/';

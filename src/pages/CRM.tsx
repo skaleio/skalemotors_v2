@@ -14,7 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
+import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
@@ -24,6 +26,7 @@ import { Pencil, Search, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -276,9 +279,25 @@ const LeadCard = memo(function LeadCard({
 
 export default function CRM() {
   const { user } = useAuth();
+  const location = useLocation();
+  const vendorMode = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("vendor") === "1";
+  }, [location.search]);
+
+  if (vendorMode && user?.role !== "vendedor") {
+    return (
+      <VendorLoginGate
+        title="CRM bloqueado"
+        description="Inicia sesión con tu usuario de vendedor para ver tu información."
+        afterLoginPath="/app/crm"
+      />
+    );
+  }
   const queryClient = useQueryClient();
   const { leads, loading, error: leadsError, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
+    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });
 
@@ -512,8 +531,9 @@ export default function CRM() {
 
     void (async () => {
       const merged: CloseDealSellerOption[] = [];
+      const isVendedor = user.role === "vendedor";
 
-      if (user.branch_id) {
+      if (!isVendedor && user.branch_id) {
         const { data, error } = await supabase
           .from("users")
           .select("id, full_name")
@@ -538,7 +558,7 @@ export default function CRM() {
             merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
           }
         }
-      } else if (assignedId && assignedId !== user.id) {
+      } else if (!isVendedor && assignedId && assignedId !== user.id) {
         merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
       }
 
@@ -709,6 +729,14 @@ export default function CRM() {
       });
       return;
     }
+    if (user?.role === "vendedor" && sellerParsed.kind === "user" && sellerParsed.id !== user.id) {
+      toast({
+        title: "No permitido",
+        description: "Como vendedor solo puedes registrar cierre con vendedores de plantilla (staff) o tu propio usuario.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const paymentLabel = closeDealSaleType === "financiado" ? "Financiado" : "Contado";
     const leadId = closeDealLead.id;
@@ -779,6 +807,8 @@ export default function CRM() {
     closeDealSellerKey,
     closeDealVehicle,
     queryClient,
+    user?.role,
+    user?.id,
   ]);
 
   return (

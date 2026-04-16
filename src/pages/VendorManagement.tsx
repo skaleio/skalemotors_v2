@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
 type PaymentRecord = {
@@ -62,6 +63,8 @@ function formatCurrency(value: number) {
 
 const STAFF_ROLES_MANAGE = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
 
+const USERS_PAGE_ROLES = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
+
 const DEFAULT_SELLER_ROLE = "Vendedor";
 
 const SELLER_ROLE_OPTIONS = [
@@ -79,6 +82,7 @@ export default function VendorManagement() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const canManageStaff = user?.role ? STAFF_ROLES_MANAGE.has(user.role) : false;
+  const canOpenUsersPage = user?.role ? USERS_PAGE_ROLES.has(user.role) : false;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
@@ -250,17 +254,24 @@ export default function VendorManagement() {
             en el CRM.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setNewName("");
-            setNewRole(DEFAULT_SELLER_ROLE);
-            setCreateOpen(true);
-          }}
-          disabled={!user?.tenant_id || !canManageStaff}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Vendedor
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {canOpenUsersPage ? (
+            <Button variant="outline" asChild>
+              <Link to="/app/users">Accesos CRM (correo y contraseña)</Link>
+            </Button>
+          ) : null}
+          <Button
+            onClick={() => {
+              setNewName("");
+              setNewRole(DEFAULT_SELLER_ROLE);
+              setCreateOpen(true);
+            }}
+            disabled={!user?.tenant_id || !canManageStaff}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Vendedor
+          </Button>
+        </div>
       </div>
 
       {/* Resumen global */}
@@ -275,7 +286,7 @@ export default function VendorManagement() {
           <CardContent>
             <p className="text-2xl font-bold">{loadingStaff ? "…" : sellers.length}</p>
             <p className="text-xs text-muted-foreground">
-              Vendedores registrados (cuentas de usuario de la sucursal se gestionan aparte).
+              Plantilla para cerrar negocios. Las cuentas con login al CRM se crean en Usuarios.
             </p>
           </CardContent>
         </Card>

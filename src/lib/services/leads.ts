@@ -77,6 +77,10 @@ export const leadService = {
       query = query.eq('assigned_to', filters.assignedTo)
     }
 
+    if (filters?.branchId) {
+      query = query.eq('branch_id', filters.branchId)
+    }
+
     if (filters?.status) {
       query = query.eq('status', filters.status)
     }

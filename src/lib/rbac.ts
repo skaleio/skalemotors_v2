@@ -72,3 +72,8 @@ export function hasPermission(role: string | undefined, permission: AppPermissio
   const permissions = roleToPermissions[role] ?? [];
   return permissions.includes(permission);
 }
+
+/** Permisos que cubren todo el módulo Finanzas de la app (rutas protegidas con estos). */
+export function isFinancePermission(permission: AppPermission | undefined): boolean {
+  return permission === "finance:read" || permission === "finance:write";
+}

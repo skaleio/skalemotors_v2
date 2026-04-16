@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Mail, Phone, Save, AlertCircle, CheckCircle, Lock, Camera, Trash2, Building2, Pencil } from 'lucide-react';
+import { User, Mail, Phone, Save, AlertCircle, CheckCircle, Lock, Camera, Trash2, Building2, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,16 +15,32 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
 
 const AVATAR_BUCKET = 'avatars';
 const AVATAR_MAX_SIZE_MB = 2;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/** Pueden elegir otra sucursal del tenant y crear sucursales desde Configuración */
+const ROLES_CAN_MANAGE_BRANCH_PICKER = new Set(['admin', 'jefe_jefe']);
+
+function optionalBranchText(value: string): string | null {
+  const t = value.trim();
+  return t === '' ? null : t;
+}
 
 export default function Settings() {
   const { user, fetchUserProfile } = useAuth();
@@ -64,6 +80,14 @@ export default function Settings() {
     email: '',
     opening_hours: '',
   });
+  const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [branchPickerLoading, setBranchPickerLoading] = useState(false);
+  const [branchPickerApplying, setBranchPickerApplying] = useState(false);
+  const [tenantBranchesList, setTenantBranchesList] = useState<{ id: string; name: string }[]>([]);
+  const [pickerBranchId, setPickerBranchId] = useState<string>('');
+
+  const canManageOrgBranches = user ? ROLES_CAN_MANAGE_BRANCH_PICKER.has(user.role) : false;
 
   // Cargar nombre de la sucursal actual si el usuario tiene una asignada
   useEffect(() => {
@@ -185,8 +209,8 @@ export default function Settings() {
   const handleAddBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
-    if (!newBranch.name.trim() || !newBranch.address.trim() || !newBranch.city.trim() || !newBranch.region.trim()) {
-      setError('Nombre, dirección, ciudad y región son obligatorios.');
+    if (!newBranch.name.trim()) {
+      setError('El nombre de la sucursal es obligatorio.');
       return;
     }
     setSavingBranch(true);
@@ -197,13 +221,14 @@ export default function Settings() {
         .from('branches')
         .insert({
           name: newBranch.name.trim(),
-          address: newBranch.address.trim(),
-          city: newBranch.city.trim(),
-          region: newBranch.region.trim(),
+          address: optionalBranchText(newBranch.address),
+          city: optionalBranchText(newBranch.city),
+          region: optionalBranchText(newBranch.region),
           opening_hours: newBranch.opening_hours.trim() || null,
           phone: newBranch.phone.trim() || null,
           email: newBranch.email.trim() || null,
           is_active: true,
+          tenant_id: user.tenant_id ?? null,
         })
         .select('id')
         .single();
@@ -247,18 +272,105 @@ export default function Settings() {
       financiero: 'Financiero',
       servicio: 'Servicio',
       inventario: 'Inventario',
+      jefe_jefe: 'Jefe de jefes',
+      jefe_sucursal: 'Jefe de sucursal',
     };
     return roles[role] || role;
   };
 
-  const openEditBranchDialog = async () => {
-    if (!formData.branch_id) return;
+  const openBranchPicker = async () => {
+    if (!user?.tenant_id) {
+      if (formData.branch_id) {
+        toast.message('Sin organización vinculada: solo puedes editar los datos de tu sucursal actual.');
+        void openEditBranchDialog();
+      } else {
+        toast.error('Tu cuenta no tiene organización (tenant). Contacta soporte o completa el onboarding.');
+      }
+      return;
+    }
+    setBranchPickerLoading(true);
+    setError('');
+    try {
+      const { data, error: listErr } = await supabase
+        .from('branches')
+        .select('id, name')
+        .eq('tenant_id', user.tenant_id)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (listErr) throw listErr;
+      const list = (data ?? []) as { id: string; name: string }[];
+      setTenantBranchesList(list);
+      const initial =
+        formData.branch_id && list.some((b) => b.id === formData.branch_id)
+          ? formData.branch_id
+          : (list[0]?.id ?? '');
+      setPickerBranchId(initial);
+      setBranchPickerOpen(true);
+      if (list.length === 0) {
+        toast.message('No hay sucursales en tu organización. Crea una nueva.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'No se pudieron cargar las sucursales';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setBranchPickerLoading(false);
+    }
+  };
+
+  const applyPickedBranch = async () => {
+    if (!user?.id || !pickerBranchId) {
+      toast.error('Selecciona una sucursal.');
+      return;
+    }
+    if (pickerBranchId === formData.branch_id) {
+      toast.message('Ya tienes asignada esta sucursal.');
+      setBranchPickerOpen(false);
+      return;
+    }
+    setBranchPickerApplying(true);
+    setError('');
+    try {
+      const userUpdatePayload: Database['public']['Tables']['users']['Update'] = {
+        branch_id: pickerBranchId,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: updateErr } = await supabase
+        .from('users')
+        // @ts-expect-error - Supabase generated types infer never for update in this setup
+        .update(userUpdatePayload)
+        .eq('id', user.id);
+      if (updateErr) throw updateErr;
+      await supabase.auth.updateUser({
+        data: { branch_id: pickerBranchId },
+      });
+      await fetchUserProfile(user.id);
+      setFormData((prev) => ({ ...prev, branch_id: pickerBranchId }));
+      const pickedName = tenantBranchesList.find((b) => b.id === pickerBranchId)?.name;
+      if (pickedName) setCurrentBranchName(pickedName);
+      setBranchPickerOpen(false);
+      toast.success('Sucursal asignada a tu perfil.');
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 5000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'No se pudo actualizar la sucursal';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setBranchPickerApplying(false);
+    }
+  };
+
+  const openEditBranchDialog = async (branchId?: string) => {
+    const id = branchId ?? formData.branch_id;
+    if (!id) return;
     setEditBranchLoading(true);
+    setEditingBranchId(id);
     try {
       const { data, error } = await supabase
         .from('branches')
         .select('id, name, address, city, region, phone, email, opening_hours')
-        .eq('id', formData.branch_id)
+        .eq('id', id)
         .single();
       if (error || !data) throw new Error(error?.message || 'No se pudo cargar la sucursal');
       setEditBranchForm({
@@ -272,17 +384,42 @@ export default function Settings() {
       });
       setEditBranchDialogOpen(true);
     } catch (err: unknown) {
+      setEditingBranchId(null);
       setError(err instanceof Error ? err.message : 'Error al cargar la sucursal');
     } finally {
       setEditBranchLoading(false);
     }
   };
 
+  const handleOpenBranchFieldAction = () => {
+    if (canManageOrgBranches) {
+      void openBranchPicker();
+    } else {
+      void openEditBranchDialog();
+    }
+  };
+
+  const openNewBranchFromPicker = () => {
+    setBranchPickerOpen(false);
+    setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
+    setCreateBranchDialogOpen(true);
+  };
+
+  const openEditBranchFromPicker = () => {
+    if (!pickerBranchId) {
+      toast.error('Selecciona una sucursal en la lista.');
+      return;
+    }
+    setBranchPickerOpen(false);
+    void openEditBranchDialog(pickerBranchId);
+  };
+
   const handleSaveEditBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.branch_id) return;
-    if (!editBranchForm.name.trim() || !editBranchForm.address.trim() || !editBranchForm.city.trim() || !editBranchForm.region.trim()) {
-      setError('Nombre, dirección, ciudad y región son obligatorios.');
+    const targetId = editingBranchId ?? formData.branch_id;
+    if (!targetId) return;
+    if (!editBranchForm.name.trim()) {
+      setError('El nombre de la sucursal es obligatorio.');
       return;
     }
     setEditBranchSaving(true);
@@ -290,9 +427,9 @@ export default function Settings() {
     try {
       const payload: Database['public']['Tables']['branches']['Update'] = {
         name: editBranchForm.name.trim(),
-        address: editBranchForm.address.trim(),
-        city: editBranchForm.city.trim(),
-        region: editBranchForm.region.trim(),
+        address: optionalBranchText(editBranchForm.address),
+        city: optionalBranchText(editBranchForm.city),
+        region: optionalBranchText(editBranchForm.region),
         phone: editBranchForm.phone.trim() || null,
         email: editBranchForm.email.trim() || null,
         opening_hours: editBranchForm.opening_hours.trim() || null,
@@ -302,10 +439,13 @@ export default function Settings() {
         .from('branches')
         // @ts-expect-error - Supabase generated types infer never for update in this setup
         .update(payload)
-        .eq('id', formData.branch_id);
+        .eq('id', targetId);
       if (updateErr) throw updateErr;
-      setCurrentBranchName(editBranchForm.name.trim());
+      if (targetId === formData.branch_id) {
+        setCurrentBranchName(editBranchForm.name.trim());
+      }
       setEditBranchDialogOpen(false);
+      setEditingBranchId(null);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 5000);
     } catch (err: unknown) {
@@ -542,21 +682,34 @@ export default function Settings() {
                   {!formData.branch_id ? (
                     <div className="rounded-lg border border-dashed p-4 space-y-3">
                       <p className="text-sm text-muted-foreground">
-                        No tienes sucursal asignada. Agrega una para poder conectar integraciones como Meta Ads.
+                        No tienes sucursal asignada. Agrega una o elige una de tu organización para integraciones como Meta Ads.
                       </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
-                          setCreateBranchDialogOpen(true);
-                        }}
-                        disabled={loading}
-                      >
-                        <Building2 className="h-4 w-4 mr-2" />
-                        Agregar sucursal
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setNewBranch({ name: '', address: '', city: '', region: '', opening_hours: '', phone: '', email: '' });
+                            setCreateBranchDialogOpen(true);
+                          }}
+                          disabled={loading}
+                        >
+                          <Building2 className="h-4 w-4 mr-2" />
+                          Agregar sucursal
+                        </Button>
+                        {canManageOrgBranches && user?.tenant_id ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void openBranchPicker()}
+                            disabled={loading || branchPickerLoading}
+                          >
+                            Elegir sucursal existente
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
@@ -568,11 +721,11 @@ export default function Settings() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={openEditBranchDialog}
-                        disabled={editBranchLoading}
-                        title="Editar sucursal"
+                        onClick={handleOpenBranchFieldAction}
+                        disabled={editBranchLoading || branchPickerLoading}
+                        title={canManageOrgBranches ? 'Elegir, crear o editar sucursal' : 'Editar sucursal'}
                       >
-                        {editBranchLoading ? (
+                        {editBranchLoading || branchPickerLoading ? (
                           <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         ) : (
                           <Pencil className="h-4 w-4" />
@@ -581,11 +734,108 @@ export default function Settings() {
                     </div>
                   )}
 
+                  {/* Administradores: elegir sucursal del tenant o crear otra */}
+                  <Dialog open={branchPickerOpen} onOpenChange={setBranchPickerOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Sucursal de trabajo</DialogTitle>
+                        <DialogDescription>
+                          Elige la sucursal asociada a tu perfil o crea una nueva para tu organización.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-2">
+                        {tenantBranchesList.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No hay sucursales activas. Crea la primera con el botón de abajo.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            <Label htmlFor="branch_picker_select">Sucursal</Label>
+                            <Select
+                              value={pickerBranchId || undefined}
+                              onValueChange={setPickerBranchId}
+                              disabled={branchPickerApplying}
+                            >
+                              <SelectTrigger id="branch_picker_select">
+                                <SelectValue placeholder="Selecciona sucursal" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tenantBranchesList.map((b) => (
+                                  <SelectItem key={b.id} value={b.id}>
+                                    {b.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="flex-1"
+                            disabled={!pickerBranchId || branchPickerApplying}
+                            onClick={openEditBranchFromPicker}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar datos de la sucursal
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1"
+                            disabled={branchPickerApplying}
+                            onClick={openNewBranchFromPicker}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Nueva sucursal
+                          </Button>
+                        </div>
+                      </div>
+                      <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setBranchPickerOpen(false)}
+                          disabled={branchPickerApplying}
+                        >
+                          Cerrar
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={!pickerBranchId || branchPickerApplying || tenantBranchesList.length === 0}
+                          onClick={() => void applyPickedBranch()}
+                        >
+                          {branchPickerApplying ? (
+                            <span className="flex items-center gap-2">
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                              Aplicando…
+                            </span>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              Usar esta sucursal
+                            </>
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                   {/* Modal editar sucursal */}
-                  <Dialog open={editBranchDialogOpen} onOpenChange={setEditBranchDialogOpen}>
+                  <Dialog
+                    open={editBranchDialogOpen}
+                    onOpenChange={(open) => {
+                      setEditBranchDialogOpen(open);
+                      if (!open) setEditingBranchId(null);
+                    }}
+                  >
                     <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Editar sucursal</DialogTitle>
+                        <DialogDescription>
+                          Solo el nombre es obligatorio. Dirección, ciudad y región puedes completarlas después.
+                        </DialogDescription>
                       </DialogHeader>
                       <form onSubmit={handleSaveEditBranch} className="space-y-4">
                         <div className="space-y-2">
@@ -599,7 +849,7 @@ export default function Settings() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="edit_branch_address">Dirección *</Label>
+                          <Label htmlFor="edit_branch_address">Dirección (opcional)</Label>
                           <Input
                             id="edit_branch_address"
                             value={editBranchForm.address}
@@ -610,7 +860,7 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label htmlFor="edit_branch_city">Ciudad *</Label>
+                            <Label htmlFor="edit_branch_city">Ciudad (opcional)</Label>
                             <Input
                               id="edit_branch_city"
                               value={editBranchForm.city}
@@ -620,7 +870,7 @@ export default function Settings() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="edit_branch_region">Región *</Label>
+                            <Label htmlFor="edit_branch_region">Región (opcional)</Label>
                             <Input
                               id="edit_branch_region"
                               value={editBranchForm.region}
@@ -695,6 +945,9 @@ export default function Settings() {
                     <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Crear sucursal</DialogTitle>
+                        <DialogDescription>
+                          Solo necesitas un nombre. El resto es opcional y lo puedes editar luego.
+                        </DialogDescription>
                       </DialogHeader>
                       <form onSubmit={handleAddBranch} className="space-y-4">
                         <div className="space-y-2">
@@ -708,7 +961,7 @@ export default function Settings() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="branch_address">Dirección *</Label>
+                          <Label htmlFor="branch_address">Dirección (opcional)</Label>
                           <Input
                             id="branch_address"
                             value={newBranch.address}
@@ -719,7 +972,7 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label htmlFor="branch_city">Ciudad *</Label>
+                            <Label htmlFor="branch_city">Ciudad (opcional)</Label>
                             <Input
                               id="branch_city"
                               value={newBranch.city}
@@ -729,7 +982,7 @@ export default function Settings() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="branch_region">Región *</Label>
+                            <Label htmlFor="branch_region">Región (opcional)</Label>
                             <Input
                               id="branch_region"
                               value={newBranch.region}

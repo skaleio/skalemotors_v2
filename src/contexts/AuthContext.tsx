@@ -1,3 +1,4 @@
+import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
 import { setObservabilityUserContext } from "@/lib/observability";
 import { setTenantContext } from "@/lib/tenant";
@@ -63,6 +64,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const PROFILE_FETCH_TIMEOUT_MS = 20 * 1000; // 20 s para redes lentas
 
+  const roleFromSessionUser = (sessionUser: Session["user"]): User["role"] => {
+    const allowed: User["role"][] = [
+      "admin",
+      "gerente",
+      "vendedor",
+      "financiero",
+      "servicio",
+      "inventario",
+      "jefe_jefe",
+      "jefe_sucursal",
+    ];
+    const appMeta = sessionUser.app_metadata as { role?: string } | undefined;
+    const raw = appMeta?.role ?? (sessionUser.user_metadata as { role?: string } | undefined)?.role;
+    if (raw && (allowed as string[]).includes(raw)) return raw as User["role"];
+    return "gerente";
+  };
+
   const buildFallbackUserFromSession = (sessionUser: Session["user"]): User => {
     const metadata = sessionUser.user_metadata || {};
     return {
@@ -70,7 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       email: sessionUser.email || "",
       full_name: metadata.full_name || sessionUser.email?.split("@")[0] || "Usuario",
       phone: metadata.phone || undefined,
-      role: "vendedor",
+      role: roleFromSessionUser(sessionUser),
       tenant_id: undefined,
       legacy_protected: false,
       branch_id: undefined,
@@ -387,13 +405,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         setSession(data.session);
-        setUser(buildFallbackUserFromSession(data.session.user));
-        setLoading(false);
-        void fetchUserProfile(data.session.user.id).then((ok) => {
-          if (!ok) {
-            setUser(buildFallbackUserFromSession(data.session.user));
-          }
-        });
+        const ok = await fetchUserProfile(data.session.user.id);
+        if (!ok) {
+          setUser(buildFallbackUserFromSession(data.session.user));
+        }
       } else {
         setUser(null);
         currentUserRef.current = null;
@@ -517,7 +532,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: passwordRecoveryRedirectUrl(),
       });
       if (error) return { error };
       return { error: null };

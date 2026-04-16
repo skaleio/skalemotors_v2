@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, type Location as RouterLocation } from 'react-router-dom'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ export default function Login() {
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { signIn, loading: authLoading, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     return () => {
@@ -53,9 +54,11 @@ export default function Login() {
   // Solo redirigir si el usuario tiene sesion valida Y no estamos en medio de un intento de login
   useEffect(() => {
     if (user && !authLoading && !localLoading && !loginAttempted) {
-      navigate('/app', { replace: true })
+      const from = (location.state as { from?: RouterLocation } | null)?.from
+      const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : "/app"
+      navigate(to, { replace: true })
     }
-  }, [user, authLoading, localLoading, loginAttempted, navigate])
+  }, [user, authLoading, localLoading, loginAttempted, navigate, location.state])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,7 +84,9 @@ export default function Login() {
       } else {
         setFailedAttempts(0)
         // Login exitoso: navegar explicitamente
-        navigate('/app', { replace: true })
+        const from = (location.state as { from?: RouterLocation } | null)?.from
+        const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : "/app"
+        navigate(to, { replace: true })
       }
     } catch {
       setError('Error inesperado. Intenta nuevamente.')

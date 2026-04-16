@@ -35,7 +35,7 @@ import {
   Moon,
   Sun
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
@@ -135,6 +135,15 @@ export function AppSidebar() {
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
 
+  const isVendorOnly = user?.role === "vendedor";
+
+  const categoriesToShow = useMemo(() => {
+    if (isVendorOnly) {
+      return menuCategories.filter((c) => c.title === "CRM & Leads");
+    }
+    return menuCategories;
+  }, [isVendorOnly]);
+
   // Función para encontrar la categoría que contiene la ruta actual
   const findCategoryForPath = (path: string): string | null => {
     // Normalizar la ruta (sin query params para comparación)
@@ -145,8 +154,7 @@ export function AppSidebar() {
       return "Dashboard";
     }
 
-    // Buscar en menuCategories
-    for (const category of menuCategories) {
+    for (const category of categoriesToShow) {
       if (category.items.some(item => {
         const itemBasePath = item.url.split('?')[0];
         // Verificar coincidencia exacta
@@ -161,6 +169,10 @@ export function AppSidebar() {
       })) {
         return category.title;
       }
+    }
+
+    if (isVendorOnly) {
+      return null;
     }
 
     // Buscar en settingsCategory
@@ -359,7 +371,7 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
-          {menuCategories.map((category) => (
+          {categoriesToShow.map((category) => (
             <Collapsible
               key={category.title}
               open={expandedCategories[category.title]}
@@ -446,6 +458,7 @@ export function AppSidebar() {
           ))}
 
           {/* Apartado Sistema - Colapsible */}
+          {!isVendorOnly ? (
           <Collapsible
             open={expandedCategories["Sistema"]}
             onOpenChange={() => toggleCategory("Sistema")}
@@ -543,6 +556,7 @@ export function AppSidebar() {
               )}
             </SidebarGroup>
           </Collapsible>
+          ) : null}
         </SidebarContent>
 
         {/* Footer con información del usuario */}

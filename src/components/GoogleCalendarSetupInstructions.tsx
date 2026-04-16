@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ExternalLink, AlertCircle, MessageCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import googleCalendarGuide from "../../docs/guides/GOOGLE_CALENDAR_SETUP.md?raw";
 
 interface GoogleCalendarSetupInstructionsProps {
   onClose?: () => void;
@@ -87,7 +88,12 @@ export default function GoogleCalendarSetupInstructions({ onClose, onContactSupp
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              onClick={() => window.open("/GOOGLE_CALENDAR_SETUP.md", "_blank")}
+              onClick={() => {
+                const blob = new Blob([googleCalendarGuide], { type: "text/markdown;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                window.open(url, "_blank", "noopener,noreferrer");
+                window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              }}
               className="flex items-center gap-2"
             >
               <ExternalLink className="h-4 w-4" />

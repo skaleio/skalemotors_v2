@@ -91,7 +91,7 @@ bun install
 ### 3. Configurar variables de entorno
 
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
 Edita el archivo `.env` con tus credenciales:
@@ -187,7 +187,7 @@ skale-motors/
 ├── supabase/            # Configuración de Supabase
 │   ├── functions/       # Edge Functions
 │   └── config.toml      # Configuración local
-├── docs/                # Documentación adicional
+├── docs/                # Documentación (índice, guías en docs/guides/)
 └── workflows/           # Templates de N8N
 
 ```
@@ -195,16 +195,16 @@ skale-motors/
 ## 🔌 Integraciones
 
 ### Google Calendar
-Ver [GOOGLE_CALENDAR_SETUP.md](./GOOGLE_CALENDAR_SETUP.md) para configuración completa.
+Ver [docs/guides/GOOGLE_CALENDAR_SETUP.md](./docs/guides/GOOGLE_CALENDAR_SETUP.md) para configuración completa.
 
 ### N8N (Automatización)
 Ver [docs/N8N_INTEGRATION_README.md](./docs/N8N_INTEGRATION_README.md) para workflows y configuración.
 
 ### WhatsApp Business
-- [META_WHATSAPP_SETUP.md](./META_WHATSAPP_SETUP.md) - Mensajería (Meta)
+- [docs/guides/META_WHATSAPP_SETUP.md](./docs/guides/META_WHATSAPP_SETUP.md) - Mensajería (Meta)
 
 ### SimpleFACTURA
-Ver [SIMPLEFACTURA_SETUP.md](./SIMPLEFACTURA_SETUP.md) para integración de facturación.
+Ver [docs/guides/SIMPLEFACTURA_SETUP.md](./docs/guides/SIMPLEFACTURA_SETUP.md) para integración de facturación.
 
 ### Marketplaces (Mercado Libre, Facebook, Chile Autos)
 Ver [docs/MARKETPLACES_SETUP.md](./docs/MARKETPLACES_SETUP.md) para publicar vehículos en marketplaces.
@@ -217,13 +217,13 @@ Ver [docs/MARKETPLACES_SETUP.md](./docs/MARKETPLACES_SETUP.md) para publicar veh
 - ✅ Validación de datos con Zod
 - ✅ Sanitización de inputs
 
-Ver [SEGURIDAD.md](./SEGURIDAD.md) para más detalles.
+Ver [docs/guides/SEGURIDAD.md](./docs/guides/SEGURIDAD.md) para más detalles. Política de reporte: [docs/SECURITY.md](./docs/SECURITY.md).
 
 ## 📚 Documentación
 
 ### Guías de Usuario
-- [GUIA_IMPLEMENTACION.md](./GUIA_IMPLEMENTACION.md) - Guía completa de implementación
-- [MIGRACION_PRODUCCION.md](./MIGRACION_PRODUCCION.md) - Deploy a producción
+- [docs/guides/GUIA_IMPLEMENTACION.md](./docs/guides/GUIA_IMPLEMENTACION.md) - Guía completa de implementación
+- [docs/guides/MIGRACION_PRODUCCION.md](./docs/guides/MIGRACION_PRODUCCION.md) - Deploy a producción
 
 ### Documentación Técnica
 - [docs/README.md](./docs/README.md) - Índice de documentación y estado del proyecto

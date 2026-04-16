@@ -24,6 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAppointments } from "@/hooks/useAppointments";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
+import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
 import "@/styles/calendar.css";
@@ -173,6 +174,7 @@ export default function Appointments() {
 
   const { leads } = useLeads({
     branchId: user?.branch_id ?? undefined,
+    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });
   const { vehicles } = useVehicles({

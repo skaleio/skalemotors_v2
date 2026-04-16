@@ -86,7 +86,7 @@ const App = () => (
 
               {/* Rutas protegidas: rutas más específicas primero para que /app/executive no sea capturada por /app */}
               <Route path="/app/executive" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <ExecutiveDashboard />
                   </Layout>
@@ -128,14 +128,14 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/app/sales" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <SalesManagement />
                   </Layout>
                 </ProtectedRoute>
               } />
               <Route path="/app/vendors" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <VendorManagement />
                   </Layout>
@@ -205,7 +205,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/app/billing" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <Billing />
                   </Layout>
@@ -247,7 +247,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/app/users" element={
-                <ProtectedRoute requiredRole={['admin', 'gerente']}>
+                <ProtectedRoute requiredRole={['admin', 'gerente', 'jefe_jefe', 'jefe_sucursal']}>
                   <Layout>
                     <Users />
                   </Layout>

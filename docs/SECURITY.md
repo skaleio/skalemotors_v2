@@ -12,4 +12,4 @@ Usa GitHub Security Advisories para reportes privados:
 
 ## Informacion adicional
 
-Consulta la guia de seguridad del proyecto en `SEGURIDAD.md`.
+Consulta la guía de seguridad del proyecto en [guides/SEGURIDAD.md](./guides/SEGURIDAD.md).

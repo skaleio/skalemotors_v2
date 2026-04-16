@@ -13,18 +13,18 @@
 | [../README.md](../README.md) | Punto de entrada: instalación, stack, scripts |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Guía de contribución y estándares de código |
 | [../CHANGELOG.md](../CHANGELOG.md) | Historial de cambios |
-| [../SECURITY.md](../SECURITY.md) | Política de reporte de vulnerabilidades |
-| [../SEGURIDAD.md](../SEGURIDAD.md) | Guía detallada de seguridad (RLS, auth, buenas prácticas) |
-| [../GUIA_IMPLEMENTACION.md](../GUIA_IMPLEMENTACION.md) | Guía paso a paso de implementación / migración |
-| [../MIGRACION_PRODUCCION.md](../MIGRACION_PRODUCCION.md) | Plan de migración y deploy a producción |
+| [SECURITY.md](./SECURITY.md) | Política de reporte de vulnerabilidades |
+| [guides/SEGURIDAD.md](./guides/SEGURIDAD.md) | Guía detallada de seguridad (RLS, auth, buenas prácticas) |
+| [guides/GUIA_IMPLEMENTACION.md](./guides/GUIA_IMPLEMENTACION.md) | Guía paso a paso de implementación / migración |
+| [guides/MIGRACION_PRODUCCION.md](./guides/MIGRACION_PRODUCCION.md) | Plan de migración y deploy a producción |
 
-### Setup por integración
+### Setup por integración (`docs/guides/`)
 
 | Documento | Integración |
 |-----------|-------------|
-| [../GOOGLE_CALENDAR_SETUP.md](../GOOGLE_CALENDAR_SETUP.md) | Google Calendar (citas) |
-| [../META_WHATSAPP_SETUP.md](../META_WHATSAPP_SETUP.md) | WhatsApp mensajería (Meta) |
-| [../SIMPLEFACTURA_SETUP.md](../SIMPLEFACTURA_SETUP.md) | Facturación electrónica |
+| [guides/GOOGLE_CALENDAR_SETUP.md](./guides/GOOGLE_CALENDAR_SETUP.md) | Google Calendar (citas) |
+| [guides/META_WHATSAPP_SETUP.md](./guides/META_WHATSAPP_SETUP.md) | WhatsApp mensajería (Meta) |
+| [guides/SIMPLEFACTURA_SETUP.md](./guides/SIMPLEFACTURA_SETUP.md) | Facturación electrónica |
 | [MARKETPLACES_SETUP.md](./MARKETPLACES_SETUP.md) | Mercado Libre, Facebook Marketplace, Chile Autos |
 
 ### N8N y Studio IA
@@ -91,9 +91,10 @@ skalemotors_v2/
 │   ├── hooks/         # useVehicles, useLeads, useAppointments, usePendingTasks, etc.
 │   ├── lib/           # supabase, services/*.ts, types
 │   └── pages/         # Rutas: Dashboard, CRM, Inventory, Studio IA, etc.
+├── api/               # Rutas serverless (Vercel): p. ej. n8n-lead-ingest
 ├── supabase/functions/  # Edge Functions (lead-state-update, marketplace-*, whatsapp-*, etc.)
-├── scripts/           # SQL (RLS, n8n_workspaces, demo users, migraciones)
-├── docs/              # Documentación (este índice + guías)
+├── scripts/           # Utilidades Node, SQL auxiliar (scripts/sql/)
+├── docs/              # Documentación: índice, guides/, integraciones
 └── workflows/         # Ejemplos/templates N8N
 ```
 

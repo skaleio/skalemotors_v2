@@ -79,12 +79,12 @@ export interface Database {
         Row: {
           id: string
           name: string
-          address: string
+          address: string | null
           phone: string | null
           email: string | null
           manager_id: string | null
-          city: string
-          region: string
+          city: string | null
+          region: string | null
           is_active: boolean
           opening_hours: string | null
           tenant_id: string | null
@@ -94,12 +94,12 @@ export interface Database {
         Insert: {
           id?: string
           name: string
-          address: string
+          address?: string | null
           phone?: string | null
           email?: string | null
           manager_id?: string | null
-          city: string
-          region: string
+          city?: string | null
+          region?: string | null
           is_active?: boolean
           opening_hours?: string | null
           tenant_id?: string | null
@@ -109,12 +109,12 @@ export interface Database {
         Update: {
           id?: string
           name?: string
-          address?: string
+          address?: string | null
           phone?: string | null
           email?: string | null
           manager_id?: string | null
-          city?: string
-          region?: string
+          city?: string | null
+          region?: string | null
           is_active?: boolean
           opening_hours?: string | null
           tenant_id?: string | null
@@ -762,6 +762,7 @@ export interface Database {
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
           closed_by_staff_id: string | null
+          created_by: string | null
           branch_id: string | null
           tenant_id: string | null
           region: string | null
@@ -789,6 +790,7 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           closed_by_staff_id?: string | null
+          created_by?: string | null
           branch_id?: string | null
           tenant_id?: string | null
           region?: string | null
@@ -816,6 +818,7 @@ export interface Database {
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           closed_by_staff_id?: string | null
+          created_by?: string | null
           branch_id?: string | null
           tenant_id?: string | null
           region?: string | null

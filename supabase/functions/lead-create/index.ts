@@ -49,6 +49,16 @@ function toTitleCase(s: string): string {
     .join(" ");
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function optionalAssignedToUuid(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const s = String(value).trim();
+  if (!s || !UUID_RE.test(s)) return undefined;
+  return s;
+}
+
 const SOURCES = ["web", "referido", "walk_in", "telefono", "redes_sociales", "evento", "otro"] as const;
 const PIPELINE_STATUSES = ["contactado", "negociando", "para_cierre"] as const;
 const PRIORITIES = ["baja", "media", "alta"] as const;
@@ -69,6 +79,8 @@ type Payload = {
   tags?: unknown;
   /** Si true y ya existe lead con mismo teléfono en la sucursal, actualiza en lugar de insertar. */
   update_existing?: boolean;
+  /** UUID public.users — asignar vendedor al crear/actualizar (ingesta con service role). */
+  assigned_to?: string | null;
 };
 
 export default async function handler(req: Request): Promise<Response> {
@@ -189,6 +201,8 @@ export default async function handler(req: Request): Promise<Response> {
       };
       if (tenantId) updatePayload.tenant_id = tenantId;
       if (tagsForUpdate !== undefined) updatePayload.tags = tagsForUpdate;
+      const ingestAssigned = optionalAssignedToUuid(body.assigned_to);
+      if (ingestAssigned) updatePayload.assigned_to = ingestAssigned;
 
       Object.keys(updatePayload).forEach((k) => {
         if (updatePayload[k] === undefined) delete updatePayload[k];
@@ -230,6 +244,8 @@ export default async function handler(req: Request): Promise<Response> {
     tags: tagsForInsert,
   };
   if (tenantId) insertPayload.tenant_id = tenantId;
+  const ingestAssignedInsert = optionalAssignedToUuid(body.assigned_to);
+  if (ingestAssignedInsert) insertPayload.assigned_to = ingestAssignedInsert;
 
   const { data: created, error: insertError } = await supabase
     .from("leads")

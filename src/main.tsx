@@ -93,7 +93,7 @@ if (supabaseUrl) {
 if (!supabaseUrl || !supabaseAnonKey) {
   showErrorInRoot(
     "Configuración requerida",
-    "Faltan variables de entorno de Supabase. Crea un archivo <strong>.env</strong> en la raíz del proyecto (junto a package.json) con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Puedes copiar env.example a .env y rellenar los valores. Luego reinicia npm run dev."
+    "Faltan variables de entorno de Supabase. Crea un archivo <strong>.env</strong> en la raíz del proyecto (junto a package.json) con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Puedes copiar <strong>.env.example</strong> a <strong>.env</strong> y rellenar los valores. Luego reinicia npm run dev."
   );
 } else {
   initObservability();
