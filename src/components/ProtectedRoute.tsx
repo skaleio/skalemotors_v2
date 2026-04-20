@@ -46,7 +46,7 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
   const location = useLocation();
 
   useEffect(() => {
-    if (user && !user.is_active) {
+    if (user && (!user.is_active || !user.tenant_id)) {
       void signOut();
     }
   }, [user, signOut]);
@@ -60,8 +60,9 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
     );
   }
 
-  if (!user || !user.is_active) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  // Segundo cinturón de seguridad: sin fila en public.users con tenant asignado, no hay acceso
+  if (!user || !user.is_active || !user.tenant_id) {
+    return <Navigate to="/login" state={{ from: location, error: "sin_acceso" }} replace />;
   }
 
   if (needsOnboarding && location.pathname !== "/onboarding") {

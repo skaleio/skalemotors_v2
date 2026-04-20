@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Users as UsersIcon, Plus, Search, Shield, Mail, Loader2, KeyRound } from "lucide-react";
+import { Users as UsersIcon, Plus, Search, Shield, Mail, Loader2, KeyRound, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -20,6 +20,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -29,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/lib/types/database";
@@ -45,6 +54,107 @@ type SalesStaffRow = Database["public"]["Tables"]["branch_sales_staff"]["Row"] &
 };
 
 const MANUAL_STAFF_VALUE = "__manual__";
+
+async function createVendorViaEdgeFunction(payload: {
+  email: string;
+  password: string;
+  full_name: string;
+  branch_id: string;
+}): Promise<{ ok: boolean; user_id?: string; email?: string }> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) {
+    throw new Error("Tu sesión expiró. Cierra sesión y vuelve a entrar.");
+  }
+  const base = (supabaseUrl ?? "").replace(/\/$/, "");
+  if (!base) {
+    throw new Error("Falta VITE_SUPABASE_URL en la configuración del build.");
+  }
+  const url = `${base}/functions/v1/vendor-user-create`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey ?? "",
+        "x-client-info": "skale-motors-web",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `No se pudo conectar con el servidor (${msg}). Revisa tu red, que en Supabase esté desplegada la función «vendor-user-create» y que VITE_SUPABASE_URL apunte a este proyecto (sin barra final al final del dominio).`,
+    );
+  }
+  const text = await res.text();
+  let body: { ok?: boolean; error?: string } = {};
+  try {
+    body = text ? (JSON.parse(text) as typeof body) : {};
+  } catch {
+    throw new Error(
+      `Respuesta inesperada (${res.status}). ¿Existe la función «vendor-user-create»? ${text.slice(0, 160)}`,
+    );
+  }
+  if (!res.ok) {
+    throw new Error(body.error || `Error ${res.status}: ${text.slice(0, 200)}`);
+  }
+  if (!body.ok) {
+    throw new Error(body.error || "No se pudo crear el vendedor");
+  }
+  return body as { ok: boolean; user_id?: string; email?: string };
+}
+
+async function deleteVendorViaEdgeFunction(userId: string): Promise<{ ok: boolean; user_id?: string }> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) {
+    throw new Error("Tu sesión expiró. Cierra sesión y vuelve a entrar.");
+  }
+  const base = (supabaseUrl ?? "").replace(/\/$/, "");
+  if (!base) {
+    throw new Error("Falta VITE_SUPABASE_URL en la configuración del build.");
+  }
+  const url = `${base}/functions/v1/vendor-user-delete`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseAnonKey ?? "",
+        "x-client-info": "skale-motors-web",
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `No se pudo conectar con el servidor (${msg}). Revisa que la función «vendor-user-delete» esté desplegada.`,
+    );
+  }
+  const text = await res.text();
+  let body: { ok?: boolean; error?: string } = {};
+  try {
+    body = text ? (JSON.parse(text) as typeof body) : {};
+  } catch {
+    throw new Error(
+      `Respuesta inesperada (${res.status}). ¿Existe la función «vendor-user-delete»? ${text.slice(0, 160)}`,
+    );
+  }
+  if (!res.ok) {
+    throw new Error(body.error || `Error ${res.status}: ${text.slice(0, 200)}`);
+  }
+  if (!body.ok) {
+    throw new Error(body.error || "No se pudo eliminar el usuario");
+  }
+  return body as { ok: boolean; user_id?: string };
+}
+
+const CAN_MANAGE_TEAM = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrador",
@@ -62,6 +172,7 @@ export default function Users() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [recoverySendingFor, setRecoverySendingFor] = useState<string | null>(null);
+  const [deleteConfirmRow, setDeleteConfirmRow] = useState<UserRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -128,20 +239,35 @@ export default function Users() {
     },
   });
 
-  const createVendorMutation = useMutation({
-    mutationFn: async (payload: { email: string; password: string; full_name: string; branch_id: string }) => {
-      const { data, error } = await supabase.functions.invoke("vendor-user-create", { body: payload });
-      if (error) throw new Error(error.message || "Error al llamar al servidor");
-      const body = data as { ok?: boolean; error?: string };
-      if (!body?.ok) throw new Error(body?.error || "No se pudo crear el vendedor");
-      return body;
-    },
+  const deleteVendorMutation = useMutation({
+    mutationFn: deleteVendorViaEdgeFunction,
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tenant_users"] });
+      setDeleteConfirmRow(null);
+      toast({
+        title: "Usuario eliminado",
+        description: "Se quitó el acceso y el perfil del vendedor.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "No se pudo eliminar",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createVendorMutation = useMutation({
+    mutationFn: createVendorViaEdgeFunction,
+    onSuccess: () => {
+      // Invalidar primero para que la tabla se refresque al cerrarse el modal
       void queryClient.invalidateQueries({ queryKey: ["tenant_users"] });
       setCreateOpen(false);
       setNewEmail("");
       setNewPassword("");
       setNewFullName("");
+      setNewBranchId("");
       setSelectedStaffId(MANUAL_STAFF_VALUE);
       toast({
         title: "Vendedor creado",
@@ -220,6 +346,18 @@ export default function Users() {
     } finally {
       setRecoverySendingFor(null);
     }
+  };
+
+  const canManageTeam = user?.role ? CAN_MANAGE_TEAM.has(user.role) : false;
+
+  const canOfferDeleteForRow = (row: UserRow) => {
+    if (!user?.id || !canManageTeam) return false;
+    if (row.id === user.id) return false;
+    if (row.role !== "vendedor" || !row.is_active) return false;
+    if (user.role === "gerente" || user.role === "jefe_sucursal") {
+      if (!user.branch_id || row.branch_id !== user.branch_id) return false;
+    }
+    return true;
   };
 
   const submitCreate = (e: React.FormEvent) => {
@@ -334,21 +472,35 @@ export default function Users() {
                     </TableCell>
                     <TableCell className="text-right">
                       {row.role === "vendedor" && row.is_active ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          disabled={recoverySendingFor === row.email}
-                          onClick={() => void sendPasswordRecovery(row.email)}
-                        >
-                          {recoverySendingFor === row.email ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <KeyRound className="h-3.5 w-3.5" />
-                          )}
-                          Enlace recuperación
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            disabled={recoverySendingFor === row.email}
+                            onClick={() => void sendPasswordRecovery(row.email)}
+                          >
+                            {recoverySendingFor === row.email ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <KeyRound className="h-3.5 w-3.5" />
+                            )}
+                            Enlace recuperación
+                          </Button>
+                          {canOfferDeleteForRow(row) ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                              onClick={() => setDeleteConfirmRow(row)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Eliminar
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground text-sm">—</span>
                       )}
@@ -360,6 +512,44 @@ export default function Users() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={!!deleteConfirmRow}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmRow(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar acceso de {deleteConfirmRow?.full_name ?? "este usuario"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cerrará la sesión en todos los dispositivos y se borrará el perfil del vendedor. Esta acción no se
+              puede deshacer. Los leads u otros registros que lo referenciaban se conservan (p. ej. creador en documentos
+              se deja sin asignar).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteVendorMutation.isPending}>Cancelar</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteVendorMutation.isPending || !deleteConfirmRow}
+              onClick={() => {
+                if (deleteConfirmRow) deleteVendorMutation.mutate(deleteConfirmRow.id);
+              }}
+            >
+              {deleteVendorMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin inline" />
+                  Eliminando…
+                </>
+              ) : (
+                "Eliminar definitivamente"
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">

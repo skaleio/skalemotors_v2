@@ -25,7 +25,18 @@ function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-export default async function handler(req: Request): Promise<Response> {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validatePassword(pw: string): string | null {
+  if (pw.length < 10) return "La contraseña debe tener al menos 10 caracteres";
+  if (!/[a-z]/.test(pw)) return "La contraseña debe contener al menos una minúscula";
+  if (!/[A-Z]/.test(pw)) return "La contraseña debe contener al menos una mayúscula";
+  if (!/[0-9]/.test(pw)) return "La contraseña debe contener al menos un número";
+  return null;
+}
+
+async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
 
@@ -46,23 +57,30 @@ export default async function handler(req: Request): Promise<Response> {
   const fullName = (body.full_name ?? "").trim();
   const branchId = (body.branch_id ?? "").trim();
 
-  if (!email || !email.includes("@")) {
+  if (!email || !EMAIL_RE.test(email) || email.length > 254) {
     return jsonResponse(400, { ok: false, error: "email inválido" });
   }
-  if (password.length < 8) {
-    return jsonResponse(400, { ok: false, error: "La contraseña debe tener al menos 8 caracteres" });
+  const pwError = validatePassword(password);
+  if (pwError) {
+    return jsonResponse(400, { ok: false, error: pwError });
   }
-  if (!fullName) {
-    return jsonResponse(400, { ok: false, error: "Nombre requerido" });
+  if (!fullName || fullName.length > 120) {
+    return jsonResponse(400, { ok: false, error: "Nombre requerido (máx 120 caracteres)" });
   }
-  if (!branchId) {
-    return jsonResponse(400, { ok: false, error: "Sucursal requerida" });
+  if (!branchId || !UUID_RE.test(branchId)) {
+    return jsonResponse(400, { ok: false, error: "Sucursal inválida" });
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
   const anonKey = getEnv("SUPABASE_ANON_KEY");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? getEnv("SERVICE_ROLE_KEY");
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    const missing = [
+      !supabaseUrl && "SUPABASE_URL",
+      !anonKey && "SUPABASE_ANON_KEY",
+      !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+    ].filter(Boolean).join(", ");
+    console.error(`[vendor-user-create] Missing env vars: ${missing}`);
     return jsonResponse(500, { ok: false, error: "Missing Supabase env vars" });
   }
 
@@ -130,6 +148,7 @@ export default async function handler(req: Request): Promise<Response> {
   });
 
   if (pendErr) {
+    console.error("[vendor-user-create] pending_vendor_provisions insert error:", pendErr.code, pendErr.message);
     return jsonResponse(500, { ok: false, error: pendErr.message || "No se pudo preparar el alta" });
   }
 
@@ -144,6 +163,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (createErr || !created?.user?.id) {
     await admin.from("pending_vendor_provisions").delete().eq("email", email);
     const msg = createErr?.message ?? "No se pudo crear el usuario";
+    console.error("[vendor-user-create] auth.admin.createUser error:", msg);
     if (msg.toLowerCase().includes("already")) {
       return jsonResponse(409, { ok: false, error: "Ese correo ya está registrado en el sistema de acceso" });
     }
@@ -156,3 +176,5 @@ export default async function handler(req: Request): Promise<Response> {
     email,
   });
 }
+
+Deno.serve((req) => handler(req));

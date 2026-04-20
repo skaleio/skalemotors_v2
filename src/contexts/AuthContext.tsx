@@ -11,7 +11,7 @@ interface AuthContextType {
   loading: boolean;
   isSigningOut: boolean;
   needsOnboarding: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: unknown }>;
+  signIn: (email: string, password: string) => Promise<{ error: unknown; role?: User["role"] }>;
   signUp: (
     email: string,
     password: string,
@@ -63,42 +63,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const PROFILE_FETCH_TIMEOUT_MS = 20 * 1000; // 20 s para redes lentas
-
-  const roleFromSessionUser = (sessionUser: Session["user"]): User["role"] => {
-    const allowed: User["role"][] = [
-      "admin",
-      "gerente",
-      "vendedor",
-      "financiero",
-      "servicio",
-      "inventario",
-      "jefe_jefe",
-      "jefe_sucursal",
-    ];
-    const appMeta = sessionUser.app_metadata as { role?: string } | undefined;
-    const raw = appMeta?.role ?? (sessionUser.user_metadata as { role?: string } | undefined)?.role;
-    if (raw && (allowed as string[]).includes(raw)) return raw as User["role"];
-    return "gerente";
-  };
-
-  const buildFallbackUserFromSession = (sessionUser: Session["user"]): User => {
-    const metadata = sessionUser.user_metadata || {};
-    return {
-      id: sessionUser.id,
-      email: sessionUser.email || "",
-      full_name: metadata.full_name || sessionUser.email?.split("@")[0] || "Usuario",
-      phone: metadata.phone || undefined,
-      role: roleFromSessionUser(sessionUser),
-      tenant_id: undefined,
-      legacy_protected: false,
-      branch_id: undefined,
-      is_active: true,
-      avatar_url: metadata.avatar_url || undefined,
-      onboarding_completed: metadata.onboarding_completed || false,
-      created_at: sessionUser.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-  };
 
   const getProfileCacheKey = (userId: string) => `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
 
@@ -253,28 +217,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const currentSession = session;
       pendingSessionRef.current = currentSession;
       setSession(currentSession);
+
       const cachedProfile = readCachedProfile(currentSession.user.id);
-      const initialUser = cachedProfile ?? buildFallbackUserFromSession(currentSession.user);
-      setUser(initialUser);
-      currentUserRef.current = initialUser;
-      setTenantContext({
-        tenantId: initialUser.tenant_id,
-        role: initialUser.role,
-        userId: initialUser.id,
-        legacyProtected: initialUser.legacy_protected,
-      });
-      setObservabilityUserContext({
-        id: initialUser.id,
-        email: initialUser.email,
-        role: initialUser.role,
-        tenantId: initialUser.tenant_id,
-      });
-      setLoading(false);
-      // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
-      // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
-      const ok = await fetchUserProfile(currentSession.user.id);
-      if (!ok) {
-        // se mantiene usuario fallback ya puesto arriba
+      if (cachedProfile?.tenant_id) {
+        // Cache válido con tenant: renderizar inmediatamente, luego verificar en background
+        setUser(cachedProfile);
+        currentUserRef.current = cachedProfile;
+        setTenantContext({
+          tenantId: cachedProfile.tenant_id,
+          role: cachedProfile.role,
+          userId: cachedProfile.id,
+          legacyProtected: cachedProfile.legacy_protected,
+        });
+        setObservabilityUserContext({
+          id: cachedProfile.id,
+          email: cachedProfile.email,
+          role: cachedProfile.role,
+          tenantId: cachedProfile.tenant_id,
+        });
+        setLoading(false);
+        // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
+        // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
+        const ok = await fetchUserProfile(currentSession.user.id);
+        if (!ok) {
+          // Perfil desapareció de DB — invalidar sesión
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          try { window.localStorage.removeItem(getProfileCacheKey(currentSession.user.id)); } catch { /* ignore */ }
+          setUser(null);
+          currentUserRef.current = null;
+          setSession(null);
+        }
+      } else {
+        // Sin cache válido: verificar DB antes de dar acceso (no mostrar app con fallback)
+        // pendingSessionRef ya está seteado; el timeout guard lleva la carga si la red falla
+        const ok = await fetchUserProfile(currentSession.user.id);
+        if (!ok) {
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          setUser(null);
+          currentUserRef.current = null;
+          setSession(null);
+          setLoading(false);
+        }
+        // Si ok: fetchUserProfile ya llamó setUser + setLoading(false)
       }
     });
 
@@ -310,10 +294,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        if (!sameUserAlreadyLoaded) {
-          const nextUser = cachedProfile ?? buildFallbackUserFromSession(session.user);
-          setUser(nextUser);
-          currentUserRef.current = nextUser;
+        if (!sameUserAlreadyLoaded && cachedProfile?.tenant_id) {
+          setUser(cachedProfile);
+          currentUserRef.current = cachedProfile;
         }
 
         if (
@@ -323,7 +306,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ) {
           const ok = await fetchUserProfile(session.user.id);
           if (!ok) {
-            setUser(buildFallbackUserFromSession(session.user));
+            // Sin perfil en DB y sin cache válido → no otorgar acceso
+            if (!cachedProfile?.tenant_id) {
+              try { await supabase.auth.signOut(); } catch { /* ignore */ }
+              setUser(null);
+              currentUserRef.current = null;
+              setSession(null);
+            }
             setLoading(false);
           }
         }
@@ -349,9 +338,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadingTimeoutRef.current = window.setTimeout(() => {
       const pending = pendingSessionRef.current;
       if (pending?.user) {
-        setUser(buildFallbackUserFromSession(pending.user));
-        setSession(pending);
+        // Sin perfil verificado tras timeout — sign out por seguridad
+        supabase.auth.signOut().catch(() => {});
       }
+      setUser(null);
+      currentUserRef.current = null;
+      setSession(null);
       setLoading(false);
     }, AUTH_LOADING_TIMEOUT_MS);
 
@@ -407,7 +399,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSession(data.session);
         const ok = await fetchUserProfile(data.session.user.id);
         if (!ok) {
-          setUser(buildFallbackUserFromSession(data.session.user));
+          // Credenciales válidas en Auth pero sin fila en public.users → acceso denegado
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          setUser(null);
+          currentUserRef.current = null;
+          setSession(null);
+          setLoading(false);
+          return { error: new Error("NO_PROFILE") };
         }
       } else {
         setUser(null);
@@ -417,7 +415,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: new Error("No se recibió una sesión válida del servidor") };
       }
 
-      return { error: null };
+      return { error: null, role: currentUserRef.current?.role };
     } catch {
       setUser(null);
       currentUserRef.current = null;

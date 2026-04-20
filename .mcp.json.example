@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "https://n8n-n8n.obmrlq.easypanel.host/mcp-server/http",
+        "--header",
+        "authorization:Bearer REEMPLAZAR_POR_JWT_DE_N8N_MCP_SERVER"
+      ]
+    }
+  }
+}

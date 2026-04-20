@@ -47,6 +47,9 @@ export default function Login() {
     if (err instanceof Error && err.message === 'ACCOUNT_DISABLED') {
       return 'Tu cuenta ha sido desactivada. Contacta al administrador.'
     }
+    if (err instanceof Error && err.message === 'NO_PROFILE') {
+      return 'Tu cuenta no tiene acceso configurado. Contacta al administrador.'
+    }
     if (attempts >= 5) return 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.'
     return 'Credenciales incorrectas. Verifica tu correo y contraseña.'
   }
@@ -55,7 +58,8 @@ export default function Login() {
   useEffect(() => {
     if (user && !authLoading && !localLoading && !loginAttempted) {
       const from = (location.state as { from?: RouterLocation } | null)?.from
-      const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : "/app"
+      const defaultPath = user.role === "vendedor" ? "/app/crm" : "/app"
+      const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
       navigate(to, { replace: true })
     }
   }, [user, authLoading, localLoading, loginAttempted, navigate, location.state])
@@ -68,13 +72,13 @@ export default function Login() {
     setError('')
 
     try {
-      const { error } = await signIn(email, password)
-      
+      const { error, role } = await signIn(email, password)
+
       if (error) {
-        const isDisabled = error instanceof Error && error.message === 'ACCOUNT_DISABLED'
-        const newAttempts = isDisabled ? failedAttempts : failedAttempts + 1
+        const isTerminal = error instanceof Error && (error.message === 'ACCOUNT_DISABLED' || error.message === 'NO_PROFILE')
+        const newAttempts = isTerminal ? failedAttempts : failedAttempts + 1
         setFailedAttempts(newAttempts)
-        if (!isDisabled) {
+        if (!isTerminal) {
           const cooldownSeconds = newAttempts >= 5 ? 60 : newAttempts >= 3 ? 15 : 0
           if (cooldownSeconds > 0) startCooldown(cooldownSeconds)
         }
@@ -83,9 +87,10 @@ export default function Login() {
         setLoginAttempted(false)
       } else {
         setFailedAttempts(0)
-        // Login exitoso: navegar explicitamente
+        // Login exitoso: redirigir según rol (vendedor → CRM, resto → dashboard)
         const from = (location.state as { from?: RouterLocation } | null)?.from
-        const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : "/app"
+        const defaultPath = role === "vendedor" ? "/app/crm" : "/app"
+        const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
         navigate(to, { replace: true })
       }
     } catch {
@@ -191,17 +196,6 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-white/80">
-                ¿No tienes una cuenta?{' '}
-                <Link
-                  to="/register"
-                  className="text-white hover:text-white/80 font-medium transition-colors"
-                >
-                  Regístrate aquí
-                </Link>
-              </p>
-            </div>
           </CardContent>
         </Card>
 
