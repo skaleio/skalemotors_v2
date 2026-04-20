@@ -185,14 +185,23 @@ function includes<T extends readonly string[]>(arr: T, val: string): val is T[nu
   return arr.includes(val as T[number]);
 }
 
-function buildNotes(body: Payload): string | null {
+function buildNotes(body: Payload, rawMessage: string | null): string | null {
   const parts: string[] = [];
+  const rawTrimmed = rawMessage?.trim() ?? "";
 
   if (body.vehicle_interest) {
     parts.push(`Vehículo de interés: ${body.vehicle_interest}`);
   }
+  // Dedupe: si body.notes es idéntico (o muy similar) al raw_message,
+  // evitamos duplicar el dump del chatbot en la columna notes.
   if (body.notes) {
-    parts.push(body.notes);
+    const notesTrimmed = body.notes.trim();
+    const duplicatesRaw = rawTrimmed !== "" && (
+      notesTrimmed === rawTrimmed || notesTrimmed.includes(rawTrimmed)
+    );
+    if (!duplicatesRaw) {
+      parts.push(body.notes);
+    }
   }
   if (body.chat_summary) {
     parts.push(`--- Resumen chat ---\n${body.chat_summary}`);
@@ -357,7 +366,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // vehicle_interest también se concatena en buildNotes; dejamos que siga ocurriendo
   // para compat con notas históricas, y además lo guardamos en su columna propia.
   const bodyForNotes: Payload = { ...body, vehicle_interest: vehicleInterest ?? undefined };
-  const notesText = buildNotes(bodyForNotes);
+  const notesText = buildNotes(bodyForNotes, rawMessage);
 
   const budgetStr = pickString(body.budget, body.presupuesto, parsed.presupuesto);
 
