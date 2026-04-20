@@ -84,6 +84,63 @@ function pickString(...values: (string | number | null | undefined)[]): string |
   return null;
 }
 
+const RAW_MESSAGE_LABELS: Record<string, string> = {
+  "nombre": "nombre",
+  "telefono": "telefono",
+  "rut": "rut",
+  "correo": "email",
+  "email": "email",
+  "region": "region",
+  "presupuesto": "presupuesto",
+  "presupuesto pie disponible": "pie_disponible",
+  "pie disponible": "pie_disponible",
+  "uso principal": "uso_principal",
+  "cantidad de pasajeros y filas requeridas": "pasajeros_filas",
+  "pasajeros y filas requeridas": "pasajeros_filas",
+  "transmision preferida": "transmision",
+  "transmision": "transmision",
+  "marca preferida": "marca_preferida",
+  "anos": "anos",
+  "ano minimo": "anos",
+  "preferencia": "preferencia",
+  "alerta crediticia": "alerta_crediticia",
+  "tipo de vehiculo": "tipo_vehiculo",
+  "vehiculo": "tipo_vehiculo",
+  "financiamiento": "payment_method",
+};
+
+function normalizeLabel(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseRawMessage(text: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!text || typeof text !== "string") return out;
+  const lines = text.split(/\r?\n|\\n/);
+  for (const line of lines) {
+    const match = line.match(/^\s*([^:]{1,80}?)\s*:\s*(.+?)\s*$/);
+    if (!match) continue;
+    const rawLabel = match[1];
+    let value = match[2]
+      .replace(/\{[\s\S]*$/, "")
+      .replace(/[{}"]/g, "")
+      .replace(/^\$/, "")
+      .trim();
+    if (!value) continue;
+    const canonical = RAW_MESSAGE_LABELS[normalizeLabel(rawLabel)];
+    if (canonical && out[canonical] === undefined) {
+      out[canonical] = value;
+    }
+  }
+  return out;
+}
+
 type KeyResolution =
   | { kind: "env"; branchId: string }
   | { kind: "db"; branchId: string; keyRowId: string };
@@ -246,13 +303,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const branchId = auth.resolution.branchId;
 
-  const phoneRaw = pickString(body.phone, body.telefono) || "";
+  // Fallback: si el cliente mandó raw_message / mensaje_mike / notes con formato
+  // "Label: valor" por línea, extraemos los campos faltantes para llenar columnas
+  // cuando el n8n no emite las claves canónicas.
+  const rawTextCandidate = pickString(body.raw_message, body.mensaje_mike, body.notes) || "";
+  const parsed = parseRawMessage(rawTextCandidate);
+
+  const phoneRaw = pickString(body.phone, body.telefono, parsed.telefono) || "";
   const normalizedPhone = normalizePhoneChile(phoneRaw);
   if (!normalizedPhone) {
     return res.status(400).json({ ok: false, error: "phone is required (valid Chile format)" });
   }
 
-  const fullName = toTitleCase(pickString(body.full_name, body.nombre) || "") || "Sin nombre";
+  const fullName = toTitleCase(pickString(body.full_name, body.nombre, parsed.nombre) || "") || "Sin nombre";
 
   const status =
     body.status && includes(VALID_STATUSES, body.status) ? body.status : "contactado";
@@ -279,28 +342,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tenantId = branch.tenant_id ?? null;
 
   // Campos extraídos por el AI: se aceptan tanto las claves EN como los aliases ES.
-  const vehicleInterest = pickString(body.vehicle_interest, body.tipo_vehiculo);
-  const usoPrincipal = pickString(body.uso_principal);
-  const pasajerosFilas = pickString(body.pasajeros_filas, body.cantidad_pasajeros_filas_requeridas);
-  const transmision = pickString(body.transmision, body.transmision_preferida);
-  const pieDisponible = pickString(body.pie_disponible, body.presupuesto_pie_disponible);
-  const marcaPreferida = pickString(body.marca_preferida);
-  const anosMinimo = pickString(body.anos_minimo, body.anos);
-  const preferencia = pickString(body.preferencia);
-  const alertaCrediticia = pickString(body.alerta_crediticia);
-  const rawMessage = pickString(body.raw_message, body.mensaje_mike);
+  // Si faltan, se completan con el parse del raw_message/notes.
+  const vehicleInterest = pickString(body.vehicle_interest, body.tipo_vehiculo, parsed.tipo_vehiculo);
+  const usoPrincipal = pickString(body.uso_principal, parsed.uso_principal);
+  const pasajerosFilas = pickString(body.pasajeros_filas, body.cantidad_pasajeros_filas_requeridas, parsed.pasajeros_filas);
+  const transmision = pickString(body.transmision, body.transmision_preferida, parsed.transmision);
+  const pieDisponible = pickString(body.pie_disponible, body.presupuesto_pie_disponible, parsed.pie_disponible);
+  const marcaPreferida = pickString(body.marca_preferida, parsed.marca_preferida);
+  const anosMinimo = pickString(body.anos_minimo, body.anos, parsed.anos);
+  const preferencia = pickString(body.preferencia, parsed.preferencia);
+  const alertaCrediticia = pickString(body.alerta_crediticia, parsed.alerta_crediticia);
+  const rawMessage = rawTextCandidate || null;
 
   // vehicle_interest también se concatena en buildNotes; dejamos que siga ocurriendo
   // para compat con notas históricas, y además lo guardamos en su columna propia.
   const bodyForNotes: Payload = { ...body, vehicle_interest: vehicleInterest ?? undefined };
   const notesText = buildNotes(bodyForNotes);
 
-  const budgetStr = pickString(body.budget, body.presupuesto);
+  const budgetStr = pickString(body.budget, body.presupuesto, parsed.presupuesto);
 
-  const paymentType = pickString(body.payment_type, body.payment_method);
-  const rut = pickString(body.rut);
-  const email = pickString(body.email);
-  const region = pickString(body.region);
+  const paymentType = pickString(body.payment_type, body.payment_method, parsed.payment_method);
+  const rut = pickString(body.rut, parsed.rut);
+  const email = pickString(body.email, parsed.email);
+  const region = pickString(body.region, parsed.region);
 
   const stateVal = body.state?.trim() || null;
   const stateConfidence =
