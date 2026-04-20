@@ -20,10 +20,12 @@ export function initObservability() {
   if (!dsn) return;
 
   const restPrefix = supabaseRestUrlPrefix();
+  const release = (import.meta.env.VITE_APP_RELEASE as string | undefined) || undefined;
 
   Sentry.init({
     dsn,
     environment: (import.meta.env.VITE_APP_ENV as string) || "development",
+    release,
     enableLogs: true,
     integrations: [
       supabaseIntegration(SupabaseClient, Sentry, {
@@ -47,6 +49,18 @@ export function initObservability() {
     tracesSampleRate: 0.2,
     replaysSessionSampleRate: 0.02,
     replaysOnErrorSampleRate: 1.0,
+    ignoreErrors: [
+      "ResizeObserver loop limit exceeded",
+      "ResizeObserver loop completed with undelivered notifications",
+      "Non-Error promise rejection captured",
+      "AbortError: The user aborted a request",
+    ],
+    denyUrls: [
+      /^chrome-extension:\/\//i,
+      /^moz-extension:\/\//i,
+      /^safari-(web-)?extension:\/\//i,
+      /extensions\//i,
+    ],
   });
 }
 
@@ -57,6 +71,12 @@ export function setObservabilityUserContext(user: UserScope) {
     role: user.role ?? "unknown",
     tenant_id: user.tenantId ?? "unknown",
   });
+}
+
+export function clearObservabilityUserContext() {
+  if (!import.meta.env.VITE_SENTRY_DSN) return;
+  Sentry.setUser(null);
+  Sentry.setTags({ role: "unknown", tenant_id: "unknown" });
 }
 
 export function captureAppError(error: unknown, context?: Record<string, unknown>) {

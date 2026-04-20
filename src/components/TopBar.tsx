@@ -3,7 +3,16 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLeads } from "@/hooks/useLeads";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
+import {
+  useDismissNotification,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+  type Notification,
+} from "@/hooks/useNotifications";
 import { useVehicles } from "@/hooks/useVehicles";
+import { formatDistanceToNow } from "date-fns";
+import { es as esLocale } from "date-fns/locale";
 import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -155,53 +164,46 @@ export function TopBar() {
     setIsSearchOpen(false);
   };
 
-  const [notifications, setNotifications] = useState<
-    Array<{
-      id: number;
-      title: string;
-      message: string;
-      time: string;
-      unread: boolean;
-      type: string;
-      action?: string;
-    }>
-  >([]);
+  const { notifications, unreadCount } = useNotifications({ userId: user?.id, limit: 20 });
+  const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
+  const dismissMutation = useDismissNotification();
 
-  const unreadCount = notifications.filter(n => n.unread).length;
-
-  const markAsRead = (id: number) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === id
-          ? { ...notification, unread: false }
-          : notification
-      )
-    );
-  };
-
-  const dismissNotification = (id: number) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  };
-
+  const markAsRead = (id: string) => markReadMutation.mutate(id);
+  const dismissNotification = (id: string) => dismissMutation.mutate(id);
   const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, unread: false }))
-    );
+    if (user?.id) markAllReadMutation.mutate(user.id);
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'sale':
+      case 'lead_sold':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'consignacion_created':
+        return <Car className="h-5 w-5 text-indigo-500" />;
+      case 'consignacion_stale':
+        return <Clock className="h-5 w-5 text-amber-500" />;
       case 'lead':
+      case 'lead_assigned':
         return <Info className="h-5 w-5 text-pink-500" />;
       case 'appointment':
         return <Clock className="h-5 w-5 text-orange-500" />;
-      case 'inventory':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
       default:
         return <Info className="h-5 w-5 text-gray-500" />;
     }
+  };
+
+  const formatNotificationTime = (iso: string) => {
+    try {
+      return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: esLocale });
+    } catch {
+      return '';
+    }
+  };
+
+  const openNotification = (notification: Notification) => {
+    if (!notification.read_at) markAsRead(notification.id);
+    if (notification.action_url) navigateWithLoading(notification.action_url);
   };
 
   return (
@@ -613,13 +615,15 @@ export function TopBar() {
                   No hay notificaciones
                 </div>
               ) : (
-                notifications.map((notification) => (
+                notifications.map((notification) => {
+                  const unread = !notification.read_at;
+                  return (
                   <div
                     key={notification.id}
                     className={`p-4 border-b transition-colors ${theme === 'dark'
-                        ? `border-slate-600 hover:bg-slate-700 ${notification.unread ? 'bg-pink-900/20' : 'bg-slate-800'
+                        ? `border-slate-600 hover:bg-slate-700 ${unread ? 'bg-pink-900/20' : 'bg-slate-800'
                         }`
-                        : `border-gray-100 hover:bg-gray-50 ${notification.unread ? 'bg-pink-50' : 'bg-white'
+                        : `border-gray-100 hover:bg-gray-50 ${unread ? 'bg-pink-50' : 'bg-white'
                         }`
                       }`}
                   >
@@ -632,33 +636,40 @@ export function TopBar() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                          <div
+                            className="flex-1 cursor-pointer"
+                            onClick={() => openNotification(notification)}
+                          >
                             <h4 className={`text-sm font-semibold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'
                               }`}>
                               {notification.title}
                             </h4>
-                            <p className={`text-sm mb-2 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'
-                              }`}>
-                              {notification.message}
-                            </p>
+                            {notification.message && (
+                              <p className={`text-sm mb-2 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'
+                                }`}>
+                                {notification.message}
+                              </p>
+                            )}
                             <div className="flex items-center justify-between">
                               <div className={`flex items-center space-x-1 text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-400'
                                 }`}>
                                 <Clock className="h-3 w-3" />
-                                <span>{notification.time}</span>
+                                <span>{formatNotificationTime(notification.created_at)}</span>
                               </div>
-                              <button className={`text-xs font-medium ${theme === 'dark'
-                                  ? 'text-pink-400 hover:text-pink-300'
-                                  : 'text-pink-600 hover:text-pink-800'
-                                }`}>
-                                {notification.action}
-                              </button>
+                              {notification.action_url && (
+                                <span className={`text-xs font-medium ${theme === 'dark'
+                                    ? 'text-pink-400 hover:text-pink-300'
+                                    : 'text-pink-600 hover:text-pink-800'
+                                  }`}>
+                                  Ver
+                                </span>
+                              )}
                             </div>
                           </div>
 
                           {/* Action buttons */}
                           <div className="flex items-center space-x-1 ml-2">
-                            {notification.unread && (
+                            {unread && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
                                 className={`p-1 rounded-full transition-colors ${theme === 'dark'
@@ -687,24 +698,26 @@ export function TopBar() {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 
             {/* Footer */}
-            {notifications.length > 0 && (
-              <div className={`p-3 border-t ${theme === 'dark'
-                  ? 'border-slate-600 bg-slate-700/50'
-                  : 'border-gray-200 bg-gray-50'
-                }`}>
-                <button className={`w-full text-center text-sm font-medium ${theme === 'dark'
-                    ? 'text-pink-400 hover:text-pink-300'
-                    : 'text-pink-600 hover:text-pink-800'
-                  }`}>
-                  Ver todas las notificaciones
-                </button>
-              </div>
-            )}
+            <div className={`p-3 border-t ${theme === 'dark'
+                ? 'border-slate-600 bg-slate-700/50'
+                : 'border-gray-200 bg-gray-50'
+              }`}>
+              <button
+                onClick={() => navigateWithLoading('/app/alerts')}
+                className={`w-full text-center text-sm font-medium ${theme === 'dark'
+                  ? 'text-pink-400 hover:text-pink-300'
+                  : 'text-pink-600 hover:text-pink-800'
+                  }`}
+              >
+                Ver todas las notificaciones
+              </button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 

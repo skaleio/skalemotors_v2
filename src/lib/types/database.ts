@@ -960,7 +960,7 @@ export interface Database {
           description: string | null
           action_type: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label: string
-          entity_type: 'lead' | 'appointment' | 'custom' | 'vehicle'
+          entity_type: 'lead' | 'appointment' | 'custom' | 'vehicle' | 'consignacion'
           entity_id: string | null
           metadata: Json
           source: 'rule' | 'llm' | 'whatsapp'
@@ -979,7 +979,7 @@ export interface Database {
           description?: string | null
           action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label?: string
-          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle'
+          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle' | 'consignacion'
           entity_id?: string | null
           metadata?: Json
           source?: 'rule' | 'llm' | 'whatsapp'
@@ -998,7 +998,7 @@ export interface Database {
           description?: string | null
           action_type?: 'contactar' | 'llamar' | 'confirmar' | 'enviar_cotizacion' | 'otro'
           action_label?: string
-          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle'
+          entity_type?: 'lead' | 'appointment' | 'custom' | 'vehicle' | 'consignacion'
           entity_id?: string | null
           metadata?: Json
           source?: 'rule' | 'llm' | 'whatsapp'
@@ -1006,6 +1006,59 @@ export interface Database {
           completed_at?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      notifications: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          recipient_user_id: string
+          actor_user_id: string | null
+          type: string
+          title: string
+          message: string | null
+          entity_type: string | null
+          entity_id: string | null
+          action_url: string | null
+          metadata: Json
+          read_at: string | null
+          archived_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          recipient_user_id: string
+          actor_user_id?: string | null
+          type: string
+          title: string
+          message?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          action_url?: string | null
+          metadata?: Json
+          read_at?: string | null
+          archived_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          recipient_user_id?: string
+          actor_user_id?: string | null
+          type?: string
+          title?: string
+          message?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          action_url?: string | null
+          metadata?: Json
+          read_at?: string | null
+          archived_at?: string | null
+          created_at?: string
         }
       }
       marketplace_connections: {

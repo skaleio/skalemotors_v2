@@ -27,6 +27,7 @@ import {
   Settings,
   Target,
   TrendingUp,
+  Trophy,
   UserCheck,
   UserCircle,
   UserCog,
@@ -39,6 +40,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
+import { SidebarSalesRanking } from "@/components/SidebarSalesRanking";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -77,6 +79,7 @@ const menuCategories = [
       { title: "CRM", url: "/app/crm", icon: Target },
       { title: "Leads", url: "/app/leads", icon: Users },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
+      { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
     ]
   },
   {
@@ -141,7 +144,10 @@ export function AppSidebar() {
     if (isVendorOnly) {
       return menuCategories
         .map((c) => {
-          if (c.title === "CRM & Leads") return c;
+          if (c.title === "CRM & Leads") {
+            const items = c.items.filter((item) => item.url !== "/app/ranking");
+            return { ...c, items };
+          }
           if (c.title === "Inventario & Vehículos") {
             const items = c.items.filter((item) => item.url === "/app/consignaciones");
             return items.length ? { ...c, items } : null;
@@ -566,6 +572,7 @@ export function AppSidebar() {
             </SidebarGroup>
           </Collapsible>
           ) : null}
+          {isVendorOnly && <SidebarSalesRanking collapsed={isCollapsed} />}
         </SidebarContent>
 
         {/* Footer con información del usuario */}

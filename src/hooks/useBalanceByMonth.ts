@@ -4,6 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 /** Mismo criterio que Finanzas: ingresos con esta etiqueta van al Pozo Hessen, no al balance operativo. */
 const INGRESO_ETIQUETA_AHORRO_POZO = "Ahorro pozo";
 
+/**
+ * Solo los gastos con inversor HessenMotors son gastos reales de la empresa.
+ * Gastos de Jota/Mike/Ronald/Antonio = inversión del bolsillo del socio (no restan balance).
+ * Gastos de Pozo Hessen = salen del Pozo, no del balance.
+ * Sin inversor definido → no toca el balance (no asumimos empresa).
+ */
+const INVERSOR_EMPRESA_LOWER = "hessenmotors";
+
 export interface BalanceMonth {
   income: number;
   expenses: number;
@@ -55,20 +63,24 @@ export function useBalanceByMonth(branchId: string | null | undefined, year: num
           }
         });
 
-      // Gastos empresa — igual que Gastos/Ingresos (sin filtro de sucursal)
+      // Gastos empresa: solo HessenMotors resta balance. Jota/Mike/Ronald/Antonio son plata del socio y Pozo Hessen descuenta del Pozo.
       let gastosQuery = supabase
         .from("gastos_empresa")
-        .select("expense_date, amount")
+        .select("expense_date, amount, inversor_name")
         .gte("expense_date", from)
         .lte("expense_date", to);
       const { data: gastosData } = await gastosQuery;
-      (gastosData ?? []).forEach((g: { expense_date: string; amount: number | null }) => {
-        const d = parseLocalDate(g.expense_date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        if (monthMap[key]) {
-          monthMap[key].expenses += Number(g.amount ?? 0);
-        }
-      });
+      (gastosData ?? [])
+        .filter((g: { inversor_name?: string | null }) =>
+          (g.inversor_name ?? "").trim().toLowerCase() === INVERSOR_EMPRESA_LOWER
+        )
+        .forEach((g: { expense_date: string; amount: number | null }) => {
+          const d = parseLocalDate(g.expense_date);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          if (monthMap[key]) {
+            monthMap[key].expenses += Number(g.amount ?? 0);
+          }
+        });
 
       const result: Record<string, BalanceMonth> = {};
       for (const [key, v] of Object.entries(monthMap)) {

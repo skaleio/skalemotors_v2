@@ -1,6 +1,6 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
-import { setObservabilityUserContext } from "@/lib/observability";
+import { clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
 import { setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
@@ -41,6 +41,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const currentUserRef = useRef<User | null>(null);
   // Bloquea onAuthStateChange mientras signIn esta en progreso
   const signingInRef = useRef(false);
+  // Deduplica fetchUserProfile en vuelo (evita N requests cuando el SDK
+  // dispara múltiples eventos: SIGNED_IN + TOKEN_REFRESHED + USER_UPDATED)
+  const inFlightProfileFetch = useRef<Map<string, Promise<boolean>>>(new Map());
+  // Canal para sincronizar login/logout entre pestañas del mismo navegador
+  const authChannelRef = useRef<BroadcastChannel | null>(null);
+  // Última vez que se revalidó el perfil (para throttle en visibilitychange)
+  const lastProfileRevalidateRef = useRef<number>(0);
 
   /** Tiempo máx. esperando getSession (red lenta); no cerrar sesión por esto */
   const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
@@ -87,6 +94,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
+    // Dedup: si ya hay un fetch en vuelo para este userId, reutilizarlo.
+    // Esto evita ráfagas cuando SDK dispara SIGNED_IN + TOKEN_REFRESHED + USER_UPDATED.
+    const existing = inFlightProfileFetch.current.get(userId);
+    if (existing) return existing;
+    const p = doFetchUserProfile(userId).finally(() => {
+      inFlightProfileFetch.current.delete(userId);
+    });
+    inFlightProfileFetch.current.set(userId, p);
+    return p;
+  };
+
+  const doFetchUserProfile = async (userId: string): Promise<boolean> => {
     try {
       const { data, error } = await withTimeout(
         supabase
@@ -322,6 +341,63 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ==========================================================================
+  // Cross-tab sync (BroadcastChannel): logout en una pestaña propaga a todas.
+  // Crítico cuando varios vendedores comparten navegador (modo kiosko) o cuando
+  // un admin desactiva a un vendedor desde otra pestaña.
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel("skale.auth");
+    authChannelRef.current = ch;
+    ch.onmessage = (ev) => {
+      const msg = ev.data as { type?: string; userId?: string } | null;
+      if (!msg?.type) return;
+      if (msg.type === "SIGNED_OUT") {
+        // Otra pestaña cerró sesión → limpiar esta también
+        setUser(null);
+        currentUserRef.current = null;
+        setSession(null);
+        setNeedsOnboarding(false);
+        setLoading(false);
+      } else if (msg.type === "PROFILE_UPDATED" && msg.userId && currentUserRef.current?.id === msg.userId) {
+        // Otra pestaña actualizó el perfil → refrescar acá también
+        void fetchUserProfile(msg.userId);
+      }
+    };
+    return () => {
+      ch.close();
+      authChannelRef.current = null;
+    };
+  }, []);
+
+  // ==========================================================================
+  // Revalidación de perfil al volver a la pestaña / recuperar red.
+  // Cubre: admin cambió rol/activación mientras el vendedor estaba en otra tab.
+  // Throttle a 30s para no martillar la DB con 9 usuarios haciendo tab-switch.
+  // ==========================================================================
+  useEffect(() => {
+    const REVALIDATE_THROTTLE_MS = 30 * 1000;
+    const tryRevalidate = () => {
+      const uid = currentUserRef.current?.id;
+      if (!uid) return;
+      const now = Date.now();
+      if (now - lastProfileRevalidateRef.current < REVALIDATE_THROTTLE_MS) return;
+      lastProfileRevalidateRef.current = now;
+      void fetchUserProfile(uid);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tryRevalidate();
+    };
+    const onOnline = () => tryRevalidate();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
+  }, []);
+
   useEffect(() => {
     if (!loading) {
       if (loadingTimeoutRef.current) {
@@ -356,6 +432,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [loading]);
 
   const signIn: AuthContextType["signIn"] = async (email, password) => {
+    // Guard: ignorar doble submit (click repetido, race entre tabs)
+    if (signingInRef.current) {
+      return { error: new Error("SIGNIN_IN_PROGRESS") };
+    }
     signingInRef.current = true;
     try {
       // Destruir cualquier sesion previa del SDK antes de intentar un nuevo login.
@@ -519,11 +599,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setNeedsOnboarding(false);
       setLoading(false);
       setIsSigningOut(false);
+      clearObservabilityUserContext();
     };
 
     try {
       await supabase.auth.signOut();
     } catch { /* ignore */ }
+    // Notificar a otras pestañas del mismo navegador para que también cierren.
+    try { authChannelRef.current?.postMessage({ type: "SIGNED_OUT" }); } catch { /* ignore */ }
     clearState();
   };
 

@@ -90,6 +90,16 @@ function getDateRange(preset: DateRangePreset): { from: string; to: string } {
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
+/**
+ * Solo los gastos con inversor HessenMotors son gastos reales de la empresa.
+ * Jota/Mike/Ronald/Antonio = inversión del bolsillo del socio (no tocan balance).
+ * Pozo Hessen = sale del Pozo.
+ */
+const INVERSOR_EMPRESA_LOWER = 'hessenmotors'
+function esGastoEmpresa(g: { inversor_name?: string | null }): boolean {
+  return (g.inversor_name ?? '').trim().toLowerCase() === INVERSOR_EMPRESA_LOWER
+}
+
 export function useFinancialTracking(branchId?: string | null, preset: DateRangePreset = 'last_6_months') {
   const { from, to } = getDateRange(preset)
 
@@ -145,7 +155,9 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
       const ingresosRealizados = ingresos.filter((i: any) => (i.payment_status ?? 'realizado') === 'realizado')
       const incomeFromOther = ingresosRealizados.reduce((sum: number, i: any) => sum + Number(i.amount ?? 0), 0)
       const totalIncome = incomeFromSales + incomeFromOther
-      const totalExpenses = gastos.reduce((sum: number, g: any) => sum + Number(g.amount ?? 0), 0)
+      // totalExpenses y balance cuentan solo gastos de empresa (HessenMotors). Gastos de socios y Pozo Hessen se ven en expensesByInversor pero no restan balance.
+      const gastosEmpresa = (gastos as any[]).filter(esGastoEmpresa)
+      const totalExpenses = gastosEmpresa.reduce((sum: number, g: any) => sum + Number(g.amount ?? 0), 0)
       const balance = totalIncome - totalExpenses
       const salesRevenue = sales.reduce((sum: number, s: any) => sum + Number(s.sale_price ?? 0), 0)
       const marginPercent = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0
@@ -178,7 +190,8 @@ export function useFinancialTracking(branchId?: string | null, preset: DateRange
         bucket.income += Number(i.amount ?? 0)
       })
 
-      gastos.forEach((g: any) => {
+      // byMonth.expenses alimenta el balance mensual → solo HessenMotors (mismo criterio que Finanzas).
+      gastosEmpresa.forEach((g: any) => {
         const d = new Date(g.expense_date)
         const key = `${d.getFullYear()}-${d.getMonth()}`
         addMonth(key)

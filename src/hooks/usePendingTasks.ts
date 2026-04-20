@@ -24,6 +24,16 @@ export function usePendingTasks(branchId: string | undefined) {
           if (error && !rpcNotFound) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
         })
       }
+      // Staleness de consignaciones (admin-only; la RPC se auto-gateea por rol).
+      // Se ejecuta siempre: el server devuelve 0/0 si el usuario no es admin.
+      await supabase
+        .rpc('sync_stale_consignaciones_to_pending_tasks', { dias_sin_publicar: 7 })
+        .then(({ error }) => {
+          const rpcNotFound =
+            error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound)
+            console.warn('sync_stale_consignaciones_to_pending_tasks:', error.message)
+        })
       const { data, error } = await supabase
         .from('pending_tasks')
         .select('*')

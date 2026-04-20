@@ -235,6 +235,8 @@ export default function Dashboard() {
       navigate(`/appointments?id=${task.entity_id}`);
     } else if (task.entity_type === 'vehicle' && task.entity_id) {
       navigate(`/app/consignaciones?vehicle=${task.entity_id}`);
+    } else if (task.entity_type === 'consignacion' && task.entity_id) {
+      navigate(`/app/consignaciones?consignacion=${task.entity_id}`);
     } else if (task.action_type === 'enviar_cotizacion') {
       setQuoteData({
         ...quoteData,

@@ -22,6 +22,7 @@ const Leads = lazy(() => import("./pages/Leads"));
 const LeadsBoard = lazy(() => import("./pages/LeadsBoard"));
 const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
+const SalespersonRanking = lazy(() => import("./pages/SalespersonRanking"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const Finance = lazy(() => import("./pages/Finance"));
@@ -36,6 +37,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const Users = lazy(() => import("./pages/Users"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Alerts = lazy(() => import("./pages/Alerts"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 // Landing se importa estático: es la ruta principal y evita errores de "Failed to fetch dynamically imported module"
 import Landing from "./pages/Landing";
@@ -124,6 +126,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <LeadsBoard />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/ranking" element={
+                <ProtectedRoute requiredRole={['admin', 'gerente', 'financiero', 'jefe_jefe', 'jefe_sucursal']}>
+                  <Layout>
+                    <SalespersonRanking />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -257,6 +266,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Profile />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/alerts" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Alerts />
                   </Layout>
                 </ProtectedRoute>
               } />

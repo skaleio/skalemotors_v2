@@ -92,6 +92,16 @@ function esGastoPozoHessen(g: GastoEmpresaWithInversor): boolean {
   return nombreInversorGasto(g).toLowerCase() === POZO_HESSEN_INVERSOR.toLowerCase();
 }
 
+/**
+ * Solo los gastos de HessenMotors son gastos reales de la empresa y restan del balance.
+ * Gastos de Jota/Mike/Ronald/Antonio = inversión del bolsillo del socio, no restan balance
+ * (solo alimentan "A Devolver" mientras devolucion=false).
+ * Gastos de Pozo Hessen → descuentan del Pozo, no del balance.
+ */
+function gastoAfectaBalance(g: GastoEmpresaWithInversor): boolean {
+  return nombreInversorGasto(g).toLowerCase() === INVERSOR_EMPRESA.toLowerCase();
+}
+
 /** Fecha mínima del gasto para contar en Pozo Hessen (histórico antes de marzo 2026 no cuenta). El pozo en pantalla es por mes seleccionado. */
 const POZO_HESSEN_DESDE_FECHA = "2026-03-01";
 
@@ -470,7 +480,7 @@ export default function Finance() {
 
   const montoParaBalance = (row: MovimientoRow): number => {
     if (row.tipo === "gasto") {
-      if (esGastoPozoHessen(row.data)) return 0;
+      if (!gastoAfectaBalance(row.data)) return 0;
       return -Number(row.data.amount);
     }
     if (row.tipo === "ingreso") {
@@ -510,9 +520,19 @@ export default function Finance() {
   const totalIngresos = ingresosRealizados.reduce((sum, i) => sum + Number(i.amount), 0);
   const pozoHessenDisponible =
     totalAhorroEmpresa + totalIngresosAhorroPozo - totalGastosHessenAllTime;
-  /** Gastos que afectan el balance (excluye Pozo Hessen: esos solo descontan del Pozo Hessen). */
-  const gastosParaBalance = gastos.filter((g) => !esGastoPozoHessen(g));
-  const totalGastos = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
+  /**
+   * Listado "Total gastos" (informativo): todos excepto Pozo Hessen.
+   * Incluye gastos de inversores Jota/Mike/Ronald/Antonio aunque NO resten balance
+   * (son inversión del bolsillo del socio, visibles aquí solo para trackeo).
+   */
+  const gastosDelMes = gastos.filter((g) => !esGastoPozoHessen(g));
+  const totalGastos = gastosDelMes.reduce((sum, g) => sum + Number(g.amount), 0);
+  /**
+   * Gastos que realmente restan del balance empresa: solo HessenMotors.
+   * Jota/Mike/Ronald/Antonio nunca tocan balance; Pozo Hessen sale del Pozo.
+   */
+  const gastosParaBalance = gastos.filter((g) => gastoAfectaBalance(g));
+  const totalGastosBalance = gastosParaBalance.reduce((sum, g) => sum + Number(g.amount), 0);
   const gastosPendientes = gastos.filter(
     (g) =>
       !(g.devolucion ?? false) &&
@@ -524,7 +544,8 @@ export default function Finance() {
   const totalGastosHessenMotors = gastosHessenMotors.reduce((sum, g) => sum + Number(g.amount), 0);
   const ingresosPendientes = ingresosEmpresa.filter((i) => (i.payment_status ?? "realizado") === "pendiente");
   const totalIngresosPendientes = ingresosPendientes.reduce((sum, i) => sum + Number(i.amount), 0);
-  const balance = totalIngresos - totalGastos;
+  // Balance empresa: solo gastos HessenMotors restan. Jota/Mike/Ronald/Antonio son plata del socio (no afectan balance).
+  const balance = totalIngresos - totalGastosBalance;
 
   const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
     Jota: gastos
@@ -948,7 +969,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} (no incl. Pozo Hessen)
+              {gastosDelMes.length} gasto{gastosDelMes.length !== 1 ? "s" : ""} · solo HessenMotors resta del balance
             </p>
           </CardContent>
         </Card>
@@ -982,7 +1003,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(balance)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total ingresos − Total gastos
+              Ingresos − Gastos HessenMotors (socios no cuentan)
             </p>
             {balance < 0 && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -1115,7 +1136,7 @@ export default function Finance() {
             Gastos / Ingresos
           </CardTitle>
           <CardDescription>
-            Solo ingresos y gastos cargados manualmente. Las ventas en Ventas no se agregan aquí; cargar ganancias/comisiones manualmente en &quot;Nuevo Ingreso&quot; para evitar duplicados. Balance = Total ingresos − Total gastos.
+            Solo ingresos y gastos cargados manualmente. Las ventas en Ventas no se agregan aquí; cargar ganancias/comisiones manualmente en &quot;Nuevo Ingreso&quot; para evitar duplicados. Balance = Ingresos realizados − Gastos HessenMotors. Los gastos de Jota/Mike/Ronald/Antonio son inversión del bolsillo del socio (no restan balance).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -2304,7 +2325,7 @@ export default function Finance() {
               Total gastos
             </DialogTitle>
             <DialogDescription>
-              Gastos que afectan el balance (no incluye Pozo Hessen). Ordenados por fecha (más reciente primero).
+              Todos los gastos del mes (no incluye Pozo Hessen). Ordenados por fecha (más reciente primero). Solo los de HessenMotors restan del balance; el resto es inversión de socios.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -2341,15 +2362,15 @@ export default function Finance() {
           <div className="flex-1 overflow-auto">
             {loading ? (
               <div className="py-12 text-center text-muted-foreground">Cargando…</div>
-            ) : gastosParaBalance.length === 0 ? (
+            ) : gastosDelMes.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
-                No hay gastos que afecten el balance (los de Pozo Hessen no se incluyen aquí).
+                No hay gastos este mes (Pozo Hessen se muestra aparte).
               </div>
             ) : (() => {
               const gastosFiltradosModal =
                 filterTotalGastosTipo === "all"
-                  ? gastosParaBalance
-                  : gastosParaBalance.filter((g) => g.expense_type === filterTotalGastosTipo);
+                  ? gastosDelMes
+                  : gastosDelMes.filter((g) => g.expense_type === filterTotalGastosTipo);
               const gastosPorInversor =
                 filterTotalGastosInversor === "all"
                   ? gastosFiltradosModal
@@ -2539,7 +2560,7 @@ export default function Finance() {
               Balance
             </DialogTitle>
             <DialogDescription>
-              Resumen: Total ingresos (realizados) menos Total gastos. Los gastos Pozo Hessen no se incluyen en el balance (solo descontan del Pozo Hessen). Los ingresos pendientes no suman hasta marcarlos como realizados.
+              Balance = Ingresos realizados (etiqueta cuenta) − Gastos HessenMotors. Los gastos de inversores Jota/Mike/Ronald/Antonio son inversión del bolsillo del socio y no tocan el balance (solo alimentan "A Devolver"). Los gastos Pozo Hessen descuentan del Pozo, no del balance. Los ingresos pendientes no suman hasta marcarlos realizados.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4 py-2">
@@ -2557,17 +2578,17 @@ export default function Finance() {
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total gastos</p>
-                  <p className="text-xs text-muted-foreground">{gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} (no incl. Pozo Hessen)</p>
+                  <p className="text-sm font-medium text-muted-foreground">Gastos HessenMotors</p>
+                  <p className="text-xs text-muted-foreground">{gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} · solo estos restan del balance</p>
                 </div>
                 <span className="text-lg font-bold text-red-600">
-                  {loading ? "…" : formatCurrency(totalGastos)}
+                  {loading ? "…" : formatCurrency(totalGastosBalance)}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg border-2 border-primary/30 px-4 py-3 bg-muted/50">
                 <div>
                   <p className="text-sm font-semibold">Balance</p>
-                  <p className="text-xs text-muted-foreground">Ingresos − Gastos</p>
+                  <p className="text-xs text-muted-foreground">Ingresos − Gastos HessenMotors</p>
                 </div>
                 <span className={`text-xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-destructive"}`}>
                   {loading ? "…" : formatCurrency(balance)}
