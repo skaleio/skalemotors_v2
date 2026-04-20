@@ -1178,38 +1178,100 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Correo</p>
-                      <p className="text-base">{editingLead.email || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Región</p>
-                      <p className="text-base">
-                        {editingLead.region || getTagValue(editingLead.tags, REGION_TAG_PREFIX) || "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Financiamiento / Contado</p>
-                      <p className="text-base">{editingLead.payment_type || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Presupuesto</p>
-                      <p className="text-base">{editingLead.budget || "—"}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Vehículo de interés</p>
-                    <p className="text-base">
-                      {getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "—"}
-                    </p>
-                  </div>
+                  {(() => {
+                    const rut = editingLead.rut?.trim();
+                    const email = editingLead.email?.trim();
+                    const region = editingLead.region?.trim() || getTagValue(editingLead.tags, REGION_TAG_PREFIX);
+                    const pairs: Array<{ label: string; value: string }> = [];
+                    if (rut) pairs.push({ label: "RUT", value: rut });
+                    if (email) pairs.push({ label: "Correo", value: email });
+                    if (region) pairs.push({ label: "Región", value: region });
+                    return pairs.length ? (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {pairs.map((p) => (
+                          <div key={p.label}>
+                            <p className="text-sm text-muted-foreground">{p.label}</p>
+                            <p className="text-base">{p.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    const paymentType = editingLead.payment_type?.trim();
+                    const budget = editingLead.budget?.trim();
+                    const pairs: Array<{ label: string; value: string }> = [];
+                    if (paymentType) pairs.push({ label: "Financiamiento / Contado", value: paymentType });
+                    if (budget) pairs.push({ label: "Presupuesto", value: budget });
+                    return pairs.length ? (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {pairs.map((p) => (
+                          <div key={p.label}>
+                            <p className="text-sm text-muted-foreground">{p.label}</p>
+                            <p className="text-base">{p.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    const vehicleInterest = editingLead.vehicle_interest?.trim()
+                      || getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX);
+                    return vehicleInterest ? (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Vehículo de interés</p>
+                        <p className="text-base">{vehicleInterest}</p>
+                      </div>
+                    ) : null;
+                  })()}
                   {getConsignacionLabel(editingLead.tags) && (
                     <div>
                       <p className="text-sm text-muted-foreground">Etiqueta consignación</p>
                       <p className="text-base">{getConsignacionLabel(editingLead.tags)}</p>
+                    </div>
+                  )}
+                  {(editingLead.uso_principal
+                    || editingLead.pasajeros_filas
+                    || editingLead.transmision
+                    || editingLead.pie_disponible
+                    || editingLead.marca_preferida
+                    || editingLead.anos_minimo
+                    || editingLead.preferencia
+                    || editingLead.alerta_crediticia
+                    || editingLead.raw_message) && (
+                    <div className="space-y-3 rounded-md border border-border/60 bg-muted/30 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Datos del chatbot
+                      </p>
+                      {(() => {
+                        const chatbotFields: Array<{ label: string; value: string }> = [];
+                        if (editingLead.uso_principal) chatbotFields.push({ label: "Uso principal", value: editingLead.uso_principal });
+                        if (editingLead.transmision) chatbotFields.push({ label: "Transmisión", value: editingLead.transmision });
+                        if (editingLead.pasajeros_filas) chatbotFields.push({ label: "Pasajeros / Filas", value: editingLead.pasajeros_filas });
+                        if (editingLead.pie_disponible) chatbotFields.push({ label: "PIE disponible", value: editingLead.pie_disponible });
+                        if (editingLead.marca_preferida) chatbotFields.push({ label: "Marca preferida", value: editingLead.marca_preferida });
+                        if (editingLead.anos_minimo) chatbotFields.push({ label: "Año mínimo", value: editingLead.anos_minimo });
+                        if (editingLead.preferencia) chatbotFields.push({ label: "Preferencia", value: editingLead.preferencia });
+                        if (editingLead.alerta_crediticia) chatbotFields.push({ label: "Alerta crediticia", value: editingLead.alerta_crediticia });
+                        return chatbotFields.length ? (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {chatbotFields.map((f) => (
+                              <div key={f.label}>
+                                <p className="text-sm text-muted-foreground">{f.label}</p>
+                                <p className="text-base">{f.value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
+                      {editingLead.raw_message && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Mensaje original</p>
+                          <pre className="mt-1 whitespace-pre-wrap rounded bg-background/60 p-2 text-xs leading-relaxed">
+                            {editingLead.raw_message}
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   )}
                   {(editingLead.state != null && editingLead.state !== "") && (

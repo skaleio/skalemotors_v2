@@ -1775,40 +1775,14 @@ export default function Leads() {
           </DialogHeader>
           {detailsLead ? (
             <div className="flex-1 space-y-4 overflow-y-auto min-h-0 py-1 -mx-1 px-1">
-              <div>
-                <p className="text-sm text-muted-foreground">Nombre</p>
-                <p className="text-base font-medium">{detailsLead.full_name || "Sin nombre"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">RUT</p>
-                <p className="text-base">{detailsLead.rut?.trim() ? detailsLead.rut : "—"}</p>
-              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Nombre</p>
+                  <p className="text-base font-medium">{detailsLead.full_name || "Sin nombre"}</p>
+                </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Teléfono</p>
                   <p className="text-base">{formatChilePhoneForDisplay(detailsLead.phone) || "Sin telefono"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Correo</p>
-                  <p className="text-base">{detailsLead.email || "—"}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Región</p>
-                  <p className="text-base">
-                    {detailsLead.region || getTagValue(detailsLead.tags, REGION_TAG_PREFIX) || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Financiamiento/Contado</p>
-                  <p className="text-base">{detailsLead.payment_type || "—"}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Presupuesto</p>
-                  <p className="text-base">{detailsLead.budget || "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Estado</p>
@@ -1817,21 +1791,50 @@ export default function Leads() {
                   </div>
                 </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Vehículo</p>
-                <p className="text-base">
-                  {(() => {
-                    const tags = normalizeTags(detailsLead.tags);
-                    const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
-                    if (isConsignacion) {
-                      const consignacion = consignacionByLeadId.get(detailsLead.id);
-                      const consignacionVehicle = getConsignacionVehicleLabel(consignacion);
-                      return consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
-                    }
-                    return detailsLead.vehicle_interest || getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
-                  })()}
-                </p>
-              </div>
+              {(() => {
+                const rut = detailsLead.rut?.trim();
+                const email = detailsLead.email?.trim();
+                const region = detailsLead.region?.trim() || getTagValue(detailsLead.tags, REGION_TAG_PREFIX);
+                const paymentType = detailsLead.payment_type?.trim();
+                const budget = detailsLead.budget?.trim();
+                const fields: Array<{ label: string; value: string }> = [];
+                if (rut) fields.push({ label: "RUT", value: rut });
+                if (email) fields.push({ label: "Correo", value: email });
+                if (region) fields.push({ label: "Región", value: region });
+                if (paymentType) fields.push({ label: "Financiamiento / Contado", value: paymentType });
+                if (budget) fields.push({ label: "Presupuesto", value: budget });
+                return fields.length ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {fields.map((f) => (
+                      <div key={f.label}>
+                        <p className="text-sm text-muted-foreground">{f.label}</p>
+                        <p className="text-base">{f.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+              {(() => {
+                const tags = normalizeTags(detailsLead.tags);
+                const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
+                let vehicleLabel: string | null = null;
+                if (isConsignacion) {
+                  const consignacion = consignacionByLeadId.get(detailsLead.id);
+                  vehicleLabel = getConsignacionVehicleLabel(consignacion)
+                    || getTagValue(tags, VEHICULO_TAG_PREFIX)
+                    || null;
+                } else {
+                  vehicleLabel = detailsLead.vehicle_interest?.trim()
+                    || getTagValue(tags, VEHICULO_TAG_PREFIX)
+                    || null;
+                }
+                return vehicleLabel ? (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vehículo</p>
+                    <p className="text-base">{vehicleLabel}</p>
+                  </div>
+                ) : null;
+              })()}
               {(detailsLead.uso_principal
                 || detailsLead.pasajeros_filas
                 || detailsLead.transmision
@@ -1845,40 +1848,27 @@ export default function Leads() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Datos del chatbot
                   </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Uso principal</p>
-                      <p className="text-base">{detailsLead.uso_principal || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Transmisión</p>
-                      <p className="text-base">{detailsLead.transmision || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Pasajeros / Filas</p>
-                      <p className="text-base">{detailsLead.pasajeros_filas || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">PIE disponible</p>
-                      <p className="text-base">{detailsLead.pie_disponible || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Marca preferida</p>
-                      <p className="text-base">{detailsLead.marca_preferida || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Año mínimo</p>
-                      <p className="text-base">{detailsLead.anos_minimo || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Preferencia</p>
-                      <p className="text-base">{detailsLead.preferencia || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Alerta crediticia</p>
-                      <p className="text-base">{detailsLead.alerta_crediticia || "—"}</p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const chatbotFields: Array<{ label: string; value: string }> = [];
+                    if (detailsLead.uso_principal) chatbotFields.push({ label: "Uso principal", value: detailsLead.uso_principal });
+                    if (detailsLead.transmision) chatbotFields.push({ label: "Transmisión", value: detailsLead.transmision });
+                    if (detailsLead.pasajeros_filas) chatbotFields.push({ label: "Pasajeros / Filas", value: detailsLead.pasajeros_filas });
+                    if (detailsLead.pie_disponible) chatbotFields.push({ label: "PIE disponible", value: detailsLead.pie_disponible });
+                    if (detailsLead.marca_preferida) chatbotFields.push({ label: "Marca preferida", value: detailsLead.marca_preferida });
+                    if (detailsLead.anos_minimo) chatbotFields.push({ label: "Año mínimo", value: detailsLead.anos_minimo });
+                    if (detailsLead.preferencia) chatbotFields.push({ label: "Preferencia", value: detailsLead.preferencia });
+                    if (detailsLead.alerta_crediticia) chatbotFields.push({ label: "Alerta crediticia", value: detailsLead.alerta_crediticia });
+                    return chatbotFields.length ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {chatbotFields.map((f) => (
+                          <div key={f.label}>
+                            <p className="text-sm text-muted-foreground">{f.label}</p>
+                            <p className="text-base">{f.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                   {detailsLead.raw_message ? (
                     <div>
                       <p className="text-sm text-muted-foreground">Mensaje original</p>
@@ -1889,12 +1879,12 @@ export default function Leads() {
                   ) : null}
                 </div>
               ) : null}
-              <div>
-                <p className="text-sm text-muted-foreground">Nota</p>
-                <p className="text-base whitespace-pre-wrap">
-                  {detailsLead.notes || "—"}
-                </p>
-              </div>
+              {detailsLead.notes?.trim() ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Nota</p>
+                  <p className="text-base whitespace-pre-wrap">{detailsLead.notes}</p>
+                </div>
+              ) : null}
             </div>
           ) : null}
           <DialogFooter className="shrink-0">
