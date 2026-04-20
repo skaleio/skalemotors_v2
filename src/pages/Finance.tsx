@@ -525,8 +525,8 @@ export default function Finance() {
    * Incluye gastos de inversores Jota/Mike/Ronald/Antonio aunque NO resten balance
    * (son inversión del bolsillo del socio, visibles aquí solo para trackeo).
    */
-  const gastosDelMes = gastos.filter((g) => !esGastoPozoHessen(g));
-  const totalGastos = gastosDelMes.reduce((sum, g) => sum + Number(g.amount), 0);
+  const gastosSinPozoHessen = gastos.filter((g) => !esGastoPozoHessen(g));
+  const totalGastos = gastosSinPozoHessen.reduce((sum, g) => sum + Number(g.amount), 0);
   /**
    * Gastos que realmente restan del balance empresa: solo HessenMotors.
    * Jota/Mike/Ronald/Antonio nunca tocan balance; Pozo Hessen sale del Pozo.
@@ -627,10 +627,10 @@ export default function Finance() {
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
   const gastosDelMes = gastos.filter((g) => {
+    if (esGastoPozoHessen(g)) return false;
     const d = parseLocalDate(g.expense_date);
     return d >= inicioMes && d <= finMes;
   });
-  const totalDelMes = gastosDelMes.reduce((sum, g) => sum + Number(g.amount), 0);
 
   const promedioPorGasto =
     gastosUltimos30Dias.length > 0
@@ -969,7 +969,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastosDelMes.length} gasto{gastosDelMes.length !== 1 ? "s" : ""} · solo HessenMotors resta del balance
+              {gastosSinPozoHessen.length} gasto{gastosSinPozoHessen.length !== 1 ? "s" : ""} · solo HessenMotors resta del balance
             </p>
           </CardContent>
         </Card>
