@@ -20,7 +20,7 @@ type ConsignacionWithRelations = Consignacion & {
     year: number | null;
     vin: string | null;
     color: string | null;
-    images: unknown;
+    primary_image_url: string | null;
   } | null;
 };
 
@@ -38,7 +38,7 @@ export const consignacionesService = {
         `
         *,
         lead:leads(id, full_name, phone, email, tags),
-        vehicle:vehicles(id, make, model, year, vin, color, images)
+        vehicle:vehicles(id, make, model, year, vin, color, primary_image_url)
       `
       )
       .order("created_at", { ascending: false });
@@ -100,7 +100,7 @@ export const consignacionesService = {
         `
         *,
         lead:leads(id, full_name, phone, email, tags),
-        vehicle:vehicles(id, make, model, year, vin, color, images)
+        vehicle:vehicles(id, make, model, year, vin, color, primary_image_url)
       `
       )
       .single();

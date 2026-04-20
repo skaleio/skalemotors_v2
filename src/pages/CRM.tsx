@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
@@ -1033,17 +1034,26 @@ export default function CRM() {
               </DialogDescription>
             </div>
             {editingLead && !isEditingForm && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={startEditing}
-                className="shrink-0"
-                aria-label="Editar datos del lead"
-                title="Editar datos del lead"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                <AssignLeadMenu
+                  leadId={editingLead.id}
+                  assignedTo={editingLead.assigned_to}
+                  assignedLabel={(editingLead as Lead & {
+                    assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                  }).assigned_user?.full_name ?? null}
+                  leadBranchId={editingLead.branch_id}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={startEditing}
+                  aria-label="Editar datos del lead"
+                  title="Editar datos del lead"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
             )}
           </DialogHeader>
           {editingLead && (
@@ -1222,6 +1232,18 @@ export default function CRM() {
                       <p className="text-base whitespace-pre-wrap">{editingLead.notes}</p>
                     </div>
                   )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vendedor asignado</p>
+                    <p className="text-base">
+                      {(editingLead as Lead & {
+                        assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                      }).assigned_user?.full_name
+                        || (editingLead as Lead & {
+                          assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                        }).assigned_user?.email
+                        || "Sin asignar"}
+                    </p>
+                  </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select value={safePipelineSelectValue(leadStatus)} onValueChange={setLeadStatus}>

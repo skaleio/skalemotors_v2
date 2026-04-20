@@ -31,6 +31,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
     Table,
     TableBody,
@@ -90,6 +91,88 @@ const consignmentTypeLabels: Record<ConsignmentType, string> = {
   fisica: "Física",
   digital: "Digital",
 };
+
+/** Encabezados alineados con la hoja «ONLINE» de STOCK ON LINE.xlsx */
+const STOCK_ONLINE_COLUMN_LABELS = {
+  modelo: "MODELO",
+  anio: "AÑO",
+  carroceria: "CARROCERÍA",
+  kilometraje: "KILOMETRAJE",
+  motor: "MOTOR",
+  transmision: "TRANSMISION",
+  combustible: "COMBUSTIBLE",
+  patente: "PATENTE",
+  precio: "PRECIO",
+  consignatario: "CONSIGNATARIO",
+  publicado: "PUBLICADO",
+} as const;
+
+type VehicleStatus = "disponible" | "reservado" | "vendido" | "en_reparacion" | "fuera_de_servicio";
+
+function normalizeForMatch(s: string) {
+  return s.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function deriveFuelTypeFromExcelText(text: string): "gasolina" | "diesel" | "híbrido" | "eléctrico" {
+  const u = normalizeForMatch(text);
+  if (!u) return "gasolina";
+  if (u.includes("DIESEL")) return "diesel";
+  if (u.includes("HIBR")) return "híbrido";
+  if (u.includes("ELECT")) return "eléctrico";
+  return "gasolina";
+}
+
+function deriveTransmissionFromExcelText(text: string): "manual" | "automático" | "cvt" {
+  const u = normalizeForMatch(text);
+  if (!u) return "automático";
+  if (u.includes("MECAN") || u === "MANUAL") return "manual";
+  if (u.includes("CVT")) return "cvt";
+  return "automático";
+}
+
+function transmissionToDisplayLabel(t: string | null | undefined): string {
+  if (!t) return "";
+  if (t === "manual") return "MECANICO";
+  if (t === "cvt") return "CVT";
+  if (t === "automático") return "AUTOMATICO";
+  return String(t);
+}
+
+function fuelTypeToDisplayLabel(f: string | null | undefined): string {
+  if (!f) return "";
+  if (f === "diesel") return "DIESEL";
+  if (f === "gasolina") return "BENCINA";
+  return String(f);
+}
+
+function createEmptyNewVehicle() {
+  return {
+    make: "",
+    model: "",
+    year: 0,
+    color: "",
+    mileage: 0,
+    owner_name: "",
+    owner_phone: "",
+    consignment_type: "fisica" as ConsignmentType,
+    patente: "",
+    consignatario_staff_id: "",
+    carroceria: "",
+    transmision_display: "",
+    combustible_display: "",
+    publicado: false,
+    price: 0,
+    cost: 0,
+    minDownPayment: 0,
+    engine_size: "",
+    fuel_type: "gasolina" as "gasolina" | "diesel" | "híbrido" | "eléctrico",
+    transmission: "automático" as "manual" | "automático" | "cvt",
+    location: "",
+    drivetrain: "",
+    images: [] as File[],
+    status: "disponible" as VehicleStatus,
+  };
+}
 
 const getVehicleConsignmentType = (vehicle: Vehicle): ConsignmentType => {
   const t = vehicle.consignment_type;
@@ -294,6 +377,7 @@ const updateVehicleImages = async (
 
 export default function Inventory() {
   const { user, session } = useAuth();
+  const isVendedor = user?.role === "vendedor";
   // Sin filtrar por sucursal al cargar: mostrar todos los vehículos (los datos pueden tener branch_id distinto o NULL)
   const { vehicles, loading, isFetching, error: vehiclesError, refetch } = useVehicles({
     branchId: undefined,
@@ -333,29 +417,7 @@ export default function Inventory() {
     paymentMethod: 'contado',
     notes: ''
   });
-  type VehicleStatus = "disponible" | "reservado" | "vendido" | "en_reparacion" | "fuera_de_servicio";
-  const [newVehicle, setNewVehicle] = useState({
-    make: "",
-    model: "",
-    year: 0,
-    color: "",
-    mileage: 0,
-    owner_name: "",
-    owner_phone: "",
-    consignment_type: "fisica" as ConsignmentType,
-    patente: "",
-    consignatario_staff_id: "",
-    price: 0,
-    cost: 0,
-    minDownPayment: 0,
-    engine_size: "",
-    fuel_type: "gasolina" as "gasolina" | "diesel" | "híbrido" | "eléctrico",
-    transmission: "automático" as "manual" | "automático" | "cvt",
-    location: "",
-    drivetrain: "",
-    images: [] as File[],
-    status: "disponible" as VehicleStatus,
-  });
+  const [newVehicle, setNewVehicle] = useState(createEmptyNewVehicle);
 
   const [listingsByVehicle, setListingsByVehicle] = useState<Record<string, VehicleListingRow[]>>({});
   const [marketplaceConnections, setMarketplaceConnections] = useState<{ platform: MarketplacePlatform }[]>([]);
@@ -636,6 +698,14 @@ export default function Inventory() {
         consignment_type: getVehicleConsignmentType(vehicleToEdit),
         patente: vehicleToEdit.patente || "",
         consignatario_staff_id: vehicleToEdit.consignatario_staff_id || "",
+        carroceria: vehicleToEdit.carroceria ?? "",
+        transmision_display:
+          (vehicleToEdit.transmision_display || "").trim() ||
+          transmissionToDisplayLabel(vehicleToEdit.transmission),
+        combustible_display:
+          (vehicleToEdit.combustible_display || "").trim() ||
+          fuelTypeToDisplayLabel(vehicleToEdit.fuel_type),
+        publicado: vehicleToEdit.publicado ?? false,
         price: Number(vehicleToEdit.price || 0),
         cost: Number(vehicleToEdit.cost || 0),
         minDownPayment: Number(features.min_down_payment || 0),
@@ -680,6 +750,8 @@ export default function Inventory() {
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
+      const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
+      const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
       // Preparar features con campos adicionales
       const features = {
@@ -691,6 +763,7 @@ export default function Inventory() {
       // Asegurar que los números sean del tipo correcto para Supabase
       const vinToCreate = generateVin();
       const fallbackYear = new Date().getFullYear();
+      const patenteVal = newVehicle.patente.trim() || null;
       const vehicleData = {
         vin: vinToCreate,
         make: newVehicle.make.trim() || "Sin marca",
@@ -698,20 +771,25 @@ export default function Inventory() {
         year: newVehicle.year && Number(newVehicle.year) > 0 ? Number(newVehicle.year) : fallbackYear,
         color: newVehicle.color.trim() || "Sin color",
         mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
-        fuel_type: newVehicle.fuel_type,
-        transmission: newVehicle.transmission,
+        fuel_type: fuelDerived,
+        transmission: transDerived,
         engine_size: newVehicle.engine_size?.trim() || null,
         category: "consignado" as const,
         owner_name: newVehicle.owner_name?.trim() || null,
         owner_phone: newVehicle.owner_phone?.trim() || null,
         consignment_type: newVehicle.consignment_type,
-        patente: newVehicle.patente.trim() ? newVehicle.patente.trim().toUpperCase() : null,
+        patente: patenteVal,
         consignatario_staff_id: newVehicle.consignatario_staff_id.trim() || null,
+        carroceria: newVehicle.carroceria?.trim() || null,
+        transmision_display: newVehicle.transmision_display?.trim() || null,
+        combustible_display: newVehicle.combustible_display?.trim() || null,
+        publicado: newVehicle.publicado,
         price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
         status: "disponible" as const,
         branch_id: user.branch_id,
+        ...(user.tenant_id ? { tenant_id: user.tenant_id } : {}),
         location: newVehicle.location?.trim() || null,
         images: [], // Inicialmente vacío, se llenará después de subir las imágenes
         features: features as any,
@@ -766,26 +844,7 @@ export default function Inventory() {
       setShowAddDialog(false);
 
       // Resetear formulario
-      setNewVehicle({
-        make: "",
-        model: "",
-        year: 0,
-        color: "",
-        mileage: 0,
-        owner_name: "",
-        owner_phone: "",
-        consignment_type: "fisica",
-        price: 0,
-        cost: 0,
-        minDownPayment: 0,
-        engine_size: "",
-        fuel_type: "gasolina",
-        transmission: "automático",
-        location: "",
-        drivetrain: "",
-        images: [],
-        status: "disponible",
-      });
+      setNewVehicle(createEmptyNewVehicle());
 
       // Refetch con timeout para evitar que se quede colgado
       // Usar un solo refetch con manejo robusto de errores
@@ -840,6 +899,8 @@ export default function Inventory() {
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
       const minDownPayment = newVehicle.minDownPayment || 0;
+      const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
+      const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
       // Preparar features con campos adicionales
       const features = {
@@ -849,19 +910,26 @@ export default function Inventory() {
 
       // Preparar datos de actualización
       const fallbackYear = new Date().getFullYear();
+      const patenteVal = newVehicle.patente.trim() || null;
       const updateData = {
         make: newVehicle.make.trim() || "Sin marca",
         model: newVehicle.model.trim() || "Sin modelo",
         year: newVehicle.year && Number(newVehicle.year) > 0 ? parseInt(String(newVehicle.year), 10) : fallbackYear,
         color: newVehicle.color.trim() || "Sin color",
         mileage: newVehicle.mileage ? Number(newVehicle.mileage) : null,
-        fuel_type: newVehicle.fuel_type,
-        transmission: newVehicle.transmission,
+        fuel_type: fuelDerived,
+        transmission: transDerived,
         engine_size: newVehicle.engine_size?.trim() || null,
         category: "consignado" as const,
         owner_name: newVehicle.owner_name?.trim() || null,
         owner_phone: newVehicle.owner_phone?.trim() || null,
         consignment_type: newVehicle.consignment_type,
+        patente: patenteVal,
+        consignatario_staff_id: newVehicle.consignatario_staff_id.trim() || null,
+        carroceria: newVehicle.carroceria?.trim() || null,
+        transmision_display: newVehicle.transmision_display?.trim() || null,
+        combustible_display: newVehicle.combustible_display?.trim() || null,
+        publicado: newVehicle.publicado,
         price: Number(newVehicle.price || 0),
         cost: newVehicle.cost ? Number(newVehicle.cost) : null,
         margin: Number(margin),
@@ -916,26 +984,7 @@ export default function Inventory() {
 
       // Cerrar diálogo y resetear
       setVehicleToEdit(null);
-      setNewVehicle({
-        make: "",
-        model: "",
-        year: 0,
-        color: "",
-        mileage: 0,
-        owner_name: "",
-        owner_phone: "",
-        consignment_type: "fisica",
-        price: 0,
-        cost: 0,
-        minDownPayment: 0,
-        engine_size: "",
-        fuel_type: "gasolina",
-        transmission: "automático",
-        location: "",
-        drivetrain: "",
-        images: [],
-        status: "disponible",
-      });
+      setNewVehicle(createEmptyNewVehicle());
 
       // Refetch con timeout
       try {
@@ -1196,51 +1245,33 @@ export default function Inventory() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Consignaciones</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
           <p className="text-muted-foreground">
             Gestiona consignaciones físicas y digitales en un solo lugar
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowExportDialog(true)}
-            disabled={isExporting || !user?.branch_id}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {isExporting ? "Exportando..." : "Exportar"}
-          </Button>
-          <Button
-            onClick={() => {
-              // Resetear formulario antes de abrir
-              setNewVehicle({
-                make: "",
-                model: "",
-                year: 0,
-                color: "",
-                mileage: 0,
-                owner_name: "",
-                owner_phone: "",
-                consignment_type: "fisica",
-                price: 0,
-                cost: 0,
-                minDownPayment: 0,
-                engine_size: "",
-                fuel_type: "gasolina",
-                transmission: "automático",
-                location: "",
-                drivetrain: "",
-                images: [],
-                status: "disponible",
-              });
-              setShowAddDialog(true);
-            }}
-            className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar Vehículo
-          </Button>
-        </div>
+        {!isVendedor && (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowExportDialog(true)}
+              disabled={isExporting || !user?.branch_id}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {isExporting ? "Exportando..." : "Exportar"}
+            </Button>
+            <Button
+              onClick={() => {
+                setNewVehicle(createEmptyNewVehicle());
+                setShowAddDialog(true);
+              }}
+              className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar Vehículo
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -1292,8 +1323,7 @@ export default function Inventory() {
         </Select>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className={`grid gap-4 ${isVendedor ? "md:grid-cols-2" : "md:grid-cols-4"}`}>
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Total Vehículos</CardTitle>
@@ -1306,29 +1336,33 @@ export default function Inventory() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Valor Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCLP(totalValue)}</div>
-            <p className="text-xs text-muted-foreground">
-              precio de lista
-            </p>
-          </CardContent>
-        </Card>
+        {!isVendedor && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Valor Total</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCLP(totalValue)}</div>
+              <p className="text-xs text-muted-foreground">
+                precio de lista
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Margen Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">{formatCLP(totalMargin)}</div>
-            <p className="text-xs text-muted-foreground">
-              margen proyectado
-            </p>
-          </CardContent>
-        </Card>
+        {!isVendedor && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Margen Total</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-success">{formatCLP(totalMargin)}</div>
+              <p className="text-xs text-muted-foreground">
+                margen proyectado
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -1364,25 +1398,25 @@ export default function Inventory() {
               <TableRow>
                 <TableHead>Vehículo</TableHead>
                 <TableHead>Detalles</TableHead>
-                <TableHead>Precio</TableHead>
-                <TableHead>Margen</TableHead>
+                {!isVendedor && <TableHead>Precio</TableHead>}
+                {!isVendedor && <TableHead>Margen</TableHead>}
                 <TableHead>Estado</TableHead>
                 <TableHead>Consignación</TableHead>
                 <TableHead className="w-[140px]">Portales</TableHead>
-                <TableHead className="w-[100px]">Acciones</TableHead>
+                {!isVendedor && <TableHead className="w-[100px]">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && !vehiclesError && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isVendedor ? 5 : 8} className="text-center py-8 text-muted-foreground">
                     Cargando vehículos...
                   </TableCell>
                 </TableRow>
               )}
               {vehiclesError && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={isVendedor ? 5 : 8} className="text-center py-8">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <p>No se pudo cargar el inventario. {vehiclesError.message || "Error de conexión."}</p>
                       <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -1449,20 +1483,24 @@ export default function Inventory() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="font-medium">{formatCLP(Number(vehicle.price || 0))}</div>
-                      <div className="text-sm text-muted-foreground">Costo: {formatCLP(Number(vehicle.cost || 0))}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className={`font-medium ${(Number(vehicle.margin || 0)) > 0 ? 'text-success' : 'text-danger'}`}>
-                      {formatCLP(Number(vehicle.margin || 0))}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {Number(vehicle.price || 0) > 0 ? ((Number(vehicle.margin || 0)) / Number(vehicle.price || 0) * 100).toFixed(1) : "0.0"}%
-                    </div>
-                  </TableCell>
+                  {!isVendedor && (
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{formatCLP(Number(vehicle.price || 0))}</div>
+                        <div className="text-sm text-muted-foreground">Costo: {formatCLP(Number(vehicle.cost || 0))}</div>
+                      </div>
+                    </TableCell>
+                  )}
+                  {!isVendedor && (
+                    <TableCell>
+                      <div className={`font-medium ${(Number(vehicle.margin || 0)) > 0 ? 'text-success' : 'text-danger'}`}>
+                        {formatCLP(Number(vehicle.margin || 0))}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {Number(vehicle.price || 0) > 0 ? ((Number(vehicle.margin || 0)) / Number(vehicle.price || 0) * 100).toFixed(1) : "0.0"}%
+                      </div>
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Badge
                       variant="outline"
@@ -1509,6 +1547,7 @@ export default function Inventory() {
                       ))}
                     </div>
                   </TableCell>
+                  {!isVendedor && (
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button
@@ -1665,6 +1704,7 @@ export default function Inventory() {
                       </DropdownMenu>
                     </div>
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -1892,10 +1932,6 @@ export default function Inventory() {
                     <div className="text-xs text-muted-foreground">Pie mínimo</div>
                     <div className="font-semibold">{formatCLP(selectedVehicleComputed.minDownPayment)}</div>
                   </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Ganancia estimada</div>
-                    <div className="font-semibold text-success">{formatCLP(selectedVehicleComputed.margin)}</div>
-                  </div>
                 </div>
 
                 <div className="rounded-xl border p-4">
@@ -1982,26 +2018,7 @@ export default function Inventory() {
             if (location.search) {
               navigate(location.pathname, { replace: true });
             }
-            setNewVehicle({
-              make: "",
-              model: "",
-              year: 0,
-              color: "",
-              mileage: 0,
-              owner_name: "",
-              owner_phone: "",
-              consignment_type: "fisica",
-              price: 0,
-              cost: 0,
-              minDownPayment: 0,
-              engine_size: "",
-              fuel_type: "gasolina",
-              transmission: "automático",
-              location: "",
-              drivetrain: "",
-              images: [],
-              status: "disponible",
-            });
+            setNewVehicle(createEmptyNewVehicle());
           }
         }}
       >
@@ -2013,9 +2030,8 @@ export default function Inventory() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {/* Fotos del vehículo */}
-            <div className="md:col-span-2">
+          <div className="space-y-6 mt-4">
+            <div>
               <Label htmlFor="images">Fotos del vehículo</Label>
               <div className="mt-2">
                 <div className="flex flex-wrap gap-4 mb-4">
@@ -2053,292 +2069,301 @@ export default function Inventory() {
               </div>
             </div>
 
-            {/* Nombre del vehículo (Marca) */}
-            <div>
-              <Label htmlFor="make">Marca</Label>
-              <Input
-                id="make"
-                value={newVehicle.make}
-                onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
-                placeholder="Ej: Toyota"
-              />
-            </div>
-
-            {/* Modelo */}
-            <div>
-              <Label htmlFor="model">Modelo</Label>
-              <Input
-                id="model"
-                value={newVehicle.model}
-                onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
-                placeholder="Ej: Corolla Cross"
-              />
-            </div>
-
-            {/* Año */}
-            <div>
-              <Label htmlFor="year">Año</Label>
-              <Input
-                id="year"
-                type="text"
-                value={newVehicle.year || ''}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, ''); // Solo números
-                  if (value === '') {
-                    setNewVehicle({ ...newVehicle, year: 0 });
-                  } else {
-                    const yearNum = parseInt(value);
-                    if (!isNaN(yearNum)) {
-                      setNewVehicle({ ...newVehicle, year: yearNum });
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="make">Marca</Label>
+                <Input
+                  id="make"
+                  value={newVehicle.make}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                  placeholder="Ej: Toyota"
+                />
+              </div>
+              <div>
+                <Label htmlFor="model">{STOCK_ONLINE_COLUMN_LABELS.modelo}</Label>
+                <Input
+                  id="model"
+                  value={newVehicle.model}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                  placeholder="Ej: Corolla Cross"
+                />
+              </div>
+              <div>
+                <Label htmlFor="year">{STOCK_ONLINE_COLUMN_LABELS.anio}</Label>
+                <Input
+                  id="year"
+                  type="text"
+                  value={newVehicle.year || ""}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    if (value === "") {
+                      setNewVehicle({ ...newVehicle, year: 0 });
+                    } else {
+                      const yearNum = parseInt(value, 10);
+                      if (!isNaN(yearNum)) {
+                        setNewVehicle({ ...newVehicle, year: yearNum });
+                      }
                     }
-                  }
-                }}
-                placeholder="Ej: 2024"
-              />
-            </div>
-
-            {/* Color */}
-            <div>
-              <Label htmlFor="color">Color</Label>
-              <Input
-                id="color"
-                value={newVehicle.color}
-                onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
-                placeholder="Ej: Blanco"
-              />
-            </div>
-
-            {/* Kilometraje */}
-            <div>
-              <Label htmlFor="mileage">Kilometraje</Label>
-              <Input
-                id="mileage"
-                type="text"
-                value={formatNumberDisplay(newVehicle.mileage)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  }}
+                  placeholder="Ej: 2024"
+                />
+              </div>
+              <div>
+                <Label htmlFor="carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
+                <Input
+                  id="carroceria"
+                  value={newVehicle.carroceria}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, carroceria: e.target.value })}
+                  placeholder="Ej: SUV, Sedán"
+                />
+              </div>
+              <div>
+                <Label htmlFor="mileage">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
+                <Input
+                  id="mileage"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.mileage)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando kilometraje:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando kilometraje:', error);
+                  }}
+                  placeholder="Ej: 15.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="engine_size">{STOCK_ONLINE_COLUMN_LABELS.motor}</Label>
+                <Input
+                  id="engine_size"
+                  value={newVehicle.engine_size}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
+                  placeholder="Ej: 2.0, 1600 cc"
+                />
+              </div>
+              <div>
+                <Label htmlFor="transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
+                <Input
+                  id="transmision_display"
+                  value={newVehicle.transmision_display}
+                  onChange={(e) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      transmision_display: e.target.value,
+                      transmission: deriveTransmissionFromExcelText(e.target.value),
+                    })
                   }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 15.000"
-              />
-            </div>
-
-            {/* Dueño y consignación */}
-            <div>
-              <Label htmlFor="owner_name">Nombre del dueño</Label>
-              <Input
-                id="owner_name"
-                value={newVehicle.owner_name}
-                onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
-                placeholder="Ej: Juan Pérez"
-              />
-            </div>
-            <div>
-              <Label htmlFor="owner_phone">Teléfono del dueño</Label>
-              <Input
-                id="owner_phone"
-                type="tel"
-                value={newVehicle.owner_phone}
-                onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
-                placeholder="Ej: +56 9 1234 5678"
-              />
-            </div>
-            <div>
-              <Label htmlFor="consignment_type">Consignación</Label>
-              <Select
-                value={newVehicle.consignment_type}
-                onValueChange={(value: ConsignmentType) =>
-                  setNewVehicle({ ...newVehicle, consignment_type: value })
-                }
-              >
-                <SelectTrigger id="consignment_type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fisica">Física</SelectItem>
-                  <SelectItem value="digital">Digital</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Valor por vender */}
-            <div>
-              <Label htmlFor="price">Valor por vender (CLP)</Label>
-              <Input
-                id="price"
-                type="text"
-                value={formatNumberDisplay(newVehicle.price)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  placeholder="Ej: AUTOMATICO, MECANICO"
+                />
+              </div>
+              <div>
+                <Label htmlFor="combustible_display">{STOCK_ONLINE_COLUMN_LABELS.combustible}</Label>
+                <Input
+                  id="combustible_display"
+                  value={newVehicle.combustible_display}
+                  onChange={(e) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      combustible_display: e.target.value,
+                      fuel_type: deriveFuelTypeFromExcelText(e.target.value),
+                    })
+                  }
+                  placeholder="Ej: BENCINA, DIESEL"
+                />
+              </div>
+              <div>
+                <Label htmlFor="patente">{STOCK_ONLINE_COLUMN_LABELS.patente}</Label>
+                <Input
+                  id="patente"
+                  value={newVehicle.patente}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
+                  placeholder="Ej: ABCD12"
+                />
+              </div>
+              <div>
+                <Label htmlFor="price">{STOCK_ONLINE_COLUMN_LABELS.precio} (CLP)</Label>
+                <Input
+                  id="price"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.price)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando precio:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando precio:', error);
+                  }}
+                  placeholder="Ej: 15.990.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="consignatario_staff_id">{STOCK_ONLINE_COLUMN_LABELS.consignatario}</Label>
+                <Select
+                  value={newVehicle.consignatario_staff_id || "__none__"}
+                  onValueChange={(v) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      consignatario_staff_id: v === "__none__" ? "" : v,
+                    })
                   }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 15.990.000"
-              />
-            </div>
-
-            {/* Costo */}
-            <div>
-              <Label htmlFor="cost">Costo (CLP)</Label>
-              <Input
-                id="cost"
-                type="text"
-                value={formatNumberDisplay(newVehicle.cost)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                >
+                  <SelectTrigger id="consignatario_staff_id">
+                    <SelectValue placeholder="Seleccionar vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin asignar</SelectItem>
+                    {salesStaff.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.full_name}
+                        {s.role_label ? ` · ${s.role_label}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                <Label htmlFor="publicado_add" className="text-sm font-normal cursor-pointer">
+                  {STOCK_ONLINE_COLUMN_LABELS.publicado}
+                </Label>
+                <Switch
+                  id="publicado_add"
+                  checked={newVehicle.publicado}
+                  onCheckedChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="color">Color</Label>
+                <Input
+                  id="color"
+                  value={newVehicle.color}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                  placeholder="Ej: Blanco"
+                />
+              </div>
+              <div>
+                <Label htmlFor="owner_name">Nombre del dueño</Label>
+                <Input
+                  id="owner_name"
+                  value={newVehicle.owner_name}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
+                  placeholder="Ej: Juan Pérez"
+                />
+              </div>
+              <div>
+                <Label htmlFor="owner_phone">Teléfono del dueño</Label>
+                <Input
+                  id="owner_phone"
+                  type="tel"
+                  value={newVehicle.owner_phone}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
+                  placeholder="Ej: +56 9 1234 5678"
+                />
+              </div>
+              <div>
+                <Label htmlFor="consignment_type">Tipo de consignación</Label>
+                <Select
+                  value={newVehicle.consignment_type}
+                  onValueChange={(value: ConsignmentType) =>
+                    setNewVehicle({ ...newVehicle, consignment_type: value })
+                  }
+                >
+                  <SelectTrigger id="consignment_type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fisica">Física</SelectItem>
+                    <SelectItem value="digital">Digital</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="cost">Costo (CLP)</Label>
+                <Input
+                  id="cost"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.cost)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando costo:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando costo:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 12.000.000"
-              />
-            </div>
-
-            {/* Pie mínimo */}
-            <div>
-              <Label htmlFor="minDownPayment">Pie mínimo</Label>
-              <Input
-                id="minDownPayment"
-                type="text"
-                value={formatNumberDisplay(newVehicle.minDownPayment)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  }}
+                  placeholder="Ej: 12.000.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="minDownPayment">Pie mínimo</Label>
+                <Input
+                  id="minDownPayment"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.minDownPayment)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando pie mínimo:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando pie mínimo:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 3.000.000"
-              />
+                  }}
+                  placeholder="Ej: 3.000.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="drivetrain">Tracción</Label>
+                <Select
+                  value={newVehicle.drivetrain || undefined}
+                  onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
+                >
+                  <SelectTrigger id="drivetrain">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Delantera">Delantera</SelectItem>
+                    <SelectItem value="Trasera">Trasera</SelectItem>
+                    <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
+                    <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="location">Ubicación física</Label>
+                <Input
+                  id="location"
+                  value={newVehicle.location}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
+                  placeholder="Ej: Patio A, Estacionamiento 3"
+                />
+              </div>
             </div>
-
-            {/* Ganancia estimada (calculada) */}
-            <div>
-              <Label>Ganancia estimada (calculada)</Label>
-              <Input
-                value={formatCLP(newVehicle.price - newVehicle.cost)}
-                disabled
-                className="bg-gray-100 dark:bg-gray-800"
-              />
-            </div>
-
-            {/* Motor */}
-            <div>
-              <Label htmlFor="engine_size">Motor</Label>
-              <Input
-                id="engine_size"
-                value={newVehicle.engine_size}
-                onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
-                placeholder="Ej: 1.8L, 2.0L"
-              />
-            </div>
-
-            {/* Tipo Combustible */}
-            <div>
-              <Label htmlFor="fuel_type">Tipo Combustible</Label>
-              <Select
-                value={newVehicle.fuel_type}
-                onValueChange={(value: "gasolina" | "diesel" | "híbrido" | "eléctrico") =>
-                  setNewVehicle({ ...newVehicle, fuel_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gasolina">Gasolina</SelectItem>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="híbrido">Híbrido</SelectItem>
-                  <SelectItem value="eléctrico">Eléctrico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Transmisión */}
-            <div>
-              <Label htmlFor="transmission">Transmisión</Label>
-              <Select
-                value={newVehicle.transmission}
-                onValueChange={(value: "manual" | "automático" | "cvt") =>
-                  setNewVehicle({ ...newVehicle, transmission: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="automático">Automático</SelectItem>
-                  <SelectItem value="cvt">CVT</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Tracción */}
-            <div>
-              <Label htmlFor="drivetrain">Tracción</Label>
-              <Select
-                value={newVehicle.drivetrain || undefined}
-                onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Delantera">Delantera</SelectItem>
-                  <SelectItem value="Trasera">Trasera</SelectItem>
-                  <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
-                  <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Ubicación Física */}
-            <div>
-              <Label htmlFor="location">Ubicación Física</Label>
-              <Input
-                id="location"
-                value={newVehicle.location}
-                onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
-                placeholder="Ej: Patio A, Estacionamiento 3"
-              />
-            </div>
-
-
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -2346,26 +2371,7 @@ export default function Inventory() {
               variant="outline"
               onClick={() => {
                 setShowAddDialog(false);
-                setNewVehicle({
-                  make: "",
-                  model: "",
-                  year: 0,
-                  color: "",
-                  mileage: 0,
-                  owner_name: "",
-                  owner_phone: "",
-                  consignment_type: "fisica",
-                  price: 0,
-                  cost: 0,
-                  minDownPayment: 0,
-                  engine_size: "",
-                  fuel_type: "gasolina",
-                  transmission: "automático",
-                  location: "",
-                  drivetrain: "",
-                  images: [],
-                  status: "disponible",
-                });
+                setNewVehicle(createEmptyNewVehicle());
               }}
               disabled={isSaving}
             >
@@ -2388,27 +2394,7 @@ export default function Inventory() {
         onOpenChange={(open) => {
           if (!open) {
             setVehicleToEdit(null);
-            // Resetear formulario al cerrar
-            setNewVehicle({
-              make: "",
-              model: "",
-              year: 0,
-              color: "",
-              mileage: 0,
-              owner_name: "",
-              owner_phone: "",
-              consignment_type: "fisica",
-              price: 0,
-              cost: 0,
-              minDownPayment: 0,
-              engine_size: "",
-              fuel_type: "gasolina",
-              transmission: "automático",
-              location: "",
-              drivetrain: "",
-              images: [],
-              status: "disponible",
-            });
+            setNewVehicle(createEmptyNewVehicle());
           }
         }}
       >
@@ -2420,12 +2406,10 @@ export default function Inventory() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {/* Fotos del vehículo */}
-            <div className="md:col-span-2">
+          <div className="space-y-6 mt-4">
+            <div>
               <Label htmlFor="edit-images">Fotos del vehículo</Label>
               <div className="mt-2">
-                {/* Mostrar imágenes existentes */}
                 {vehicleToEdit && ((vehicleToEdit.images as unknown as string[] | null) || []).length > 0 && (
                   <div className="flex flex-wrap gap-4 mb-4">
                     <p className="text-sm text-muted-foreground w-full">Imágenes actuales:</p>
@@ -2445,7 +2429,6 @@ export default function Inventory() {
                     ))}
                   </div>
                 )}
-                {/* Mostrar nuevas imágenes seleccionadas */}
                 {newVehicle.images.length > 0 && (
                   <div className="flex flex-wrap gap-4 mb-4">
                     <p className="text-sm text-muted-foreground w-full">Nuevas imágenes a agregar:</p>
@@ -2487,318 +2470,321 @@ export default function Inventory() {
               </div>
             </div>
 
-            {/* Resto de campos - reutilizando los mismos del formulario de agregar */}
-            {/* Marca */}
-            <div>
-              <Label htmlFor="edit-make">Marca</Label>
-              <Input
-                id="edit-make"
-                value={newVehicle.make}
-                onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
-                placeholder="Ej: Toyota"
-              />
-            </div>
-
-            {/* Modelo */}
-            <div>
-              <Label htmlFor="edit-model">Modelo</Label>
-              <Input
-                id="edit-model"
-                value={newVehicle.model}
-                onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
-                placeholder="Ej: Corolla Cross"
-              />
-            </div>
-
-            {/* Año */}
-            <div>
-              <Label htmlFor="edit-year">Año</Label>
-              <Input
-                id="edit-year"
-                type="text"
-                value={newVehicle.year || ''}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, ''); // Solo números
-                  if (value === '') {
-                    setNewVehicle({ ...newVehicle, year: 0 });
-                  } else {
-                    const yearNum = parseInt(value);
-                    if (!isNaN(yearNum)) {
-                      setNewVehicle({ ...newVehicle, year: yearNum });
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="edit-make">Marca</Label>
+                <Input
+                  id="edit-make"
+                  value={newVehicle.make}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                  placeholder="Ej: Toyota"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-model">{STOCK_ONLINE_COLUMN_LABELS.modelo}</Label>
+                <Input
+                  id="edit-model"
+                  value={newVehicle.model}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                  placeholder="Ej: Corolla Cross"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-year">{STOCK_ONLINE_COLUMN_LABELS.anio}</Label>
+                <Input
+                  id="edit-year"
+                  type="text"
+                  value={newVehicle.year || ""}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    if (value === "") {
+                      setNewVehicle({ ...newVehicle, year: 0 });
+                    } else {
+                      const yearNum = parseInt(value, 10);
+                      if (!isNaN(yearNum)) {
+                        setNewVehicle({ ...newVehicle, year: yearNum });
+                      }
                     }
-                  }
-                }}
-                placeholder="Ej: 2024"
-              />
-            </div>
-
-            {/* Color */}
-            <div>
-              <Label htmlFor="edit-color">Color</Label>
-              <Input
-                id="edit-color"
-                value={newVehicle.color}
-                onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
-                placeholder="Ej: Blanco"
-              />
-            </div>
-
-            {/* Estado */}
-            <div>
-              <Label htmlFor="edit-status">Estado</Label>
-              <Select
-                value={newVehicle.status}
-                onValueChange={(value: VehicleStatus) =>
-                  setNewVehicle({ ...newVehicle, status: value })
-                }
-              >
-                <SelectTrigger id="edit-status">
-                  <SelectValue placeholder="Estado del vehículo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(statusLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Disponible, Reservado, Vendido, etc.
-              </p>
-            </div>
-
-            {/* Kilometraje */}
-            <div>
-              <Label htmlFor="edit-mileage">Kilometraje</Label>
-              <Input
-                id="edit-mileage"
-                type="text"
-                value={formatNumberDisplay(newVehicle.mileage)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  }}
+                  placeholder="Ej: 2024"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
+                <Input
+                  id="edit-carroceria"
+                  value={newVehicle.carroceria}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, carroceria: e.target.value })}
+                  placeholder="Ej: SUV, Sedán"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-mileage">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
+                <Input
+                  id="edit-mileage"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.mileage)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando kilometraje:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando kilometraje:', error);
+                  }}
+                  placeholder="Ej: 15.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-engine_size">{STOCK_ONLINE_COLUMN_LABELS.motor}</Label>
+                <Input
+                  id="edit-engine_size"
+                  value={newVehicle.engine_size}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
+                  placeholder="Ej: 2.0, 1600 cc"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
+                <Input
+                  id="edit-transmision_display"
+                  value={newVehicle.transmision_display}
+                  onChange={(e) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      transmision_display: e.target.value,
+                      transmission: deriveTransmissionFromExcelText(e.target.value),
+                    })
                   }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, mileage: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 15.000"
-              />
-            </div>
-
-            {/* Dueño y consignación */}
-            <div>
-              <Label htmlFor="edit-owner_name">Nombre del dueño</Label>
-              <Input
-                id="edit-owner_name"
-                value={newVehicle.owner_name}
-                onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
-                placeholder="Ej: Juan Pérez"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-owner_phone">Teléfono del dueño</Label>
-              <Input
-                id="edit-owner_phone"
-                type="tel"
-                value={newVehicle.owner_phone}
-                onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
-                placeholder="Ej: +56 9 1234 5678"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-consignment_type">Consignación</Label>
-              <Select
-                value={newVehicle.consignment_type}
-                onValueChange={(value: ConsignmentType) =>
-                  setNewVehicle({ ...newVehicle, consignment_type: value })
-                }
-              >
-                <SelectTrigger id="edit-consignment_type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fisica">Física</SelectItem>
-                  <SelectItem value="digital">Digital</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Valor por vender */}
-            <div>
-              <Label htmlFor="edit-price">Valor por vender (CLP)</Label>
-              <Input
-                id="edit-price"
-                type="text"
-                value={formatNumberDisplay(newVehicle.price)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  placeholder="Ej: AUTOMATICO, MECANICO"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-combustible_display">{STOCK_ONLINE_COLUMN_LABELS.combustible}</Label>
+                <Input
+                  id="edit-combustible_display"
+                  value={newVehicle.combustible_display}
+                  onChange={(e) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      combustible_display: e.target.value,
+                      fuel_type: deriveFuelTypeFromExcelText(e.target.value),
+                    })
+                  }
+                  placeholder="Ej: BENCINA, DIESEL"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-patente">{STOCK_ONLINE_COLUMN_LABELS.patente}</Label>
+                <Input
+                  id="edit-patente"
+                  value={newVehicle.patente}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
+                  placeholder="Ej: ABCD12"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-price">{STOCK_ONLINE_COLUMN_LABELS.precio} (CLP)</Label>
+                <Input
+                  id="edit-price"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.price)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando precio:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando precio:', error);
+                  }}
+                  placeholder="Ej: 15.990.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-consignatario_staff_id">{STOCK_ONLINE_COLUMN_LABELS.consignatario}</Label>
+                <Select
+                  value={newVehicle.consignatario_staff_id || "__none__"}
+                  onValueChange={(v) =>
+                    setNewVehicle({
+                      ...newVehicle,
+                      consignatario_staff_id: v === "__none__" ? "" : v,
+                    })
                   }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 15.990.000"
-              />
-            </div>
-
-            {/* Costo */}
-            <div>
-              <Label htmlFor="edit-cost">Costo (CLP)</Label>
-              <Input
-                id="edit-cost"
-                type="text"
-                value={formatNumberDisplay(newVehicle.cost)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                >
+                  <SelectTrigger id="edit-consignatario_staff_id">
+                    <SelectValue placeholder="Seleccionar vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin asignar</SelectItem>
+                    {salesStaff.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.full_name}
+                        {s.role_label ? ` · ${s.role_label}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                <Label htmlFor="publicado_edit" className="text-sm font-normal cursor-pointer">
+                  {STOCK_ONLINE_COLUMN_LABELS.publicado}
+                </Label>
+                <Switch
+                  id="publicado_edit"
+                  checked={newVehicle.publicado}
+                  onCheckedChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-color">Color</Label>
+                <Input
+                  id="edit-color"
+                  value={newVehicle.color}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                  placeholder="Ej: Blanco"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-status">Estado</Label>
+                <Select
+                  value={newVehicle.status}
+                  onValueChange={(value: VehicleStatus) =>
+                    setNewVehicle({ ...newVehicle, status: value })
+                  }
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue placeholder="Estado del vehículo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(statusLabels).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-owner_name">Nombre del dueño</Label>
+                <Input
+                  id="edit-owner_name"
+                  value={newVehicle.owner_name}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, owner_name: e.target.value })}
+                  placeholder="Ej: Juan Pérez"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-owner_phone">Teléfono del dueño</Label>
+                <Input
+                  id="edit-owner_phone"
+                  type="tel"
+                  value={newVehicle.owner_phone}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, owner_phone: e.target.value })}
+                  placeholder="Ej: +56 9 1234 5678"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-consignment_type">Tipo de consignación</Label>
+                <Select
+                  value={newVehicle.consignment_type}
+                  onValueChange={(value: ConsignmentType) =>
+                    setNewVehicle({ ...newVehicle, consignment_type: value })
+                  }
+                >
+                  <SelectTrigger id="edit-consignment_type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fisica">Física</SelectItem>
+                    <SelectItem value="digital">Digital</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-cost">Costo (CLP)</Label>
+                <Input
+                  id="edit-cost"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.cost)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando costo:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando costo:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, cost: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 12.000.000"
-              />
-            </div>
-
-            {/* Pie mínimo */}
-            <div>
-              <Label htmlFor="minDownPayment">Pie mínimo</Label>
-              <Input
-                id="minDownPayment"
-                type="text"
-                value={formatNumberDisplay(newVehicle.minDownPayment)}
-                onChange={(e) => {
-                  try {
-                    const formatted = formatNumberInput(e.target.value);
+                  }}
+                  placeholder="Ej: 12.000.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-minDownPayment">Pie mínimo</Label>
+                <Input
+                  id="edit-minDownPayment"
+                  type="text"
+                  value={formatNumberDisplay(newVehicle.minDownPayment)}
+                  onChange={(e) => {
+                    try {
+                      const formatted = formatNumberInput(e.target.value);
+                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
+                    } catch (error) {
+                      console.error("Error procesando pie mínimo:", error);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedText = e.clipboardData.getData("text");
+                    const formatted = formatNumberInput(pastedText);
                     setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  } catch (error) {
-                    console.error('Error procesando pie mínimo:', error);
-                  }
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const pastedText = e.clipboardData.getData('text');
-                  const formatted = formatNumberInput(pastedText);
-                  setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                }}
-                placeholder="Ej: 3.000.000"
-              />
+                  }}
+                  placeholder="Ej: 3.000.000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-drivetrain">Tracción</Label>
+                <Select
+                  value={newVehicle.drivetrain || undefined}
+                  onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
+                >
+                  <SelectTrigger id="edit-drivetrain">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Delantera">Delantera</SelectItem>
+                    <SelectItem value="Trasera">Trasera</SelectItem>
+                    <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
+                    <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="edit-location">Ubicación física</Label>
+                <Input
+                  id="edit-location"
+                  value={newVehicle.location}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
+                  placeholder="Ej: Patio A, Estacionamiento 3"
+                />
+              </div>
             </div>
-
-            {/* Ganancia estimada (calculada) */}
-            <div>
-              <Label>Ganancia estimada (calculada)</Label>
-              <Input
-                value={formatCLP(newVehicle.price - newVehicle.cost)}
-                disabled
-                className="bg-gray-100 dark:bg-gray-800"
-              />
-            </div>
-
-            {/* Motor */}
-            <div>
-              <Label htmlFor="edit-engine_size">Motor</Label>
-              <Input
-                id="edit-engine_size"
-                value={newVehicle.engine_size}
-                onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
-                placeholder="Ej: 1.8L, 2.0L"
-              />
-            </div>
-
-            {/* Tipo Combustible */}
-            <div>
-              <Label htmlFor="edit-fuel_type">Tipo Combustible</Label>
-              <Select
-                value={newVehicle.fuel_type}
-                onValueChange={(value: "gasolina" | "diesel" | "híbrido" | "eléctrico") =>
-                  setNewVehicle({ ...newVehicle, fuel_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gasolina">Gasolina</SelectItem>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="híbrido">Híbrido</SelectItem>
-                  <SelectItem value="eléctrico">Eléctrico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Transmisión */}
-            <div>
-              <Label htmlFor="edit-transmission">Transmisión</Label>
-              <Select
-                value={newVehicle.transmission}
-                onValueChange={(value: "manual" | "automático" | "cvt") =>
-                  setNewVehicle({ ...newVehicle, transmission: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="automático">Automático</SelectItem>
-                  <SelectItem value="cvt">CVT</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Tracción */}
-            <div>
-              <Label htmlFor="edit-drivetrain">Tracción</Label>
-              <Select
-                value={newVehicle.drivetrain || undefined}
-                onValueChange={(value) => setNewVehicle({ ...newVehicle, drivetrain: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Delantera">Delantera</SelectItem>
-                  <SelectItem value="Trasera">Trasera</SelectItem>
-                  <SelectItem value="4WD">4WD (Tracción en las 4 ruedas)</SelectItem>
-                  <SelectItem value="AWD">AWD (Tracción integral)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Ubicación Física */}
-            <div>
-              <Label htmlFor="edit-location">Ubicación Física</Label>
-              <Input
-                id="edit-location"
-                value={newVehicle.location}
-                onChange={(e) => setNewVehicle({ ...newVehicle, location: e.target.value })}
-                placeholder="Ej: Patio A, Estacionamiento 3"
-              />
-            </div>
-
-
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -2806,26 +2792,7 @@ export default function Inventory() {
               variant="outline"
               onClick={() => {
                 setVehicleToEdit(null);
-                setNewVehicle({
-                  make: "",
-                  model: "",
-                  year: 0,
-                  color: "",
-                  mileage: 0,
-                  owner_name: "",
-                  owner_phone: "",
-                  consignment_type: "fisica",
-                  price: 0,
-                  cost: 0,
-                  minDownPayment: 0,
-                  engine_size: "",
-                  fuel_type: "gasolina",
-                  transmission: "automático",
-                  location: "",
-                  drivetrain: "",
-                  images: [],
-                  status: "disponible",
-                });
+                setNewVehicle(createEmptyNewVehicle());
               }}
               disabled={isSaving}
             >

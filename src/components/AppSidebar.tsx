@@ -139,7 +139,16 @@ export function AppSidebar() {
 
   const categoriesToShow = useMemo(() => {
     if (isVendorOnly) {
-      return menuCategories.filter((c) => c.title === "CRM & Leads");
+      return menuCategories
+        .map((c) => {
+          if (c.title === "CRM & Leads") return c;
+          if (c.title === "Inventario & Vehículos") {
+            const items = c.items.filter((item) => item.url === "/app/consignaciones");
+            return items.length ? { ...c, items } : null;
+          }
+          return null;
+        })
+        .filter((c): c is (typeof menuCategories)[number] => c !== null);
     }
     return menuCategories;
   }, [isVendorOnly]);

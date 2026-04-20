@@ -25,8 +25,14 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { AlertTriangle, Calendar, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Separator } from "@/components/ui/separator";
+import { AlertTriangle, Calendar, ChevronDown, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +44,7 @@ import { consignacionesService } from "@/lib/services/consignaciones";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
+import { toSupabaseTransformedImageUrl } from "@/lib/storage-image-utils";
 
 type Consignacion = Database["public"]["Tables"]["consignaciones"]["Row"];
 type ConsignacionWithRelations = Consignacion & {
@@ -55,9 +62,54 @@ type ConsignacionWithRelations = Consignacion & {
     year: number | null;
     vin: string | null;
     color: string | null;
-    images: unknown;
+    primary_image_url: string | null;
   } | null;
 };
+
+const CONSIGNACION_THUMB_PLACEHOLDER = "/placeholder.svg";
+
+/** Miniatura ligera: transformación Storage + lazy load (no bloquea el hilo principal). */
+const ConsignacionVehicleThumb = memo(function ConsignacionVehicleThumb({
+  url,
+}: {
+  url: string | null | undefined;
+}) {
+  const src = useMemo(() => {
+    if (!url?.trim()) return CONSIGNACION_THUMB_PLACEHOLDER;
+    return (
+      toSupabaseTransformedImageUrl(url.trim(), {
+        width: 200,
+        height: 140,
+        quality: 68,
+        resize: "cover",
+      }) ?? url.trim()
+    );
+  }, [url]);
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-14 w-[4.5rem] shrink-0 rounded-md border border-border object-cover bg-muted"
+      loading="lazy"
+      decoding="async"
+      fetchPriority="low"
+      width={72}
+      height={56}
+      sizes="72px"
+      onError={(e) => {
+        const el = e.target as HTMLImageElement;
+        const raw = url?.trim();
+        if (el.dataset.fallback === "1" || !raw) {
+          el.src = CONSIGNACION_THUMB_PLACEHOLDER;
+          return;
+        }
+        el.dataset.fallback = "1";
+        el.src = raw;
+      }}
+    />
+  );
+});
 
 const statusLabels: Record<Consignacion["status"], string> = {
   nuevo: "Nuevo",
@@ -96,6 +148,21 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
   Publicado: { dot: "bg-purple-500", text: "text-purple-600" },
   "Seguimiento semanal": { dot: "bg-blue-500", text: "text-blue-600" },
 };
+
+/** Encabezados alineados con la hoja «ONLINE» de STOCK ON LINE.xlsx (Miami Motors). */
+const STOCK_ONLINE_COLUMN_LABELS = {
+  modelo: "MODELO",
+  anio: "AÑO",
+  carroceria: "CARROCERÍA",
+  kilometraje: "KILOMETRAJE",
+  motor: "MOTOR",
+  transmision: "TRANSMISION",
+  combustible: "COMBUSTIBLE",
+  patente: "PATENTE",
+  precio: "PRECIO",
+  consignatario: "CONSIGNATARIO",
+  publicado: "PUBLICADO",
+} as const;
 
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
@@ -490,6 +557,7 @@ const ConsignacionKmCell = ({
 
 export default function Consignaciones() {
   const { user } = useAuth();
+  const isVendedor = user?.role === "vendedor";
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
@@ -499,6 +567,7 @@ export default function Consignaciones() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [consignacionAdvancedOpen, setConsignacionAdvancedOpen] = useState(false);
 
   // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -652,6 +721,7 @@ export default function Consignaciones() {
       vehicle_model: prev.vehicle_model || vehicle?.model || "",
       vehicle_year: prev.vehicle_year || (vehicle?.year ? `${vehicle.year}` : ""),
       vehicle_vin: prev.vehicle_vin || vehicle?.vin || "",
+      patente: prev.patente || vehicle?.patente || "",
       vehicle_km:
         prev.vehicle_km || (vehicle?.mileage != null ? String(vehicle.mileage) : ""),
       motor: prev.motor || vehicle?.engine_size || "",
@@ -721,7 +791,7 @@ export default function Consignaciones() {
         motor: formState.motor.trim() || null,
         transmision: formState.transmision.trim() || null,
         combustible: formState.combustible.trim() || null,
-        patente: formState.patente.trim() || null,
+        patente: formState.patente.trim() ? formState.patente.trim() : null,
         publicado: formState.publicado,
         label: normalizeLabelValue(formState.label),
         status: formState.status,
@@ -987,66 +1057,69 @@ export default function Consignaciones() {
             Controla clientes y autos consignados, y gestiona etiquetas de leads. El listado se mantiene y no se resetea al cambiar de mes.
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} className="w-full md:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva consignacion
-        </Button>
+        {!isVendedor && (
+          <Button onClick={() => setShowCreateDialog(true)} className="w-full md:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva consignacion
+          </Button>
+        )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-3 md:gap-4 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2 md:pb-3">
-            <CardTitle className="text-xs md:text-base">Total Consignaciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isFilterActive ? (
-                <>de {consignaciones.length} registradas (filtrado)</>
-              ) : (
-                <>registradas</>
-              )}
-            </p>
-          </CardContent>
-        </Card>
+      {!isVendedor && (
+        <div className="grid gap-3 md:gap-4 grid-cols-2 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2 md:pb-3">
+              <CardTitle className="text-xs md:text-base">Total Consignaciones</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl md:text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isFilterActive ? (
+                  <>de {consignaciones.length} registradas (filtrado)</>
+                ) : (
+                  <>registradas</>
+                )}
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2 md:pb-3">
-            <CardTitle className="text-xs md:text-base">Valor Consignación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">{formatCLP(stats.totalConsignacionValue)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              precio de consignación
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2 md:pb-3">
+              <CardTitle className="text-xs md:text-base">Valor Consignación</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl md:text-2xl font-bold">{formatCLP(stats.totalConsignacionValue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                precio de consignación
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2 md:pb-3">
-            <CardTitle className="text-xs md:text-base">Valor Venta</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">{formatCLP(stats.totalSaleValue)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              precio de venta total
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2 md:pb-3">
+              <CardTitle className="text-xs md:text-base">Valor Venta</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl md:text-2xl font-bold">{formatCLP(stats.totalSaleValue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                precio de venta total
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2 md:pb-3">
-            <CardTitle className="text-xs md:text-base">Margen Proyectado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold text-green-600">{formatCLP(stats.totalMargin)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              margen estimado
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="pb-2 md:pb-3">
+              <CardTitle className="text-xs md:text-base">Margen Proyectado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl md:text-2xl font-bold text-green-600">{formatCLP(stats.totalMargin)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                margen estimado
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-4 md:pt-6">
@@ -1231,10 +1304,11 @@ export default function Consignaciones() {
                     <CardContent className="pt-4">
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
+                          <div className="flex gap-3 min-w-0 flex-1">
+                            <ConsignacionVehicleThumb url={item.vehicle?.primary_image_url} />
+                            <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-base truncate">
-                              {model || item.vehicle_make || "Sin modelo"}
-                              {year ? ` · ${year}` : ""}
+                              {item.patente?.trim() || model || item.vehicle_make || "Consignación"}
                             </h3>
                             <div className="flex flex-wrap gap-2 mt-2">
                               <Select
@@ -1284,6 +1358,7 @@ export default function Consignaciones() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            </div>
                           </div>
                           <Button
                             variant="ghost"
@@ -1297,52 +1372,63 @@ export default function Consignaciones() {
                         </div>
 
                         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                          <div>
-                            <dt className="text-xs text-muted-foreground">Consignatario</dt>
-                            <dd className="font-medium truncate">{item.owner_name}</dd>
+                          <div className="col-span-2">
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.modelo}</dt>
+                            <dd className="font-medium truncate">
+                              {model || item.vehicle_make || "—"}
+                              {year != null ? ` · ${year}` : ""}
+                            </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-muted-foreground">Patente</dt>
-                            <dd>{item.patente || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-muted-foreground">Carrocería</dt>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</dt>
                             <dd className="truncate">{item.carroceria || "—"}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-muted-foreground">Kilometraje</dt>
-                            <dd>{getConsignacionKm(item) != null ? `${getConsignacionKm(item)?.toLocaleString("es-CL")} km` : "—"}</dd>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</dt>
+                            <dd>{getConsignacionKm(item) != null ? `${getConsignacionKm(item)?.toLocaleString("es-CL")}` : "—"}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-muted-foreground">Motor</dt>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.motor}</dt>
                             <dd className="truncate">{item.motor || "—"}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-muted-foreground">Transmisión</dt>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.transmision}</dt>
                             <dd className="truncate">{item.transmision || "—"}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-muted-foreground">Combustible</dt>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.combustible}</dt>
                             <dd className="truncate">{item.combustible || "—"}</dd>
                           </div>
-                          <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
+                          <div>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.patente}</dt>
+                            <dd className="truncate">{item.patente || "—"}</dd>
+                          </div>
+                          {!isVendedor && (
                             <div>
-                              <dt className="text-xs text-muted-foreground">Publicado</dt>
+                              <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.precio}</dt>
+                              <dd>
+                                <PriceInput
+                                  value={item.consignacion_price ?? null}
+                                  onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
+                                  className="w-full text-sm"
+                                />
+                              </dd>
+                            </div>
+                          )}
+                          <div>
+                            <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.consignatario}</dt>
+                            <dd className="font-medium truncate">{item.owner_name}</dd>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-between gap-3 pt-1 border-t border-border/60 mt-1">
+                            <div>
+                              <dt className="text-xs text-muted-foreground">{STOCK_ONLINE_COLUMN_LABELS.publicado}</dt>
                               <dd className="pt-1">
                                 <Switch
                                   checked={item.publicado}
                                   onCheckedChange={(v) => handlePublicadoChange(item, v)}
-                                  aria-label="Publicado"
+                                  aria-label={STOCK_ONLINE_COLUMN_LABELS.publicado}
                                 />
                               </dd>
-                            </div>
-                            <div className="flex-1 text-right">
-                              <div className="text-xs text-muted-foreground">Precio</div>
-                              <PriceInput
-                                value={item.consignacion_price ?? null}
-                                onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
-                                className="w-full max-w-[140px] ml-auto text-sm"
-                              />
                             </div>
                           </div>
                         </dl>
@@ -1366,15 +1452,17 @@ export default function Consignaciones() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">Precio venta</Label>
-                            <PriceInput
-                              value={item.sale_price ?? null}
-                              onBlur={(value) => handlePriceChange(item, "sale_price", value)}
-                              className="w-full text-sm"
-                            />
-                          </div>
+                        <div className={`grid gap-3 pt-2 border-t ${isVendedor ? "grid-cols-1" : "grid-cols-2"}`}>
+                          {!isVendedor && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground mb-1 block">Precio venta</Label>
+                              <PriceInput
+                                value={item.sale_price ?? null}
+                                onBlur={(value) => handlePriceChange(item, "sale_price", value)}
+                                className="w-full text-sm"
+                              />
+                            </div>
+                          )}
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
                               <Calendar className="h-3 w-3" />
@@ -1416,22 +1504,31 @@ export default function Consignaciones() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Modelo</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide w-[5rem]">Año</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Carrocería</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6.5rem]">Kilometraje</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Motor</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Transmisión</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">Combustible</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[5.5rem]">Patente</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Precio</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Consignatario</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-center w-[5.5rem]">Publicado</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Estado</TableHead>
+                  <TableHead className="w-[4.5rem] p-2 text-center text-xs font-semibold uppercase tracking-wide">
+                    Foto
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">{STOCK_ONLINE_COLUMN_LABELS.modelo}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide w-[5rem]">{STOCK_ONLINE_COLUMN_LABELS.anio}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6.5rem]">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">{STOCK_ONLINE_COLUMN_LABELS.motor}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">{STOCK_ONLINE_COLUMN_LABELS.transmision}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[6rem]">{STOCK_ONLINE_COLUMN_LABELS.combustible}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[5.5rem]">{STOCK_ONLINE_COLUMN_LABELS.patente}</TableHead>
+                  {!isVendedor && (
+                    <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">{STOCK_ONLINE_COLUMN_LABELS.precio}</TableHead>
+                  )}
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">{STOCK_ONLINE_COLUMN_LABELS.consignatario}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-center w-[5.5rem]">{STOCK_ONLINE_COLUMN_LABELS.publicado}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Estado CRM</TableHead>
                   <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Etiqueta</TableHead>
                   <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide min-w-[7rem]">Reunión</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Venta</TableHead>
-                  <TableHead className="text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Acciones</TableHead>
+                  {!isVendedor && (
+                    <TableHead className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">P. venta</TableHead>
+                  )}
+                  {!isVendedor && (
+                    <TableHead className="text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wide">Acciones</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1439,6 +1536,11 @@ export default function Consignaciones() {
                   const vehicleVin = item.vehicle?.vin || item.vehicle_vin;
                   return (
                     <TableRow key={item.id}>
+                      <TableCell className="p-2 align-middle w-[4.5rem]">
+                        <div className="flex justify-center">
+                          <ConsignacionVehicleThumb url={item.vehicle?.primary_image_url} />
+                        </div>
+                      </TableCell>
                       <TableCell className="p-2 align-top min-w-[8rem]">
                         <ConsignacionTextCell
                           value={getConsignacionModel(item) || null}
@@ -1494,17 +1596,19 @@ export default function Consignaciones() {
                       <TableCell className="p-2 align-top">
                         <ConsignacionTextCell
                           value={item.patente}
-                          onSave={(next) => patchConsignacionRow(item, { patente: next ? next.toUpperCase() : null })}
+                          onSave={(next) => patchConsignacionRow(item, { patente: next && next.trim() ? next.trim() : null })}
                           className="h-8 text-xs min-w-[4.5rem]"
                         />
                       </TableCell>
-                      <TableCell className="p-2 align-top">
-                        <PriceInput
-                          value={item.consignacion_price ?? null}
-                          onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
-                          className="h-8 text-xs w-[120px]"
-                        />
-                      </TableCell>
+                      {!isVendedor && (
+                        <TableCell className="p-2 align-top">
+                          <PriceInput
+                            value={item.consignacion_price ?? null}
+                            onBlur={(value) => handlePriceChange(item, "consignacion_price", value)}
+                            className="h-8 text-xs w-[120px]"
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="p-2 align-top min-w-[7rem]">
                         <ConsignacionTextCell
                           value={item.owner_name}
@@ -1592,24 +1696,28 @@ export default function Consignaciones() {
                           className="w-[160px] h-8 text-xs"
                         />
                       </TableCell>
-                      <TableCell className="p-2 align-top">
-                        <PriceInput
-                          value={item.sale_price ?? null}
-                          onBlur={(value) => handlePriceChange(item, "sale_price", value)}
-                          className="h-8 text-xs w-[120px]"
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 align-top text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(item)}
-                          title="Eliminar consignacion"
-                          className="h-8 w-8"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TableCell>
+                      {!isVendedor && (
+                        <TableCell className="p-2 align-top">
+                          <PriceInput
+                            value={item.sale_price ?? null}
+                            onBlur={(value) => handlePriceChange(item, "sale_price", value)}
+                            className="h-8 text-xs w-[120px]"
+                          />
+                        </TableCell>
+                      )}
+                      {!isVendedor && (
+                        <TableCell className="p-2 align-top text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(item)}
+                            title="Eliminar consignacion"
+                            className="h-8 w-8"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -1635,9 +1743,9 @@ export default function Consignaciones() {
       >
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nueva consignacion</DialogTitle>
+            <DialogTitle>Nueva consignación</DialogTitle>
             <DialogDescription>
-              Registra un cliente y vehiculo consignado para seguimiento y etiquetado.
+              Mismos campos y orden que la hoja «ONLINE» de <strong>STOCK ON LINE.xlsx</strong> (MODELO → PUBLICADO). Abajo puedes ampliar con inventario, CRM y seguimiento.
             </DialogDescription>
           </DialogHeader>
 
@@ -1648,93 +1756,21 @@ export default function Consignaciones() {
             }}
             className="space-y-4"
           >
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Stock en línea (Excel)
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Label htmlFor="vehicle_id_form">Vehículo en stock (opcional)</Label>
-              <Select
-                value={formState.vehicle_id || "__none__"}
-                onValueChange={(v) => handleVehicleChange(v === "__none__" ? "" : v)}
-              >
-                <SelectTrigger id="vehicle_id_form">
-                  <SelectValue placeholder="Sin vincular a inventario" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin vincular a inventario</SelectItem>
-                  {vehicles.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.year} {v.make} {v.model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="owner_name">Consignatario</Label>
-              <Input
-                id="owner_name"
-                value={formState.owner_name}
-                onChange={(e) => setFormState({ ...formState, owner_name: e.target.value })}
-                placeholder="Nombre del consignatario"
-              />
-            </div>
-            <div>
-              <Label htmlFor="owner_phone">Teléfono</Label>
-              <Input
-                id="owner_phone"
-                value={formState.owner_phone}
-                onChange={(e) => setFormState({ ...formState, owner_phone: e.target.value })}
-                placeholder="+56 9 1234 5678"
-              />
-            </div>
-            <div>
-              <Label htmlFor="owner_email">Correo</Label>
-              <Input
-                id="owner_email"
-                type="email"
-                value={formState.owner_email}
-                onChange={(e) => setFormState({ ...formState, owner_email: e.target.value })}
-                placeholder="correo@ejemplo.cl"
-              />
-            </div>
-            <div>
-              <Label htmlFor="lead_id_form">Lead existente (opcional)</Label>
-              <Select
-                value={formState.lead_id || "__none__"}
-                onValueChange={(v) => handleLeadChange(v === "__none__" ? "" : v)}
-              >
-                <SelectTrigger id="lead_id_form">
-                  <SelectValue placeholder="Sin lead vinculado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Sin lead vinculado</SelectItem>
-                  {leads.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.full_name || l.phone || l.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="vehicle_make">Marca</Label>
-              <Input
-                id="vehicle_make"
-                value={formState.vehicle_make}
-                onChange={(e) => setFormState({ ...formState, vehicle_make: e.target.value })}
-                placeholder="Ej: Toyota"
-              />
-            </div>
-            <div>
-              <Label htmlFor="vehicle_model">Modelo</Label>
+              <Label htmlFor="vehicle_model">{STOCK_ONLINE_COLUMN_LABELS.modelo}</Label>
               <Input
                 id="vehicle_model"
                 value={formState.vehicle_model}
                 onChange={(e) => setFormState({ ...formState, vehicle_model: e.target.value })}
-                placeholder="Ej: Corolla"
+                placeholder="Ej: CITRÖEN C3 · HAVAL JOLION"
               />
             </div>
             <div>
-              <Label htmlFor="vehicle_year">Año</Label>
+              <Label htmlFor="vehicle_year">{STOCK_ONLINE_COLUMN_LABELS.anio}</Label>
               <Input
                 id="vehicle_year"
                 type="number"
@@ -1746,16 +1782,16 @@ export default function Consignaciones() {
               />
             </div>
             <div>
-              <Label htmlFor="carroceria">Carrocería</Label>
+              <Label htmlFor="carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
               <Input
                 id="carroceria"
                 value={formState.carroceria}
                 onChange={(e) => setFormState({ ...formState, carroceria: e.target.value })}
-                placeholder="SUV, sedán, hatchback…"
+                placeholder="Ej: HATCHBACK, SUV, PICK UP"
               />
             </div>
             <div>
-              <Label htmlFor="vehicle_km">Kilometraje</Label>
+              <Label htmlFor="vehicle_km">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
               <Input
                 id="vehicle_km"
                 inputMode="numeric"
@@ -1763,57 +1799,69 @@ export default function Consignaciones() {
                 onChange={(e) =>
                   setFormState({ ...formState, vehicle_km: e.target.value.replace(/\D/g, "") })
                 }
-                placeholder="Ej: 45000"
+                placeholder="Ej: 129000"
               />
             </div>
             <div>
-              <Label htmlFor="motor">Motor</Label>
+              <Label htmlFor="motor">{STOCK_ONLINE_COLUMN_LABELS.motor}</Label>
               <Input
                 id="motor"
                 value={formState.motor}
                 onChange={(e) => setFormState({ ...formState, motor: e.target.value })}
-                placeholder="Ej: 1.8, 2.0 turbo…"
+                placeholder="Ej: 1.6 T · 1.5"
               />
             </div>
             <div>
-              <Label htmlFor="transmision">Transmisión</Label>
+              <Label htmlFor="transmision">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
               <Input
                 id="transmision"
                 value={formState.transmision}
                 onChange={(e) => setFormState({ ...formState, transmision: e.target.value })}
-                placeholder="Manual, automático…"
+                placeholder="Ej: MECANICO, AUTOMATICO"
               />
             </div>
             <div>
-              <Label htmlFor="combustible">Combustible</Label>
+              <Label htmlFor="combustible">{STOCK_ONLINE_COLUMN_LABELS.combustible}</Label>
               <Input
                 id="combustible"
                 value={formState.combustible}
                 onChange={(e) => setFormState({ ...formState, combustible: e.target.value })}
-                placeholder="Gasolina, diésel…"
+                placeholder="Ej: DIESEL, BENCINA, HIBRIDA"
               />
             </div>
             <div>
-              <Label htmlFor="patente">Patente</Label>
+              <Label htmlFor="patente">{STOCK_ONLINE_COLUMN_LABELS.patente}</Label>
               <Input
                 id="patente"
                 value={formState.patente}
-                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
-                placeholder="Ej: ABCD12"
+                onChange={(e) => setFormState({ ...formState, patente: e.target.value })}
+                placeholder="Ej: KD TR 90 · PL WY 18"
               />
             </div>
             <div>
-              <Label htmlFor="vehicle_vin">VIN (opcional)</Label>
+              <Label htmlFor="consignacion_price">{STOCK_ONLINE_COLUMN_LABELS.precio} (CLP)</Label>
               <Input
-                id="vehicle_vin"
-                value={formState.vehicle_vin}
-                onChange={(e) => setFormState({ ...formState, vehicle_vin: e.target.value })}
+                id="consignacion_price"
+                value={formState.consignacion_price}
+                onChange={(e) =>
+                  setFormState({ ...formState, consignacion_price: e.target.value })
+                }
+                placeholder="Ej: 8990000"
+              />
+            </div>
+            <div>
+              <Label htmlFor="owner_name">{STOCK_ONLINE_COLUMN_LABELS.consignatario}</Label>
+              <Input
+                id="owner_name"
+                value={formState.owner_name}
+                onChange={(e) => setFormState({ ...formState, owner_name: e.target.value })}
+                placeholder="Ej: ELIAS"
               />
             </div>
             <div className="flex flex-row items-center justify-between rounded-lg border p-3 md:col-span-2">
               <div>
-                <Label htmlFor="publicado_form" className="text-base">Publicado</Label>
-                <p className="text-xs text-muted-foreground">Marcar si el auto está publicado en portales u oferta.</p>
+                <Label htmlFor="publicado_form" className="text-base">{STOCK_ONLINE_COLUMN_LABELS.publicado}</Label>
+                <p className="text-xs text-muted-foreground">Equivalente a marcar publicado en la planilla.</p>
               </div>
               <Switch
                 id="publicado_form"
@@ -1821,42 +1869,160 @@ export default function Consignaciones() {
                 onCheckedChange={(v) => setFormState({ ...formState, publicado: v })}
               />
             </div>
-            <div>
-              <Label>Precio (consignación)</Label>
-              <Input
-                value={formState.consignacion_price}
-                onChange={(e) =>
-                  setFormState({ ...formState, consignacion_price: e.target.value })
-                }
-                placeholder="Ej: 8000000"
-              />
-            </div>
-            <div>
-              <Label>Precio venta objetivo</Label>
-              <Input
-                value={formState.sale_price}
-                onChange={(e) => setFormState({ ...formState, sale_price: e.target.value })}
-                placeholder="Ej: 9290000"
-              />
-            </div>
-            <div>
-              <Label>Fecha reunión</Label>
-              <Input
-                type="datetime-local"
-                value={formState.meeting_at}
-                onChange={(e) => setFormState({ ...formState, meeting_at: e.target.value })}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label htmlFor="notes_form">Notas</Label>
-              <Input
-                id="notes_form"
-                value={formState.notes}
-                onChange={(e) => setFormState({ ...formState, notes: e.target.value })}
-                placeholder="Observaciones internas"
-              />
-            </div>
           </div>
+
+          <Collapsible open={consignacionAdvancedOpen} onOpenChange={setConsignacionAdvancedOpen}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" className="w-full flex justify-between gap-2">
+                <span>Opcional: inventario, CRM, contacto y seguimiento</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${consignacionAdvancedOpen ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4 space-y-4">
+              <Separator />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <Label htmlFor="vehicle_id_form">Vehículo en stock (opcional)</Label>
+                  <Select
+                    value={formState.vehicle_id || "__none__"}
+                    onValueChange={(v) => handleVehicleChange(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger id="vehicle_id_form">
+                      <SelectValue placeholder="Sin vincular a inventario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin vincular a inventario</SelectItem>
+                      {vehicles.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.year} {v.make} {v.model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="vehicle_make">Marca (opcional, para búsquedas)</Label>
+                  <Input
+                    id="vehicle_make"
+                    value={formState.vehicle_make}
+                    onChange={(e) => setFormState({ ...formState, vehicle_make: e.target.value })}
+                    placeholder="Ej: Peugeot"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lead_id_form">Lead existente (opcional)</Label>
+                  <Select
+                    value={formState.lead_id || "__none__"}
+                    onValueChange={(v) => handleLeadChange(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger id="lead_id_form">
+                      <SelectValue placeholder="Sin lead vinculado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin lead vinculado</SelectItem>
+                      {leads.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.full_name || l.phone || l.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="owner_phone">Teléfono</Label>
+                  <Input
+                    id="owner_phone"
+                    value={formState.owner_phone}
+                    onChange={(e) => setFormState({ ...formState, owner_phone: e.target.value })}
+                    placeholder="+56 9 1234 5678"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="owner_email">Correo</Label>
+                  <Input
+                    id="owner_email"
+                    type="email"
+                    value={formState.owner_email}
+                    onChange={(e) => setFormState({ ...formState, owner_email: e.target.value })}
+                    placeholder="correo@ejemplo.cl"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="vehicle_vin">VIN (opcional)</Label>
+                  <Input
+                    id="vehicle_vin"
+                    value={formState.vehicle_vin}
+                    onChange={(e) => setFormState({ ...formState, vehicle_vin: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="form_status">Estado en CRM</Label>
+                  <Select
+                    value={formState.status}
+                    onValueChange={(value) =>
+                      setFormState({ ...formState, status: value as Consignacion["status"] })
+                    }
+                  >
+                    <SelectTrigger id="form_status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(statusLabels).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="form_label">Etiqueta</Label>
+                  <Select
+                    value={formState.label}
+                    onValueChange={(value) => setFormState({ ...formState, label: value })}
+                  >
+                    <SelectTrigger id="form_label">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {labelOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="sale_price">Precio venta objetivo (CLP)</Label>
+                  <Input
+                    id="sale_price"
+                    value={formState.sale_price}
+                    onChange={(e) => setFormState({ ...formState, sale_price: e.target.value })}
+                    placeholder="Ej: 9290000"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="meeting_at">Fecha reunión</Label>
+                  <Input
+                    id="meeting_at"
+                    type="datetime-local"
+                    value={formState.meeting_at}
+                    onChange={(e) => setFormState({ ...formState, meeting_at: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="notes_form">Notas</Label>
+                  <Input
+                    id="notes_form"
+                    value={formState.notes}
+                    onChange={(e) => setFormState({ ...formState, notes: e.target.value })}
+                    placeholder="Observaciones internas"
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {createError && (
             <div className="flex items-center gap-2 rounded-md bg-destructive/10 text-destructive px-3 py-2 text-sm">

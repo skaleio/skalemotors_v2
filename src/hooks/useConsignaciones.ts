@@ -19,7 +19,7 @@ type ConsignacionWithRelations = Consignacion & {
     year: number | null;
     vin: string | null;
     color: string | null;
-    images: unknown;
+    primary_image_url: string | null;
   } | null;
 };
 
