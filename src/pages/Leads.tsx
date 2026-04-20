@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
@@ -337,7 +338,7 @@ const LeadsTable = memo(function LeadsTable({
                 <TableHead className="hidden min-w-[90px] xl:table-cell">Presupuesto</TableHead>
                 <TableHead className="min-w-[120px]">Estado</TableHead>
                 <TableHead className="hidden min-w-[80px] sm:table-cell">Fecha</TableHead>
-                <TableHead className="text-right w-[90px] shrink-0">Acciones</TableHead>
+                <TableHead className="text-right w-[130px] shrink-0">Acciones</TableHead>
               </TableRow>
             </TableHeader>
           <TableBody>
@@ -367,7 +368,23 @@ const LeadsTable = memo(function LeadsTable({
                       aria-label={`Seleccionar lead ${lead.full_name || "sin nombre"}`}
                     />
                   </TableCell>
-                  <TableCell className="font-medium">{lead.full_name || "Sin nombre"}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="space-y-0.5">
+                      <div>{lead.full_name || "Sin nombre"}</div>
+                      {(() => {
+                        const assignedUser = (lead as Lead & {
+                          assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                        }).assigned_user;
+                        const label = assignedUser?.full_name || assignedUser?.email;
+                        if (!label) return null;
+                        return (
+                          <div className="text-[11px] font-normal text-muted-foreground truncate" title={`Asignado a ${label}`}>
+                            → {label}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                     {lead.rut?.trim() ? lead.rut : "—"}
                   </TableCell>
@@ -468,6 +485,14 @@ const LeadsTable = memo(function LeadsTable({
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground shrink-0">
                     <div className="flex items-center justify-end gap-2">
+                      <AssignLeadMenu
+                        leadId={lead.id}
+                        assignedTo={lead.assigned_to}
+                        assignedLabel={(lead as Lead & {
+                          assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                        }).assigned_user?.full_name ?? null}
+                        leadBranchId={lead.branch_id}
+                      />
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1803,10 +1828,67 @@ export default function Leads() {
                       const consignacionVehicle = getConsignacionVehicleLabel(consignacion);
                       return consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
                     }
-                    return getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
+                    return detailsLead.vehicle_interest || getTagValue(tags, VEHICULO_TAG_PREFIX) || "—";
                   })()}
                 </p>
               </div>
+              {(detailsLead.uso_principal
+                || detailsLead.pasajeros_filas
+                || detailsLead.transmision
+                || detailsLead.pie_disponible
+                || detailsLead.marca_preferida
+                || detailsLead.anos_minimo
+                || detailsLead.preferencia
+                || detailsLead.alerta_crediticia
+                || detailsLead.raw_message) ? (
+                <div className="space-y-3 rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Datos del chatbot
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Uso principal</p>
+                      <p className="text-base">{detailsLead.uso_principal || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Transmisión</p>
+                      <p className="text-base">{detailsLead.transmision || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Pasajeros / Filas</p>
+                      <p className="text-base">{detailsLead.pasajeros_filas || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">PIE disponible</p>
+                      <p className="text-base">{detailsLead.pie_disponible || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Marca preferida</p>
+                      <p className="text-base">{detailsLead.marca_preferida || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Año mínimo</p>
+                      <p className="text-base">{detailsLead.anos_minimo || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Preferencia</p>
+                      <p className="text-base">{detailsLead.preferencia || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Alerta crediticia</p>
+                      <p className="text-base">{detailsLead.alerta_crediticia || "—"}</p>
+                    </div>
+                  </div>
+                  {detailsLead.raw_message ? (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Mensaje original</p>
+                      <pre className="mt-1 whitespace-pre-wrap rounded bg-background/60 p-2 text-xs leading-relaxed">
+                        {detailsLead.raw_message}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div>
                 <p className="text-sm text-muted-foreground">Nota</p>
                 <p className="text-base whitespace-pre-wrap">

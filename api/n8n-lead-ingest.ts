@@ -50,7 +50,39 @@ type Payload = {
   update_existing?: boolean;
   /** UUID de usuario vendedor (public.users) para asignar el lead al crear/actualizar. */
   assigned_to?: string | null;
+
+  // --- Campos extraídos por agentes IA (ej. n8n WHATSAPP HESSEN) ---
+  uso_principal?: string | null;
+  pasajeros_filas?: string | null;
+  transmision?: string | null;
+  pie_disponible?: string | number | null;
+  marca_preferida?: string | null;
+  anos_minimo?: string | null;
+  preferencia?: string | null;
+  alerta_crediticia?: string | null;
+  raw_message?: string | null;
+
+  // --- Aliases en español (agente produce estas claves) ---
+  nombre?: string;
+  telefono?: string;
+  presupuesto?: string | number | null;
+  tipo_vehiculo?: string | null;
+  payment_method?: string | null;
+  cantidad_pasajeros_filas_requeridas?: string | null;
+  transmision_preferida?: string | null;
+  presupuesto_pie_disponible?: string | number | null;
+  anos?: string | null;
+  mensaje_mike?: string | null;
 };
+
+function pickString(...values: (string | number | null | undefined)[]): string | null {
+  for (const v of values) {
+    if (v === undefined || v === null) continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return null;
+}
 
 type KeyResolution =
   | { kind: "env"; branchId: string }
@@ -214,13 +246,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const branchId = auth.resolution.branchId;
 
-  const phoneRaw = body.phone?.trim() || "";
+  const phoneRaw = pickString(body.phone, body.telefono) || "";
   const normalizedPhone = normalizePhoneChile(phoneRaw);
   if (!normalizedPhone) {
     return res.status(400).json({ ok: false, error: "phone is required (valid Chile format)" });
   }
 
-  const fullName = toTitleCase(body.full_name?.trim() || "") || "Sin nombre";
+  const fullName = toTitleCase(pickString(body.full_name, body.nombre) || "") || "Sin nombre";
 
   const status =
     body.status && includes(VALID_STATUSES, body.status) ? body.status : "contactado";
@@ -245,19 +277,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const tenantId = branch.tenant_id ?? null;
-  const notesText = buildNotes(body);
 
-  const budgetStr =
-    body.budget != null ? String(body.budget).trim() || null : null;
+  // Campos extraídos por el AI: se aceptan tanto las claves EN como los aliases ES.
+  const vehicleInterest = pickString(body.vehicle_interest, body.tipo_vehiculo);
+  const usoPrincipal = pickString(body.uso_principal);
+  const pasajerosFilas = pickString(body.pasajeros_filas, body.cantidad_pasajeros_filas_requeridas);
+  const transmision = pickString(body.transmision, body.transmision_preferida);
+  const pieDisponible = pickString(body.pie_disponible, body.presupuesto_pie_disponible);
+  const marcaPreferida = pickString(body.marca_preferida);
+  const anosMinimo = pickString(body.anos_minimo, body.anos);
+  const preferencia = pickString(body.preferencia);
+  const alertaCrediticia = pickString(body.alerta_crediticia);
+  const rawMessage = pickString(body.raw_message, body.mensaje_mike);
 
-  const paymentType = body.payment_type?.trim() || null;
-  const rut =
-    body.rut != null && String(body.rut).trim() ? String(body.rut).trim() : null;
-  const email =
-    body.email != null && String(body.email).trim()
-      ? String(body.email).trim()
-      : null;
-  const region = body.region?.trim() || null;
+  // vehicle_interest también se concatena en buildNotes; dejamos que siga ocurriendo
+  // para compat con notas históricas, y además lo guardamos en su columna propia.
+  const bodyForNotes: Payload = { ...body, vehicle_interest: vehicleInterest ?? undefined };
+  const notesText = buildNotes(bodyForNotes);
+
+  const budgetStr = pickString(body.budget, body.presupuesto);
+
+  const paymentType = pickString(body.payment_type, body.payment_method);
+  const rut = pickString(body.rut);
+  const email = pickString(body.email);
+  const region = pickString(body.region);
 
   const stateVal = body.state?.trim() || null;
   const stateConfidence =
@@ -300,6 +343,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         notes: notesText,
         region,
         rut,
+        vehicle_interest: vehicleInterest,
+        uso_principal: usoPrincipal,
+        pasajeros_filas: pasajerosFilas,
+        transmision,
+        pie_disponible: pieDisponible,
+        marca_preferida: marcaPreferida,
+        anos_minimo: anosMinimo,
+        preferencia,
+        alerta_crediticia: alertaCrediticia,
+        raw_message: rawMessage,
         updated_at: new Date().toISOString(),
       };
 
@@ -355,6 +408,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     region,
     rut,
     tags,
+    vehicle_interest: vehicleInterest,
+    uso_principal: usoPrincipal,
+    pasajeros_filas: pasajerosFilas,
+    transmision,
+    pie_disponible: pieDisponible,
+    marca_preferida: marcaPreferida,
+    anos_minimo: anosMinimo,
+    preferencia,
+    alerta_crediticia: alertaCrediticia,
+    raw_message: rawMessage,
   };
 
   if (tenantId) insertPayload.tenant_id = tenantId;

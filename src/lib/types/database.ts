@@ -385,6 +385,11 @@ export interface Database {
           consignment_type: 'fisica' | 'digital'
           patente: string | null
           consignatario_staff_id: string | null
+          carroceria: string | null
+          transmision_display: string | null
+          combustible_display: string | null
+          publicado: boolean
+          primary_image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -420,6 +425,10 @@ export interface Database {
           consignment_type?: 'fisica' | 'digital'
           patente?: string | null
           consignatario_staff_id?: string | null
+          carroceria?: string | null
+          transmision_display?: string | null
+          combustible_display?: string | null
+          publicado?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -455,6 +464,10 @@ export interface Database {
           consignment_type?: 'fisica' | 'digital'
           patente?: string | null
           consignatario_staff_id?: string | null
+          carroceria?: string | null
+          transmision_display?: string | null
+          combustible_display?: string | null
+          publicado?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -775,6 +788,16 @@ export interface Database {
           tags: Json
           last_contact_at: string | null
           next_follow_up: string | null
+          uso_principal: string | null
+          pasajeros_filas: string | null
+          transmision: string | null
+          pie_disponible: string | null
+          marca_preferida: string | null
+          anos_minimo: string | null
+          preferencia: string | null
+          alerta_crediticia: string | null
+          vehicle_interest: string | null
+          raw_message: string | null
           created_at: string
           updated_at: string
           deleted_at: string | null
@@ -803,6 +826,16 @@ export interface Database {
           tags?: Json
           last_contact_at?: string | null
           next_follow_up?: string | null
+          uso_principal?: string | null
+          pasajeros_filas?: string | null
+          transmision?: string | null
+          pie_disponible?: string | null
+          marca_preferida?: string | null
+          anos_minimo?: string | null
+          preferencia?: string | null
+          alerta_crediticia?: string | null
+          vehicle_interest?: string | null
+          raw_message?: string | null
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
@@ -831,6 +864,16 @@ export interface Database {
           tags?: Json
           last_contact_at?: string | null
           next_follow_up?: string | null
+          uso_principal?: string | null
+          pasajeros_filas?: string | null
+          transmision?: string | null
+          pie_disponible?: string | null
+          marca_preferida?: string | null
+          anos_minimo?: string | null
+          preferencia?: string | null
+          alerta_crediticia?: string | null
+          vehicle_interest?: string | null
+          raw_message?: string | null
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
