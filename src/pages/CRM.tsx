@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
@@ -251,6 +252,14 @@ const LeadCard = memo(function LeadCard({
       </div>
       <div className="text-muted-foreground">
         {lead.phone || "Sin telefono"}
+      </div>
+      <div className="mt-1.5">
+        <ContactAttemptsBar
+          leadId={lead.id}
+          value={lead.contact_attempts ?? 0}
+          size="sm"
+          showLabel={false}
+        />
       </div>
       {label && styles && (
         <div className="mt-2">
@@ -1383,6 +1392,17 @@ export default function CRM() {
                           assigned_user?: { full_name?: string | null; email?: string | null } | null;
                         }).assigned_user?.email
                         || "Sin asignar"}
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2.5">
+                    <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
+                    <ContactAttemptsBar
+                      leadId={editingLead.id}
+                      value={editingLead.contact_attempts ?? 0}
+                      showLabel={false}
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Meta: 3 contactos. Click en los puntos para subir o bajar.
                     </p>
                   </div>
                   <div className="grid gap-2 pt-2 border-t">

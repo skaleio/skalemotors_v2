@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
@@ -1790,6 +1791,17 @@ export default function Leads() {
                     <Badge variant="secondary">{getStatusMeta(detailsLead.status).label}</Badge>
                   </div>
                 </div>
+              </div>
+              <div className="rounded-md border bg-muted/30 px-3 py-2.5">
+                <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
+                <ContactAttemptsBar
+                  leadId={detailsLead.id}
+                  value={(detailsLead as { contact_attempts?: number }).contact_attempts ?? 0}
+                  showLabel={false}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Meta: 3 contactos. Click en los puntos para subir o bajar.
+                </p>
               </div>
               {(() => {
                 const rut = detailsLead.rut?.trim();
