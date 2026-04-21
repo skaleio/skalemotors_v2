@@ -209,6 +209,13 @@ const LeadCard = memo(function LeadCard({
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
   const lastDragEndRef = useRef(0);
+  const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
+  const attemptStyles: Record<number, string> = {
+    0: "",
+    1: "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/10",
+    2: "border-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
+    3: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
+  };
 
   const handleClick = () => {
     if (Date.now() - lastDragEndRef.current < 400) return;
@@ -242,6 +249,7 @@ const LeadCard = memo(function LeadCard({
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         draggable ? "cursor-grab touch-none active:cursor-grabbing hover:bg-muted/40 hover:shadow-md" : "cursor-pointer hover:bg-muted/50",
+        attemptStyles[attempts],
         isDragging &&
           "scale-[0.97] border-dashed border-primary/50 bg-muted/50 opacity-[0.42] shadow-none ring-0",
         justLanded && "animate-in zoom-in-95 fade-in duration-300 ring-2 ring-emerald-500/35 shadow-md",
@@ -484,9 +492,17 @@ export default function CRM() {
   }, [leads, searchQuery]);
 
   const leadsByStage = useMemo(() => {
+    const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;
     return stages.map((stage) => ({
       ...stage,
-      leads: filteredLeads.filter((lead) => stage.statuses.includes(lead.status)),
+      leads: filteredLeads
+        .filter((lead) => stage.statuses.includes(lead.status))
+        .slice()
+        .sort((a, b) => {
+          const aMax = maxedOut(a) ? 1 : 0;
+          const bMax = maxedOut(b) ? 1 : 0;
+          return aMax - bMax;
+        }),
     }));
   }, [filteredLeads, stages]);
 
@@ -1402,7 +1418,7 @@ export default function CRM() {
                       showLabel={false}
                     />
                     <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Meta: 3 contactos. Click en los puntos para subir o bajar.
+                      Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna.
                     </p>
                   </div>
                   <div className="grid gap-2 pt-2 border-t">

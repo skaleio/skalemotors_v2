@@ -45,30 +45,24 @@ export function ContactAttemptsBar({
               ...l,
               contact_attempts: next,
               last_contact_at: next > current ? new Date().toISOString() : l.last_contact_at,
-              status: reachedMax ? "perdido" : l.status,
             }
           : l,
       );
     });
 
     try {
-      const updates: {
-        contact_attempts: number;
-        last_contact_at?: string;
-        status?: "perdido";
-      } = {
+      const updates: { contact_attempts: number; last_contact_at?: string } = {
         contact_attempts: next,
       };
       if (next > current) updates.last_contact_at = new Date().toISOString();
-      if (reachedMax) updates.status = "perdido";
       await leadService.update(leadId, updates);
       onChange?.(next);
       if (reachedMax) {
-        toast({
-          title: "Lead marcado como perdido",
-          description: "Se alcanzaron los 3 intentos de contacto.",
-        });
         queryClient.invalidateQueries({ queryKey: ["leads"] });
+        toast({
+          title: "Contactos agotados",
+          description: "El lead se mueve al final de su columna.",
+        });
       }
     } catch (err) {
       console.error("[ContactAttemptsBar] update falló", err);
@@ -112,7 +106,7 @@ export function ContactAttemptsBar({
               aria-label={`${n <= current ? "Quitar" : "Marcar"} contacto ${n}`}
               title={
                 n === MAX_ATTEMPTS && !filled
-                  ? "Al marcar el 3er contacto, el lead pasa a perdido"
+                  ? "Al marcar el 3er contacto, el lead baja al final de su columna"
                   : `${n} de ${MAX_ATTEMPTS} contactos`
               }
               className={cn(

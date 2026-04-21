@@ -1800,7 +1800,7 @@ export default function Leads() {
                   showLabel={false}
                 />
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Meta: 3 contactos. Click en los puntos para subir o bajar.
+                  Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna en el CRM.
                 </p>
               </div>
               {(() => {
