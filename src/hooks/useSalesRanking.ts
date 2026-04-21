@@ -109,9 +109,9 @@ async function callRpc(fromStr: string, toStr: string, branchId?: string | null)
 export function useSalesRanking(
   period: RankingPeriodKey,
   branchId: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; anchor?: Date },
 ) {
-  const range = resolveRange(period)
+  const range = resolveRange(period, options?.anchor)
   return useQuery({
     queryKey: ['sales-ranking', period, branchId ?? 'all', range.fromStr, range.toStr],
     queryFn: async (): Promise<{ range: RankingRange; rows: RankingEntry[] }> => {

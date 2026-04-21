@@ -28,14 +28,16 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
-type PaymentRecord = {
+type StaffSaleRecord = {
   id: string;
-  date: string;
-  concept: string;
-  type: "Salario fijo" | "Comisión";
-  saleCode?: string;
-  amount: number;
-  status: "Pagado" | "Pendiente";
+  sale_date: string;
+  client_name: string | null;
+  vehicle_description: string | null;
+  sale_price: number;
+  payment_method: string | null;
+  payment_status: string | null;
+  commission: number | null;
+  lead_full_name: string | null;
 };
 
 type Seller = {
@@ -43,10 +45,7 @@ type Seller = {
   name: string;
   role: string;
   branch: string;
-  totalCommissionMonth: number;
-  totalPaidMonth: number;
   status: "Activo" | "Inactivo";
-  payments: PaymentRecord[];
 };
 
 type StaffRow = Database["public"]["Tables"]["branch_sales_staff"]["Row"] & {
@@ -117,12 +116,72 @@ export default function VendorManagement() {
       name: row.full_name,
       role: row.role_label || "Vendedor",
       branch: row.branch?.name || (row.branch_id ? "Sucursal" : "Todas las sucursales"),
-      totalCommissionMonth: 0,
-      totalPaidMonth: 0,
       status: row.is_active ? "Activo" : "Inactivo",
-      payments: [],
     }));
   }, [staffList]);
+
+  const { data: staffSales = [], isLoading: loadingStaffSales } = useQuery({
+    queryKey: ["staff_sales", selectedSeller?.id, user?.tenant_id],
+    enabled: detailOpen && !!selectedSeller?.id && !!user?.tenant_id,
+    queryFn: async (): Promise<StaffSaleRecord[]> => {
+      const { data: leadRows, error: leadErr } = await supabase
+        .from("leads")
+        .select("id, full_name")
+        .eq("closed_by_staff_id", selectedSeller!.id)
+        .eq("tenant_id", user!.tenant_id!);
+      if (leadErr) throw leadErr;
+
+      const leads = leadRows ?? [];
+      if (leads.length === 0) return [];
+
+      const leadIds = leads.map((l) => l.id);
+      const leadNameById = new Map(leads.map((l) => [l.id, l.full_name as string | null]));
+
+      const { data: saleRows, error: saleErr } = await supabase
+        .from("sales")
+        .select(
+          "id, sale_date, client_name, vehicle_description, sale_price, payment_method, payment_status, commission, lead_id",
+        )
+        .in("lead_id", leadIds)
+        .order("sale_date", { ascending: false });
+      if (saleErr) throw saleErr;
+
+      return (saleRows ?? []).map((s) => ({
+        id: s.id,
+        sale_date: s.sale_date,
+        client_name: s.client_name,
+        vehicle_description: s.vehicle_description,
+        sale_price: Number(s.sale_price ?? 0),
+        payment_method: s.payment_method,
+        payment_status: s.payment_status,
+        commission: s.commission == null ? null : Number(s.commission),
+        lead_full_name: s.lead_id ? leadNameById.get(s.lead_id) ?? null : null,
+      }));
+    },
+  });
+
+  const salesSummary = useMemo(() => {
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    const thisMonth = now.getMonth();
+    const inThisMonth = (iso: string) => {
+      const d = new Date(iso);
+      return d.getFullYear() === thisYear && d.getMonth() === thisMonth;
+    };
+    const monthSales = staffSales.filter((s) => inThisMonth(s.sale_date));
+    const totalAmountMonth = monthSales.reduce((sum, s) => sum + s.sale_price, 0);
+    const commissionMonth = monthSales.reduce((sum, s) => sum + (s.commission ?? 0), 0);
+    const commissionPaidMonth = monthSales
+      .filter((s) => s.payment_status === "realizado")
+      .reduce((sum, s) => sum + (s.commission ?? 0), 0);
+    return {
+      totalSales: staffSales.length,
+      salesThisMonth: monthSales.length,
+      totalAmountMonth,
+      commissionMonth,
+      commissionPaidMonth,
+    };
+  }, [staffSales]);
 
   const createMutation = useMutation({
     mutationFn: async (payload: Database["public"]["Tables"]["branch_sales_staff"]["Insert"]) => {
@@ -160,10 +219,52 @@ export default function VendorManagement() {
     setDetailOpen(true);
   };
 
-  const totalCommissions = useMemo(
-    () => sellers.reduce((sum, s) => sum + s.totalCommissionMonth, 0),
-    [sellers],
-  );
+  // Totales por staff del mes en curso (una sola query, agrupado en cliente).
+  const { data: staffMonthTotals = new Map<string, { salesCount: number; totalAmount: number; totalCommission: number }>() } =
+    useQuery({
+      queryKey: ["staff_sales_month_totals", user?.tenant_id],
+      enabled: !!user?.tenant_id && sellers.length > 0,
+      queryFn: async () => {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        const { data, error } = await supabase
+          .from("sales")
+          .select("sale_price, commission, sale_date, lead:leads!inner(closed_by_staff_id)")
+          .eq("tenant_id", user!.tenant_id!)
+          .gte("sale_date", firstDay);
+        if (error) throw error;
+
+        type Row = {
+          sale_price: number | null;
+          commission: number | null;
+          lead: { closed_by_staff_id: string | null } | { closed_by_staff_id: string | null }[] | null;
+        };
+        const map = new Map<string, { salesCount: number; totalAmount: number; totalCommission: number }>();
+        for (const row of (data ?? []) as Row[]) {
+          const leadObj = Array.isArray(row.lead) ? row.lead[0] : row.lead;
+          const staffId = leadObj?.closed_by_staff_id ?? null;
+          if (!staffId) continue;
+          const prev = map.get(staffId) ?? { salesCount: 0, totalAmount: 0, totalCommission: 0 };
+          prev.salesCount += 1;
+          prev.totalAmount += Number(row.sale_price ?? 0);
+          prev.totalCommission += Number(row.commission ?? 0);
+          map.set(staffId, prev);
+        }
+        return map;
+      },
+    });
+
+  const totalCommissions = useMemo(() => {
+    let total = 0;
+    for (const entry of staffMonthTotals.values()) total += entry.totalCommission;
+    return total;
+  }, [staffMonthTotals]);
+
+  const totalSalesAmountMonth = useMemo(() => {
+    let total = 0;
+    for (const entry of staffMonthTotals.values()) total += entry.totalAmount;
+    return total;
+  }, [staffMonthTotals]);
 
   const handleDeleteSeller = (id: string) => {
     if (!canManageStaff) {
@@ -275,7 +376,7 @@ export default function VendorManagement() {
       </div>
 
       {/* Resumen global */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -295,13 +396,28 @@ export default function VendorManagement() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <DollarSign className="h-4 w-4 text-primary" />
+              Ventas del mes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(totalSalesAmountMonth)}</p>
+            <p className="text-xs text-muted-foreground">
+              Monto total vendido en el mes en curso por la plantilla.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <DollarSign className="h-4 w-4 text-primary" />
               Comisiones del mes
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{formatCurrency(totalCommissions)}</p>
             <p className="text-xs text-muted-foreground">
-              Próximo paso: enlazar con ventas reales para totales automáticos.
+              Calculado desde las ventas registradas con comisión.
             </p>
           </CardContent>
         </Card>
@@ -327,7 +443,10 @@ export default function VendorManagement() {
       {/* Cuadros por vendedor */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredSellers.map((seller) => {
-          const pendingCommission = seller.totalCommissionMonth - seller.totalPaidMonth;
+          const totals = staffMonthTotals.get(seller.id);
+          const salesCount = totals?.salesCount ?? 0;
+          const totalAmount = totals?.totalAmount ?? 0;
+          const totalCommission = totals?.totalCommission ?? 0;
           return (
             <Card
               key={seller.id}
@@ -369,24 +488,22 @@ export default function VendorManagement() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Comisiones mes</p>
-                    <p className="font-semibold">
-                      {formatCurrency(seller.totalCommissionMonth)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Ventas mes</p>
+                    <p className="font-semibold">{salesCount}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Pagado</p>
-                    <p className="font-semibold">{formatCurrency(seller.totalPaidMonth)}</p>
+                    <p className="text-xs text-muted-foreground">Monto mes</p>
+                    <p className="font-semibold">{formatCurrency(totalAmount)}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Por pagar aprox.</p>
-                    <p className="font-semibold text-amber-600">
-                      {formatCurrency(Math.max(pendingCommission, 0))}
+                    <p className="text-xs text-muted-foreground">Comisión mes</p>
+                    <p className="font-semibold text-emerald-600">
+                      {formatCurrency(totalCommission)}
                     </p>
                   </div>
                 </div>
                 <p className="pt-1 text-xs text-primary group-hover:underline">
-                  Ver detalle de pagos y ventas
+                  Ver detalle de ventas
                 </p>
               </CardContent>
             </Card>
@@ -426,12 +543,34 @@ export default function VendorManagement() {
                   </div>
                 </DialogTitle>
                 <DialogDescription>
-                  Resumen de comisiones y pagos registrados para este vendedor.
+                  Resumen de ventas cerradas por este vendedor y sus comisiones.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">
+                        Ventas del mes
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-lg font-bold">{salesSummary.salesThisMonth}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">
+                        Monto vendido mes
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-lg font-bold">
+                        {formatCurrency(salesSummary.totalAmountMonth)}
+                      </p>
+                    </CardContent>
+                  </Card>
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-xs font-medium text-muted-foreground">
@@ -440,7 +579,7 @@ export default function VendorManagement() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-lg font-bold">
-                        {formatCurrency(selectedSeller.totalCommissionMonth)}
+                        {formatCurrency(salesSummary.commissionMonth)}
                       </p>
                     </CardContent>
                   </Card>
@@ -452,7 +591,7 @@ export default function VendorManagement() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-lg font-bold">
-                        {formatCurrency(selectedSeller.totalPaidMonth)}
+                        {formatCurrency(salesSummary.commissionPaidMonth)}
                       </p>
                     </CardContent>
                   </Card>
@@ -460,9 +599,9 @@ export default function VendorManagement() {
 
                 <div>
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Historial de pagos y comisiones</h3>
+                    <h3 className="text-sm font-semibold">Historial de ventas</h3>
                     <span className="text-xs text-muted-foreground">
-                      {selectedSeller.payments.length} movimientos
+                      {loadingStaffSales ? "Cargando…" : `${staffSales.length} ventas`}
                     </span>
                   </div>
                   <div className="rounded-md border">
@@ -470,43 +609,50 @@ export default function VendorManagement() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Fecha</TableHead>
-                          <TableHead>Concepto</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Monto</TableHead>
-                          <TableHead>Estado</TableHead>
+                          <TableHead>Vehículo</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Pago</TableHead>
+                          <TableHead className="text-right">Monto</TableHead>
+                          <TableHead className="text-right">Comisión</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedSeller.payments.map((payment) => (
-                          <TableRow key={payment.id}>
-                            <TableCell className="whitespace-nowrap text-xs">
-                              {payment.date}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {payment.concept}
-                              {payment.saleCode && (
-                                <span className="ml-1 text-[11px] text-muted-foreground">
-                                  · {payment.saleCode}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
-                              {payment.type}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs font-semibold">
-                              {formatCurrency(payment.amount)}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
-                              <Badge
-                                variant={
-                                  payment.status === "Pagado" ? "default" : "outline"
-                                }
-                              >
-                                {payment.status}
-                              </Badge>
+                        {loadingStaffSales ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">
+                              Cargando ventas…
                             </TableCell>
                           </TableRow>
-                        ))}
+                        ) : staffSales.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">
+                              Sin ventas registradas para este vendedor.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          staffSales.map((sale) => (
+                            <TableRow key={sale.id}>
+                              <TableCell className="whitespace-nowrap text-xs">
+                                {new Date(sale.sale_date).toLocaleDateString("es-CL")}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {sale.vehicle_description || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {sale.client_name || sale.lead_full_name || "—"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-xs capitalize">
+                                {sale.payment_method || "—"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-xs font-semibold text-right">
+                                {formatCurrency(sale.sale_price)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-xs text-right">
+                                {sale.commission != null ? formatCurrency(sale.commission) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </div>

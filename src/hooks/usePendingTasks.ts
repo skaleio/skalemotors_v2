@@ -5,49 +5,81 @@ import type { Database } from '@/lib/types/database'
 export type PendingTask = Database['public']['Tables']['pending_tasks']['Row']
 const ENABLE_PENDING_TASK_SYNC_RPCS = false
 
-export function usePendingTasks(branchId: string | undefined) {
+type UsePendingTasksOptions = {
+  branchId?: string | null
+  tenantId?: string | null
+  role?: string | null
+}
+
+// Backward compat: acepta un string (branchId) como en la versión anterior,
+// o un objeto con contexto completo del usuario (branchId + tenantId + role).
+type UsePendingTasksInput = string | null | undefined | UsePendingTasksOptions
+
+export function usePendingTasks(input: UsePendingTasksInput) {
   const queryClient = useQueryClient()
 
+  const opts: UsePendingTasksOptions =
+    typeof input === 'string' || input == null
+      ? { branchId: input ?? null }
+      : input
+
+  const { branchId, tenantId, role } = opts
+  const isAdminWide = role === 'admin' || role === 'jefe_jefe'
+
+  // enabled: admin/jefe_jefe necesita tenantId; el resto necesita branchId
+  const enabled = isAdminWide ? !!tenantId : !!branchId
+
   const query = useQuery({
-    queryKey: ['pending-tasks', branchId],
+    queryKey: ['pending-tasks', { branchId, tenantId, role, scope: isAdminWide ? 'tenant' : 'branch' }],
     queryFn: async (): Promise<PendingTask[]> => {
-      if (!branchId) return []
+      if (!enabled) return []
+
       if (ENABLE_PENDING_TASK_SYNC_RPCS) {
-        // Sincronizar recordatorios (opcional: si la RPC no existe en el proyecto, se omite)
         await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
           const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
           if (error && !rpcNotFound) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
         })
-        // Avisos: vehículos mucho tiempo en inventario (opcional: si la RPC no existe, se omite)
         await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
           const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
           if (error && !rpcNotFound) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
         })
       }
-      // Staleness de consignaciones (admin-only; la RPC se auto-gateea por rol).
-      // Se ejecuta siempre: el server devuelve 0/0 si el usuario no es admin.
-      await supabase
-        .rpc('sync_stale_consignaciones_to_pending_tasks', { dias_sin_publicar: 7 })
-        .then(({ error }) => {
-          const rpcNotFound =
-            error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound)
-            console.warn('sync_stale_consignaciones_to_pending_tasks:', error.message)
-        })
-      const { data, error } = await supabase
+
+      // Staleness RPCs (admin-only; auto-gate interno, seguros de llamar por otros roles).
+      await Promise.all([
+        supabase.rpc('sync_stale_consignaciones_to_pending_tasks', { dias_sin_publicar: 7 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_stale_consignaciones_to_pending_tasks:', error.message)
+        }),
+        supabase.rpc('sync_stale_leads_to_pending_tasks', { dias_sin_movimiento: 3 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_stale_leads_to_pending_tasks:', error.message)
+        }),
+      ])
+
+      // Scope de lectura: admin/jefe_jefe = tenant-wide; otros = su branch.
+      let q = supabase
         .from('pending_tasks')
         .select('*')
-        .eq('branch_id', branchId)
         .is('completed_at', null)
         .order('due_at', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: false })
+
+      if (isAdminWide && tenantId) {
+        q = q.eq('tenant_id', tenantId)
+      } else if (branchId) {
+        q = q.eq('branch_id', branchId)
+      } else {
+        return []
+      }
+
+      const { data, error } = await q
       if (error) throw error
       const list = data ?? []
-      // Ordenar por prioridad: urgent → today → later
       const order: Record<string, number> = { urgent: 0, today: 1, later: 2 }
       return [...list].sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2))
     },
-    enabled: !!branchId,
+    enabled,
     staleTime: 2 * 60 * 1000,
     placeholderData: (previousData: PendingTask[] | undefined) => previousData ?? [],
   })

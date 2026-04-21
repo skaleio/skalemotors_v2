@@ -6,16 +6,30 @@ export interface BranchSeller {
   full_name: string;
   email: string | null;
   branch_id: string | null;
+  role: string;
 }
+
+type SellerRole = "vendedor" | "jefe_sucursal";
 
 interface UseBranchSellersOptions {
   tenantId?: string | null;
   branchId?: string | null;
   enabled?: boolean;
+  roles?: SellerRole[];
+  scope?: "branch" | "tenant";
 }
 
-export function useBranchSellers({ tenantId, branchId, enabled = true }: UseBranchSellersOptions) {
-  const queryKey = ["branch_sellers", tenantId ?? null, branchId ?? null];
+const DEFAULT_ROLES: SellerRole[] = ["vendedor", "jefe_sucursal"];
+
+export function useBranchSellers({
+  tenantId,
+  branchId,
+  enabled = true,
+  roles = DEFAULT_ROLES,
+  scope = "branch",
+}: UseBranchSellersOptions) {
+  const rolesKey = roles.slice().sort().join(",");
+  const queryKey = ["branch_sellers", tenantId ?? null, scope, branchId ?? null, rolesKey];
 
   const query = useQuery({
     queryKey,
@@ -25,13 +39,13 @@ export function useBranchSellers({ tenantId, branchId, enabled = true }: UseBran
     queryFn: async (): Promise<BranchSeller[]> => {
       let q = supabase
         .from("users")
-        .select("id, full_name, email, branch_id")
+        .select("id, full_name, email, branch_id, role")
         .eq("tenant_id", tenantId!)
-        .eq("role", "vendedor")
+        .in("role", roles)
         .eq("is_active", true)
         .order("full_name", { ascending: true });
 
-      if (branchId) {
+      if (scope === "branch" && branchId) {
         q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
       }
 

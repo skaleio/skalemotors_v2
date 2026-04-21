@@ -13,7 +13,7 @@ import {
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
-import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, Users, X } from "lucide-react";
+import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -169,6 +169,19 @@ export function TopBar() {
   const markAllReadMutation = useMarkAllNotificationsRead();
   const dismissMutation = useDismissNotification();
 
+  // Animación campana: brinca cuando el contador de no leídas aumenta (nueva notificación).
+  const prevUnreadRef = useRef(unreadCount);
+  const [bellBounce, setBellBounce] = useState(false);
+  useEffect(() => {
+    if (unreadCount > prevUnreadRef.current) {
+      setBellBounce(true);
+      const t = setTimeout(() => setBellBounce(false), 1800);
+      prevUnreadRef.current = unreadCount;
+      return () => clearTimeout(t);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
+
   const markAsRead = (id: string) => markReadMutation.mutate(id);
   const dismissNotification = (id: string) => dismissMutation.mutate(id);
   const markAllAsRead = () => {
@@ -183,8 +196,13 @@ export function TopBar() {
         return <Car className="h-5 w-5 text-indigo-500" />;
       case 'consignacion_stale':
         return <Clock className="h-5 w-5 text-amber-500" />;
-      case 'lead':
+      case 'lead_stale':
+        return <Clock className="h-5 w-5 text-red-500" />;
+      case 'lead_contactado':
+        return <Info className="h-5 w-5 text-blue-500" />;
       case 'lead_assigned':
+        return <UserPlus className="h-5 w-5 text-pink-500" />;
+      case 'lead':
         return <Info className="h-5 w-5 text-pink-500" />;
       case 'appointment':
         return <Clock className="h-5 w-5 text-orange-500" />;
@@ -575,14 +593,19 @@ export function TopBar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative ml-3">
-              <Bell className="h-4 w-4" />
+              <Bell className={`h-4 w-4 transition-transform ${bellBounce ? 'animate-bounce text-pink-500' : ''}`} />
               {unreadCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
-                >
-                  {unreadCount}
-                </Badge>
+                <>
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-60 animate-ping" />
+                  </span>
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center z-10"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
+                </>
               )}
               <span className="sr-only">Notificaciones</span>
             </Button>
@@ -725,7 +748,7 @@ export function TopBar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
+                <ProfileAvatarImage avatarUrl={user?.avatar_url} size={32} cacheKey={user?.updated_at} priority="high" />
                 <AvatarFallback>
                   {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
                 </AvatarFallback>

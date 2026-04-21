@@ -127,7 +127,11 @@ export default function Dashboard() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
-  const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks(user?.branch_id);
+  const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks({
+    branchId: user?.branch_id,
+    tenantId: user?.tenant_id,
+    role: user?.role,
+  });
   const completeTaskMutation = useCompletePendingTask();
 
   // Próximas citas: solo las que vienen del módulo Citas, ventana de 3 días para tener tiempo de preparación

@@ -1,5 +1,6 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
+import { getAvatarSrcSet, getOptimizedAvatarUrl } from "@/lib/avatar-utils";
 import { clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
 import { setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
@@ -224,6 +225,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     currentUserRef.current = user;
   }, [user]);
+
+  // ==========================================================================
+  // Preload del avatar del usuario: inyecta <link rel="preload" as="image">
+  // con imagesrcset 1x/2x para que el navegador lo descargue en paralelo
+  // mientras React monta TopBar/Sidebar. Reduce latencia visual del avatar
+  // sobre todo en navegaciones internas (SPA) y en admins que siempre lo ven.
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!user?.avatar_url) return;
+    const PRELOAD_ID = "skale-avatar-preload";
+    const existing = document.getElementById(PRELOAD_ID) as HTMLLinkElement | null;
+    const href = getOptimizedAvatarUrl(user.avatar_url, 32, user.updated_at);
+    const srcset = getAvatarSrcSet(user.avatar_url, 32, user.updated_at);
+    if (!href) {
+      existing?.remove();
+      return;
+    }
+    const link = existing ?? document.createElement("link");
+    link.id = PRELOAD_ID;
+    link.rel = "preload";
+    link.as = "image";
+    link.href = href;
+    if (srcset) link.setAttribute("imagesrcset", srcset);
+    link.setAttribute("fetchpriority", "high");
+    if (!existing) document.head.appendChild(link);
+    return () => {
+      // No remover al unmount: el preload debe vivir mientras la app esté
+      // montada; se actualizará con el próximo cambio de avatar.
+    };
+  }, [user?.avatar_url, user?.updated_at]);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {

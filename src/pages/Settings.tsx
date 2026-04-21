@@ -583,7 +583,7 @@ export default function Settings() {
                 <Avatar className="h-20 w-20 shrink-0">
                   <ProfileAvatarImage
                     avatarUrl={user?.avatar_url}
-                    size={128}
+                    size={80}
                     cacheKey={user?.updated_at}
                     alt="Tu foto de perfil"
                   />

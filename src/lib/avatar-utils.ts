@@ -55,10 +55,32 @@ export async function optimizeAvatarFile(file: File): Promise<Blob> {
 
 const AVATAR_BUCKET = "avatars";
 
+type AvatarTransformOptions = {
+  size: number;
+  /** WebP pesa ~30% menos que JPEG a misma calidad; Supabase lo soporta nativo */
+  format?: "webp" | "origin";
+  quality?: number;
+  /** Sirve para invalidar CDN cuando el archivo cambia en la misma URL */
+  cacheBuster?: string | null;
+};
+
+function buildTransformUrl(avatarUrl: string, opts: AvatarTransformOptions): string {
+  const pathMatch = avatarUrl.match(/\/storage\/v1\/object\/public\/avatars\/(.+)$/);
+  if (!pathMatch) return avatarUrl;
+  const base = avatarUrl.replace(/\/object\/public\//, "/render/image/public/").split("?")[0];
+  const params = new URLSearchParams();
+  params.set("width", String(opts.size));
+  params.set("height", String(opts.size));
+  params.set("quality", String(opts.quality ?? 75));
+  params.set("resize", "cover");
+  if (opts.format && opts.format !== "origin") params.set("format", opts.format);
+  if (opts.cacheBuster) params.set("t", opts.cacheBuster);
+  return `${base}?${params.toString()}`;
+}
+
 /**
- * Si la URL es de nuestro bucket de avatares, devuelve una URL con transformación
- * (tamaño pequeño + calidad) para cargar más rápido. Si no, devuelve la URL tal cual.
- * cacheBuster evita que el navegador use una imagen en caché tras actualizar el perfil.
+ * URL transformada (tamaño pequeño, calidad y formato WebP) para carga rápida.
+ * Si la URL no pertenece al bucket avatars, devuelve la original.
  */
 export function getOptimizedAvatarUrl(
   avatarUrl: string | undefined | null,
@@ -67,20 +89,29 @@ export function getOptimizedAvatarUrl(
 ): string | undefined {
   if (!avatarUrl?.trim()) return undefined;
   try {
-    const pathMatch = avatarUrl.match(/\/storage\/v1\/object\/public\/avatars\/(.+)$/);
-    const base = pathMatch
-      ? avatarUrl.replace(/\/object\/public\//, "/render/image/public/").split("?")[0]
-      : avatarUrl.split("?")[0];
-    const sep = base.includes("?") ? "&" : "?";
-    let url = pathMatch
-      ? `${base}${sep}width=${size}&height=${size}&quality=80`
-      : avatarUrl;
-    if (cacheBuster) {
-      url += url.includes("?") ? "&" : "?";
-      url += "t=" + encodeURIComponent(cacheBuster);
-    }
-    return url;
+    return buildTransformUrl(avatarUrl, { size, format: "webp", quality: 75, cacheBuster });
   } catch {
     return avatarUrl;
+  }
+}
+
+/**
+ * srcSet con 1x y 2x para pantallas retina. Double-pixel para no verse borroso.
+ * Devuelve null si la URL no es del bucket avatars (transform no disponible).
+ */
+export function getAvatarSrcSet(
+  avatarUrl: string | undefined | null,
+  size: number,
+  cacheBuster?: string | null
+): string | undefined {
+  if (!avatarUrl?.trim()) return undefined;
+  const pathMatch = avatarUrl.match(/\/storage\/v1\/object\/public\/avatars\/(.+)$/);
+  if (!pathMatch) return undefined;
+  try {
+    const url1x = buildTransformUrl(avatarUrl, { size, format: "webp", quality: 75, cacheBuster });
+    const url2x = buildTransformUrl(avatarUrl, { size: size * 2, format: "webp", quality: 70, cacheBuster });
+    return `${url1x} 1x, ${url2x} 2x`;
+  } catch {
+    return undefined;
   }
 }

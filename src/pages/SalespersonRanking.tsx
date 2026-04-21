@@ -16,7 +16,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Medal, Award, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
+import { Trophy, Medal, Award, TrendingUp, TrendingDown, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { useSalesRanking, type RankingPeriodKey, type RankingEntry } from '@/hooks/useSalesRanking'
@@ -79,6 +80,29 @@ export default function SalespersonRanking() {
   const [period, setPeriod] = useState<RankingPeriodKey>('month')
   const [branchId, setBranchId] = useState<string>(NO_BRANCH_FILTER)
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([])
+  const [anchor, setAnchor] = useState<Date>(() => new Date())
+
+  const now = new Date()
+  const isCurrentPeriod = useMemo(() => {
+    if (period === 'month') {
+      return anchor.getFullYear() === now.getFullYear() && anchor.getMonth() === now.getMonth()
+    }
+    if (period === 'quarter') {
+      return anchor.getFullYear() === now.getFullYear() && Math.floor(anchor.getMonth() / 3) === Math.floor(now.getMonth() / 3)
+    }
+    return Math.abs(anchor.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000
+  }, [period, anchor, now])
+
+  const stepAnchor = (direction: -1 | 1) => {
+    const d = new Date(anchor)
+    if (period === 'week') d.setDate(d.getDate() + direction * 7)
+    else if (period === 'quarter') d.setMonth(d.getMonth() + direction * 3)
+    else d.setMonth(d.getMonth() + direction)
+    if (direction > 0 && d > now) return
+    setAnchor(d)
+  }
+
+  const goCurrent = () => setAnchor(new Date())
 
   const canFilterBranch = useMemo(() => {
     if (!user) return false
@@ -105,6 +129,7 @@ export default function SalespersonRanking() {
 
   const { data, isLoading, error } = useSalesRanking(period, effectiveBranchId, {
     enabled: !!user && !restrictedRole,
+    anchor,
   })
 
   const rows = data?.rows ?? []
@@ -127,21 +152,33 @@ export default function SalespersonRanking() {
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Ranking de Vendedores</h1>
-          {rangeLabel && (
-            <p className="text-sm text-muted-foreground">{rangeLabel}</p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Cada mes se reinicia automáticamente · Navegá con las flechas para revisar históricos.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={period} onValueChange={(v) => setPeriod(v as RankingPeriodKey)}>
-            <SelectTrigger className="w-[180px]">
+          <Select value={period} onValueChange={(v) => { setPeriod(v as RankingPeriodKey); setAnchor(new Date()) }}>
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="week">Semana actual</SelectItem>
-              <SelectItem value="month">Mes actual</SelectItem>
-              <SelectItem value="quarter">Trimestre actual</SelectItem>
+              <SelectItem value="week">Semana</SelectItem>
+              <SelectItem value="month">Mes</SelectItem>
+              <SelectItem value="quarter">Trimestre</SelectItem>
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-1 rounded-md border border-border">
+            <Button variant="ghost" size="icon" onClick={() => stepAnchor(-1)} aria-label="Período anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[140px] text-center text-sm font-medium">{rangeLabel || '—'}</span>
+            <Button variant="ghost" size="icon" onClick={() => stepAnchor(1)} disabled={isCurrentPeriod} aria-label="Período siguiente">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          {!isCurrentPeriod && (
+            <Button variant="outline" size="sm" onClick={goCurrent}>Hoy</Button>
+          )}
           {canFilterBranch && (
             <Select value={branchId} onValueChange={setBranchId}>
               <SelectTrigger className="w-[220px]">

@@ -581,7 +581,7 @@ export function AppSidebar() {
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800/70 transition-colors group group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:min-w-0">
                 <Avatar className="h-8 w-8 shrink-0">
-                  <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
+                  <ProfileAvatarImage avatarUrl={user?.avatar_url} size={32} cacheKey={user?.updated_at} priority="high" />
                   <AvatarFallback className="bg-gradient-to-br from-pink-500 to-pink-700 text-white text-sm font-semibold">
                     {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </AvatarFallback>
@@ -693,7 +693,7 @@ export function AppSidebar() {
               <div className="px-3 py-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
-                    <ProfileAvatarImage avatarUrl={user?.avatar_url} size={64} cacheKey={user?.updated_at} />
+                    <ProfileAvatarImage avatarUrl={user?.avatar_url} size={32} cacheKey={user?.updated_at} />
                     <AvatarFallback className="bg-gradient-to-br from-pink-500 to-pink-700 text-white text-sm font-semibold">
                       {user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                     </AvatarFallback>
