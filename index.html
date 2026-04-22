@@ -6,8 +6,13 @@
     <meta name="google" content="notranslate" />
     <meta name="googlebot" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="dns-prefetch" href="https://supabase.co" />
-    <link rel="preconnect" href="https://supabase.co" crossorigin />
+    <!--
+      Preconnect al URL específico del proyecto Supabase: el preconnect a
+      "supabase.co" genérico no reutiliza TLS con el subdominio. Ahorra
+      ~100-300ms en el primer request (auth + rest + storage comparten host).
+    -->
+    <link rel="dns-prefetch" href="https://qszfkwshuhmedmzufalh.supabase.co" />
+    <link rel="preconnect" href="https://qszfkwshuhmedmzufalh.supabase.co" crossorigin />
     <title>SKALEMOTORS - Ecosistema Automotriz #1</title>
     <meta name="description" content="SKALEMOTORS - El ecosistema automotriz #1 en Chile. CRM especializado para automotoras. Gestiona leads, inventario, test drives, cotizaciones, financiamiento y postventa en una sola plataforma." />
     <meta name="author" content="SKALEMOTORS" />

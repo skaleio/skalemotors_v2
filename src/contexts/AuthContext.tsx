@@ -6,6 +6,8 @@ import { setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 
+type ProfileFetchReason = "ok" | "disabled" | "no-profile" | "error";
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -44,7 +46,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signingInRef = useRef(false);
   // Deduplica fetchUserProfile en vuelo (evita N requests cuando el SDK
   // dispara múltiples eventos: SIGNED_IN + TOKEN_REFRESHED + USER_UPDATED)
-  const inFlightProfileFetch = useRef<Map<string, Promise<boolean>>>(new Map());
+  const inFlightProfileFetch = useRef<Map<string, Promise<ProfileFetchReason>>>(new Map());
   // Canal para sincronizar login/logout entre pestañas del mismo navegador
   const authChannelRef = useRef<BroadcastChannel | null>(null);
   // Última vez que se revalidó el perfil (para throttle en visibilitychange)
@@ -95,6 +97,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
+    const r = await fetchUserProfileWithReason(userId);
+    return r === "ok";
+  };
+
+  const fetchUserProfileWithReason = async (userId: string): Promise<ProfileFetchReason> => {
     // Dedup: si ya hay un fetch en vuelo para este userId, reutilizarlo.
     // Esto evita ráfagas cuando SDK dispara SIGNED_IN + TOKEN_REFRESHED + USER_UPDATED.
     const existing = inFlightProfileFetch.current.get(userId);
@@ -106,7 +113,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return p;
   };
 
-  const doFetchUserProfile = async (userId: string): Promise<boolean> => {
+  const doFetchUserProfile = async (userId: string): Promise<ProfileFetchReason> => {
     try {
       const { data, error } = await withTimeout(
         supabase
@@ -119,7 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         setLoading(false);
-        return false;
+        return "error";
       }
 
       if (data) {
@@ -130,7 +137,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession(null);
           setNeedsOnboarding(false);
           setLoading(false);
-          return false;
+          return "disabled";
         }
 
         const updatedUser: User = {
@@ -166,18 +173,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         writeCachedProfile(updatedUser);
         setNeedsOnboarding(!data.onboarding_completed);
         setLoading(false);
-        return true;
+        return "ok";
       }
 
       // Trigger de signup puede tardar — reintentar con backoff
       return await retryFetchUserProfile(userId);
-    } catch (error) {
+    } catch {
       setLoading(false);
-      return false;
+      return "error";
     }
   };
 
-  const retryFetchUserProfile = async (userId: string, maxRetries = 3): Promise<boolean> => {
+  const retryFetchUserProfile = async (userId: string, maxRetries = 3): Promise<ProfileFetchReason> => {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -215,11 +222,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
         setNeedsOnboarding(!data.onboarding_completed);
         setLoading(false);
-        return true;
+        return "ok";
       }
     }
     setLoading(false);
-    return false;
+    return "no-profile";
   };
 
   useEffect(() => {
@@ -270,8 +277,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(currentSession);
 
       const cachedProfile = readCachedProfile(currentSession.user.id);
-      if (cachedProfile?.tenant_id) {
-        // Cache válido con tenant: renderizar inmediatamente, luego verificar en background
+      // Cache válido = con tenant_id OR legacy_protected (hessen y similares)
+      const hasValidCache = !!(cachedProfile?.tenant_id || cachedProfile?.legacy_protected);
+      if (hasValidCache && cachedProfile) {
+        // Cache válido: renderizar inmediatamente, luego verificar en background
         setUser(cachedProfile);
         currentUserRef.current = cachedProfile;
         setTenantContext({
@@ -345,7 +354,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        if (!sameUserAlreadyLoaded && cachedProfile?.tenant_id) {
+        const cacheIsValid = !!(cachedProfile?.tenant_id || cachedProfile?.legacy_protected);
+        if (!sameUserAlreadyLoaded && cacheIsValid && cachedProfile) {
           setUser(cachedProfile);
           currentUserRef.current = cachedProfile;
         }
@@ -358,7 +368,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const ok = await fetchUserProfile(session.user.id);
           if (!ok) {
             // Sin perfil en DB y sin cache válido → no otorgar acceso
-            if (!cachedProfile?.tenant_id) {
+            if (!cacheIsValid) {
               try { await supabase.auth.signOut(); } catch { /* ignore */ }
               setUser(null);
               currentUserRef.current = null;
@@ -469,11 +479,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { error: new Error("SIGNIN_IN_PROGRESS") };
     }
     signingInRef.current = true;
+    const log = (step: string, extra?: unknown) => {
+      if (import.meta.env.DEV) console.info(`[signIn] ${step}`, extra ?? "");
+    };
     try {
-      // Destruir cualquier sesion previa del SDK antes de intentar un nuevo login.
-      // Sin esto, si signInWithPassword falla, el SDK conserva la sesion vieja en
-      // localStorage y su auto-refresh puede restaurar al usuario anterior.
+      log("start");
+      // Limpieza de sesión previa (evita que auto-refresh restaure al usuario
+      // anterior si signInWithPassword falla).
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
+      log("pre-signOut done");
       setUser(null);
       currentUserRef.current = null;
       setSession(null);
@@ -483,6 +497,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         password,
       });
+      log("signInWithPassword done", { hasSession: !!data?.session, hasError: !!error });
 
       if (error) {
         setUser(null);
@@ -493,32 +508,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.session?.user) {
-        const { data: profile } = await supabase
-          .from("users")
-          .select("is_active")
-          .eq("id", data.session.user.id)
-          .maybeSingle();
-
-        if (profile && !profile.is_active) {
-          await supabase.auth.signOut();
-          setUser(null);
-          currentUserRef.current = null;
-          setSession(null);
-          setLoading(false);
-          return { error: new Error("ACCOUNT_DISABLED") };
-        }
-
         setSession(data.session);
-        const ok = await fetchUserProfile(data.session.user.id);
-        if (!ok) {
-          // Credenciales válidas en Auth pero sin fila en public.users → acceso denegado
+        log("fetching profile", { uid: data.session.user.id });
+        const reason = await fetchUserProfileWithReason(data.session.user.id);
+        log("fetchUserProfile done", { reason });
+        if (reason !== "ok") {
           try { await supabase.auth.signOut(); } catch { /* ignore */ }
           setUser(null);
           currentUserRef.current = null;
           setSession(null);
           setLoading(false);
-          return { error: new Error("NO_PROFILE") };
+          return { error: new Error(reason === "disabled" ? "ACCOUNT_DISABLED" : "NO_PROFILE") };
         }
+        log("success, role=", currentUserRef.current?.role);
       } else {
         setUser(null);
         currentUserRef.current = null;

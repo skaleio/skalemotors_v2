@@ -45,11 +45,15 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
   const { user, loading, isSigningOut, needsOnboarding, signOut } = useAuth();
   const location = useLocation();
 
+  // Usuarios legacy (ej. hessen@test.io) tienen legacy_protected=true y pueden
+  // operar sin tenant_id. Cualquier otro usuario debe tener tenant asignado.
+  const needsTenant = !user?.legacy_protected;
+
   useEffect(() => {
-    if (user && (!user.is_active || !user.tenant_id)) {
+    if (user && (!user.is_active || (needsTenant && !user.tenant_id))) {
       void signOut();
     }
-  }, [user, signOut]);
+  }, [user, needsTenant, signOut]);
 
   if (loading) {
     return (
@@ -60,8 +64,8 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
     );
   }
 
-  // Segundo cinturón de seguridad: sin fila en public.users con tenant asignado, no hay acceso
-  if (!user || !user.is_active || !user.tenant_id) {
+  // Segundo cinturón de seguridad: sin perfil activo (o sin tenant para no-legacy)
+  if (!user || !user.is_active || (needsTenant && !user.tenant_id)) {
     return <Navigate to="/login" state={{ from: location, error: "sin_acceso" }} replace />;
   }
 

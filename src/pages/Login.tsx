@@ -1,3 +1,4 @@
+// Login page — flujo simplificado: signIn clásico + prefetch CRM + legacy-safe redirect.
 import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate, type Location as RouterLocation } from 'react-router-dom'
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react'
@@ -26,6 +27,20 @@ export default function Login() {
     return () => {
       if (cooldownRef.current) clearInterval(cooldownRef.current)
     }
+  }, [])
+
+  // Prefetch del chunk post-login más probable: CRM (para vendedores).
+  // Dashboard es estático (ya está en bundle principal). Solo precargamos
+  // CRM porque es el primer destino del 80% de logins (vendedores). El resto
+  // se lazy-loadea natural al navegar. Se dispara en idle para no competir
+  // con el render del Login.
+  useEffect(() => {
+    const idle = (cb: () => void) =>
+      (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+        .requestIdleCallback?.(cb) ?? window.setTimeout(cb, 400);
+    idle(() => {
+      void import('./CRM').catch(() => {});
+    });
   }, [])
 
   const startCooldown = (seconds: number) => {
@@ -99,6 +114,12 @@ export default function Login() {
       setLoginAttempted(false)
     }
   }
+
+  const buttonLabel = loginCooldown > 0
+    ? `Espera ${loginCooldown}s`
+    : localLoading
+      ? "Iniciando sesión..."
+      : "Iniciar Sesión"
   
   useEffect(() => {
     if (!authLoading && !localLoading) {
@@ -192,7 +213,14 @@ export default function Login() {
                 className="w-full bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-medium py-2.5 transition-colors"
                 disabled={localLoading || loginCooldown > 0}
               >
-                {localLoading ? 'Iniciando sesión...' : loginCooldown > 0 ? `Espera ${loginCooldown}s` : 'Iniciar Sesión'}
+                {localLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    <span>{buttonLabel}</span>
+                  </span>
+                ) : (
+                  buttonLabel
+                )}
               </Button>
             </form>
 
