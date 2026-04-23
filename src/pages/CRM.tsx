@@ -967,8 +967,21 @@ export default function CRM() {
           return (
             <Card
               key={stage.key}
+              onDragOver={(e) => {
+                handleStageDragOver(e);
+                if (draggingLeadId) setDragOverStageKey(stage.key);
+              }}
+              onDragLeave={(e) => {
+                // Solo limpiar cuando salimos de la Card entera, no al pasar entre hijos.
+                const next = e.relatedTarget as Node | null;
+                if (!next || !(e.currentTarget as HTMLElement).contains(next)) {
+                  if (dragOverStageKey === stage.key) setDragOverStageKey(null);
+                }
+              }}
+              onDrop={(e) => void handleStageDrop(e, stage.key, stage.statuses)}
               className={cn(
                 `border-t-4 transition-shadow duration-200 ${style?.border || ""}`,
+                draggingLeadId && "cursor-copy",
                 dragOverStageKey === stage.key &&
                   draggingLeadId &&
                   "shadow-lg shadow-primary/10 ring-1 ring-primary/25",
@@ -993,11 +1006,6 @@ export default function CRM() {
                       draggingLeadId &&
                       "bg-primary/[0.06] outline outline-2 outline-dashed outline-primary/30 -outline-offset-2",
                   )}
-                  onDragOver={(e) => {
-                    handleStageDragOver(e);
-                    if (draggingLeadId) setDragOverStageKey(stage.key);
-                  }}
-                  onDrop={(e) => void handleStageDrop(e, stage.key, stage.statuses)}
                 >
                   {loading ? (
                     <p className="text-sm text-muted-foreground text-center py-6">
