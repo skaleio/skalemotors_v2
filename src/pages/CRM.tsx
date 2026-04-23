@@ -182,6 +182,19 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   }
 }
 
+/**
+ * Formatea un error de Supabase/PostgREST en un string legible, combinando
+ * message + details + hint + code. Permite ver en el toast la causa real
+ * (RLS denegado, CHECK violado, etc.) en vez de un "Intenta de nuevo" genérico.
+ */
+function describeSupabaseError(err: unknown): string {
+  if (!err) return "Intenta de nuevo.";
+  const e = err as { message?: string; details?: string; hint?: string; code?: string };
+  const parts = [e.message, e.details, e.hint].filter((p): p is string => !!p && p.trim().length > 0);
+  const joined = parts.length > 0 ? parts.join(" · ") : err instanceof Error ? err.message : "Intenta de nuevo.";
+  return e.code ? `${joined} [${e.code}]` : joined;
+}
+
 const LeadCard = memo(function LeadCard({
   lead,
   onClick,
@@ -442,8 +455,12 @@ export default function CRM() {
         closeEditDialog();
       }
     } catch (error: unknown) {
-      console.error("Error actualizando lead:", error);
-      alert(error instanceof Error ? error.message : "No se pudo actualizar el lead.");
+      console.error("[CRM] handleUpdateLead", { leadId: editingLead.id, isEditingForm, error });
+      toast({
+        title: "No se pudo actualizar el lead",
+        description: describeSupabaseError(error),
+        variant: "destructive",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -705,6 +722,7 @@ export default function CRM() {
         return;
       }
 
+      const previousStatus = lead.status;
       setMovingLeadId(leadId);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
@@ -725,11 +743,17 @@ export default function CRM() {
           landHighlightTimerRef.current = null;
         }, 700);
       } catch (err) {
-        console.error(err);
+        console.error("[CRM] handleStageDrop", { leadId, from: previousStatus, to: nextStatus, err });
+        // Rollback explícito al status previo (no dependemos solo de invalidate, que
+        // puede no refetchear si la query sigue "fresca" por staleTime).
+        queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          return current.map((l: Lead) => (l.id === leadId ? { ...l, status: previousStatus } : l));
+        });
         queryClient.invalidateQueries({ queryKey: ["leads"] });
         toast({
           title: "No se pudo mover el lead",
-          description: err instanceof Error ? err.message : "Intenta de nuevo.",
+          description: describeSupabaseError(err),
           variant: "destructive",
         });
       } finally {
@@ -873,11 +897,11 @@ export default function CRM() {
         description: `Venta registrada por ${salePrice.toLocaleString("es-CL")} CLP.`,
       });
     } catch (err) {
-      console.error(err);
+      console.error("[CRM] handleConfirmCloseDeal", err);
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "No se pudo cerrar el negocio",
-        description: err instanceof Error ? err.message : "Intenta de nuevo.",
+        description: describeSupabaseError(err),
         variant: "destructive",
       });
     } finally {
