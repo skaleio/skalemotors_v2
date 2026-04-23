@@ -336,6 +336,7 @@ Responde de manera natural y útil:
    - Body:
      {
        "lead_id": "{{lead_id}}",
+       "branch_id": "{{branch_id}}",
        "state": "{{lead_state}}",
        "state_confidence": "{{state_confidence}}",
        "state_reason": "{{state_reason}}"
@@ -348,6 +349,7 @@ Responde de manera natural y útil:
 **Notas:**
 - Usa `lead_id` del webhook si viene disponible. Si es null, primero busca el lead por `contact_phone`.
 - El nodo HTTP que llama a `lead-state-update` debe usar Header Auth (credencial LEAD) con header `x-api-key`.
+- `branch_id` es **obligatorio**: aísla el update al branch correcto. La función devuelve `404 lead not found for the provided branch_id` si el pair `(lead_id, branch_id)` no coincide. Esto evita que una API key filtrada permita modificar leads de otros tenants/sucursales.
 
 ---
 

@@ -32,11 +32,14 @@ function getApiKey(req: Request) {
 
 type Payload = {
   lead_id?: string;
+  branch_id?: string;
   state?: string;
   state_confidence?: number | string | null;
   state_reason?: string | null;
   state_updated_at?: string | null;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
@@ -64,9 +67,16 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const leadId = body.lead_id?.trim();
+  const branchId = body.branch_id?.trim();
   const state = body.state?.trim();
   if (!leadId || !state) {
     return jsonResponse(400, { ok: false, error: "lead_id and state are required" });
+  }
+  if (!leadId.match(UUID_RE)) {
+    return jsonResponse(400, { ok: false, error: "lead_id must be a valid UUID" });
+  }
+  if (!branchId || !branchId.match(UUID_RE)) {
+    return jsonResponse(400, { ok: false, error: "branch_id is required and must be a valid UUID" });
   }
 
   const supabaseUrl = getEnvAny(["SUPABASE_URL", "PROJECT_URL"]);
@@ -113,11 +123,16 @@ export default async function handler(req: Request): Promise<Response> {
     .from("leads")
     .update(updatePayload)
     .eq("id", leadId)
+    .eq("branch_id", branchId)
     .select("id, state, state_confidence, state_reason, state_updated_at, status")
     .maybeSingle();
 
   if (error) {
     return jsonResponse(400, { ok: false, error: error.message });
+  }
+
+  if (!data) {
+    return jsonResponse(404, { ok: false, error: "lead not found for the provided branch_id" });
   }
 
   return jsonResponse(200, { ok: true, data });
