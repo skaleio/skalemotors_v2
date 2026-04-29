@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
+import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
@@ -26,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -310,6 +311,8 @@ const LeadCard = memo(function LeadCard({
   );
 });
 
+const CAN_SUPERVISE = new Set(["admin", "gerente", "jefe_jefe", "jefe_sucursal", "financiero"]);
+
 export default function CRM() {
   const { user } = useAuth();
   const location = useLocation();
@@ -333,6 +336,24 @@ export default function CRM() {
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });
+
+  const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
+  const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
+
+  const { sellers: vendorList } = useBranchSellers({
+    tenantId: user?.tenant_id ?? null,
+    branchId: canSupervise && !["admin","gerente","jefe_jefe","financiero"].includes(user?.role ?? "")
+      ? (user?.branch_id ?? null)
+      : null,
+    scope: ["admin","gerente","jefe_jefe","financiero"].includes(user?.role ?? "") ? "tenant" : "branch",
+    roles: ["vendedor"],
+    enabled: canSupervise,
+  });
+
+  const supervisedVendorName = useMemo(
+    () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
+    [vendorList, supervisedVendorId],
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -484,6 +505,30 @@ export default function CRM() {
     [],
   );
 
+  /**
+   * Métricas globales del CRM. Se calculan sobre TODOS los leads del usuario
+   * (excluyendo consignaciones — leads que vinieron del flujo de consignación).
+   * Se aplica también el filtro de supervisión si está activo, para que las
+   * métricas reflejen lo que el usuario ve en el pipeline.
+   *
+   * Efectividad de cierre = vendidos / (vendidos + perdidos + en pipeline)
+   * Es decir: del total de leads trabajados, qué % terminó cerrado.
+   */
+  const metrics = useMemo(() => {
+    const base = leads.filter((lead) => {
+      const tags = normalizeTags(lead.tags);
+      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
+      return true;
+    });
+    const total = base.length;
+    const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
+    const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
+    const enPipeline = total - cerrados - perdidos;
+    const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
+    return { total, cerrados, perdidos, enPipeline, efectividad };
+  }, [leads, supervisedVendorId]);
+
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
     // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
@@ -496,17 +541,22 @@ export default function CRM() {
       return true;
     });
 
-    // 3) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
+    // 3) Filtro de supervisión: si hay un vendedor seleccionado, solo sus leads.
+    const supervised = supervisedVendorId
+      ? onlyLeads.filter((lead) => lead.assigned_to === supervisedVendorId)
+      : onlyLeads;
+
+    // 4) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return onlyLeads;
-    return onlyLeads.filter((lead) => {
+    if (!q) return supervised;
+    return supervised.filter((lead) => {
       const name = (lead.full_name || "").toLowerCase();
       const phone = (lead.phone || "").replace(/\D/g, "");
       const phoneQuery = q.replace(/\D/g, "");
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [leads, searchQuery]);
+  }, [leads, searchQuery, supervisedVendorId]);
 
   const leadsByStage = useMemo(() => {
     const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;
@@ -936,6 +986,23 @@ export default function CRM() {
           </Button>
         </div>
       )}
+      {supervisedVendorId && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-400 bg-blue-50 px-4 py-2.5 dark:bg-blue-950/30 dark:border-blue-600">
+          <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-300 flex-1">
+            Supervisando CRM de <span className="font-bold">{supervisedVendorName ?? "Vendedor"}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
+            onClick={() => setSupervisedVendorId(null)}
+            title="Volver a vista global"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
@@ -947,17 +1014,96 @@ export default function CRM() {
             <span className="font-medium">NEGOCIO CONCRETADO</span> se pedirán datos de la venta antes de guardar.
           </p>
         </div>
-        <div className="relative w-full sm:w-72 shrink-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Buscar por nombre, teléfono o correo..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            aria-label="Buscar cliente en el CRM"
-          />
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shrink-0">
+          {canSupervise && vendorList.length > 0 && (
+            <Select
+              value={supervisedVendorId ?? "__all__"}
+              onValueChange={(val) => setSupervisedVendorId(val === "__all__" ? null : val)}
+            >
+              <SelectTrigger className="w-full sm:w-52 gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Ver CRM de vendedor…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">— Vista global —</SelectItem>
+                {vendorList.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.full_name || v.email || v.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Buscar por nombre, teléfono o correo..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+              aria-label="Buscar cliente en el CRM"
+            />
+          </div>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+              <Users className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Total leads</p>
+              <p className="text-2xl font-bold leading-tight">{metrics.total}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-orange-50 p-2 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">En pipeline</p>
+              <p className="text-2xl font-bold leading-tight">{metrics.enPipeline}</p>
+              <p className="text-[11px] text-muted-foreground">
+                Activos sin cerrar
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Cerrados</p>
+              <p className="text-2xl font-bold leading-tight">{metrics.cerrados}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.perdidos} perdido{metrics.perdidos === 1 ? "" : "s"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-purple-50 p-2 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
+              <Target className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Efectividad de cierre</p>
+              <p className="text-2xl font-bold leading-tight">
+                {metrics.total > 0 ? `${metrics.efectividad.toLocaleString("es-CL")}%` : "—"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.cerrados} de {metrics.total} cerrados
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
