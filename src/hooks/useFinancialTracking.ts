@@ -1,3 +1,4 @@
+import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
 
@@ -102,9 +103,11 @@ function esGastoEmpresa(g: { inversor_name?: string | null }): boolean {
 
 export function useFinancialTracking(branchId?: string | null, preset: DateRangePreset = 'last_6_months') {
   const { from, to } = getDateRange(preset)
+  const { user } = useAuth()
+  const tenantId = user?.tenant_id ?? null
 
   return useQuery({
-    queryKey: ['financial-tracking', branchId, preset, from, to],
+    queryKey: ['financial-tracking', tenantId, branchId, preset, from, to],
     queryFn: async (): Promise<FinancialTrackingData> => {
       // 1. Ventas completadas con pago realizado (margin = ganancia)
       let salesQuery = supabase

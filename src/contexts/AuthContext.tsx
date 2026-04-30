@@ -2,8 +2,9 @@ import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
 import { getAvatarSrcSet, getOptimizedAvatarUrl } from "@/lib/avatar-utils";
 import { clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
-import { setTenantContext } from "@/lib/tenant";
+import { clearTenantContext, setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 
 type ProfileFetchReason = "ok" | "disabled" | "no-profile" | "error";
@@ -34,6 +35,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -339,6 +341,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (event === "SIGNED_OUT") {
+        try { queryClient.clear(); } catch { /* ignore */ }
+        clearTenantContext();
         setUser(null);
         currentUserRef.current = null;
         setNeedsOnboarding(false);
@@ -396,7 +400,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const msg = ev.data as { type?: string; userId?: string } | null;
       if (!msg?.type) return;
       if (msg.type === "SIGNED_OUT") {
-        // Otra pestaña cerró sesión → limpiar esta también
+        // Otra pestaña cerró sesión → limpiar esta también (incluido cache cross-tenant)
+        try { queryClient.clear(); } catch { /* ignore */ }
+        clearTenantContext();
         setUser(null);
         currentUserRef.current = null;
         setSession(null);
@@ -488,6 +494,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // anterior si signInWithPassword falla).
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       log("pre-signOut done");
+      // Si había un usuario cargado (cambio de cuenta en mismo tab), purgar cache
+      // de TanStack para que datos del user previo no aparezcan al loguearse
+      // el nuevo. Las query keys que no incluyen tenant_id (sales, appointments,
+      // expense-types, etc.) podrían mezclarse sin esto.
+      try { queryClient.clear(); } catch { /* ignore */ }
+      clearTenantContext();
       setUser(null);
       currentUserRef.current = null;
       setSession(null);
@@ -619,12 +631,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(true);
     setIsSigningOut(true);
 
-    // Limpiar cache del perfil en localStorage
-    if (currentUserRef.current?.id) {
-      try {
-        window.localStorage.removeItem(getProfileCacheKey(currentUserRef.current.id));
-      } catch { /* ignore */ }
-    }
+    // Cross-tenant safety: borrar TODO el cache de TanStack Query antes de
+    // que el próximo login pueda repintar UI con datos del usuario anterior.
+    // Sin esto, queries cacheadas con keys que no incluyen tenant_id (sales,
+    // appointments, expense-types, etc.) podrían mezclarse entre logins.
+    try { queryClient.clear(); } catch { /* ignore */ }
+
+    // Limpiar tenant-context global y todos los profile caches en localStorage.
+    clearTenantContext();
 
     const clearState = () => {
       setUser(null);

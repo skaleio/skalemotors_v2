@@ -7,6 +7,7 @@ type TramiteInsert = Database["public"]["Tables"]["tramites"]["Insert"];
 type TramiteUpdate = Database["public"]["Tables"]["tramites"]["Update"];
 
 export function useTramiteTipos() {
+  // tramite-tipos es catálogo global (compartido entre tenants), no se scopea.
   return useQuery({
     queryKey: ["tramite-tipos"],
     queryFn: () => tramitesService.getTipos(),
@@ -14,8 +15,10 @@ export function useTramiteTipos() {
 }
 
 export function useTramites(filters?: { branchId?: string; status?: string; tramiteTipoCode?: string }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id ?? null;
   return useQuery({
-    queryKey: ["tramites", filters?.branchId, filters?.status, filters?.tramiteTipoCode],
+    queryKey: ["tramites", tenantId, filters?.branchId, filters?.status, filters?.tramiteTipoCode],
     queryFn: () => tramitesService.getAll(filters),
   });
 }
@@ -42,8 +45,10 @@ export function useUpdateTramite() {
 }
 
 export function useAutofactConfig(branchId: string | undefined) {
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id ?? null;
   return useQuery({
-    queryKey: ["autofact-config", branchId],
+    queryKey: ["autofact-config", tenantId, branchId],
     queryFn: () => (branchId ? tramitesService.getAutofactConfig(branchId) : Promise.resolve(null)),
     enabled: !!branchId,
   });

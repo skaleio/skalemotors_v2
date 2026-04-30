@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
@@ -203,8 +204,10 @@ function getMonthRange(year: number, month: number) {
 export function useFundManagement(branchId: string | null, options?: UseFundManagementOptions) {
   const enabled = options?.enabled !== false;
   const period = options?.period;
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id ?? null;
   return useQuery({
-    queryKey: ["fund-management", branchId, period?.year, period?.month],
+    queryKey: ["fund-management", tenantId, branchId, period?.year, period?.month],
     enabled,
     queryFn: async (): Promise<FundManagementData> => {
       try {

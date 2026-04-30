@@ -23,6 +23,28 @@ export function getTenantContext(): TenantContext {
   }
 }
 
+/**
+ * Borra el tenant-context y los caches de perfil del logout.
+ * Crítico: si no se limpia, en logout queda el tenant_id del usuario anterior
+ * y un nuevo login en el mismo tab puede mezclar UI hasta que se rehidrate.
+ */
+export function clearTenantContext() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TENANT_STORAGE_KEY);
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("skale.user-profile")) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => window.localStorage.removeItem(k));
+  } catch {
+    // localStorage no disponible (modo privado, etc.)
+  }
+}
+
 export function isLegacyProtectedUser(context: TenantContext): boolean {
   return Boolean(context.legacyProtected);
 }

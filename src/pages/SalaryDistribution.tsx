@@ -121,9 +121,10 @@ function computeAmounts(profit: number, month: number): Record<string, number> {
 export default function SalaryDistribution() {
   const { user } = useAuth();
   const branchId = user?.branch_id ?? null;
+  const tenantId = user?.tenant_id ?? null;
   const queryClient = useQueryClient();
   const { data: dataFromDb = {}, isLoading: dataLoading } = useQuery({
-    queryKey: ["salary-distribution", branchId ?? "all"],
+    queryKey: ["salary-distribution", tenantId, branchId ?? "all"],
     queryFn: () => salaryDistributionService.getByBranch(branchId ?? ""),
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

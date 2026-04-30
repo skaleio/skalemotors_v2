@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { saleService } from "@/lib/services/sales";
 import type { Database } from "@/lib/types/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,7 +38,12 @@ export function useSales(options: UseSalesOptions = {}) {
   } = options;
 
   const queryClient = useQueryClient();
-  const queryKey = ["sales", branchId, sellerId, status, period?.year, period?.month];
+  const { user } = useAuth();
+  // Scoping por tenant_id: aunque RLS aísla el server, las query keys deben
+  // segmentar el cache para que un cambio de cuenta en el mismo tab no exponga
+  // datos del tenant anterior antes del refetch.
+  const tenantId = user?.tenant_id ?? null;
+  const queryKey = ["sales", tenantId, branchId, sellerId, status, period?.year, period?.month];
 
   const dateRange =
     period &&
@@ -64,7 +70,7 @@ export function useSales(options: UseSalesOptions = {}) {
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["sales-stats", branchId, period?.year, period?.month],
+    queryKey: ["sales-stats", tenantId, branchId, period?.year, period?.month],
     queryFn: () =>
       dateRange
         ? saleService.getStats(undefined, undefined, { from: dateRange.from, to: dateRange.to })

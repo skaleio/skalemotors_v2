@@ -1,0 +1,92 @@
+---
+description: Reglas obligatorias de aislamiento multi-tenant. Cualquier tabla nueva o insert/update debe incluir tenant_id.
+alwaysApply: true
+---
+
+# Aislamiento multi-tenant — REGLAS CRÍTICAS
+
+Skalemotors es SaaS multi-tenant (Hessen, Miami, etc.). Una fuga de datos entre tenants
+expone información financiera/personal y deriva en denuncias legales (LGPD/Ley 19.628 Chile).
+**Nunca** escribas código que pueda exponer o mezclar datos entre tenants.
+
+## Al insertar registros desde el frontend
+
+Toda tabla con columna `tenant_id` REQUIERE que el insert incluya `tenant_id` (y `branch_id`
+si aplica) tomados del usuario autenticado:
+
+```ts
+// ❌ MAL — el registro queda invisible (RLS lo bloquea) o, peor, queda huérfano.
+await supabase.from("ingresos_empresa").insert({
+  amount, income_date, etiqueta,
+});
+
+// ✅ BIEN — siempre desde useAuth().user
+const { user } = useAuth();
+await supabase.from("ingresos_empresa").insert({
+  amount, income_date, etiqueta,
+  tenant_id: user?.tenant_id ?? null,
+  branch_id: user?.branch_id ?? null,
+});
+```
+
+Hay un trigger BD `autofill_tenant_branch_from_user` que rellena ambos si vienen NULL,
+pero **no confíes solo en el trigger**: enviarlos explícitamente facilita debugging y
+audit logs.
+
+## Tablas con tenant_id
+
+Estas tablas tienen `tenant_id NOT NULL` y RLS por tenant:
+`ai_branch_brain`, `ai_conversations`, `ai_messages`, `ai_usage_logs`, `appointments`,
+`autofact_config`, `chileautos_saved_listings`, `consignaciones`, `documents`,
+`gastos_empresa`, `ingresos_empresa`, `leads`, `marketplace_connections`, `messages`,
+`meta_ads_connections`, `n8n_workflow_executions`, `n8n_workspaces`, `pending_tasks`,
+`salary_distribution`, `sale_expenses`, `sales`, `studio_prompts`, `tramites`,
+`vehicle_appraisals`, `vehicle_listings`, `vehicles`, `webhook_endpoints`, `webhook_log`,
+`whatsapp_calls`, `whatsapp_inboxes`.
+
+## Al crear NUEVAS tablas
+
+Si la nueva tabla almacena datos de negocio (no es global tipo `expense_types`), DEBES:
+
+1. Agregar columna `tenant_id uuid NOT NULL REFERENCES tenants(id)`.
+2. Agregar columna `branch_id uuid` cuando aplique (datos por sucursal).
+3. Habilitar RLS y agregar **dos** políticas:
+   ```sql
+   ALTER TABLE public.mi_tabla ENABLE ROW LEVEL SECURITY;
+
+   CREATE POLICY tenant_restrict_mi_tabla ON public.mi_tabla
+     AS RESTRICTIVE FOR ALL TO authenticated
+     USING (current_is_legacy_protected() OR tenant_id = current_tenant_id());
+
+   CREATE POLICY mi_tabla_select ON public.mi_tabla
+     FOR SELECT TO authenticated
+     USING (current_is_legacy_protected() OR tenant_id = current_tenant_id());
+   ```
+4. Agregar trigger autofill:
+   ```sql
+   CREATE TRIGGER trg_mi_tabla_autofill_tenant
+     BEFORE INSERT ON public.mi_tabla
+     FOR EACH ROW EXECUTE FUNCTION public.autofill_tenant_branch_from_user();
+   ```
+
+## En queries (hooks/services)
+
+- **Confía en RLS** para filtrar por tenant; no necesitas `WHERE tenant_id = ...` (lo agrega Postgres).
+- **Pero** sí filtra explícitamente por `branch_id` cuando el usuario seleccionó una sucursal específica.
+- **Nunca** hagas query con `service_role` desde el cliente (eso bypasea RLS).
+
+## Antipatrones prohibidos
+
+```ts
+// ❌ Crear inserts sin tenant_id confiando en triggers
+// ❌ Hacer SELECT sin RLS habilitada
+// ❌ Crear policies con `WITH CHECK (true)` o `USING (true)` en tablas multi-tenant
+// ❌ Usar service_role key en código que corre en el browser
+// ❌ Mezclar registros sin tenant_id "globales" con datos por tenant en la misma tabla
+```
+
+## Cuando dudes
+
+1. Pregúntate: "¿Si Miami Motors corre esta query, vería datos de Hessen?"
+2. Si la respuesta no es un rotundo NO, hay un bug.
+3. Verifica con `SET LOCAL request.jwt.claims` y simula el otro tenant.

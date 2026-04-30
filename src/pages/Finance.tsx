@@ -792,13 +792,19 @@ export default function Finance() {
       toast.error("Ingresa un monto mayor a 0.");
       return;
     }
-    // Ingresos: siempre enviar income_date (nunca expense_date)
+    // Ingresos: siempre enviar income_date (nunca expense_date).
+    // tenant_id + branch_id son críticos: sin ellos las RLS bloquean la lectura
+    // y los registros quedan invisibles en Finanzas (balance negativo).
+    const branchIdIngreso = user?.branch_id ?? null;
+    const tenantIdIngreso = user?.tenant_id ?? null;
     const payloadCreate = {
       amount,
       description: formIngreso.description.trim() || null,
       income_date: formIngreso.income_date,
       etiqueta: formIngreso.etiqueta.trim() || INGRESO_ETIQUETA_PAGOS_MIAMI,
       payment_status: formIngreso.payment_status,
+      branch_id: branchIdIngreso,
+      tenant_id: tenantIdIngreso,
     };
     const payloadUpdate = {
       amount,

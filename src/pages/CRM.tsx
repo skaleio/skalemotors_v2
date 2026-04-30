@@ -26,8 +26,8 @@ import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -224,6 +224,10 @@ const LeadCard = memo(function LeadCard({
   const hasAiState = lead.state != null && lead.state !== "";
   const lastDragEndRef = useRef(0);
   const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
+  const isContactadoStage = useMemo(() => {
+    const st = (lead.status || "").toLowerCase();
+    return st === "contactado" || st === "nuevo" || st === "interesado";
+  }, [lead.status]);
   const attemptStyles: Record<number, string> = {
     0: "",
     1: "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/10",
@@ -263,7 +267,7 @@ const LeadCard = memo(function LeadCard({
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         draggable ? "cursor-grab touch-none active:cursor-grabbing hover:bg-muted/40 hover:shadow-md" : "cursor-pointer hover:bg-muted/50",
-        attemptStyles[attempts],
+        isContactadoStage && attemptStyles[attempts],
         isDragging &&
           "scale-[0.97] border-dashed border-primary/50 bg-muted/50 opacity-[0.42] shadow-none ring-0",
         justLanded && "animate-in zoom-in-95 fade-in duration-300 ring-2 ring-emerald-500/35 shadow-md",
@@ -276,12 +280,18 @@ const LeadCard = memo(function LeadCard({
         {lead.phone || "Sin telefono"}
       </div>
       <div className="mt-1.5">
-        <ContactAttemptsBar
-          leadId={lead.id}
-          value={lead.contact_attempts ?? 0}
-          size="sm"
-          showLabel={false}
-        />
+        {isContactadoStage ? (
+          <ContactAttemptsBar
+            leadId={lead.id}
+            value={lead.contact_attempts ?? 0}
+            size="sm"
+            showLabel={false}
+          />
+        ) : (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            Contactos {attempts}/3
+          </span>
+        )}
       </div>
       {label && styles && (
         <div className="mt-2">
@@ -335,6 +345,13 @@ export default function CRM() {
     branchId: user?.branch_id ?? undefined,
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
+  });
+
+  const { data: deletedLeads = [] } = useQuery({
+    queryKey: ["leads", "deleted"],
+    queryFn: () => leadService.getDeleted(),
+    enabled: !!user,
+    staleTime: 1 * 60 * 1000,
   });
 
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
@@ -526,8 +543,41 @@ export default function CRM() {
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
     const enPipeline = total - cerrados - perdidos;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
-    return { total, cerrados, perdidos, enPipeline, efectividad };
-  }, [leads, supervisedVendorId]);
+    const noRespondieron = deletedLeads.filter((lead) => {
+      const tags = normalizeTags(lead.tags);
+      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
+      const st = (lead.status || "").toLowerCase();
+      return st === "nuevo" || st === "contactado" || st === "interesado";
+    }).length;
+    const tasaNoRespondieron = total + noRespondieron > 0
+      ? Math.round((noRespondieron / (total + noRespondieron)) * 1000) / 10
+      : 0;
+    const avanzados = base.filter((lead) => {
+      const st = (lead.status || "").toLowerCase();
+      return st === "negociando" || st === "cotizando" || st === "para_cierre" || st === "vendido" || st === "perdido";
+    }).length;
+    const tasaAvanceNegociando = total + noRespondieron > 0
+      ? Math.round((avanzados / (total + noRespondieron)) * 1000) / 10
+      : 0;
+
+    const tasaPerdida = cerrados + perdidos > 0
+      ? Math.round((perdidos / (cerrados + perdidos)) * 1000) / 10
+      : 0;
+
+    return {
+      total,
+      cerrados,
+      perdidos,
+      enPipeline,
+      efectividad,
+      noRespondieron,
+      tasaNoRespondieron,
+      avanzados,
+      tasaAvanceNegociando,
+      tasaPerdida,
+    };
+  }, [leads, supervisedVendorId, deletedLeads]);
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
@@ -1048,7 +1098,7 @@ export default function CRM() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
         <Card>
           <CardContent className="flex items-center gap-3 py-4">
             <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
@@ -1100,6 +1150,60 @@ export default function CRM() {
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {metrics.cerrados} de {metrics.total} cerrados
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-rose-50 p-2 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+              <PhoneOff className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">No respondieron (sin negociar)</p>
+              <p className="text-2xl font-bold leading-tight">
+                {(metrics.total + metrics.noRespondieron) > 0
+                  ? `${metrics.tasaNoRespondieron.toLocaleString("es-CL")}%`
+                  : "—"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.noRespondieron} en papelera
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-sky-50 p-2 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+              <ArrowUpRight className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Avance a negociando</p>
+              <p className="text-2xl font-bold leading-tight">
+                {(metrics.total + metrics.noRespondieron) > 0
+                  ? `${metrics.tasaAvanceNegociando.toLocaleString("es-CL")}%`
+                  : "—"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.avanzados} llegaron a negociando+
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4">
+            <div className="rounded-lg bg-amber-50 p-2 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <Skull className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Tasa de pérdida</p>
+              <p className="text-2xl font-bold leading-tight">
+                {(metrics.cerrados + metrics.perdidos) > 0
+                  ? `${metrics.tasaPerdida.toLocaleString("es-CL")}%`
+                  : "—"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.perdidos} de {metrics.cerrados + metrics.perdidos} cerrados/perdidos
               </p>
             </div>
           </CardContent>

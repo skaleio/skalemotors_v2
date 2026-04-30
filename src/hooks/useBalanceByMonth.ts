@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
@@ -32,9 +33,11 @@ export function useBalanceByMonth(branchId: string | null | undefined, year: num
   const from = `${year}-01-01`;
   const toDate = new Date(year, 11, 31);
   const to = toDate.toISOString().split("T")[0];
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id ?? null;
 
   return useQuery({
-    queryKey: ["balance-by-month", branchId, year, from, to],
+    queryKey: ["balance-by-month", tenantId, branchId, year, from, to],
     queryFn: async (): Promise<Record<string, BalanceMonth>> => {
       const monthMap: Record<string, { income: number; expenses: number }> = {};
       for (let m = 1; m <= 12; m++) {
