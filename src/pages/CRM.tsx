@@ -183,6 +183,16 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   }
 }
 
+function formatLeadTimestamp(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Formatea un error de Supabase/PostgREST en un string legible, combinando
  * message + details + hint + code. Permite ver en el toast la causa real
@@ -1075,7 +1085,7 @@ export default function CRM() {
                 <SelectValue placeholder="Ver CRM de vendedor…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">— Vista global —</SelectItem>
+                <SelectItem value="__all__">Vista global</SelectItem>
                 {vendorList.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
                     {v.full_name || v.email || v.id}
@@ -1678,6 +1688,17 @@ export default function CRM() {
                     <div>
                       <p className="text-sm text-muted-foreground">Nota</p>
                       <p className="text-base whitespace-pre-wrap">{editingLead.notes}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Última modificación:{" "}
+                        <span className="font-medium text-foreground/80">
+                          {formatLeadTimestamp(editingLead.updated_at) || "—"}
+                        </span>
+                        {" · "}
+                        Creado:{" "}
+                        <span className="font-medium text-foreground/80">
+                          {formatLeadTimestamp(editingLead.created_at) || "—"}
+                        </span>
+                      </p>
                     </div>
                   )}
                   <div>

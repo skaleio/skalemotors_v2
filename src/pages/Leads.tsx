@@ -118,6 +118,16 @@ const formatChilePhoneForDisplay = (value?: string | null) => {
   return trimmed;
 };
 
+const formatLeadTimestamp = (iso?: string | null) => {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return "";
+  }
+};
+
 const normalizeHeader = (value: string) =>
   value
     .toLowerCase()
@@ -1895,6 +1905,17 @@ export default function Leads() {
                 <div>
                   <p className="text-sm text-muted-foreground">Nota</p>
                   <p className="text-base whitespace-pre-wrap">{detailsLead.notes}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Última modificación:{" "}
+                    <span className="font-medium text-foreground/80">
+                      {formatLeadTimestamp(detailsLead.updated_at) || "—"}
+                    </span>
+                    {" · "}
+                    Creado:{" "}
+                    <span className="font-medium text-foreground/80">
+                      {formatLeadTimestamp(detailsLead.created_at) || "—"}
+                    </span>
+                  </p>
                 </div>
               ) : null}
             </div>
