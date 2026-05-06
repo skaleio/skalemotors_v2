@@ -44,7 +44,7 @@ import { consignacionesService } from "@/lib/services/consignaciones";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
-import { toSupabaseTransformedImageUrl } from "@/lib/storage-image-utils";
+import { VehicleImage } from "@/components/VehicleImage";
 
 type Consignacion = Database["public"]["Tables"]["consignaciones"]["Row"];
 type ConsignacionWithRelations = Consignacion & {
@@ -66,47 +66,19 @@ type ConsignacionWithRelations = Consignacion & {
   } | null;
 };
 
-const CONSIGNACION_THUMB_PLACEHOLDER = "/placeholder.svg";
-
-/** Miniatura ligera: transformación Storage + lazy load (no bloquea el hilo principal). */
 const ConsignacionVehicleThumb = memo(function ConsignacionVehicleThumb({
   url,
 }: {
   url: string | null | undefined;
 }) {
-  const src = useMemo(() => {
-    if (!url?.trim()) return CONSIGNACION_THUMB_PLACEHOLDER;
-    return (
-      toSupabaseTransformedImageUrl(url.trim(), {
-        width: 200,
-        height: 140,
-        quality: 68,
-        resize: "cover",
-      }) ?? url.trim()
-    );
-  }, [url]);
-
   return (
-    <img
-      src={src}
+    <VehicleImage
+      src={url}
       alt=""
+      preset="thumb-sm"
       className="h-14 w-[4.5rem] shrink-0 rounded-md border border-border object-cover bg-muted"
-      loading="lazy"
-      decoding="async"
-      fetchPriority="low"
-      width={72}
-      height={56}
-      sizes="72px"
-      onError={(e) => {
-        const el = e.target as HTMLImageElement;
-        const raw = url?.trim();
-        if (el.dataset.fallback === "1" || !raw) {
-          el.src = CONSIGNACION_THUMB_PLACEHOLDER;
-          return;
-        }
-        el.dataset.fallback = "1";
-        el.src = raw;
-      }}
+      displayWidth={72}
+      displayHeight={56}
     />
   );
 });

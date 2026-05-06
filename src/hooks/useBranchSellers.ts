@@ -7,6 +7,7 @@ export interface BranchSeller {
   email: string | null;
   branch_id: string | null;
   role: string;
+  crm_color?: string | null;
 }
 
 type SellerRole = "vendedor" | "jefe_sucursal";
@@ -39,7 +40,7 @@ export function useBranchSellers({
     queryFn: async (): Promise<BranchSeller[]> => {
       let q = supabase
         .from("users")
-        .select("id, full_name, email, branch_id, role")
+        .select("id, full_name, email, branch_id, role, crm_color")
         .eq("tenant_id", tenantId!)
         .in("role", roles)
         .eq("is_active", true)

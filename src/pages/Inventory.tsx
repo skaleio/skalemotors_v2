@@ -54,6 +54,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
+import { VehicleImage } from "@/components/VehicleImage";
 import { useQuery } from "@tanstack/react-query";
 import { formatCLP } from "@/lib/format";
 import { vehicleService } from "@/lib/services/vehicles";
@@ -275,6 +276,34 @@ const vehicleImageUrlList = (images: unknown): string[] => {
 };
 
 const allowedImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+function LocalFilePreview({
+  file,
+  alt,
+  className,
+  displayWidth,
+  displayHeight,
+}: {
+  file: File;
+  alt: string;
+  className?: string;
+  displayWidth?: number;
+  displayHeight?: number;
+}) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <img
+      src={url}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      decoding="async"
+      width={displayWidth}
+      height={displayHeight}
+    />
+  );
+}
 
 const optimizeVehicleImage = async (file: File) => {
   try {
@@ -1435,15 +1464,13 @@ export default function Inventory() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
-                        <img
+                        <VehicleImage
                           src={firstVehicleImageUrl(vehicle.images)}
                           alt={`${vehicle.make} ${vehicle.model}`}
+                          preset="thumb-xs"
                           className="h-full w-full object-cover"
-                          loading="eager"
-                          decoding="sync"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
-                          }}
+                          displayWidth={48}
+                          displayHeight={48}
                         />
                       </div>
                       <div>
@@ -1849,16 +1876,12 @@ export default function Inventory() {
               {/* Fotos */}
               <div className="space-y-3">
                 <div className="rounded-xl overflow-hidden border bg-muted">
-                  <img
+                  <VehicleImage
                     src={firstVehicleImageUrl((selectedVehicleFull || selectedVehicle).images)}
                     alt="Foto vehículo"
+                    preset="hero"
                     className="w-full h-[280px] object-cover"
-                    loading="eager"
-                    decoding="sync"
-                    fetchPriority="high"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
-                    }}
+                    displayHeight={280}
                   />
                 </div>
                 <div className="grid grid-cols-5 gap-2">
@@ -1884,15 +1907,12 @@ export default function Inventory() {
                           }
                         }}
                       >
-                        <img
-                          src={normalizeVehicleImageUrl(src) || PLACEHOLDER_VEHICLE_IMAGE}
+                        <VehicleImage
+                          src={src}
                           alt="thumb"
+                          preset="thumb-sm"
                           className="h-14 w-full object-cover"
-                          loading="eager"
-                          decoding="sync"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
-                          }}
+                          displayHeight={56}
                         />
                       </button>
                     ));
@@ -2036,16 +2056,14 @@ export default function Inventory() {
               <div className="mt-2">
                 <div className="flex flex-wrap gap-4 mb-4">
                   {newVehicle.images.map((file, index) => {
-                    const imageUrl = URL.createObjectURL(file);
                     return (
                       <div key={index} className="relative">
-                        <img
-                          src={imageUrl}
+                        <LocalFilePreview
+                          file={file}
                           alt={`Vehículo ${index + 1}`}
                           className="w-24 h-24 object-cover rounded-lg border bg-muted"
-                          loading="eager"
-                          decoding="sync"
-                          onLoad={() => URL.revokeObjectURL(imageUrl)}
+                          displayWidth={96}
+                          displayHeight={96}
                         />
                         <button
                           type="button"
@@ -2415,15 +2433,13 @@ export default function Inventory() {
                     <p className="text-sm text-muted-foreground w-full">Imágenes actuales:</p>
                     {((vehicleToEdit.images as unknown as string[]) || []).map((img, index) => (
                       <div key={index} className="relative">
-                        <img
-                          src={normalizeVehicleImageUrl(img) || PLACEHOLDER_VEHICLE_IMAGE}
+                        <VehicleImage
+                          src={img}
                           alt={`Vehículo ${index + 1}`}
+                          preset="thumb-sm"
                           className="w-24 h-24 object-cover rounded-lg border bg-muted"
-                          loading="eager"
-                          decoding="sync"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = PLACEHOLDER_VEHICLE_IMAGE;
-                          }}
+                          displayWidth={96}
+                          displayHeight={96}
                         />
                       </div>
                     ))}
@@ -2433,16 +2449,14 @@ export default function Inventory() {
                   <div className="flex flex-wrap gap-4 mb-4">
                     <p className="text-sm text-muted-foreground w-full">Nuevas imágenes a agregar:</p>
                     {newVehicle.images.map((file, index) => {
-                      const imageUrl = URL.createObjectURL(file);
                       return (
                         <div key={index} className="relative">
-                          <img
-                            src={imageUrl}
+                          <LocalFilePreview
+                            file={file}
                             alt={`Nueva ${index + 1}`}
                             className="w-24 h-24 object-cover rounded-lg border bg-muted"
-                            loading="eager"
-                            decoding="sync"
-                            onLoad={() => URL.revokeObjectURL(imageUrl)}
+                            displayWidth={96}
+                            displayHeight={96}
                           />
                           <button
                             type="button"

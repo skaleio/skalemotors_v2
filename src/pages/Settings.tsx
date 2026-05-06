@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
+import { CRM_COLOR_PRESETS } from '@/lib/crmAssigneeColor';
 
 const AVATAR_BUCKET = 'avatars';
 const AVATAR_MAX_SIZE_MB = 2;
@@ -55,6 +56,8 @@ export default function Settings() {
     email: '',
     role: '',
     branch_id: '' as string,
+    /** Color en tarjetas del CRM (#RRGGBB) */
+    crm_color: '' as string,
   });
   const [currentBranchName, setCurrentBranchName] = useState<string | null>(null);
   const [newBranch, setNewBranch] = useState({
@@ -119,6 +122,7 @@ export default function Settings() {
         email: user.email || '',
         role: user.role || '',
         branch_id: user.branch_id || '',
+        crm_color: user.crm_color?.trim() || '',
       });
     }
   }, [user]);
@@ -150,10 +154,17 @@ export default function Settings() {
       }
 
       // Actualizar perfil en la base de datos (incluye sucursal)
+      const crmHex = formData.crm_color.trim();
+      const crmValid = crmHex === '' || /^#[0-9A-Fa-f]{6}$/.test(crmHex);
+      if (!crmValid) {
+        throw new Error('El color del CRM debe ser formato #RRGGBB (ej. #2563eb) o déjalo vacío.');
+      }
+
       const updatePayload: Database['public']['Tables']['users']['Update'] = {
         full_name: formData.full_name.trim(),
         phone: formData.phone.trim() || null,
         branch_id: formData.branch_id.trim() || null,
+        crm_color: crmHex ? crmHex : null,
         updated_at: new Date().toISOString(),
       };
       const { error: updateError } = await supabase
@@ -194,6 +205,7 @@ export default function Settings() {
         full_name: formData.full_name.trim(),
         phone: formData.phone.trim() || '',
         branch_id: formData.branch_id.trim() || '',
+        crm_color: formData.crm_color.trim() || '',
       }));
 
       setSuccess(true);
@@ -671,6 +683,57 @@ export default function Settings() {
                     onChange={(e) => handleInputChange('phone', e.target.value)}
                     disabled={loading}
                   />
+                </div>
+
+                <div className="space-y-3 md:col-span-2">
+                  <Label className="flex items-center gap-2">
+                    Color en el CRM
+                  </Label>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Se usa en las tarjetas de leads para identificar quién hace el seguimiento. Si no eliges uno, el sistema asigna un color automático.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant={formData.crm_color === '' ? 'secondary' : 'outline'}
+                      size="sm"
+                      className="h-9"
+                      onClick={() => handleInputChange('crm_color', '')}
+                      disabled={loading}
+                    >
+                      Automático
+                    </Button>
+                    {CRM_COLOR_PRESETS.map((p) => (
+                      <Button
+                        key={p.value}
+                        type="button"
+                        variant={formData.crm_color === p.value ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="h-9 gap-2"
+                        onClick={() => handleInputChange('crm_color', p.value)}
+                        disabled={loading}
+                      >
+                        <span
+                          className="h-4 w-4 rounded-full ring-1 ring-border"
+                          style={{ backgroundColor: p.value }}
+                        />
+                        {p.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Label htmlFor="crm_color_hex" className="text-xs text-muted-foreground shrink-0">
+                      Hex personalizado
+                    </Label>
+                    <Input
+                      id="crm_color_hex"
+                      className="max-w-[140px] font-mono text-sm"
+                      placeholder="#2563eb"
+                      value={formData.crm_color}
+                      onChange={(e) => handleInputChange('crm_color', e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
 
                 {/* Sucursal */}

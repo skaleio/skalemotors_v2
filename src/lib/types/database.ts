@@ -177,6 +177,7 @@ export interface Database {
           legacy_protected: boolean
           is_active: boolean
           avatar_url: string | null
+          crm_color: string | null
           onboarding_completed: boolean
           created_at: string
           updated_at: string
@@ -200,6 +201,7 @@ export interface Database {
           legacy_protected?: boolean
           is_active?: boolean
           avatar_url?: string | null
+          crm_color?: string | null
           onboarding_completed?: boolean
           created_at?: string
           updated_at?: string
@@ -223,6 +225,7 @@ export interface Database {
           legacy_protected?: boolean
           is_active?: boolean
           avatar_url?: string | null
+          crm_color?: string | null
           onboarding_completed?: boolean
           created_at?: string
           updated_at?: string
@@ -774,6 +777,7 @@ export interface Database {
           status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
+          crm_seguimiento_socio: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id: string | null
           created_by: string | null
           branch_id: string | null
@@ -801,6 +805,7 @@ export interface Database {
           raw_message: string | null
           created_at: string
           updated_at: string
+          closed_at: string | null
           deleted_at: string | null
         }
         Insert: {
@@ -813,6 +818,7 @@ export interface Database {
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
+          crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id?: string | null
           created_by?: string | null
           branch_id?: string | null
@@ -840,6 +846,7 @@ export interface Database {
           raw_message?: string | null
           created_at?: string
           updated_at?: string
+          closed_at?: string | null
           deleted_at?: string | null
         }
         Update: {
@@ -852,6 +859,7 @@ export interface Database {
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
+          crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id?: string | null
           created_by?: string | null
           branch_id?: string | null
@@ -879,6 +887,7 @@ export interface Database {
           raw_message?: string | null
           created_at?: string
           updated_at?: string
+          closed_at?: string | null
           deleted_at?: string | null
         }
       }

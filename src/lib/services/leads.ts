@@ -35,7 +35,7 @@ export const leadService = {
       .from('leads')
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
 
@@ -67,7 +67,7 @@ export const leadService = {
       .from('leads')
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
       .is('deleted_at', null)
@@ -109,7 +109,7 @@ export const leadService = {
       .from('leads')
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
       .not('deleted_at', 'is', null)
@@ -127,7 +127,7 @@ export const leadService = {
       .eq('id', id)
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
       .single()
@@ -142,7 +142,7 @@ export const leadService = {
       .from('leads')
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, avatar_url),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, avatar_url, crm_color),
         branch:branches(id, name, address, phone),
         activities:lead_activities(*, user:users(id, full_name))
       `)
@@ -164,7 +164,7 @@ export const leadService = {
       .insert(row)
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
       .single()
@@ -185,7 +185,7 @@ export const leadService = {
       .eq('id', id)
       .select(`
         *,
-        assigned_user:users!leads_assigned_to_fkey(id, full_name, email),
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
       `)
       .single()

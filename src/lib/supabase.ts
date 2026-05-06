@@ -46,6 +46,8 @@ export interface User {
   branch_id?: string
   is_active: boolean
   avatar_url?: string
+  /** Color en CRM (#RRGGBB); opcional */
+  crm_color?: string | null
   onboarding_completed?: boolean
   created_at: string
   updated_at: string

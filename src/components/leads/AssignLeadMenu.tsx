@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
+import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import { leadService } from "@/lib/services/leads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, UserPlus, UserX } from "lucide-react";
@@ -108,6 +109,10 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
           sellers.map((seller) => {
             const isCurrent = seller.id === assignedTo;
             const isJefe = seller.role === "jefe_sucursal";
+            const sellerDot = resolveAssigneeBorderColor({
+              userId: seller.id,
+              crmColor: seller.crm_color ?? null,
+            });
             return (
               <DropdownMenuItem
                 key={seller.id}
@@ -116,6 +121,11 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
                 className="gap-2"
               >
                 {isCurrent ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <span className="w-3.5" />}
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
+                  style={{ backgroundColor: sellerDot }}
+                  aria-hidden
+                />
                 <span className="truncate flex-1">{seller.full_name || seller.email || seller.id}</span>
                 {isJefe ? (
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-auto">

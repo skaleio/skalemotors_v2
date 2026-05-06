@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
+import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
+import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
 import { leadService } from "@/lib/services/leads";
@@ -34,6 +36,12 @@ import { toast } from "@/hooks/use-toast";
 import { useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
+
+type LeadWithAssignee = Lead & {
+  assigned_user?: { id?: string; full_name?: string | null; email?: string | null; crm_color?: string | null } | null;
+};
+
+const CRM_UNASSIGNED_VALUE = "__crm_sin_asignar__";
 
 type CloseDealSellerOption = { key: string; label: string };
 
@@ -193,6 +201,29 @@ function formatLeadTimestamp(iso: string | null | undefined): string {
   }
 }
 
+/** YYYY-MM en calendario local: la columna «Negocio concretado» solo muestra cierres del mes en curso. */
+function localCalendarMonthKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function vendidoClosedMonthKey(lead: Lead): string | null {
+  if ((lead.status || "").toLowerCase() !== "vendido") return null;
+  const raw = lead.closed_at ?? lead.updated_at;
+  if (!raw) return null;
+  try {
+    return localCalendarMonthKey(new Date(raw));
+  } catch {
+    return null;
+  }
+}
+
+function isVendidoInLocalCalendarMonth(lead: Lead, monthKey: string): boolean {
+  const k = vendidoClosedMonthKey(lead);
+  return k !== null && k === monthKey;
+}
+
 /**
  * Formatea un error de Supabase/PostgREST en un string legible, combinando
  * message + details + hint + code. Permite ver en el toast la causa real
@@ -217,7 +248,7 @@ const LeadCard = memo(function LeadCard({
   onExternalDrop,
   justLanded,
 }: {
-  lead: Lead;
+  lead: LeadWithAssignee;
   onClick: () => void;
   draggable?: boolean;
   isDragging?: boolean;
@@ -234,6 +265,13 @@ const LeadCard = memo(function LeadCard({
   const hasAiState = lead.state != null && lead.state !== "";
   const lastDragEndRef = useRef(0);
   const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
+  const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
+  const assigneeBorder = socio
+    ? null
+    : resolveAssigneeBorderColor({
+        userId: lead.assigned_to,
+        crmColor: lead.assigned_user?.crm_color ?? null,
+      });
   const isContactadoStage = useMemo(() => {
     const st = (lead.status || "").toLowerCase();
     return st === "contactado" || st === "nuevo" || st === "interesado";
@@ -273,7 +311,8 @@ const LeadCard = memo(function LeadCard({
       aria-grabbed={isDragging ? true : undefined}
       title={draggable ? "Arrastra a otra columna o haz clic para abrir" : undefined}
       className={cn(
-        "rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
+        "relative rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
+        assigneeBorder && "border-l-[3px]",
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         draggable ? "cursor-grab touch-none active:cursor-grabbing hover:bg-muted/40 hover:shadow-md" : "cursor-pointer hover:bg-muted/50",
@@ -282,13 +321,33 @@ const LeadCard = memo(function LeadCard({
           "scale-[0.97] border-dashed border-primary/50 bg-muted/50 opacity-[0.42] shadow-none ring-0",
         justLanded && "animate-in zoom-in-95 fade-in duration-300 ring-2 ring-emerald-500/35 shadow-md",
       )}
+      style={assigneeBorder ? { borderLeftColor: assigneeBorder } : undefined}
     >
-      <div className="font-medium">
-        {lead.full_name || "Sin nombre"}
-      </div>
+      {socio ? (
+        <span
+          title={`Seguimiento: ${socio}`}
+          className={cn(
+            "pointer-events-none absolute right-1 top-1 z-[1] max-w-[4.25rem] truncate rounded px-1 py-px text-center text-[9px] font-semibold leading-tight shadow-sm",
+            seguimientoSocioPillClass(socio),
+          )}
+        >
+          {socio}
+        </span>
+      ) : null}
+      <div className={cn("font-medium", socio && "pr-12")}>{lead.full_name || "Sin nombre"}</div>
       <div className="text-muted-foreground">
         {lead.phone || "Sin telefono"}
       </div>
+      {!socio && (lead.assigned_user?.full_name || lead.assigned_user?.email) && (
+        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {assigneeBorder ? (
+            <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border" style={{ backgroundColor: assigneeBorder }} />
+          ) : null}
+          <span className="truncate">
+            Seguimiento: {lead.assigned_user?.full_name || lead.assigned_user?.email}
+          </span>
+        </div>
+      )}
       <div className="mt-1.5">
         {isContactadoStage ? (
           <ContactAttemptsBar
@@ -341,15 +400,6 @@ export default function CRM() {
     return params.get("vendor") === "1";
   }, [location.search]);
 
-  if (vendorMode && user?.role !== "vendedor") {
-    return (
-      <VendorLoginGate
-        title="CRM bloqueado"
-        description="Inicia sesión con tu usuario de vendedor para ver tu información."
-        afterLoginPath="/app/crm"
-      />
-    );
-  }
   const queryClient = useQueryClient();
   const { leads, loading, error: leadsError, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
@@ -382,6 +432,24 @@ export default function CRM() {
     [vendorList, supervisedVendorId],
   );
 
+  const [crmCalendarMonthKey, setCrmCalendarMonthKey] = useState(() => localCalendarMonthKey(new Date()));
+
+  useEffect(() => {
+    const syncMonth = () => {
+      const next = localCalendarMonthKey(new Date());
+      setCrmCalendarMonthKey((prev) => (prev === next ? prev : next));
+    };
+    const id = window.setInterval(syncMonth, 60_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") syncMonth();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -398,6 +466,17 @@ export default function CRM() {
     notes: "",
     vehicle: "",
     status: "contactado",
+    /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
+    assigned_to: null as string | null,
+    /** Mike / Antonio / Jota (`leads.crm_seguimiento_socio`) */
+    crm_seguimiento_socio: null as "Mike" | "Antonio" | "Jota" | null,
+  });
+
+  const { sellers: crmAssigneeOptions } = useBranchSellers({
+    tenantId: user?.tenant_id ?? null,
+    scope: "tenant",
+    roles: ["vendedor", "jefe_sucursal"],
+    enabled: !!user?.tenant_id && showEditDialog && isEditingForm,
   });
 
   useEffect(() => {
@@ -413,7 +492,7 @@ export default function CRM() {
     };
   }, []);
 
-  const openEditDialog = useCallback((lead: Lead) => {
+  const openEditDialog = useCallback((lead: LeadWithAssignee) => {
     setEditingLead(lead);
     setLeadStatus(safePipelineSelectValue(lead.status));
     setIsEditingForm(false);
@@ -467,6 +546,10 @@ export default function CRM() {
       notes: editingLead.notes || "",
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
       status: safePipelineSelectValue(editingLead.status),
+      assigned_to: editingLead.assigned_to ?? null,
+      crm_seguimiento_socio: isCrmSeguimientoSocio(editingLead.crm_seguimiento_socio)
+        ? editingLead.crm_seguimiento_socio
+        : null,
     });
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
@@ -487,6 +570,8 @@ export default function CRM() {
             budget: editForm.budget.trim() || null,
             notes: editForm.notes.trim() || null,
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
+            assigned_to: editForm.assigned_to,
+            crm_seguimiento_socio: editForm.crm_seguimiento_socio,
           }
         : { status: leadStatus };
 
@@ -550,6 +635,7 @@ export default function CRM() {
     });
     const total = base.length;
     const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
+    const cerradosMes = base.filter((l) => isVendidoInLocalCalendarMonth(l, crmCalendarMonthKey)).length;
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
     const enPipeline = total - cerrados - perdidos;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
@@ -578,6 +664,7 @@ export default function CRM() {
     return {
       total,
       cerrados,
+      cerradosMes,
       perdidos,
       enPipeline,
       efectividad,
@@ -587,7 +674,7 @@ export default function CRM() {
       tasaAvanceNegociando,
       tasaPerdida,
     };
-  }, [leads, supervisedVendorId, deletedLeads]);
+  }, [leads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
@@ -623,7 +710,13 @@ export default function CRM() {
     return stages.map((stage) => ({
       ...stage,
       leads: filteredLeads
-        .filter((lead) => stage.statuses.includes(lead.status))
+        .filter((lead) => {
+          if (!stage.statuses.includes(lead.status)) return false;
+          if (stage.key === "negocio_cerrado") {
+            return isVendidoInLocalCalendarMonth(lead, crmCalendarMonthKey);
+          }
+          return true;
+        })
         .slice()
         .sort((a, b) => {
           const aMax = maxedOut(a) ? 1 : 0;
@@ -631,7 +724,7 @@ export default function CRM() {
           return aMax - bMax;
         }),
     }));
-  }, [filteredLeads, stages]);
+  }, [filteredLeads, stages, crmCalendarMonthKey]);
 
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
@@ -1032,6 +1125,16 @@ export default function CRM() {
     user?.branch_id,
   ]);
 
+  if (vendorMode && user?.role !== "vendedor") {
+    return (
+      <VendorLoginGate
+        title="CRM bloqueado"
+        description="Inicia sesión con tu usuario de vendedor para ver tu información."
+        afterLoginPath="/app/crm"
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {leadsError && (
@@ -1140,10 +1243,10 @@ export default function CRM() {
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Cerrados</p>
-              <p className="text-2xl font-bold leading-tight">{metrics.cerrados}</p>
+              <p className="text-xs text-muted-foreground">Concretados (mes)</p>
+              <p className="text-2xl font-bold leading-tight">{metrics.cerradosMes}</p>
               <p className="text-[11px] text-muted-foreground">
-                {metrics.perdidos} perdido{metrics.perdidos === 1 ? "" : "s"}
+                {metrics.cerrados} total histórico · {metrics.perdidos} perdido{metrics.perdidos === 1 ? "" : "s"}
               </p>
             </div>
           </CardContent>
@@ -1247,7 +1350,7 @@ export default function CRM() {
                   "shadow-lg shadow-primary/10 ring-1 ring-primary/25",
               )}
             >
-              <CardHeader>
+              <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
                   <span className="text-sm flex items-center gap-2">
                     {style?.dot && <span className={`h-2 w-2 rounded-full ${style.dot}`} />}
@@ -1257,6 +1360,11 @@ export default function CRM() {
                     {stage.leads.length}
                   </Badge>
                 </CardTitle>
+                {stage.key === "negocio_cerrado" ? (
+                  <CardDescription className="text-[11px] pt-1">
+                    Solo negocios cerrados en el mes en curso (calendario local). Al cambiar de mes, la columna arranca vacía; el resto del embudo no se mueve.
+                  </CardDescription>
+                ) : null}
               </CardHeader>
               <CardContent>
                 <div
@@ -1540,6 +1648,63 @@ export default function CRM() {
                       rows={3}
                     />
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="crm-edit-socio">Encargado del seguimiento (socio)</Label>
+                    <Select
+                      value={editForm.crm_seguimiento_socio ?? CRM_UNASSIGNED_VALUE}
+                      onValueChange={(v) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          crm_seguimiento_socio:
+                            v === CRM_UNASSIGNED_VALUE
+                              ? null
+                              : (v as "Mike" | "Antonio" | "Jota"),
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="crm-edit-socio">
+                        <SelectValue placeholder="Sin asignar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={CRM_UNASSIGNED_VALUE}>Sin asignar</SelectItem>
+                        {CRM_SEGUIMIENTO_SOCIOS.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Etiqueta pequeña arriba a la derecha en el pipeline: Mike (azul), Antonio (celeste), Jota (verde).
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="crm-edit-assignee">Seguimiento (vendedor)</Label>
+                    <Select
+                      value={editForm.assigned_to ?? CRM_UNASSIGNED_VALUE}
+                      onValueChange={(v) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          assigned_to: v === CRM_UNASSIGNED_VALUE ? null : v,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="crm-edit-assignee">
+                        <SelectValue placeholder="Sin asignar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={CRM_UNASSIGNED_VALUE}>Sin asignar</SelectItem>
+                        {crmAssigneeOptions.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.full_name || s.email || s.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Si no hay socio asignado, el color del borde usa el vendedor y su color en Configuración.
+                    </p>
+                  </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select
@@ -1702,15 +1867,50 @@ export default function CRM() {
                     </div>
                   )}
                   <div>
-                    <p className="text-sm text-muted-foreground">Vendedor asignado</p>
-                    <p className="text-base">
-                      {(editingLead as Lead & {
-                        assigned_user?: { full_name?: string | null; email?: string | null } | null;
-                      }).assigned_user?.full_name
-                        || (editingLead as Lead & {
-                          assigned_user?: { full_name?: string | null; email?: string | null } | null;
-                        }).assigned_user?.email
-                        || "Sin asignar"}
+                    <p className="text-sm text-muted-foreground">Encargado (socio)</p>
+                    <p className="text-base flex items-center gap-2">
+                      {(() => {
+                        const s = editingLead.crm_seguimiento_socio;
+                        if (!isCrmSeguimientoSocio(s)) {
+                          return <span>Sin asignar</span>;
+                        }
+                        return (
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold text-white",
+                              seguimientoSocioPillClass(s),
+                            )}
+                          >
+                            {s}
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vendedor asignado (seguimiento)</p>
+                    <p className="text-base flex items-center gap-2">
+                      {(() => {
+                        const au = (editingLead as LeadWithAssignee).assigned_user;
+                        const dot = resolveAssigneeBorderColor({
+                          userId: editingLead.assigned_to,
+                          crmColor: au?.crm_color ?? null,
+                        });
+                        const label =
+                          au?.full_name?.trim() || au?.email?.trim() || "Sin asignar";
+                        return (
+                          <>
+                            {dot && editingLead.assigned_to ? (
+                              <span
+                                className="h-3 w-3 shrink-0 rounded-full ring-1 ring-border"
+                                style={{ backgroundColor: dot }}
+                                aria-hidden
+                              />
+                            ) : null}
+                            <span>{label}</span>
+                          </>
+                        );
+                      })()}
                     </p>
                   </div>
                   <div className="rounded-md border bg-muted/30 px-3 py-2.5">
