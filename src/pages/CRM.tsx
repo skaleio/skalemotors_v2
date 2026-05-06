@@ -272,9 +272,17 @@ const LeadCard = memo(function LeadCard({
         userId: lead.assigned_to,
         crmColor: lead.assigned_user?.crm_color ?? null,
       });
-  const isContactadoStage = useMemo(() => {
+  /** Semáforo de intentos: visible en contactado, negociando y para cierre (no en vendido). */
+  const showContactAttemptsSemaforo = useMemo(() => {
     const st = (lead.status || "").toLowerCase();
-    return st === "contactado" || st === "nuevo" || st === "interesado";
+    return (
+      st === "contactado"
+      || st === "nuevo"
+      || st === "interesado"
+      || st === "negociando"
+      || st === "cotizando"
+      || st === "para_cierre"
+    );
   }, [lead.status]);
   const attemptStyles: Record<number, string> = {
     0: "",
@@ -316,7 +324,7 @@ const LeadCard = memo(function LeadCard({
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         draggable ? "cursor-grab touch-none active:cursor-grabbing hover:bg-muted/40 hover:shadow-md" : "cursor-pointer hover:bg-muted/50",
-        isContactadoStage && attemptStyles[attempts],
+        showContactAttemptsSemaforo && attemptStyles[attempts],
         isDragging &&
           "scale-[0.97] border-dashed border-primary/50 bg-muted/50 opacity-[0.42] shadow-none ring-0",
         justLanded && "animate-in zoom-in-95 fade-in duration-300 ring-2 ring-emerald-500/35 shadow-md",
@@ -349,7 +357,7 @@ const LeadCard = memo(function LeadCard({
         </div>
       )}
       <div className="mt-1.5">
-        {isContactadoStage ? (
+        {showContactAttemptsSemaforo ? (
           <ContactAttemptsBar
             leadId={lead.id}
             value={lead.contact_attempts ?? 0}
