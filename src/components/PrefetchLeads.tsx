@@ -1,4 +1,5 @@
 import { leadService } from "@/lib/services/leads";
+import { scheduleWhenIdle } from "@/lib/scheduleIdle";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef } from "react";
@@ -23,8 +24,7 @@ export function PrefetchLeads() {
     }
 
     const prefetchKey = `${LEADS_PREFETCH_KEY_PREFIX}.${branchId}`;
-    let timeoutId: number | null = null;
-    let idleId: number | null = null;
+    let cancelScheduled: (() => void) | null = null;
 
     const markPrefetched = () => {
       didPrefetch.current = true;
@@ -68,12 +68,11 @@ export function PrefetchLeads() {
         return;
       }
 
-      if ("requestIdleCallback" in window) {
-        idleId = window.requestIdleCallback(runPrefetch, { timeout: 1500 });
-        return;
-      }
-
-      timeoutId = window.setTimeout(runPrefetch, 1200);
+      cancelScheduled?.();
+      cancelScheduled = scheduleWhenIdle(runPrefetch, {
+        idleTimeoutMs: 1500,
+        fallbackDelayMs: 1200,
+      });
     };
 
     const handleVisibilityChange = () => {
@@ -95,12 +94,8 @@ export function PrefetchLeads() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("storage", handleStorage);
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-      if (idleId !== null && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
-      }
+      cancelScheduled?.();
+      cancelScheduled = null;
     };
   }, [user?.branch_id, queryClient]);
 }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
 import { StaticLoginBackground } from '@/components/StaticLoginBackground'
+import { scheduleWhenIdle } from '@/lib/scheduleIdle'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -35,12 +36,13 @@ export default function Login() {
   // se lazy-loadea natural al navegar. Se dispara en idle para no competir
   // con el render del Login.
   useEffect(() => {
-    const idle = (cb: () => void) =>
-      (window as Window & { requestIdleCallback?: (cb: () => void) => number })
-        .requestIdleCallback?.(cb) ?? window.setTimeout(cb, 400);
-    idle(() => {
-      void import('./CRM').catch(() => {});
-    });
+    const cancel = scheduleWhenIdle(
+      () => {
+        void import('./CRM').catch(() => {});
+      },
+      { idleTimeoutMs: 2000, fallbackDelayMs: 400 },
+    );
+    return cancel;
   }, [])
 
   const startCooldown = (seconds: number) => {
@@ -98,11 +100,8 @@ export default function Login() {
           if (cooldownSeconds > 0) startCooldown(cooldownSeconds)
         }
         setError(getErrorMessage(newAttempts, error))
-        setLocalLoading(false)
-        setLoginAttempted(false)
       } else {
         setFailedAttempts(0)
-        // Login exitoso: redirigir según rol (vendedor → CRM, resto → dashboard)
         const from = (location.state as { from?: RouterLocation } | null)?.from
         const defaultPath = role === "vendedor" ? "/app/crm" : "/app"
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
@@ -110,6 +109,9 @@ export default function Login() {
       }
     } catch {
       setError('Error inesperado. Intenta nuevamente.')
+    } finally {
+      // Siempre liberar UI: antes el éxito dejaba localLoading=true y loginAttempted=true,
+      // el botón quedaba en «Iniciando…» y el useEffect de redirección nunca corría.
       setLocalLoading(false)
       setLoginAttempted(false)
     }
@@ -120,12 +122,6 @@ export default function Login() {
     : localLoading
       ? "Iniciando sesión..."
       : "Iniciar Sesión"
-  
-  useEffect(() => {
-    if (!authLoading && !localLoading) {
-      setLocalLoading(false)
-    }
-  }, [authLoading])
 
   return (
     <div className="min-h-screen relative">

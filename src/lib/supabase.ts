@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createBrowserAuthStorage } from '@/lib/safeStorage'
 import type { Database } from './types/database'
 
 // Usar variables de entorno (NO hardcodear keys en el repo)
@@ -15,7 +16,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    // Safari (macOS/iOS) ventana privada u opciones restrictivas: localStorage puede fallar;
+    // el fallback en memoria evita pantallas colgadas en el arranque de auth.
+    storage: createBrowserAuthStorage(),
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },

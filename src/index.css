@@ -160,8 +160,17 @@
     @apply border-border;
   }
 
+  html {
+    /* Safari / WebKit: evita saltos de tamaño de texto al rotar o al mostrar barras del sistema */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Altura útil coherente en WebKit (Safari macOS, iPhone): min-h-screen solo con 100vh a veces queda corto */
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 }
 
