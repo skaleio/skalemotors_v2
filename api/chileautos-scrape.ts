@@ -3,11 +3,49 @@ import * as cheerio from "cheerio";
 interface VercelRequest {
   method?: string;
   query?: Record<string, string | string[] | undefined>;
+  headers: Record<string, string | string[] | undefined>;
 }
 interface VercelResponse {
   setHeader(name: string, value: string): void;
   status(code: number): VercelResponse;
   json(body: unknown): void;
+}
+
+// H14: rate-limit en memoria por IP. No persiste entre cold starts (Vercel),
+// pero limita abuso dentro de una invocation lambda. Para rate-limit duradero
+// hace falta KV/Redis externo (out of scope de este fix).
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQ = 30;
+const FETCH_TIMEOUT_MS = 8_000;
+const ipHits = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(req: VercelRequest): string {
+  const fwd = req.headers["x-forwarded-for"];
+  if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0].trim();
+  if (Array.isArray(fwd) && fwd.length) return fwd[0].split(",")[0].trim();
+  const real = req.headers["x-real-ip"];
+  if (typeof real === "string" && real.length) return real;
+  return "unknown";
+}
+
+function checkRateLimit(ip: string): { ok: true } | { ok: false; retryAfter: number } {
+  const now = Date.now();
+  const entry = ipHits.get(ip);
+  if (!entry || entry.resetAt < now) {
+    ipHits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true };
+  }
+  if (entry.count >= RATE_LIMIT_MAX_REQ) {
+    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count += 1;
+  return { ok: true };
+}
+
+function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(t));
 }
 
 const BASE_URL = "https://www.chileautos.cl/vehiculos/";
@@ -99,22 +137,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Método no permitido" });
   }
 
-  const keyword = typeof req.query.q === "string" ? req.query.q : "";
-  const offset = Math.max(0, Number(req.query.offset) || 0);
+  // H14: rate-limit por IP.
+  const ip = getClientIp(req);
+  const rl = checkRateLimit(ip);
+  if (!rl.ok) {
+    res.setHeader("Retry-After", String(rl.retryAfter));
+    return res.status(429).json({ error: "Too many requests" });
+  }
 
-  if (!keyword.trim()) {
-    return res.status(400).json({ error: "Parámetro 'q' (búsqueda) es requerido" });
+  const keyword = typeof req.query?.q === "string" ? req.query.q : "";
+  const offset = Math.max(0, Math.min(1000, Number(req.query?.offset) || 0));
+
+  if (!keyword.trim() || keyword.length > 200) {
+    return res.status(400).json({ error: "Parámetro 'q' (búsqueda) es requerido (máx 200 chars)" });
   }
 
   try {
     const url = buildSearchUrl(keyword, offset);
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Language": ACCEPT_LANGUAGE,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+          "Accept-Language": ACCEPT_LANGUAGE,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
       },
-    });
+      FETCH_TIMEOUT_MS
+    );
 
     if (!response.ok) {
       return res.status(502).json({
@@ -134,7 +184,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       listings,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Error al scrapear ChileAutos";
-    return res.status(500).json({ error: message });
+    // H14: no leakear err.message al cliente.
+    console.error("[chileautos-scrape] fetch/parse error:", err);
+    return res.status(500).json({ error: "Error al scrapear ChileAutos" });
   }
 }

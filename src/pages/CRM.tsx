@@ -12,6 +12,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
@@ -29,7 +37,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { Car, CheckCircle2, ChevronDown, ChevronUp, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -102,6 +110,15 @@ const statusLabels: Record<string, string> = {
   negocio_cerrado: "NEGOCIO CONCRETADO",
 };
 
+const ACTIVE_PIPELINE_STATUS_ES: Record<string, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  interesado: "Interesado",
+  cotizando: "Cotizando",
+  negociando: "Negociando",
+  para_cierre: "Para cierre",
+};
+
 /**
  * Valor seguro para <Select> del pipeline CRM (4 estados).
  * Mapea estados legacy al bucket correspondiente.
@@ -135,6 +152,16 @@ const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: st
   negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
 };
 
+/** Estados del embudo donde el cliente sigue activo (excluye vendido y perdido). */
+const CRM_PIPELINE_ACTIVE_STATUSES = new Set([
+  "contactado",
+  "nuevo",
+  "interesado",
+  "negociando",
+  "cotizando",
+  "para_cierre",
+]);
+
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
   return tags.filter((tag) => typeof tag === "string") as string[];
@@ -149,6 +176,29 @@ const getConsignacionLabel = (tags: unknown): string | null => {
   if (!label || label === "sin_etiqueta") return null;
   return label;
 };
+
+/** Filas de datos del lead para mostrar en la tarjeta del pipeline (sin abrir el diálogo). */
+/** Texto unificado del vehículo de interés (columna + tag legacy). */
+function getLeadVehicleInterestText(lead: Pick<Lead, "vehicle_interest" | "tags">): string {
+  const raw = (lead.vehicle_interest?.trim() || getTagValue(lead.tags, VEHICULO_TAG_PREFIX)).trim();
+  if (!raw) return "";
+  return raw.replace(/\s+/g, " ");
+}
+
+function leadPipelinePreviewRows(lead: LeadWithAssignee): { label: string; value: string }[] {
+  const rows: { label: string; value: string }[] = [];
+  const add = (label: string, raw?: string | null) => {
+    const v = typeof raw === "string" ? raw.trim() : "";
+    if (v) rows.push({ label, value: v });
+  };
+  add("Correo", lead.email);
+  add("RUT", lead.rut);
+  add("Vehículo", lead.vehicle_interest || getTagValue(lead.tags, VEHICULO_TAG_PREFIX));
+  add("Región", lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX));
+  add("Financ./Contado", lead.payment_type);
+  add("Presupuesto", lead.budget);
+  return rows;
+}
 
 function buildTagsWithVehicle(tags: unknown, vehicle: string): string[] {
   const current = normalizeTags(tags).filter((tag) => !tag.startsWith(VEHICULO_TAG_PREFIX));
@@ -260,6 +310,7 @@ const LeadCard = memo(function LeadCard({
   /** Breve feedback visual tras soltar en otra columna (sin toast). */
   justLanded?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
@@ -291,7 +342,7 @@ const LeadCard = memo(function LeadCard({
     3: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
   };
 
-  const handleClick = () => {
+  const handleCardOpen = () => {
     if (Date.now() - lastDragEndRef.current < 400) return;
     onClick();
   };
@@ -314,12 +365,17 @@ const LeadCard = memo(function LeadCard({
       onDrop={(e) => {
         onExternalDrop?.(e);
       }}
-      onClick={handleClick}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleClick()}
+      onClick={(e) => {
+        const t = e.target as HTMLElement;
+        if (t.closest("[data-crm-card-expand-toggle]")) return;
+        if (t.closest("[data-crm-card-open-lead]")) return;
+        handleCardOpen();
+      }}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardOpen()}
       aria-grabbed={isDragging ? true : undefined}
       title={draggable ? "Arrastra a otra columna o haz clic para abrir" : undefined}
       className={cn(
-        "relative rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
+        "group relative rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
         assigneeBorder && "border-l-[3px]",
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
@@ -343,57 +399,138 @@ const LeadCard = memo(function LeadCard({
         </span>
       ) : null}
       <div className={cn("font-medium", socio && "pr-12")}>{lead.full_name || "Sin nombre"}</div>
-      <div className="text-muted-foreground">
-        {lead.phone || "Sin telefono"}
+      <div className="text-muted-foreground text-[13px]">
+        {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
       </div>
-      {!socio && (lead.assigned_user?.full_name || lead.assigned_user?.email) && (
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          {assigneeBorder ? (
-            <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border" style={{ backgroundColor: assigneeBorder }} />
-          ) : null}
-          <span className="truncate">
-            Seguimiento: {lead.assigned_user?.full_name || lead.assigned_user?.email}
-          </span>
-        </div>
-      )}
-      <div className="mt-1.5">
-        {showContactAttemptsSemaforo ? (
-          <ContactAttemptsBar
-            leadId={lead.id}
-            value={lead.contact_attempts ?? 0}
-            size="sm"
-            showLabel={false}
-          />
-        ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Contactos {attempts}/3
-          </span>
-        )}
-      </div>
-      {label && styles && (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
-            <span className={`h-2 w-2 rounded-full ${styles.dot}`} />
-            <span className={`${styles.text} font-medium`}>{label}</span>
-          </span>
-        </div>
-      )}
-      {hasAiState && (
-        <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-          <div className="font-medium text-foreground/90">
-            Estado IA: {lead.state}
-            {lead.state_confidence != null && !Number.isNaN(Number(lead.state_confidence)) && (
-              <span> ({Math.round(Number(lead.state_confidence) * 100)}%)</span>
-            )}
-          </div>
-          {lead.state_reason && (
-            <div className="mt-0.5 truncate" title={lead.state_reason}>{lead.state_reason}</div>
-          )}
-          {lead.state_updated_at && (
-            <div className="mt-0.5 text-[10px] opacity-80">{formatStateUpdatedAt(lead.state_updated_at)}</div>
+      <div className="mt-1.5 flex items-end justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          {showContactAttemptsSemaforo ? (
+            <ContactAttemptsBar
+              leadId={lead.id}
+              value={lead.contact_attempts ?? 0}
+              size="sm"
+              showLabel={false}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Contactos {attempts}/3
+            </span>
           )}
         </div>
-      )}
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-1 transition-opacity duration-200",
+            "pointer-events-none opacity-0",
+            "group-hover:pointer-events-auto group-hover:opacity-100",
+            "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+            "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
+          )}
+        >
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          data-crm-card-open-lead
+          onClick={(e) => {
+            e.stopPropagation();
+            if (Date.now() - lastDragEndRef.current < 400) return;
+            onClick();
+          }}
+          aria-label="Abrir ficha del lead"
+          title="Abrir ficha para ver o editar datos"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 shrink-0 gap-0.5 px-2 text-[11px] font-medium"
+          data-crm-card-expand-toggle
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          aria-expanded={expanded}
+        >
+          {expanded ? (
+            <>
+              Ocultar
+              <ChevronUp className="h-3.5 w-3.5 opacity-80" aria-hidden />
+            </>
+          ) : (
+            <>
+              Ver datos
+              <ChevronDown className="h-3.5 w-3.5 opacity-80" aria-hidden />
+            </>
+          )}
+        </Button>
+        </div>
+      </div>
+      {expanded ? (
+        <>
+          {(() => {
+            const previewRows = leadPipelinePreviewRows(lead);
+            const notesPreview = lead.notes?.trim() ?? "";
+            if (previewRows.length === 0 && !notesPreview) return null;
+            return (
+              <div className="mt-2 space-y-1 rounded-md border border-border/45 bg-muted/25 px-2 py-1.5 text-[11px] leading-snug">
+                {previewRows.map((row) => (
+                  <div key={row.label} className="grid grid-cols-[minmax(0,5.25rem)_1fr] gap-x-2 items-start">
+                    <span className="text-muted-foreground shrink-0">{row.label}</span>
+                    <span className="min-w-0 break-words text-foreground/90" title={row.value}>
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
+                {notesPreview ? (
+                  <div className="mt-1 border-t border-border/35 pt-1.5">
+                    <span className="text-muted-foreground">Nota</span>
+                    <p className="mt-0.5 text-foreground/90 line-clamp-3 whitespace-pre-wrap break-words" title={notesPreview}>
+                      {notesPreview}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
+          {!socio && (lead.assigned_user?.full_name || lead.assigned_user?.email) && (
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              {assigneeBorder ? (
+                <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border" style={{ backgroundColor: assigneeBorder }} />
+              ) : null}
+              <span className="truncate">
+                Seguimiento: {lead.assigned_user?.full_name || lead.assigned_user?.email}
+              </span>
+            </div>
+          )}
+          {label && styles && (
+            <div className="mt-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
+                <span className={`h-2 w-2 rounded-full ${styles.dot}`} />
+                <span className={`${styles.text} font-medium`}>{label}</span>
+              </span>
+            </div>
+          )}
+          {hasAiState && (
+            <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground/90">
+                Estado IA: {lead.state}
+                {lead.state_confidence != null && !Number.isNaN(Number(lead.state_confidence)) && (
+                  <span> ({Math.round(Number(lead.state_confidence) * 100)}%)</span>
+                )}
+              </div>
+              {lead.state_reason && (
+                <div className="mt-0.5 truncate" title={lead.state_reason}>{lead.state_reason}</div>
+              )}
+              {lead.state_updated_at && (
+                <div className="mt-0.5 text-[10px] opacity-80">{formatStateUpdatedAt(lead.state_updated_at)}</div>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   );
 });
@@ -733,6 +870,37 @@ export default function CRM() {
         }),
     }));
   }, [filteredLeads, stages, crmCalendarMonthKey]);
+
+  /** Demanda de stock: agrupa vehículo de interés en leads activos del embudo (respeta búsqueda y supervisión). */
+  const vehicleDemandSummary = useMemo(() => {
+    const base = filteredLeads.filter((lead) =>
+      CRM_PIPELINE_ACTIVE_STATUSES.has((lead.status || "").toLowerCase()),
+    );
+    const bucket = new Map<string, number>();
+    let sinVehiculo = 0;
+    for (const lead of base) {
+      const v = getLeadVehicleInterestText(lead);
+      if (!v) {
+        sinVehiculo += 1;
+        continue;
+      }
+      bucket.set(v, (bucket.get(v) ?? 0) + 1);
+    }
+    const entries = [...bucket.entries()]
+      .map(([vehicle, count]) => ({ vehicle, count }))
+      .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.vehicle.localeCompare(b.vehicle, "es")));
+    return { entries, sinVehiculo, pipelineCount: base.length };
+  }, [filteredLeads]);
+
+  const [demandVehicleInterestKey, setDemandVehicleInterestKey] = useState<string | null>(null);
+
+  const leadsForDemandInterest = useMemo(() => {
+    if (!demandVehicleInterestKey) return [] as LeadWithAssignee[];
+    return filteredLeads.filter((lead) => {
+      if (!CRM_PIPELINE_ACTIVE_STATUSES.has((lead.status || "").toLowerCase())) return false;
+      return getLeadVehicleInterestText(lead) === demandVehicleInterestKey;
+    });
+  }, [filteredLeads, demandVehicleInterestKey]);
 
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
@@ -1330,6 +1498,151 @@ export default function CRM() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Car className="h-4 w-4" aria-hidden />
+            </span>
+            Vehículos a buscar en stock
+          </CardTitle>
+          <CardDescription>
+            Consolidado desde el campo <span className="font-medium text-foreground/80">vehículo de interés</span> de
+            tus clientes en etapas activas del pipeline (contactado → para cierre). Coincide con la búsqueda y la vista que
+            tengas arriba; los vendidos y perdidos no entran aquí.{" "}
+            <span className="font-medium text-foreground/80">Clic</span> en una tarjeta para ver la lista de esos leads.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {vehicleDemandSummary.pipelineCount === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No hay leads activos en el embudo con los filtros actuales.
+            </p>
+          ) : vehicleDemandSummary.entries.length === 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Ningún lead activo tiene aún un vehículo de interés cargado. Completalo en la ficha del lead para armar esta
+                lista de búsqueda.
+              </p>
+              {vehicleDemandSummary.sinVehiculo > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Hay {vehicleDemandSummary.sinVehiculo}{" "}
+                  {vehicleDemandSummary.sinVehiculo === 1 ? "lead" : "leads"} sin dato de vehículo.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {vehicleDemandSummary.entries.map(({ vehicle, count }) => (
+                  <li
+                    key={vehicle}
+                    role="button"
+                    tabIndex={0}
+                    title="Ver leads que buscan esta opción"
+                    className="flex min-h-[3rem] cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    onClick={() => setDemandVehicleInterestKey(vehicle)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDemandVehicleInterestKey(vehicle);
+                      }
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">{vehicle}</span>
+                    <Badge variant="secondary" className="shrink-0 tabular-nums">
+                      ×{count}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              {vehicleDemandSummary.sinVehiculo > 0 ? (
+                <p className="text-xs text-muted-foreground border-t pt-3">
+                  Además, {vehicleDemandSummary.sinVehiculo}{" "}
+                  {vehicleDemandSummary.sinVehiculo === 1 ? "lead activo no tiene" : "leads activos no tienen"} vehículo
+                  indicado — conviene cargarlo para no perder búsquedas.
+                </p>
+              ) : null}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={demandVehicleInterestKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setDemandVehicleInterestKey(null);
+        }}
+      >
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Leads que buscan esto</DialogTitle>
+            <DialogDescription className="sr-only">
+              Lista de clientes activos en el pipeline con el mismo texto de vehículo de interés.
+            </DialogDescription>
+            {demandVehicleInterestKey ? (
+              <p className="break-words pt-1 text-sm font-medium text-foreground">{demandVehicleInterestKey}</p>
+            ) : null}
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+            {leadsForDemandInterest.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No hay leads en esta lista con los filtros actuales. Prueba cerrar otros filtros o actualizar la página.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Estado embudo</TableHead>
+                    <TableHead>Vendedor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leadsForDemandInterest.map((lead) => (
+                    <TableRow
+                      key={lead.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => {
+                        setDemandVehicleInterestKey(null);
+                        openEditDialog(lead);
+                      }}
+                    >
+                      <TableCell className="max-w-[160px] font-medium">
+                        <span className="line-clamp-2">{lead.full_name}</span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">{formatChilePhoneForDisplay(lead.phone)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-normal capitalize">
+                          {ACTIVE_PIPELINE_STATUS_ES[(lead.status || "").toLowerCase()] ||
+                            lead.status ||
+                            "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[130px] truncate text-sm text-muted-foreground">
+                        {lead.assigned_user?.full_name || "Sin asignar"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Clic en una fila para abrir la ficha del lead en el CRM.
+          </p>
+
+          <DialogFooter className="shrink-0 sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setDemandVehicleInterestKey(null)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 md:grid-cols-4">
         {leadsByStage.map((stage) => {

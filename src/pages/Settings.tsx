@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
+import { MfaEnrollSection } from '@/components/settings/MfaEnrollSection';
 import { CRM_COLOR_PRESETS } from '@/lib/crmAssigneeColor';
 
 const AVATAR_BUCKET = 'avatars';
@@ -1175,6 +1176,8 @@ export default function Settings() {
         </Card>
 
         <LeadIngestApiKeysSection showLinkToIntegrationsPage />
+
+        <MfaEnrollSection />
       </div>
     </div>
   );

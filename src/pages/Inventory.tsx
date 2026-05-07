@@ -1,4 +1,4 @@
-import { Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -57,6 +57,7 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { VehicleImage } from "@/components/VehicleImage";
 import { useQuery } from "@tanstack/react-query";
 import { formatCLP } from "@/lib/format";
+import { leadService } from "@/lib/services/leads";
 import { vehicleService } from "@/lib/services/vehicles";
 import {
   listListingsForBranch,
@@ -69,6 +70,29 @@ import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 
 type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
+type Lead = Database["public"]["Tables"]["leads"]["Row"];
+
+type LeadWithAssignee = Lead & {
+  assigned_user?: { id: string; full_name?: string | null; email?: string | null } | null;
+};
+
+const LEAD_STATUS_LABELS_ES: Record<string, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  interesado: "Interesado",
+  cotizando: "Cotizando",
+  negociando: "Negociando",
+  vendido: "Vendido",
+  perdido: "Perdido",
+  para_cierre: "Para cierre",
+};
+
+function truncateSnippet(text: string | null | undefined, max: number) {
+  if (text == null || text === "") return "—";
+  const t = String(text).trim();
+  if (!t) return "—";
+  return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
 
 const statusColors = {
   disponible: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
@@ -451,8 +475,40 @@ export default function Inventory() {
   const [listingsByVehicle, setListingsByVehicle] = useState<Record<string, VehicleListingRow[]>>({});
   const [marketplaceConnections, setMarketplaceConnections] = useState<{ platform: MarketplacePlatform }[]>([]);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
+  const [leadsMatchVehicle, setLeadsMatchVehicle] = useState<Vehicle | null>(null);
 
   const branchId = user?.branch_id ?? null;
+
+  const {
+    data: rawMatchingLeads = [],
+    isLoading: matchingLeadsLoading,
+    error: matchingLeadsError,
+  } = useQuery({
+    queryKey: ["inventory-vehicle-matching-leads", leadsMatchVehicle?.id, user?.branch_id],
+    queryFn: () =>
+      leadService.listMatchingVehicle({
+        vehicleId: leadsMatchVehicle!.id,
+        make: leadsMatchVehicle!.make || "",
+        model: leadsMatchVehicle!.model || "",
+        branchId: user?.branch_id ?? undefined,
+      }),
+    enabled: !!leadsMatchVehicle?.id && !!user,
+  });
+
+  const matchingLeadsSorted = useMemo(() => {
+    const vid = leadsMatchVehicle?.id;
+    if (!vid) return [] as LeadWithAssignee[];
+    const closed = new Set(["vendido", "perdido"]);
+    return [...(rawMatchingLeads as LeadWithAssignee[])].sort((a, b) => {
+      const ac = closed.has((a.status || "").toLowerCase()) ? 1 : 0;
+      const bc = closed.has((b.status || "").toLowerCase()) ? 1 : 0;
+      if (ac !== bc) return ac - bc;
+      const ap = a.preferred_vehicle_id === vid ? 0 : 1;
+      const bp = b.preferred_vehicle_id === vid ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+  }, [rawMatchingLeads, leadsMatchVehicle?.id]);
 
   const { data: salesStaff = [] } = useQuery({
     queryKey: ["inventory_branch_sales_staff", user?.tenant_id, user?.branch_id],
@@ -1473,12 +1529,25 @@ export default function Inventory() {
                           displayHeight={48}
                         />
                       </div>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium">
                           {vehicle.make} {vehicle.model}
                         </div>
                         <div className="text-sm text-muted-foreground">{vehicle.engine_size || ""}</div>
                       </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 h-8 w-8"
+                        title="Ver leads que buscan este modelo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLeadsMatchVehicle(vehicle);
+                        }}
+                      >
+                        <Users className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1695,6 +1764,16 @@ export default function Inventory() {
                               Publicar en Chile Autos
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setLeadsMatchVehicle(vehicle);
+                            }}
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            Leads que buscan este modelo
+                          </DropdownMenuItem>
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             Ajustar precio
                           </DropdownMenuItem>
@@ -1865,6 +1944,20 @@ export default function Inventory() {
             </DialogDescription>
           </DialogHeader>
 
+          {selectedVehicle && (
+            <div className="flex flex-wrap gap-2 -mt-2 mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setLeadsMatchVehicle(selectedVehicleFull || selectedVehicle)}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Leads que buscan este modelo
+              </Button>
+            </div>
+          )}
+
           {selectedVehicle && selectedVehicleComputed && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {selectedVehicleLoading && (
@@ -2026,6 +2119,126 @@ export default function Inventory() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!leadsMatchVehicle}
+        onOpenChange={(open) => {
+          if (!open) setLeadsMatchVehicle(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Leads interesados</DialogTitle>
+            <DialogDescription className="sr-only">
+              Lista de leads del CRM que pueden corresponder a este vehículo según preferencias o interés declarado.
+            </DialogDescription>
+            {leadsMatchVehicle && (
+              <p className="text-sm text-muted-foreground pt-1">
+                Coincidencias para{" "}
+                <span className="font-medium text-foreground">
+                  {leadsMatchVehicle.make} {leadsMatchVehicle.model} ({leadsMatchVehicle.year})
+                </span>
+                : vehículo preferido en CRM, marca declarada o texto de interés/preferencia/notas.
+              </p>
+            )}
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 flex flex-col gap-3">
+            {matchingLeadsLoading && (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Buscando leads…
+              </div>
+            )}
+
+            {!matchingLeadsLoading && matchingLeadsError && (
+              <p className="text-sm text-destructive">
+                {matchingLeadsError instanceof Error ? matchingLeadsError.message : "No se pudieron cargar los leads."}
+              </p>
+            )}
+
+            {!matchingLeadsLoading && !matchingLeadsError && matchingLeadsSorted.length === 0 && (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                No hay leads que coincidan con los criterios actuales{user?.branch_id ? " de tu sucursal" : ""}. En el CRM
+                puedes vincular este auto como preferido o completar marca e interés del cliente.
+              </p>
+            )}
+
+            {!matchingLeadsLoading && !matchingLeadsError && matchingLeadsSorted.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {matchingLeadsSorted.length} resultado{matchingLeadsSorted.length !== 1 ? "s" : ""} (activos y con
+                  vehículo preferido primero).
+                </p>
+                <div className="border rounded-md overflow-auto flex-1 min-h-[200px] max-h-[52vh]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Teléfono</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Interés / vehículo</TableHead>
+                        <TableHead>Asignado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {matchingLeadsSorted.map((lead) => (
+                        <TableRow key={lead.id}>
+                          <TableCell className="font-medium max-w-[140px] truncate" title={lead.full_name}>
+                            {lead.full_name}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">{lead.phone}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {LEAD_STATUS_LABELS_ES[(lead.status || "").toLowerCase()] ||
+                                lead.status ||
+                                "—"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] text-sm text-muted-foreground">
+                            <span className="line-clamp-2" title={lead.vehicle_interest || ""}>
+                              {lead.preferred_vehicle_id === leadsMatchVehicle?.id && (
+                                <Badge variant="secondary" className="mr-1 text-[10px] px-1">
+                                  Preferido
+                                </Badge>
+                              )}
+                              {truncateSnippet(
+                                lead.vehicle_interest ||
+                                  lead.preferencia ||
+                                  lead.marca_preferida ||
+                                  lead.notes,
+                                120
+                              )}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">
+                            {(lead as LeadWithAssignee).assigned_user?.full_name || "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t shrink-0">
+            <Button type="button" variant="outline" onClick={() => setLeadsMatchVehicle(null)}>
+              Cerrar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setLeadsMatchVehicle(null);
+                navigate("/app/crm");
+              }}
+            >
+              Abrir CRM
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

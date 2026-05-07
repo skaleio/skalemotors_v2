@@ -154,14 +154,16 @@ function DocumentPreview({ doc, onClose }: PreviewProps) {
   const handlePrint = () => {
     const content = printRef.current?.innerHTML;
     if (!content) return;
-    const win = window.open("", "_blank");
+    const win = window.open("", "_blank", "noopener,noreferrer");
     if (!win) return;
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     win.document.write(`
       <!DOCTYPE html>
       <html lang="es">
       <head>
         <meta charset="UTF-8" />
-        <title>${doc.document_number}</title>
+        <title>${escapeHtml(doc.document_number ?? "")}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: Arial, sans-serif; font-size: 12px; color: #000; padding: 40px; }

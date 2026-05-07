@@ -210,6 +210,12 @@ function buildNotes(body: Payload, rawMessage: string | null): string | null {
   return parts.length ? parts.join("\n\n") : null;
 }
 
+function isProductionEnv(): boolean {
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").toLowerCase();
+  if (vercelEnv) return vercelEnv === "production";
+  return (process.env.NODE_ENV ?? "").toLowerCase() === "production";
+}
+
 async function resolveIngestKey(
   supabase: SupabaseClient,
   providedKey: string,
@@ -219,7 +225,10 @@ async function resolveIngestKey(
   | { ok: true; resolution: KeyResolution }
   | { ok: false; status: number; error: string }
 > {
-  if (envKey && providedKey === envKey) {
+  // C5 fix: la env-key global N8N_LEAD_INGEST_API_KEY queda solo para dev/preview.
+  // En producción se exige una key de lead_ingest_keys (rotables, scopeadas a branch).
+  // Sin este gate, la env key permitía inyectar leads en cualquier branch.
+  if (envKey && providedKey === envKey && !isProductionEnv()) {
     const bid = bodyBranchId?.trim();
     if (!bid) {
       return {
@@ -241,7 +250,9 @@ async function resolveIngestKey(
     .maybeSingle();
 
   if (error) {
-    return { ok: false, status: 500, error: error.message };
+    // H13: no exponer mensajes crudos de Supabase al caller.
+    console.error("[n8n-lead-ingest] resolveIngestKey supabase error:", error);
+    return { ok: false, status: 500, error: "Internal error resolving API key" };
   }
   if (!row) {
     return { ok: false, status: 401, error: "Invalid API key" };
@@ -262,12 +273,23 @@ async function resolveIngestKey(
   };
 }
 
+function getAllowedOrigin(req: VercelRequest): string {
+  const raw = (process.env.LEAD_INGEST_ALLOWED_ORIGINS ?? "").trim();
+  if (!raw) return "*"; // backward-compatible
+  const allowed = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const origin = (req.headers["origin"] as string | undefined)?.trim() ?? "";
+  return origin && allowed.includes(origin) ? origin : allowed[0];
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // H10: CORS configurable via LEAD_INGEST_ALLOWED_ORIGINS (comma-separated).
+  // Si no está seteado, sigue siendo "*" para no romper integraciones existentes.
+  res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, x-api-key, Authorization"
+    "Content-Type, x-api-key, Authorization, Idempotency-Key"
   );
 
   if (req.method === "OPTIONS") {
@@ -342,7 +364,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (branchError) {
-    return res.status(400).json({ ok: false, error: branchError.message });
+    console.error("[n8n-lead-ingest] branch lookup error:", branchError);
+    return res.status(500).json({ ok: false, error: "Internal error resolving branch" });
   }
   if (!branch) {
     return res.status(400).json({ ok: false, error: "Invalid branch_id" });
@@ -402,7 +425,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle();
 
     if (findError) {
-      return res.status(400).json({ ok: false, error: findError.message });
+      console.error("[n8n-lead-ingest] lead find error:", findError);
+      return res.status(500).json({ ok: false, error: "Internal error finding lead" });
     }
 
     if (existing?.id) {
@@ -453,7 +477,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .maybeSingle();
 
       if (updError) {
-        return res.status(400).json({ ok: false, error: updError.message });
+        console.error("[n8n-lead-ingest] lead update error:", updError);
+        return res.status(500).json({ ok: false, error: "Internal error updating lead" });
       }
 
       if (auth.resolution.kind === "db") {
@@ -514,7 +539,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .single();
 
   if (insertError) {
-    return res.status(400).json({ ok: false, error: insertError.message });
+    console.error("[n8n-lead-ingest] lead insert error:", insertError);
+    return res.status(500).json({ ok: false, error: "Internal error inserting lead" });
   }
 
   if (auth.resolution.kind === "db") {

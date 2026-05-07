@@ -577,44 +577,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (authData.user) {
-        // El trigger debería crear el usuario automáticamente en public.users
-        // Esperar un momento para que el trigger se ejecute
+        // El trigger handle_new_user_signup (SECURITY DEFINER) crea el row en
+        // public.users a partir de pending_vendor_provisions. Esperamos a que
+        // termine, sin fallback manual: el insert directo desde cliente bypasseaba
+        // la cola pending_vendor_provisions y permitia signups con role hardcoded.
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Verificar si el usuario fue creado en public.users
-        const { data: userCheck, error: checkError } = await supabase
+        const { data: userCheck } = await supabase
           .from("users")
           .select("id")
           .eq("id", authData.user.id)
           .maybeSingle();
 
-        if (checkError && checkError.code !== 'PGRST116') {
-          // log silencioso en desarrollo
-          if (import.meta.env.DEV) console.warn("Error verificando usuario en public.users");
-        }
-
         if (!userCheck) {
-          // Intentar crear el usuario manualmente
-          const { error: profileError } = await supabase.from("users").insert({
-            id: authData.user.id,
-            email,
-            full_name: fullName,
-            phone: phone || null,
-            role: "vendedor",
-            is_active: true,
-            onboarding_completed: false,
-          });
-
-          if (profileError) {
-            setLoading(false);
-            return {
-              error: new Error("Tu cuenta fue creada pero hay un problema de configuración. Por favor, contacta al administrador.")
-            };
-          }
-
+          setLoading(false);
+          return {
+            error: new Error(
+              "No pudimos completar el alta de tu cuenta. Pedile al administrador que te invite desde el panel de equipo."
+            ),
+          };
         }
 
-        // Obtener la sesión y el perfil
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setSession(session);

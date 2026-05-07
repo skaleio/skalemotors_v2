@@ -66,11 +66,13 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 function showErrorInRoot(title: string, message: string, detail?: string) {
   const root = document.getElementById("root");
   if (!root) return;
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   root.innerHTML = `
     <div style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 560px; margin: 2rem auto; background: #1e293b; color: #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-      <h1 style="color: #f87171; margin-top: 0;">${title}</h1>
-      <p>${message}</p>
-      ${detail ? `<pre style="background: #0f172a; padding: 1rem; border-radius: 8px; overflow: auto; font-size: 0.8rem; white-space: pre-wrap;">${detail.replace(/</g, "&lt;")}</pre>` : ""}
+      <h1 style="color: #f87171; margin-top: 0;">${escape(title)}</h1>
+      <p>${escape(message)}</p>
+      ${detail ? `<pre style="background: #0f172a; padding: 1rem; border-radius: 8px; overflow: auto; font-size: 0.8rem; white-space: pre-wrap;">${escape(detail)}</pre>` : ""}
       <p>Abre la consola del navegador (F12) para más detalles.</p>
     </div>
   `;

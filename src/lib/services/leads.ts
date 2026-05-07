@@ -101,6 +101,69 @@ export const leadService = {
     return data as Lead[]
   },
 
+  /**
+   * Leads que pueden estar buscando este vehículo: `preferred_vehicle_id`, o texto en marca/interés/preferencias.
+   * No filtra por estado; la UI puede ordenar priorizando pipeline.
+   */
+  async listMatchingVehicle(params: {
+    vehicleId: string
+    make: string
+    model: string
+    branchId?: string
+    limit?: number
+  }) {
+    const { vehicleId, make, model, branchId, limit = 120 } = params
+    const token = (s: string) =>
+      s
+        .trim()
+        .replace(/[%*,()]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .slice(0, 100)
+    const m = token(make || '')
+    const mo = token(model || '')
+    const parts: string[] = [`preferred_vehicle_id.eq.${vehicleId}`]
+    if (m.length >= 2) {
+      parts.push(`marca_preferida.ilike.%${m}%`)
+      parts.push(`vehicle_interest.ilike.%${m}%`)
+      parts.push(`preferencia.ilike.%${m}%`)
+    }
+    if (mo.length >= 2) {
+      parts.push(`vehicle_interest.ilike.%${mo}%`)
+      parts.push(`preferencia.ilike.%${mo}%`)
+    }
+    if (m.length >= 2 && mo.length >= 2) {
+      const combo = token(`${m} ${mo}`)
+      if (combo.length >= 4) {
+        parts.push(`vehicle_interest.ilike.%${combo}%`)
+      }
+    }
+    if (mo.length >= 4) {
+      parts.push(`notes.ilike.%${mo}%`)
+    }
+
+    let query = supabase
+      .from('leads')
+      .select(
+        `
+        *,
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
+        branch:branches(id, name)
+      `
+      )
+      .is('deleted_at', null)
+      .or(parts.join(','))
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+
+    if (branchId) {
+      query = query.eq('branch_id', branchId)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as Lead[]
+  },
+
   // Leads en papelera (clientes "olvidados" / no respondieron)
   // No filtramos por branch_id para que el usuario pueda ver todos los leads
   // enviados a papelera, incluso si cambiaron su sucursal.

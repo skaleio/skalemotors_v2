@@ -93,12 +93,22 @@ async function handler(req: Request): Promise<Response> {
     resolvedInboxId = inbox?.id ?? null;
     resolvedProviderPhoneNumberId = inbox?.provider_phone_number_id ?? null;
   } else if (resolvedInboxId) {
+    // H3 fix: validar que el inbox pertenece al branch del usuario que llama.
+    // Sin este check, un usuario podía enviar mensajes vía un inbox de otro tenant
+    // pasando un inbox_id arbitrario en el body.
     const { data: inbox } = await admin
       .from("whatsapp_inboxes")
-      .select("id, provider_phone_number_id")
+      .select("id, provider_phone_number_id, branch_id")
       .eq("id", resolvedInboxId)
       .maybeSingle();
-    resolvedProviderPhoneNumberId = inbox?.provider_phone_number_id ?? null;
+
+    if (!inbox) {
+      return jsonResponse(404, { ok: false, error: "Inbox not found" });
+    }
+    if (branchId && inbox.branch_id !== branchId) {
+      return jsonResponse(403, { ok: false, error: "Inbox does not belong to your branch" });
+    }
+    resolvedProviderPhoneNumberId = inbox.provider_phone_number_id ?? null;
   }
 
   // ===========================
