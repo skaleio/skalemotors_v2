@@ -1,0 +1,7 @@
+# Shell scripts must use LF (Bash on Windows via Git Bash works either way,
+# but CI on Linux requires LF).
+*.sh text eol=lf
+
+# Same for shebang scripts that look like bash but lack extension.
+scripts/new-worktree text eol=lf
+scripts/cleanup-worktree text eol=lf

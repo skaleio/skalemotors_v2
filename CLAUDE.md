@@ -194,19 +194,83 @@ Si vas a tocar RLS, leé primero `docs/guides/SEGURIDAD.md` y `docs/guides/MIGRA
 
 ---
 
-## 10. Workflow de cambios
+## 10. Workflow de desarrollo
+
+> Toda feature, fix o refactor pasa por un **worktree dedicado** + un **PR (draft desde el inicio)**. No se trabaja sobre `main` directo.
+
+### 10.1 Worktrees
+
+- Cada tarea no trivial = un worktree propio en `../skalemotors_v2-<nombre-corto>` (afuera del repo principal, mismo nivel).
+- Bootstrap: `bash scripts/new-worktree.sh <nombre-corto> <branch-name>` — crea el worktree, copia `.env`, instala deps.
+- Cleanup: `bash scripts/cleanup-worktree.sh <nombre-corto>` cuando el PR ya está mergeado.
+- El worktree principal queda siempre en `main` y limpio.
+- Listar worktrees vivos: `git worktree list`.
+
+### 10.2 Naming de branches
+
+| Prefijo | Para qué |
+|---------|----------|
+| `feat/` | Feature nueva |
+| `fix/` | Bugfix |
+| `refactor/` | Reestructurar sin cambiar comportamiento |
+| `chore/` | Tooling, configs, deps, scripts |
+| `docs/` | Solo documentación |
+| `test/` | Solo tests |
+| `perf/` | Performance |
+| `security/` | Hardening, RLS, auth, secrets |
+| `style/` | Formato (prettier, eslint --fix) |
+
+Ejemplos: `feat/lead-vehicle-matching`, `fix/dashboard-alerts`, `security/rls-tests`.
+
+### 10.3 Pull Requests
+
+**Regla de oro**: abrir el PR en modo **draft** después del **primer commit**, no al final. El draft acumula contexto durante el desarrollo.
+
+```bash
+# Después del primer commit del branch:
+gh pr create --draft --title "<tipo>(<scope>): <resumen>"
+# (GitHub usa automáticamente .github/pull_request_template.md)
+
+# Cuando esté listo:
+gh pr ready
+
+# Merge (solo cuando el usuario lo pida explícito):
+gh pr merge --squash --delete-branch
+```
+
+**Plantilla obligatoria** (vive en `.github/pull_request_template.md`): Objetivo, Cambios, Decisiones, Asunciones, Pendientes/follow-ups, Cómo probar, Refs.
+
+**Tamaño de PR**: máximo **~300 líneas de diff**. Si pasa, partir en PRs encadenados (`feat/x-1`, `feat/x-2`, …) con dependencia explícita en la descripción. PRs gigantes no se revisan — se aprueban a ciegas.
+
+### 10.4 Lectura de contexto antes de codear
+
+Todo agente (humano o IA) que arranque sobre este repo lee **primero**:
+
+```bash
+gh pr list --state merged --limit 10     # qué se mergeó recientemente
+gh pr list --state open                  # qué hay en vuelo
+gh issue list --state open --limit 20    # issues abiertos
+git log --oneline -20                    # commits recientes en main
+git worktree list                        # worktrees vivos
+```
+
+Usar la salida como input al planificar la tarea.
+
+### 10.5 Reglas heredadas del régimen anterior
 
 1. **Leer antes de escribir**. Identificá el servicio + hook + componente involucrados.
 2. **Cambios chicos y atómicos**. Un fix por commit.
 3. **Migraciones SQL**: nuevo archivo en `supabase/migrations/` con timestamp `YYYYMMDDHHMMSS_descripcion.sql`. Nunca editar migraciones aplicadas.
 4. **Tipos de BD**: si tocás schema, regenerá `src/lib/types/database.ts` (vía MCP Supabase `generate_typescript_types` o CLI).
 5. **Tests**: si el módulo tiene tests, mantenerlos verdes. Nuevos features de seguridad/RBAC → test obligatorio.
-6. **Validar**: `npm run lint && npm run build && npm run test` antes de declarar "listo".
+6. **Validar antes de marcar `gh pr ready`**: `npm run lint && npm run build && npm run test`.
 7. **UI**: para cambios visuales, abrir `npm run dev` y probar el flow real en browser. Type-check ≠ feature-check.
 
-**Commits**: estilo libre del repo (ver `git log`). Idioma español, descriptivos. Co-author Claude solo si el usuario lo pide.
+**Commits**: conventional commits preferido (`feat(scope):`, `fix(scope):`). Idioma español. Co-author Claude solo si el usuario lo pide explícito.
 
-**No pushear ni crear PRs** sin pedido explícito.
+**Merge a `main`** solo cuando el usuario lo pida explícito. Nunca `--no-verify` ni force-push.
+
+Para detalles humanos del workflow ver también `CONTRIBUTING.md`. Para operación (deploy/rollback) ver `docs/runbook.md`.
 
 ---
 

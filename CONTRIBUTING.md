@@ -361,4 +361,104 @@ Si tienes preguntas:
 
 ---
 
+## 🌳 Git Worktrees (workflow paralelo)
+
+A partir de mayo 2026, **todo trabajo no trivial** vive en un **git worktree** dedicado, no en checkouts cambiantes del repo principal. Esto permite:
+
+- Trabajar en 2-3 features simultáneamente sin pisarse (1 worktree por feature).
+- Lanzar agentes de IA en paralelo, cada uno en su working tree.
+- Atender hot-fixes sin perder trabajo en curso.
+
+### Crear un worktree
+
+```bash
+bash scripts/new-worktree.sh <nombre-corto> <branch-name>
+
+# Ejemplo:
+bash scripts/new-worktree.sh billing feat/billing-ui
+# → Crea ../skalemotors_v2-billing, copia .env, instala deps.
+```
+
+### Comandos esenciales
+
+```bash
+git worktree list                                       # ver todos
+git worktree remove ../skalemotors_v2-<short>           # borrar (limpio)
+git worktree prune                                      # limpiar refs huérfanas
+```
+
+### Cuándo NO usar worktrees
+
+- Cambios triviales (typo, bump de versión): un branch normal alcanza.
+- Cuando vas a tener 1 sola tarea simultánea siempre.
+
+### Cleanup post-merge
+
+Cuando el PR de la tarea está mergeado:
+
+```bash
+bash scripts/cleanup-worktree.sh <nombre-corto>
+```
+
+El script verifica que el branch esté mergeado, working tree limpio, y pide confirmación antes de borrar.
+
+---
+
+## 📥 Draft PRs desde el primer commit
+
+**Regla**: abrí el PR en modo **draft** después del **primer commit** del branch, no al final. Así el cuerpo del PR es la "memoria viva" del trabajo: cada decisión, asunción y follow-up queda trackeado mientras avanzás, no reconstruido desde el diff al cierre.
+
+### Ciclo completo
+
+```bash
+# Estás en el worktree, hiciste tu primer commit:
+gh pr create --draft --title "feat(scope): <resumen>"
+# GitHub usa .github/pull_request_template.md automáticamente.
+
+# Mientras avanzás, editá el cuerpo del PR cada vez que tomes una decisión grande:
+gh pr edit --body "<contenido nuevo>"
+# o desde la web UI.
+
+# Cuando todo está listo y validado localmente:
+npm run lint && npm run build && npm run test
+gh pr ready
+
+# Esperás CI verde:
+gh pr checks
+
+# Merge (solo si vos decidís):
+gh pr merge --squash --delete-branch
+```
+
+### Tamaño máximo de PR
+
+**~300 líneas de diff**. Si te excedés, partí en PRs encadenados (`feat/x-1`, `feat/x-2`, ...) con dependencia explícita en la descripción de cada uno.
+
+PRs gigantes no se revisan — se aprueban a ciegas. Esa es deuda silenciosa.
+
+---
+
+## 🔍 Lectura de contexto antes de codear
+
+Todo agente (humano o IA) que arranca a trabajar en el repo lee **primero**:
+
+```bash
+gh pr list --state merged --limit 10     # ¿Qué se hizo recientemente?
+gh pr list --state open                  # ¿Qué hay en vuelo? (evitar pisar)
+gh issue list --state open --limit 20    # ¿Qué reportaron / qué falta?
+git log --oneline -20                    # Últimos commits en main
+git worktree list                        # ¿Qué worktrees están vivos?
+```
+
+Si vas a trabajar sobre un módulo específico, sumar:
+
+```bash
+gh pr list --state merged --search "in:title <modulo>" --limit 5
+git log --oneline --all -- src/pages/<Modulo>.tsx | head -20
+```
+
+La salida de estos comandos es el contexto base para planificar la tarea. Sin esto, repetís trabajo o pisás cosas en vuelo.
+
+---
+
 ¡Gracias por contribuir a Skale Motors! 🚀
