@@ -254,23 +254,40 @@ Asegúrate de configurar todas las variables en tu plataforma de hosting:
 
 ## 🤝 Contribuir
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add: nueva funcionalidad increíble'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+El workflow oficial usa **git worktrees + draft PRs** desde el primer commit. Lectura obligatoria antes de codear:
+
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — convenciones de branches, commits, code style + flujo completo de worktrees y draft PRs.
+- [`CLAUDE.md`](./CLAUDE.md) §10 — versión optimizada para agentes de IA.
+
+### Ciclo resumido
+
+```bash
+# 1. Crear worktree dedicado para la tarea
+bash scripts/new-worktree.sh <short> <feat|fix|docs|...>/<descripcion>
+cd ../skalemotors_v2-<short>
+
+# 2. Codear y commitear (conventional commits)
+git commit -m "feat(scope): resumen"
+
+# 3. Abrir draft PR desde el primer commit
+gh pr create --draft --title "feat(scope): resumen"
+
+# 4. Validar localmente y marcar listo
+npm run lint && npm run build && npm run test
+gh pr ready
+
+# 5. Merge cuando CI verde + revisado
+gh pr merge --squash --delete-branch
+
+# 6. Limpiar worktree
+bash scripts/cleanup-worktree.sh <short>
+```
 
 ### Convención de Commits
 
-Usamos [Conventional Commits](https://www.conventionalcommits.org/):
+[Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `style:`, `perf:`, `test:`, `chore:`, `security:`.
 
-- `feat:` Nueva funcionalidad
-- `fix:` Corrección de bugs
-- `docs:` Cambios en documentación
-- `style:` Formato, punto y coma, etc
-- `refactor:` Refactorización de código
-- `test:` Añadir tests
-- `chore:` Mantenimiento
+Detalles y ejemplos: [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## 📄 Licencia
 
