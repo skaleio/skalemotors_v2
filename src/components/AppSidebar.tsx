@@ -41,6 +41,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { SidebarSalesRanking } from "@/components/SidebarSalesRanking";
+import { SidebarConsignacionesRanking } from "@/components/SidebarConsignacionesRanking";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -573,6 +574,7 @@ export function AppSidebar() {
           </Collapsible>
           ) : null}
           {isVendorOnly && <SidebarSalesRanking collapsed={isCollapsed} />}
+          {isVendorOnly && <SidebarConsignacionesRanking collapsed={isCollapsed} />}
         </SidebarContent>
 
         {/* Footer con información del usuario */}
