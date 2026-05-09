@@ -290,3 +290,27 @@ Hay memorias persistentes en `.claude/memory/MEMORY.md` (overview, tech_stack, p
 ---
 
 **Cuando dudes, preguntá antes de actuar.** El costo de confirmar es bajo; el costo de un cambio masivo no pedido es alto.
+
+
+---
+
+## 13. Sub-agente `security-auditor`
+
+Auditor de seguridad **read-only** versionado en `.claude/agents/security-auditor.md`. Tres slash commands lo invocan:
+
+| Comando | Cuándo usarlo |
+|---------|---------------|
+| `/audit-fixes` | Validar el estado de los 41 hallazgos del informe pre-MVP. Ideal antes del refactor. |
+| `/audit-full [--scope=X] [--save]` | Auditoría profunda en 8 dominios (RLS, Edge Functions, auth, secrets, frontend, headers, deps, Vercel). `--save` persiste a `docs/security/audit-<fecha>.md`. |
+| `/audit-diff [PR# \| branch]` | Revisión rápida del diff actual o de un PR. Usar antes de `gh pr ready` y antes de mergear a `main`. |
+
+**Reglas duras del agente:**
+
+- Nunca modifica código.
+- Nunca corre SQL que mute (solo `SELECT` / `EXPLAIN`).
+- Nunca expone secrets en plano (los enmascara como `OPENAI_API_KEY=***`).
+- Toda finding cita `archivo:línea`.
+
+Spec: `docs/superpowers/specs/2026-05-09-security-auditor-agent-design.md`. Plan de implementación: `docs/superpowers/plans/2026-05-09-security-auditor-agent.md`.
+
+Trigger sugerido (Claude lo recuerda al usuario, no lo dispara solo) cuando se editan archivos sensibles: `supabase/migrations/`, `supabase/functions/`, `src/contexts/AuthContext.tsx`, `src/lib/services/`, `api/*.ts`, `package.json`.
