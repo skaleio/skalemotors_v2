@@ -131,6 +131,7 @@ export default function Dashboard() {
     branchId: user?.branch_id,
     tenantId: user?.tenant_id,
     role: user?.role,
+    userId: user?.id,
   });
   const completeTaskMutation = useCompletePendingTask();
 
