@@ -66,6 +66,11 @@ type ConsignacionWithRelations = Consignacion & {
   } | null;
 };
 
+/** Umbral en días para mostrar badge "Sin publicar" — debe coincidir con el default de
+ *  la RPC `sync_stale_consignaciones_to_pending_tasks` para que la lista refleje 1:1
+ *  las alertas del Dashboard. */
+const STALE_DIAS_SIN_PUBLICAR = 7;
+
 const ConsignacionVehicleThumb = memo(function ConsignacionVehicleThumb({
   url,
 }: {
@@ -540,6 +545,7 @@ export default function Consignaciones() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [consignacionAdvancedOpen, setConsignacionAdvancedOpen] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -620,6 +626,51 @@ export default function Consignaciones() {
     window.addEventListener("openNewConsignacionForm", handleOpenNewConsignacionForm);
     return () => window.removeEventListener("openNewConsignacionForm", handleOpenNewConsignacionForm);
   }, []);
+
+  // Sync con alertas del Dashboard: ?consignacion=<id> (o ?vehicle=<id>) →
+  // refetch para descartar cache stale, scroll a la fila y resaltarla.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const targetId = params.get("consignacion") ?? params.get("vehicle");
+    if (!targetId) return;
+
+    setHighlightedId(targetId);
+    refetch();
+
+    let attempts = 20;
+    const tryScroll = () => {
+      const el = document.querySelector<HTMLElement>(`[data-consignacion-id="${targetId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (attempts-- > 0) setTimeout(tryScroll, 200);
+    };
+    const scrollTimer = setTimeout(tryScroll, 150);
+    const offTimer = setTimeout(() => setHighlightedId(null), 4000);
+
+    navigate(location.pathname, { replace: true });
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(offTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  // Set de IDs alertados ("Sin publicar Xd"): mismas reglas que la RPC del Dashboard.
+  const staleByConsignacionId = useMemo(() => {
+    const m = new Map<string, number>();
+    const now = Date.now();
+    for (const c of consignaciones as ConsignacionWithRelations[]) {
+      if (c.publicado) continue;
+      if (c.status === "vendido" || c.status === "devuelto") continue;
+      if (!c.created_at) continue;
+      const days = Math.floor((now - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      if (days >= STALE_DIAS_SIN_PUBLICAR) m.set(c.id, days);
+    }
+    return m;
+  }, [consignaciones]);
 
   const filteredConsignaciones = useMemo(() => {
     let filtered = (consignaciones as ConsignacionWithRelations[]).map((item) => item);
@@ -1271,8 +1322,15 @@ export default function Consignaciones() {
                 const model = getConsignacionModel(item);
                 const year = getConsignacionYear(item);
 
+                const staleDays = staleByConsignacionId.get(item.id);
+                const isHighlighted = highlightedId === item.id;
                 return (
-                  <Card key={item.id} className="border-l-4" style={{ borderLeftColor: getLabelBorderColor(item.label) }}>
+                  <Card
+                    key={item.id}
+                    data-consignacion-id={item.id}
+                    className={`border-l-4 transition-all ${isHighlighted ? "ring-2 ring-amber-400 shadow-lg" : ""}`}
+                    style={{ borderLeftColor: getLabelBorderColor(item.label) }}
+                  >
                     <CardContent className="pt-4">
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-2">
@@ -1282,6 +1340,12 @@ export default function Consignaciones() {
                             <h3 className="font-semibold text-base truncate">
                               {item.patente?.trim() || model || item.vehicle_make || "Consignación"}
                             </h3>
+                            {staleDays != null && (
+                              <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                <AlertTriangle className="h-3 w-3" />
+                                Sin publicar {staleDays}d
+                              </span>
+                            )}
                             <div className="flex flex-wrap gap-2 mt-2">
                               <Select
                                 value={item.label || "sin_etiqueta"}
@@ -1506,8 +1570,14 @@ export default function Consignaciones() {
               <TableBody>
                 {filteredConsignaciones.map((item) => {
                   const vehicleVin = item.vehicle?.vin || item.vehicle_vin;
+                  const staleDays = staleByConsignacionId.get(item.id);
+                  const isHighlighted = highlightedId === item.id;
                   return (
-                    <TableRow key={item.id}>
+                    <TableRow
+                      key={item.id}
+                      data-consignacion-id={item.id}
+                      className={`transition-colors ${isHighlighted ? "bg-amber-50 ring-2 ring-amber-400" : ""}`}
+                    >
                       <TableCell className="p-2 align-middle w-[4.5rem]">
                         <div className="flex justify-center">
                           <ConsignacionVehicleThumb url={item.vehicle?.primary_image_url} />
@@ -1519,6 +1589,12 @@ export default function Consignaciones() {
                           onSave={(next) => patchConsignacionRow(item, { vehicle_model: next })}
                           className="h-8 text-xs"
                         />
+                        {staleDays != null && (
+                          <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            Sin publicar {staleDays}d
+                          </span>
+                        )}
                         {vehicleVin ? (
                           <div className="text-[10px] text-muted-foreground mt-0.5">VIN {vehicleVin}</div>
                         ) : null}

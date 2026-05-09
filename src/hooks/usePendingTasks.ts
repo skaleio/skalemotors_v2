@@ -9,10 +9,11 @@ type UsePendingTasksOptions = {
   branchId?: string | null
   tenantId?: string | null
   role?: string | null
+  userId?: string | null
 }
 
 // Backward compat: acepta un string (branchId) como en la versión anterior,
-// o un objeto con contexto completo del usuario (branchId + tenantId + role).
+// o un objeto con contexto completo del usuario (branchId + tenantId + role + userId).
 type UsePendingTasksInput = string | null | undefined | UsePendingTasksOptions
 
 export function usePendingTasks(input: UsePendingTasksInput) {
@@ -23,14 +24,15 @@ export function usePendingTasks(input: UsePendingTasksInput) {
       ? { branchId: input ?? null }
       : input
 
-  const { branchId, tenantId, role } = opts
-  const isAdminWide = role === 'admin' || role === 'jefe_jefe'
+  const { branchId, tenantId, role, userId } = opts
+  const isJefeJefe = role === 'jefe_jefe'
+  const isAdminWide = role === 'admin' || isJefeJefe
 
   // enabled: admin/jefe_jefe necesita tenantId; el resto necesita branchId
   const enabled = isAdminWide ? !!tenantId : !!branchId
 
   const query = useQuery({
-    queryKey: ['pending-tasks', { branchId, tenantId, role, scope: isAdminWide ? 'tenant' : 'branch' }],
+    queryKey: ['pending-tasks', { branchId, tenantId, role, userId, scope: isAdminWide ? 'tenant' : 'branch' }],
     queryFn: async (): Promise<PendingTask[]> => {
       if (!enabled) return []
 
@@ -71,6 +73,13 @@ export function usePendingTasks(input: UsePendingTasksInput) {
         q = q.eq('branch_id', branchId)
       } else {
         return []
+      }
+
+      // Scope per-user: jefe_jefe ve todo; el resto ve no-asignadas (broadcast al
+      // branch) o asignadas a sí mismo. Las consignaciones tienen assigned_to=created_by
+      // tras la migración 20260820120000_consignaciones_user_scoped.
+      if (!isJefeJefe && userId) {
+        q = q.or(`assigned_to.is.null,assigned_to.eq.${userId}`)
       }
 
       const { data, error } = await q
