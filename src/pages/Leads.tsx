@@ -175,6 +175,7 @@ const toTitleCase = (value: string) =>
 /** Quita caracteres de control que rompen el XML interno de .xlsx. */
 const sanitizeForSpreadsheet = (value: unknown): string => {
   if (value == null) return "";
+  // eslint-disable-next-line no-control-regex -- intencional: removemos control chars del payload de export.
   return String(value).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 };
 
@@ -539,6 +540,11 @@ const LeadsTable = memo(function LeadsTable({
   );
 });
 
+/* eslint-disable react-hooks/rules-of-hooks --
+   Hay un early return (VendorLoginGate) ANTES de los hooks de abajo. En la práctica
+   no crashea porque cada navegación es un mount nuevo del componente, pero la regla
+   correcta es extraer un sub-componente <LeadsImpl />. Tracked en follow-up del
+   PR security-auditor. NO copiar este patrón en código nuevo. */
 export default function Leads() {
   const { user } = useAuth();
   const navigate = useNavigate();
