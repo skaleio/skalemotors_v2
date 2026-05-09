@@ -659,27 +659,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!user) {
       throw new Error("No hay usuario autenticado");
     }
-    try {
-      const { data, error } = await supabase
-        .from("users")
-        .update({ onboarding_completed: true })
-        .eq("id", user.id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from("users")
+      .update({ onboarding_completed: true })
+      .eq("id", user.id)
+      .select()
+      .single();
 
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        const updatedUser = { ...user, onboarding_completed: true };
-        setUser(updatedUser);
-        setNeedsOnboarding(false);
-      } else {
-        throw new Error("No se recibió respuesta del servidor");
-      }
-    } catch (error) {
+    if (error) {
       throw error;
+    }
+
+    if (data) {
+      const updatedUser = { ...user, onboarding_completed: true };
+      setUser(updatedUser);
+      setNeedsOnboarding(false);
+    } else {
+      throw new Error("No se recibió respuesta del servidor");
     }
   };
 

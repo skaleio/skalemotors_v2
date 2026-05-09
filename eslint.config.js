@@ -13,6 +13,8 @@ export default tseslint.config(
       "services/**",
       "supabase/**",
       "api/**",
+      // Archivo generado de Supabase, regenerable con `supabase gen types typescript`.
+      "src/lib/types/database.ts",
     ],
   },
   {
