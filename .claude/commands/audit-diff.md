@@ -14,13 +14,13 @@ Vas a invocar al sub-agente `security-auditor` para revisar un diff.
 
 **Pasos:**
 
-1. Determiná el comando exacto según el argumento y obtené el diff con `Bash`.
-2. Lanzá el sub-agente `security-auditor` con `Agent` tool, `subagent_type=security-auditor`, pasándole este prompt:
+1. Determiná el comando exacto según el argumento y obtené el diff con `Bash`. Guardá el output como `<DIFF>` y la descripción de la fuente como `<FUENTE>` (ej: `"branch local main...HEAD"`, `"PR #42"`, `"branch feat/foo"`). Si `<DIFF>` excede ~30 KB, sustituilo por `git diff --stat` + los hunks de archivos sensibles solamente.
+2. Lanzá el sub-agente `security-auditor` con `Agent` tool, `subagent_type=security-auditor`. **Sustituí literalmente** los placeholders `<DIFF>` y `<FUENTE>` antes de mandar el prompt:
 
 ```
 MODE: audit-diff
-INPUT: <pegá acá el diff completo, o si es muy largo, un resumen de los archivos cambiados con `git diff --stat`>
-FUENTE: <"branch local main...HEAD" | "PR #42" | "branch feat/foo">
+INPUT: <DIFF>
+FUENTE: <FUENTE>
 
 Tarea: revisá el diff buscando regresiones de seguridad. Filtrá archivos sensibles primero:
 - `supabase/migrations/*.sql`

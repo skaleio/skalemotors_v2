@@ -13,11 +13,11 @@ Vas a invocar al sub-agente `security-auditor` para correr una auditoría profun
 
 **Pasos:**
 
-1. Lanzá el sub-agente `security-auditor` con `Agent` tool, `subagent_type=security-auditor`, con este prompt:
+1. Resolvé `<SCOPE>` parseando `$ARGUMENTS`: si trae `--scope=X` y `X` está en la lista válida, usá ese valor; si no aparece o es inválido, usá `all` (y avisá al usuario que el valor era inválido). Lanzá el sub-agente `security-auditor` con `Agent` tool, `subagent_type=security-auditor`. **Sustituí literalmente** el placeholder `<SCOPE>` antes de mandar el prompt:
 
 ```
 MODE: audit-full
-SCOPE: <rls|edge-functions|auth|secrets|frontend|headers|deps|vercel|all>
+SCOPE: <SCOPE>
 
 Tarea: ejecutá una auditoría profunda. Para cada dominio en scope (si scope=all, los 8):
 
