@@ -46,6 +46,7 @@ import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { VehicleImage } from "@/components/VehicleImage";
 import { AdminConsignacionesPanel } from "@/components/AdminConsignacionesPanel";
+import { ReasignarConsignacionMenu } from "@/components/ReasignarConsignacionMenu";
 import type { ConsignacionesAdminRankingRow } from "@/hooks/useConsignacionesAdminRanking";
 import { ArrowLeft } from "lucide-react";
 
@@ -1430,15 +1431,26 @@ export default function Consignaciones() {
                             </div>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                            title="Eliminar consignacion"
-                            className="h-8 w-8 flex-shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {isAdminScope && (
+                              <ReasignarConsignacionMenu
+                                consignacionId={item.id}
+                                currentCreatorId={item.created_by}
+                                ownerUserId={user?.id}
+                                onReassigned={() => refetch()}
+                                compact
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(item)}
+                              title="Eliminar consignacion"
+                              className="h-8 w-8"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
                         </div>
 
                         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
@@ -1789,15 +1801,28 @@ export default function Consignaciones() {
                       )}
                       {!isVendedor && (
                         <TableCell className="p-2 align-top text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                            title="Eliminar consignacion"
-                            className="h-8 w-8"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {isAdminScope && (
+                              <ReasignarConsignacionMenu
+                                consignacionId={item.id}
+                                currentCreatorId={item.created_by}
+                                ownerUserId={user?.id}
+                                onReassigned={() => {
+                                  refetch();
+                                }}
+                                compact
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(item)}
+                              title="Eliminar consignacion"
+                              className="h-8 w-8"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
