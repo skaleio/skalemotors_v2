@@ -45,6 +45,9 @@ import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { VehicleImage } from "@/components/VehicleImage";
+import { AdminConsignacionesPanel } from "@/components/AdminConsignacionesPanel";
+import type { ConsignacionesAdminRankingRow } from "@/hooks/useConsignacionesAdminRanking";
+import { ArrowLeft } from "lucide-react";
 
 type Consignacion = Database["public"]["Tables"]["consignaciones"]["Row"];
 type ConsignacionWithRelations = Consignacion & {
@@ -546,6 +549,8 @@ export default function Consignaciones() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [consignacionAdvancedOpen, setConsignacionAdvancedOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [selectedRanker, setSelectedRanker] = useState<ConsignacionesAdminRankingRow | null>(null);
+  const isAdminScope = user?.role === "admin" || user?.role === "jefe_jefe";
 
   // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -675,6 +680,10 @@ export default function Consignaciones() {
   const filteredConsignaciones = useMemo(() => {
     let filtered = (consignaciones as ConsignacionWithRelations[]).map((item) => item);
 
+    if (selectedRanker) {
+      filtered = filtered.filter((item) => item.created_by === selectedRanker.user_id);
+    }
+
     if (statusFilter !== "all") {
       const normalizedFilter = normalizeStatusValue(statusFilter);
       filtered = filtered.filter(
@@ -690,7 +699,7 @@ export default function Consignaciones() {
     }
 
     return filtered;
-  }, [consignaciones, labelFilter, statusFilter]);
+  }, [consignaciones, labelFilter, statusFilter, selectedRanker]);
 
   const stats = useMemo(() => {
     const total = filteredConsignaciones.length;
@@ -1087,6 +1096,31 @@ export default function Consignaciones() {
           </Button>
         )}
       </div>
+
+      {isAdminScope && !selectedRanker && (
+        <AdminConsignacionesPanel onSelectUser={setSelectedRanker} />
+      )}
+
+      {(!isAdminScope || selectedRanker) && (
+      <>
+      {selectedRanker && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 h-8"
+            onClick={() => setSelectedRanker(null)}
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" /> Volver al ranking
+          </Button>
+          <span className="text-muted-foreground">
+            Mostrando consignaciones de{" "}
+            <strong className="text-foreground">
+              {selectedRanker.full_name?.trim() || selectedRanker.email || "—"}
+            </strong>
+          </span>
+        </div>
+      )}
 
       {!isVendedor && (
         <div className="grid gap-3 md:gap-4 grid-cols-2 md:grid-cols-4">
@@ -2101,6 +2135,8 @@ export default function Consignaciones() {
           </form>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }
