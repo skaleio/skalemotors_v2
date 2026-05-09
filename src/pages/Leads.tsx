@@ -33,7 +33,7 @@ import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
-import { supabase } from "@/lib/supabase";
+import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
@@ -540,14 +540,8 @@ const LeadsTable = memo(function LeadsTable({
   );
 });
 
-/* eslint-disable react-hooks/rules-of-hooks --
-   Hay un early return (VendorLoginGate) ANTES de los hooks de abajo. En la práctica
-   no crashea porque cada navegación es un mount nuevo del componente, pero la regla
-   correcta es extraer un sub-componente <LeadsImpl />. Tracked en follow-up del
-   PR security-auditor. NO copiar este patrón en código nuevo. */
 export default function Leads() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const vendorMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -563,6 +557,15 @@ export default function Leads() {
       />
     );
   }
+  if (!user) {
+    return null;
+  }
+  return <LeadsImpl user={user} />;
+}
+
+function LeadsImpl({ user }: { user: User }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { leads, loading, isFetching, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
