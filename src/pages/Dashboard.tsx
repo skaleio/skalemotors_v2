@@ -127,7 +127,7 @@ export default function Dashboard() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
-  const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading } = usePendingTasks({
+  const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading, queryClient } = usePendingTasks({
     branchId: user?.branch_id,
     tenantId: user?.tenant_id,
     role: user?.role,
@@ -198,18 +198,31 @@ export default function Dashboard() {
   });
 
   const [quoteData, setQuoteData] = useState({
-    clientName: 'Ana Martínez',
+    leadId: null as string | null,
+    clientName: '',
     clientEmail: '',
-    vehicle: 'Mazda CX-5 2023',
+    vehicle: '',
     price: '',
     notes: ''
   });
 
   const [contactData, setContactData] = useState({
+    leadId: null as string | null,
     leadName: '',
     contactMethod: 'phone',
     notes: ''
   });
+
+  const [rescheduleData, setRescheduleData] = useState({ date: '', time: '', reason: '' });
+  const [confirmTestDriveData, setConfirmTestDriveData] = useState({ notes: '' });
+  const [selectedAppointmentSnapshot, setSelectedAppointmentSnapshot] = useState<{
+    id: string;
+    clientName: string;
+    vehicleStr: string;
+    typeLabel: string;
+    scheduledAt: string;
+    status: string;
+  } | null>(null);
 
   const handleDeleteOtherIncome = async (id: string) => {
     if (!id) return;
@@ -228,11 +241,29 @@ export default function Dashboard() {
   const handleTaskAction = (task: PendingTask) => {
     if (task.entity_type === 'lead' && task.entity_id) {
       if (task.action_type === 'contactar') {
-        setContactData({ ...contactData, leadName: task.title.replace(/^Contactar a\s+/i, '').trim() || task.title });
+        setContactData({
+          ...contactData,
+          leadId: task.entity_id,
+          leadName: task.title.replace(/^Contactar a\s+/i, '').trim() || task.title,
+        });
         setShowContactLeadDialog(true);
       } else if (task.action_type === 'llamar') {
-        setContactData({ ...contactData, leadName: task.title.replace(/^Llamar a\s+|^Seguimiento[^:]*:\s*/i, '').trim() || task.title });
+        setContactData({
+          ...contactData,
+          leadId: task.entity_id,
+          leadName: task.title.replace(/^Llamar a\s+|^Seguimiento[^:]*:\s*/i, '').trim() || task.title,
+        });
         setShowCallLeadDialog(true);
+      } else if (task.action_type === 'enviar_cotizacion') {
+        setQuoteData({
+          ...quoteData,
+          leadId: task.entity_id,
+          clientName: task.title.replace(/^Enviar cotización a\s+/i, '').trim() || task.title,
+          vehicle: (task.metadata as { vehicle_name?: string })?.vehicle_name ?? '',
+          price: '',
+          notes: task.description ?? '',
+        });
+        setShowQuoteDialog(true);
       } else {
         navigate(`/leads?id=${task.entity_id}`);
       }
@@ -242,15 +273,6 @@ export default function Dashboard() {
       navigate(`/app/consignaciones?vehicle=${task.entity_id}`);
     } else if (task.entity_type === 'consignacion' && task.entity_id) {
       navigate(`/app/consignaciones?consignacion=${task.entity_id}`);
-    } else if (task.action_type === 'enviar_cotizacion') {
-      setQuoteData({
-        ...quoteData,
-        clientName: task.title.replace(/^Enviar cotización a\s+/i, '').trim() || task.title,
-        vehicle: (task.metadata as { vehicle_name?: string })?.vehicle_name ?? '',
-        price: '',
-        notes: task.description ?? '',
-      });
-      setShowQuoteDialog(true);
     } else {
       navigate('/leads');
     }
@@ -299,13 +321,41 @@ export default function Dashboard() {
     });
   };
 
-  const handleSendQuote = () => {
-    // TODO: Integrar con Supabase y envío de email
-    toast({
-      title: "✅ Cotización enviada",
-      description: `Cotización enviada a ${quoteData.clientEmail}`,
-    });
-    setShowQuoteDialog(false);
+  const handleSendQuote = async () => {
+    if (!quoteData.leadId) {
+      toast({ title: "Falta lead", description: "Abrí la cotización desde una tarea pendiente de un lead.", variant: "destructive" });
+      return;
+    }
+    if (!quoteData.price.trim() && !quoteData.notes.trim()) {
+      toast({ title: "Faltan datos", description: "Cargá al menos precio o notas.", variant: "destructive" });
+      return;
+    }
+    setIsSavingAppointment(true);
+    try {
+      const lines = [
+        quoteData.vehicle && `Vehículo: ${quoteData.vehicle}`,
+        quoteData.price && `Precio: ${quoteData.price}`,
+        quoteData.clientEmail && `Email: ${quoteData.clientEmail}`,
+        quoteData.notes && `Notas: ${quoteData.notes}`,
+      ].filter(Boolean) as string[];
+      await leadService.addActivity(quoteData.leadId, {
+        lead_id: quoteData.leadId,
+        user_id: user?.id ?? null,
+        type: 'cotizacion',
+        subject: `Cotización ${quoteData.clientName ? `para ${quoteData.clientName}` : ''}`.trim(),
+        description: lines.join('\n') || null,
+        completed_at: new Date().toISOString(),
+      });
+      toast({ title: "✅ Cotización registrada", description: `Quedó en la actividad del lead.` });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setShowQuoteDialog(false);
+      setQuoteData({ leadId: null, clientName: '', clientEmail: '', vehicle: '', price: '', notes: '' });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
   };
 
   const handleCompleteAppointment = async () => {
@@ -328,32 +378,95 @@ export default function Dashboard() {
     setShowCompleteAppointmentDialog(false);
   };
 
-  const handleReschedule = () => {
-    // TODO: Integrar con Supabase
-    toast({
-      title: "✅ Cita reagendada",
-      description: "La cita ha sido reagendada exitosamente",
-    });
-    setShowRescheduleDialog(false);
+  const handleReschedule = async () => {
+    if (!selectedAppointmentId) {
+      toast({ title: "Error", description: "No se seleccionó ninguna cita", variant: "destructive" });
+      return;
+    }
+    if (!rescheduleData.date || !rescheduleData.time) {
+      toast({ title: "Faltan datos", description: "Elegí fecha y hora", variant: "destructive" });
+      return;
+    }
+    setIsSavingAppointment(true);
+    try {
+      const scheduledAt = new Date(`${rescheduleData.date}T${rescheduleData.time}`).toISOString();
+      const updates: { scheduled_at: string; notes?: string } = { scheduled_at: scheduledAt };
+      if (rescheduleData.reason.trim()) {
+        updates.notes = `Reagendada: ${rescheduleData.reason.trim()}`;
+      }
+      await appointmentService.update(selectedAppointmentId, updates);
+      toast({ title: "✅ Cita reagendada", description: "Nueva fecha guardada." });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      setShowRescheduleDialog(false);
+      setRescheduleData({ date: '', time: '', reason: '' });
+      setSelectedAppointmentSnapshot(null);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
   };
 
-  const handleConfirmTestDrive = () => {
-    // TODO: Integrar con Supabase
-    toast({
-      title: "✅ Test drive confirmado",
-      description: "El test drive con Carlos López ha sido confirmado",
-    });
-    setShowConfirmTestDriveDialog(false);
+  const handleConfirmTestDrive = async () => {
+    if (!selectedAppointmentId) {
+      toast({ title: "Error", description: "No se seleccionó ninguna cita", variant: "destructive" });
+      return;
+    }
+    setIsSavingAppointment(true);
+    try {
+      const updates: { status: 'confirmada'; notes?: string } = { status: 'confirmada' };
+      if (confirmTestDriveData.notes.trim()) {
+        updates.notes = confirmTestDriveData.notes.trim();
+      }
+      await appointmentService.update(selectedAppointmentId, updates);
+      toast({ title: "✅ Test drive confirmado", description: "Cita marcada como confirmada." });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      setShowConfirmTestDriveDialog(false);
+      setConfirmTestDriveData({ notes: '' });
+      setSelectedAppointmentSnapshot(null);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
   };
 
-  const handleContactLead = () => {
-    // TODO: Integrar con Supabase
-    toast({
-      title: "✅ Lead contactado",
-      description: `Contacto con ${contactData.leadName} registrado`,
-    });
-    setShowContactLeadDialog(false);
-    setContactData({ leadName: '', contactMethod: 'phone', notes: '' });
+  const handleContactLead = async () => {
+    if (!contactData.leadId) {
+      toast({ title: "Falta lead", description: "Abrí el contacto desde una tarea pendiente.", variant: "destructive" });
+      return;
+    }
+    if (!contactData.notes.trim()) {
+      toast({ title: "Falta resumen", description: "Anotá lo que se habló.", variant: "destructive" });
+      return;
+    }
+    const methodToType: Record<string, 'llamada' | 'email' | 'whatsapp' | 'reunion'> = {
+      phone: 'llamada',
+      email: 'email',
+      whatsapp: 'whatsapp',
+      presencial: 'reunion',
+    };
+    setIsSavingAppointment(true);
+    try {
+      await leadService.addActivity(contactData.leadId, {
+        lead_id: contactData.leadId,
+        user_id: user?.id ?? null,
+        type: methodToType[contactData.contactMethod] ?? 'nota',
+        description: contactData.notes.trim(),
+        completed_at: new Date().toISOString(),
+      });
+      toast({ title: "✅ Contacto registrado", description: `Contacto con ${contactData.leadName} guardado.` });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setShowContactLeadDialog(false);
+      setContactData({ leadId: null, leadName: '', contactMethod: 'phone', notes: '' });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
+    } finally {
+      setIsSavingAppointment(false);
+    }
   };
 
   const salesChange = useMemo(() => {
@@ -624,7 +737,7 @@ export default function Dashboard() {
                             <span>{branchName}</span>
                           </div>
                         </div>
-                        <div className="flex gap-2 pt-2">
+                        <div className="flex flex-wrap gap-2 pt-2">
                           <Button
                             size="sm"
                             variant="default"
@@ -635,10 +748,49 @@ export default function Dashboard() {
                           >
                             Marcar completada
                           </Button>
+                          {apt.type === 'test_drive' && apt.status === 'programada' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedAppointmentId(apt.id);
+                                setSelectedAppointmentSnapshot({
+                                  id: apt.id,
+                                  clientName,
+                                  vehicleStr,
+                                  typeLabel,
+                                  scheduledAt: apt.scheduled_at,
+                                  status: apt.status,
+                                });
+                                setConfirmTestDriveData({ notes: '' });
+                                setShowConfirmTestDriveDialog(true);
+                              }}
+                            >
+                              Confirmar
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => navigate(`/appointments?id=${apt.id}`)}
+                            onClick={() => {
+                              setSelectedAppointmentId(apt.id);
+                              setSelectedAppointmentSnapshot({
+                                id: apt.id,
+                                clientName,
+                                vehicleStr,
+                                typeLabel,
+                                scheduledAt: apt.scheduled_at,
+                                status: apt.status,
+                              });
+                              const d = new Date(apt.scheduled_at);
+                              const pad = (n: number) => String(n).padStart(2, '0');
+                              setRescheduleData({
+                                date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+                                time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+                                reason: '',
+                              });
+                              setShowRescheduleDialog(true);
+                            }}
                           >
                             Reagendar
                           </Button>
@@ -1669,17 +1821,26 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <p className="text-sm font-semibold">Cita actual</p>
-              <p className="text-xs text-muted-foreground">Test Drive - Juan Pérez</p>
-              <p className="text-xs text-muted-foreground">Hoy, 14:00</p>
-            </div>
+            {selectedAppointmentSnapshot && (
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <p className="text-sm font-semibold">Cita actual</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedAppointmentSnapshot.typeLabel} — {selectedAppointmentSnapshot.clientName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(selectedAppointmentSnapshot.scheduledAt), "EEEE d MMM, HH:mm", { locale: es })}
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="rescheduleDate">Nueva fecha *</Label>
                 <Input
                   id="rescheduleDate"
                   type="date"
+                  value={rescheduleData.date}
+                  onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value })}
+                  disabled={isSavingAppointment}
                 />
               </div>
               <div className="space-y-2">
@@ -1687,6 +1848,9 @@ export default function Dashboard() {
                 <Input
                   id="rescheduleTime"
                   type="time"
+                  value={rescheduleData.time}
+                  onChange={(e) => setRescheduleData({ ...rescheduleData, time: e.target.value })}
+                  disabled={isSavingAppointment}
                 />
               </div>
             </div>
@@ -1696,14 +1860,17 @@ export default function Dashboard() {
                 id="rescheduleReason"
                 placeholder="Razón por la que se reagenda la cita..."
                 rows={3}
+                value={rescheduleData.reason}
+                onChange={(e) => setRescheduleData({ ...rescheduleData, reason: e.target.value })}
+                disabled={isSavingAppointment}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRescheduleDialog(false)}>
+            <Button variant="outline" onClick={() => setShowRescheduleDialog(false)} disabled={isSavingAppointment}>
               Cancelar
             </Button>
-            <Button onClick={handleReschedule}>
+            <Button onClick={handleReschedule} disabled={isSavingAppointment || !rescheduleData.date || !rescheduleData.time}>
               <Calendar className="h-4 w-4 mr-2" />
               Reagendar
             </Button>
@@ -1724,25 +1891,34 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <p className="text-sm font-semibold">Test Drive - Carlos López</p>
-              <p className="text-xs text-muted-foreground">Programado para: Mañana</p>
-              <p className="text-xs text-muted-foreground">Estado: Sin confirmar</p>
-            </div>
+            {selectedAppointmentSnapshot && (
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <p className="text-sm font-semibold">
+                  {selectedAppointmentSnapshot.typeLabel} — {selectedAppointmentSnapshot.clientName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(selectedAppointmentSnapshot.scheduledAt), "EEEE d MMM, HH:mm", { locale: es })}
+                </p>
+                <p className="text-xs text-muted-foreground">Vehículo: {selectedAppointmentSnapshot.vehicleStr}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="confirmNotes">Notas de confirmación</Label>
               <Textarea
                 id="confirmNotes"
                 placeholder="Detalles adicionales para el cliente..."
                 rows={3}
+                value={confirmTestDriveData.notes}
+                onChange={(e) => setConfirmTestDriveData({ notes: e.target.value })}
+                disabled={isSavingAppointment}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmTestDriveDialog(false)}>
+            <Button variant="outline" onClick={() => setShowConfirmTestDriveDialog(false)} disabled={isSavingAppointment}>
               Cancelar
             </Button>
-            <Button onClick={handleConfirmTestDrive}>
+            <Button onClick={handleConfirmTestDrive} disabled={isSavingAppointment}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
               Confirmar Test Drive
             </Button>
