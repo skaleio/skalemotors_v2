@@ -1,4 +1,4 @@
-import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 export interface VehicleData {
   patente: string;
@@ -99,7 +99,8 @@ export interface AppraisalByPatenteResult {
 
 /**
  * Una sola petición: llama a la Edge Function getapi-appraisal (que hace GET GetAPI appraisal/{patente}).
- * Usa fetch + anon key para no depender de la sesión del usuario (evita 401).
+ * Usa supabase.functions.invoke para que el JWT del usuario autenticado vaya en el header
+ * (la function valida la sesión y rechaza llamadas con anon key).
  */
 export async function getAppraisalByPatente(patente: string): Promise<AppraisalByPatenteResult> {
   const normalizedPatente = normalizePatente(patente);
@@ -107,33 +108,15 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
   }
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Faltan variables de Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-  }
-
-  const url = `${supabaseUrl}/functions/v1/getapi-appraisal`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
-    body: JSON.stringify({ patente: normalizedPatente }),
+  const { data, error } = await supabase.functions.invoke<
+    AppraisalResult & { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
+  >("getapi-appraisal", {
+    body: { patente: normalizedPatente },
   });
 
-  const data = (await res.json().catch(() => null)) as
-    | (AppraisalResult & { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse)
-    | null;
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error(
-        "La función de tasación rechazó la petición. Revisa en Supabase que getapi-appraisal esté desplegada y que la anon key sea correcta.",
-      );
-    }
-    const msg = data?.error ?? `Error ${res.status} al obtener la tasación.`;
-    throw new Error(msg);
+  if (error) {
+    const msg = await getEdgeErrorMessage(error);
+    throw new Error(msg ?? error.message ?? "Error al obtener la tasación.");
   }
 
   if (!data?.tasacion || !Array.isArray(data.muestras)) {

@@ -1,4 +1,5 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
 type AppraisalBody = {
@@ -108,6 +109,26 @@ Deno.serve(async (req) => {
 
   if (req.method !== "POST") {
     return jsonResponse(405, { ok: false, error: "Método no permitido" });
+  }
+
+  // verify_jwt:false en config.toml porque el gateway rechaza JWT ES256 del proyecto.
+  // Validamos manualmente: rechaza anon key y cualquier request sin sesión de usuario.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return jsonResponse(500, { ok: false, error: "Supabase no configurado" });
+  }
+
+  const authHeader = req.headers.get("authorization") ?? "";
+  const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!jwt) {
+    return jsonResponse(401, { ok: false, error: "Authorization header required" });
+  }
+
+  const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: userData, error: authError } = await adminClient.auth.getUser(jwt);
+  if (authError || !userData?.user) {
+    return jsonResponse(401, { ok: false, error: "Invalid or expired token" });
   }
 
   let body: AppraisalBody;
