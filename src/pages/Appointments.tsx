@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { KPICard } from "@/components/ui/kpi-card";
 import {
     Dialog,
     DialogContent,
@@ -29,9 +30,9 @@ import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
 import "@/styles/calendar.css";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, getDay, parse, startOfWeek } from "date-fns";
+import { addDays, endOfDay, format, getDay, isSameDay, isToday, isWithinInterval, parse, startOfDay, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar, CheckCircle2, Clock, Loader2, Plus, Trash2, User } from "lucide-react";
+import { CalendarCheck, CalendarClock, CalendarDays, CheckCircle2, Clock, Loader2, Plus, Trash2, User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as BigCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -88,12 +89,14 @@ interface Event {
   vehicleInfo?: string;
 }
 
-const eventTypeColors = {
-  test_drive: "bg-blue-500",
-  meeting: "bg-green-500",
-  delivery: "bg-purple-500",
-  service: "bg-orange-500",
-  other: "bg-gray-500",
+/** Clases CSS definidas en src/styles/calendar.css. Cada tipo de evento usa
+ *  un color de CHART_PALETTE para mantener coherencia con los charts. */
+const eventTypeClass: Record<Event["type"], string> = {
+  test_drive: "event-test-drive",  // azul (chart-1)
+  meeting: "event-meeting",        // verde (chart-2)
+  delivery: "event-delivery",      // violeta (chart-4)
+  service: "event-service",        // ámbar (chart-3)
+  other: "event-other",            // muted
 };
 
 const eventTypeLabels = {
@@ -409,26 +412,47 @@ export default function Appointments() {
       .slice(0, 5);
   }, [events]);
 
-  const eventStyleGetter = (event: Event) => {
-    const backgroundColor = eventTypeColors[event.type];
-    return {
-      className: `${backgroundColor} text-white rounded-lg px-2 py-1`,
-    };
-  };
+  /** KPI stats — hoy, esta semana, pendientes futuras, completadas últimos 30 días. */
+  const appointmentStats = useMemo(() => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { locale: es });
+    const weekEnd = endOfDay(addDays(weekStart, 6));
+    const thirtyDaysAgo = addDays(startOfDay(now), -30);
+
+    let today = 0;
+    let thisWeek = 0;
+    let pending = 0;
+    let completed = 0;
+
+    for (const e of events) {
+      if (e.status === "cancelada") continue;
+      if (isToday(e.start)) today++;
+      if (isWithinInterval(e.start, { start: weekStart, end: weekEnd })) thisWeek++;
+      if (e.status === "programada" && e.start >= now) pending++;
+      if (e.status === "completada" && e.start >= thirtyDaysAgo) completed++;
+    }
+
+    return { today, thisWeek, pending, completed };
+  }, [events]);
+
+  const eventStyleGetter = (event: Event) => ({
+    className: eventTypeClass[event.type],
+  });
 
   return (
     <div className="space-y-6">
+      {/* Hero */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Citas</h1>
           <p className="text-muted-foreground mt-2">
-            Gestiona las citas y test drives
+            Agendá test drives, reuniones, entregas y servicios desde un solo lugar.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={() => {
             setSelectedEvent(null);
-            setOpenedFromSlot(false); // desde botón: sí pedir fecha en el formulario
+            setOpenedFromSlot(false);
             setFormData({
               title: "",
               start: new Date(),
@@ -442,24 +466,71 @@ export default function Appointments() {
             setIsDialogOpen(true);
           }}>
             <Plus className="h-4 w-4 mr-2" />
-            Nueva Cita
+            Nueva cita
           </Button>
         </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
+          label="Hoy"
+          icon={CalendarClock}
+          loading={loading}
+          loadingWidth="sm"
+          value={appointmentStats.today}
+          subtitle={appointmentStats.today === 0 ? "Sin citas programadas" : appointmentStats.today === 1 ? "1 cita en el día" : `${appointmentStats.today} citas en el día`}
+        />
+        <KPICard
+          label="Esta semana"
+          icon={CalendarDays}
+          loading={loading}
+          loadingWidth="sm"
+          value={appointmentStats.thisWeek}
+          subtitle="Lunes a domingo"
+        />
+        <KPICard
+          label="Pendientes"
+          icon={Clock}
+          loading={loading}
+          loadingWidth="sm"
+          value={appointmentStats.pending}
+          subtitle="Programadas a futuro"
+        />
+        <KPICard
+          label="Completadas"
+          icon={CalendarCheck}
+          loading={loading}
+          loadingWidth="sm"
+          value={appointmentStats.completed}
+          subtitle="Últimos 30 días"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Calendario
-            </CardTitle>
-            <CardDescription>
-              Haz clic en una fecha para crear un evento o en un evento para editarlo
-            </CardDescription>
+          <CardHeader className="border-b">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  Calendario
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Click en un slot para crear · click en un evento para editar
+                </CardDescription>
+              </div>
+              {/* Leyenda de tipos */}
+              <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5"><span className="event-dot event-test-drive" />Test drive</span>
+                <span className="inline-flex items-center gap-1.5"><span className="event-dot event-meeting" />Reunión</span>
+                <span className="inline-flex items-center gap-1.5"><span className="event-dot event-delivery" />Entrega</span>
+                <span className="inline-flex items-center gap-1.5"><span className="event-dot event-service" />Servicio</span>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div style={{ height: "600px" }}>
               <BigCalendar
                 localizer={localizer}
@@ -497,55 +568,73 @@ export default function Appointments() {
 
         {/* Upcoming Events */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Próximas Citas
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              Próximas citas
             </CardTitle>
-            <CardDescription>
-              Eventos próximos programados
+            <CardDescription className="text-xs">
+              Las {upcomingEvents.length === 0 ? "" : `${upcomingEvents.length} `}más cercanas
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {upcomingEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No hay citas próximas
+          <CardContent className="pt-4">
+            {upcomingEvents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="rounded-2xl bg-muted p-4 mb-3">
+                  <CalendarDays className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground mb-1">Sin citas próximas</p>
+                <p className="text-xs text-muted-foreground max-w-[200px]">
+                  Cuando agendes algo, va a aparecer acá.
                 </p>
-              ) : (
-                upcomingEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="p-4 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => handleSelectEvent(event)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{event.title}</p>
-                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {event.start && !isNaN(event.start.getTime())
-                            ? format(event.start, "dd MMM, HH:mm", { locale: es })
-                            : "—"}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {upcomingEvents.map((event) => {
+                  const dayLabel = isToday(event.start)
+                    ? "HOY"
+                    : isSameDay(event.start, addDays(new Date(), 1))
+                      ? "MAÑANA"
+                      : format(event.start, "EEE d MMM", { locale: es });
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => handleSelectEvent(event)}
+                      className="w-full text-left p-3 rounded-md border border-border hover:bg-accent/30 transition-colors group"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[52px] pt-0.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {dayLabel}
+                          </span>
+                          <span className="skale-num text-base font-semibold leading-tight">
+                            {format(event.start, "HH:mm")}
+                          </span>
                         </div>
-                        {event.clientName && (
-                          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                            <User className="h-3 w-3" />
-                            {event.clientName}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`event-dot ${eventTypeClass[event.type]}`} />
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {eventTypeLabels[event.type]}
+                            </span>
                           </div>
-                        )}
+                          <p className="text-sm font-medium truncate group-hover:text-foreground">
+                            {event.title}
+                          </p>
+                          {event.clientName && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              <span className="truncate">{event.clientName}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={`${eventTypeColors[event.type]} text-white border-none`}
-                      >
-                        {eventTypeLabels[event.type]}
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -1,44 +1,36 @@
-/* Personalización de react-big-calendar */
+/* react-big-calendar — tratamiento "data-product": hairlines, tokens, sin
+   sombras pesadas. Dark mode con .dark (no @media prefers). */
 
 .rbc-calendar {
   font-family: inherit;
+  color: hsl(var(--foreground));
 }
 
-.rbc-header {
-  padding: 10px 3px;
-  font-weight: 600;
-  font-size: 14px;
-  border-bottom: 2px solid hsl(var(--border));
-}
-
-.rbc-today {
-  background-color: hsl(var(--accent) / 0.1);
-}
-
+/* Toolbar default (se usa cuando NO renderizamos toolbar custom) */
 .rbc-toolbar {
-  padding: 15px 10px;
+  padding: 12px 4px;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .rbc-toolbar button {
   color: hsl(var(--foreground));
   border: 1px solid hsl(var(--border));
   background-color: hsl(var(--background));
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .rbc-toolbar button:hover {
-  background-color: hsl(var(--accent));
-  border-color: hsl(var(--accent));
+  background-color: hsl(var(--accent) / 0.4);
 }
 
 .rbc-toolbar button:active,
@@ -48,28 +40,70 @@
   border-color: hsl(var(--primary));
 }
 
-.rbc-toolbar button:focus {
+.rbc-toolbar button:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
+.rbc-toolbar-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* Headers de días (Lun, Mar, etc.) */
+.rbc-header {
+  padding: 10px 4px;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+/* Día actual — más visible que un tint del 10% */
+.rbc-today {
+  background-color: hsl(var(--accent) / 0.5);
+  position: relative;
+}
+
+.dark .rbc-today {
+  background-color: hsl(var(--accent) / 0.3);
+}
+
+.rbc-today .rbc-date-cell > a,
+.rbc-today .rbc-date-cell .rbc-button-link {
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+/* Eventos — la "tarjeta" base. Los colores los dan las clases .event-* */
 .rbc-event {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   border: none !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
+  transition: filter 0.15s;
 }
 
 .rbc-event:hover {
-  opacity: 0.85;
+  filter: brightness(1.08) saturate(1.15);
+}
+
+.rbc-event:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .rbc-event-label {
   font-size: 11px;
   font-weight: 600;
+  opacity: 0.9;
 }
 
 .rbc-event-content {
@@ -78,38 +112,81 @@
   text-overflow: ellipsis;
 }
 
+/* Selected event — anillo, sin cambiar background */
+.rbc-selected,
+.rbc-event.rbc-selected {
+  box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
+/* Slots horarios */
 .rbc-day-slot .rbc-time-slot {
-  border-top: 1px solid hsl(var(--border) / 0.5);
+  border-top: 1px solid hsl(var(--border) / 0.4);
 }
 
 .rbc-time-header-content {
   border-left: 1px solid hsl(var(--border));
 }
 
-.rbc-day-bg + .rbc-day-bg {
-  border-left: 1px solid hsl(var(--border) / 0.3);
+.rbc-time-content {
+  border-top: 1px solid hsl(var(--border));
 }
 
+.rbc-time-gutter {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.rbc-current-time-indicator {
+  background-color: hsl(var(--primary));
+  height: 2px;
+  border-radius: 2px;
+}
+
+.rbc-current-time-indicator::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  background-color: hsl(var(--primary));
+  border-radius: 50%;
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Vista mensual */
 .rbc-month-view {
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
+  background-color: hsl(var(--card));
 }
 
 .rbc-month-row {
   border-top: 1px solid hsl(var(--border));
-  min-height: 80px;
+  min-height: 96px;
+}
+
+.rbc-month-row:first-child {
+  border-top: none;
 }
 
 .rbc-date-cell {
-  padding: 4px 8px;
+  padding: 6px 8px;
   text-align: right;
 }
 
-.rbc-date-cell > a {
+.rbc-date-cell > a,
+.rbc-date-cell .rbc-button-link {
   color: hsl(var(--foreground));
   font-size: 13px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .rbc-off-range {
@@ -117,39 +194,163 @@
 }
 
 .rbc-off-range-bg {
+  background-color: hsl(var(--muted) / 0.4);
+}
+
+.dark .rbc-off-range-bg {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Vista semana / día */
+.rbc-time-view {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+  background-color: hsl(var(--card));
+}
+
+.rbc-time-view .rbc-allday-cell {
   background-color: hsl(var(--muted) / 0.3);
 }
 
+.rbc-time-view .rbc-row {
+  min-height: 28px;
+}
+
+/* Agenda view */
+.rbc-agenda-view {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+  background-color: hsl(var(--card));
+}
+
+.rbc-agenda-view table.rbc-agenda-table {
+  border: none;
+}
+
+.rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  padding: 10px 12px;
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr:hover > td {
+  background-color: hsl(var(--accent) / 0.3);
+}
+
+.rbc-agenda-date-cell,
+.rbc-agenda-time-cell {
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+/* "+ N más" link */
 .rbc-show-more {
   background-color: transparent;
   color: hsl(var(--primary));
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 4px 8px;
-  margin: 2px;
+  padding: 2px 6px;
+  margin: 1px 2px;
   border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.15s;
 }
 
 .rbc-show-more:hover {
-  background-color: hsl(var(--accent));
+  background-color: hsl(var(--accent) / 0.5);
+  text-decoration: none;
 }
 
+/* Popup overlay (click en "+ N más") */
 .rbc-overlay {
   background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  padding: 8px;
+  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08);
+  border-radius: var(--radius);
+  padding: 6px;
   z-index: 50;
 }
 
 .rbc-overlay-header {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid hsl(var(--border));
   font-weight: 600;
+  font-size: 13px;
   color: hsl(var(--foreground));
+  margin-bottom: 4px;
 }
+
+/* Slot selección (drag para crear evento) */
+.rbc-slot-selection {
+  background-color: hsl(var(--primary) / 0.15);
+  border: 1px dashed hsl(var(--primary));
+  border-radius: 4px;
+  color: hsl(var(--primary));
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+}
+
+/* ====================================================================
+   Tipos de evento — clases que aplica eventStyleGetter en Appointments.tsx.
+   Cada tipo toma un color de CHART_PALETTE (--chart-1..5) para mantener
+   consistencia visual con los charts del Dashboard.
+   ==================================================================== */
+
+.event-test-drive {
+  background-color: hsl(var(--chart-1));  /* azul */
+  color: white;
+}
+
+.event-meeting {
+  background-color: hsl(var(--chart-2));  /* verde */
+  color: white;
+}
+
+.event-delivery {
+  background-color: hsl(var(--chart-4));  /* violeta */
+  color: white;
+}
+
+.event-service {
+  background-color: hsl(var(--chart-3));  /* ámbar */
+  color: hsl(222 47% 11%);                /* texto oscuro sobre amarillo */
+}
+
+.event-other {
+  background-color: hsl(var(--muted-foreground));
+  color: hsl(var(--background));
+}
+
+/* Dots de leyenda — usado en sidebar de "Próximas citas" */
+.event-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.event-dot.event-test-drive { background-color: hsl(var(--chart-1)); }
+.event-dot.event-meeting { background-color: hsl(var(--chart-2)); }
+.event-dot.event-delivery { background-color: hsl(var(--chart-4)); }
+.event-dot.event-service { background-color: hsl(var(--chart-3)); }
+.event-dot.event-other { background-color: hsl(var(--muted-foreground)); }
 
 /* Responsivo */
 @media (max-width: 768px) {
@@ -160,8 +361,7 @@
 
   .rbc-toolbar-label {
     text-align: center;
-    font-size: 16px;
-    margin: 10px 0;
+    margin: 6px 0;
   }
 
   .rbc-event {
@@ -170,21 +370,10 @@
   }
 
   .rbc-month-row {
-    min-height: 60px;
-  }
-}
-
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .rbc-calendar {
-    color: hsl(var(--foreground));
+    min-height: 64px;
   }
 
-  .rbc-off-range-bg {
-    background-color: hsl(var(--muted) / 0.2);
-  }
-
-  .rbc-today {
-    background-color: hsl(var(--accent) / 0.2);
+  .rbc-date-cell {
+    padding: 3px 6px;
   }
 }

@@ -80,6 +80,15 @@
     --input: 220 13% 91%;
     --ring: 335 85% 55%;
 
+    /* Chart palette — INDEPENDIENTE de la marca (rosa). Para que los datos
+       se distingan entre sí sin pintar todo del color de la marca. */
+    --chart-1: 217 91% 60%;       /* azul */
+    --chart-2: 142 71% 45%;       /* verde */
+    --chart-3: 38 92% 50%;        /* ámbar */
+    --chart-4: 265 70% 60%;       /* violeta */
+    --chart-5: 199 89% 48%;       /* cian */
+    --chart-6: 12 76% 61%;        /* coral */
+
     /* Border radius más sobrio */
     --radius: 0.625rem;
 
@@ -143,6 +152,14 @@
     --border: 222 47% 14%;
     --input: 222 47% 14%;
     --ring: 330 81% 65%;
+
+    /* Chart palette Dark — más brillante para contraste sobre slate */
+    --chart-1: 217 91% 68%;
+    --chart-2: 142 71% 55%;
+    --chart-3: 38 92% 58%;
+    --chart-4: 265 75% 70%;
+    --chart-5: 199 89% 60%;
+    --chart-6: 12 80% 70%;
 
     /* Sidebar Dark — alineada al primary rosa (sin cian) */
     --sidebar-background: 222 47% 4%;
