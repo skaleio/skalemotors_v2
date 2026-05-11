@@ -1,7 +1,8 @@
-import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, HelpCircle, type LucideIcon } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface KPICardProps {
@@ -14,6 +15,8 @@ interface KPICardProps {
   loading?: boolean;
   loadingWidth?: "sm" | "md" | "lg";
   valueTone?: "default" | "positive" | "negative";
+  /** Tooltip contextual al lado del label. */
+  info?: React.ReactNode;
   className?: string;
 }
 
@@ -29,6 +32,7 @@ export function KPICard({
   loading,
   loadingWidth = "md",
   valueTone = "default",
+  info,
   className,
 }: KPICardProps) {
   const isClickable = !!onClick;
@@ -61,9 +65,29 @@ export function KPICard({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground truncate">
-          {label}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground truncate">
+            {label}
+          </span>
+          {info ? (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-help"
+                    aria-label="Más información"
+                  >
+                    <HelpCircle className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {info}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+        </div>
         {Icon ? <Icon className="h-4 w-4 text-muted-foreground shrink-0" /> : null}
       </div>
 
