@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -24,134 +25,134 @@
   }
 }
 
-/* SkaleMotors Design System - Automotive CRM */
+/* SkaleMotors Design System — refresh 2026 (rosa unificado, neutrales cool tint, hairlines) */
 
 @layer base {
   :root {
-    /* Brand Identity */
-    --brand: 210 40% 2%;         /* #0F172A - slate-900 */
+    /* Brand Identity (mantener — usado por componentes legacy) */
+    --brand: 222 47% 11%;
     --brand-foreground: 0 0% 100%;
 
     /* Core Colors */
     --background: 0 0% 100%;
-    --foreground: 210 40% 2%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 210 40% 2%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 40% 2%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary - Pink for actions */
-    --primary: 335 85% 55%;       /* #ec4899 - pink-500 */
+    /* Primary — rosa (sin cambios respecto al original) */
+    --primary: 335 85% 55%;       /* #ec4899 */
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Light backgrounds */
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 240 5.9% 10%;
+    /* Secondary alineado con muted para coherencia */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    /* Accent - Dark pink for highlights */
-    --accent: 335 80% 45%;        /* #db2777 - pink-600 */
-    --accent-foreground: 0 0% 100%;
+    /* Accent — rosa MUY claro, pensado para hover/selección suave */
+    --accent: 335 80% 96%;
+    --accent-foreground: 335 85% 30%;
 
     /* Status Colors */
-    --success: 142 76% 36%;       /* #16A34A - green-600 */
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;        /* #F59E0B - amber-500 */
-    --warning-foreground: 210 40% 2%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
 
-    --danger: 0 74% 50%;          /* #DC2626 - red-600 */
+    --danger: 0 72% 51%;
     --danger-foreground: 0 0% 100%;
 
-    --destructive: 0 74% 50%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders and inputs */
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    /* Info — cian, queda como acento de información */
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Borders and inputs — hairlines cool */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 335 85% 55%;
 
-    /* Border radius for automotive feel */
-    --radius: 0.75rem;
+    /* Border radius más sobrio */
+    --radius: 0.625rem;
 
     --sidebar-background: 0 0% 100%;
-
-    --sidebar-foreground: 240 5.9% 10%;
-
+    --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 335 85% 55%;
-
     --sidebar-primary-foreground: 0 0% 100%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 240 5.9% 90%;
-
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
     --sidebar-ring: 335 85% 55%;
   }
 
   .dark {
     /* Brand Identity Dark */
-    --brand: 210 40% 98%;
-    --brand-foreground: 210 40% 2%;
+    --brand: 220 14% 96%;
+    --brand-foreground: 222 47% 11%;
 
     /* Core Colors Dark */
-    --background: 210 40% 2%;       /* #0F172A - slate-900 */
-    --foreground: 210 40% 98%;
+    --background: 222 47% 4%;
+    --foreground: 220 14% 96%;
 
-    --card: 220 13% 9%;             /* #1E293B - slate-800 */
-    --card-foreground: 210 40% 98%;
+    --card: 222 47% 7%;
+    --card-foreground: 220 14% 96%;
 
-    --popover: 220 13% 9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 222 47% 7%;
+    --popover-foreground: 220 14% 96%;
 
-    /* Primary Dark - Bright blue */
-    --primary: 188 95% 43%;         /* #06B6D4 - cyan-500 */
-    --primary-foreground: 210 40% 2%;
+    /* Primary Dark — rosa con +brightness (unificado con light) */
+    --primary: 330 81% 65%;       /* #f472b6 */
+    --primary-foreground: 222 47% 11%;
 
-    /* Secondary Dark */
-    --secondary: 215 25% 27%;       /* #475569 - slate-600 */
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 222 47% 10%;
+    --secondary-foreground: 220 14% 96%;
 
-    --muted: 215 25% 15%;           /* #334155 - slate-700 */
-    --muted-foreground: 217 19% 60%;
+    --muted: 222 47% 10%;
+    --muted-foreground: 220 9% 60%;
 
-    /* Accent Dark */
-    --accent: 224 76% 48%;          /* #1E40AF - blue-800 */
-    --accent-foreground: 210 40% 98%;
+    /* Accent Dark — rosa muy oscuro, hover suave en superficies oscuras */
+    --accent: 330 70% 18%;
+    --accent-foreground: 330 81% 75%;
 
     /* Status Colors Dark */
-    --success: 142 76% 36%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 210 40% 2%;
+    --warning-foreground: 222 47% 11%;
 
-    --danger: 0 74% 50%;
+    --danger: 0 63% 51%;
     --danger-foreground: 0 0% 100%;
 
-    --destructive: 0 74% 50%;
+    --destructive: 0 63% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders and inputs Dark */
-    --border: 215 25% 15%;
-    --input: 215 25% 15%;
-    --ring: 188 95% 43%;
+    /* Info Dark */
+    --info: 199 89% 58%;
+    --info-foreground: 222 47% 11%;
 
-    /* Sidebar Dark */
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Borders and inputs Dark — hairlines visibles */
+    --border: 222 47% 14%;
+    --input: 222 47% 14%;
+    --ring: 330 81% 65%;
+
+    /* Sidebar Dark — alineada al primary rosa (sin cian) */
+    --sidebar-background: 222 47% 4%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 330 81% 65%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 222 47% 10%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 47% 14%;
+    --sidebar-ring: 330 81% 65%;
   }
 }
 
@@ -166,7 +167,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
     /* Altura útil coherente en WebKit (Safari macOS, iPhone): min-h-screen solo con 100vh a veces queda corto */
     min-height: 100vh;
     min-height: 100dvh;
@@ -234,6 +235,13 @@ html[data-mobile-app="true"] #root > * {
   .dark .top-bar-logo {
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 20px rgba(236, 72, 153, 0.5), 0 0 30px rgba(236, 72, 153, 0.3);
     color: #fbcfe8;
+  }
+
+  /* Números tabulares para KPIs, montos CLP, RUTs, fechas. Usar agregando `skale-num` al elemento. */
+  .skale-num {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }
 
