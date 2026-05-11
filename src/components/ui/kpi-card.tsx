@@ -1,0 +1,103 @@
+import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
+
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+interface KPICardProps {
+  label: string;
+  value: React.ReactNode;
+  delta?: { value: number };
+  subtitle?: React.ReactNode;
+  icon?: LucideIcon;
+  onClick?: () => void;
+  loading?: boolean;
+  loadingWidth?: "sm" | "md" | "lg";
+  valueTone?: "default" | "positive" | "negative";
+  className?: string;
+}
+
+const SKELETON_WIDTHS = { sm: "w-16", md: "w-28", lg: "w-36" };
+
+export function KPICard({
+  label,
+  value,
+  delta,
+  subtitle,
+  icon: Icon,
+  onClick,
+  loading,
+  loadingWidth = "md",
+  valueTone = "default",
+  className,
+}: KPICardProps) {
+  const isClickable = !!onClick;
+  const valueColorCls = {
+    default: "text-foreground",
+    positive: "text-success",
+    negative: "text-destructive",
+  }[valueTone];
+
+  return (
+    <Card
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        isClickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        "p-5 flex flex-col gap-3 transition-colors",
+        isClickable &&
+          "cursor-pointer hover:bg-accent/30 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground truncate">
+          {label}
+        </span>
+        {Icon ? <Icon className="h-4 w-4 text-muted-foreground shrink-0" /> : null}
+      </div>
+
+      <div className="flex items-end gap-2 flex-wrap">
+        {loading ? (
+          <Skeleton className={cn("h-8", SKELETON_WIDTHS[loadingWidth])} />
+        ) : (
+          <div className={cn("skale-num text-3xl font-semibold leading-none", valueColorCls)}>
+            {value}
+          </div>
+        )}
+        {delta !== undefined && !loading && delta.value !== 0 ? <DeltaPill value={delta.value} /> : null}
+      </div>
+
+      {loading ? (
+        <Skeleton className="h-3 w-24" />
+      ) : subtitle ? (
+        <div className="text-xs text-muted-foreground truncate">{subtitle}</div>
+      ) : null}
+    </Card>
+  );
+}
+
+function DeltaPill({ value }: { value: number }) {
+  const positive = value > 0;
+  return (
+    <span
+      className={cn(
+        "skale-num inline-flex items-center gap-0.5 text-xs font-medium leading-none",
+        positive ? "text-success" : "text-destructive",
+      )}
+    >
+      {positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}

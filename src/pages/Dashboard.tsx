@@ -407,146 +407,65 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card
-          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-green-50/30 dark:from-gray-900 dark:to-green-950/20 cursor-pointer"
-          role="button"
-          tabIndex={0}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <KPICard
+          label="Ventas del mes"
+          icon={DollarSign}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.salesRevenue || 0) : ""}
+          delta={stats && salesChange !== 0 ? { value: salesChange } : undefined}
+          subtitle={stats ? `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}` : undefined}
           onClick={() => setShowVentasMesModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowVentasMesModal(true)}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ventas del Mes</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg shadow-green-500/20">
-              <DollarSign className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? (
-              <Skeleton className="h-9 w-32" />
-            ) : (
-              <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.salesRevenue || 0)}</div>
-            )}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground font-medium">{!stats ? <Skeleton className="h-4 w-20" /> : `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}`}</span>
-              {stats && salesChange !== 0 && (
-                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${salesChange > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                  {salesChange > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                  {Math.abs(salesChange).toFixed(1)}%
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-emerald-50/30 dark:from-gray-900 dark:to-emerald-950/20 cursor-pointer"
-          role="button"
-          tabIndex={0}
+        <KPICard
+          label="Total ingresos"
+          icon={Banknote}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
+          subtitle={`Ingresos del mes (${stats?.selectedMonthLabel ?? "—"})`}
           onClick={() => setShowTotalIngresosModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowTotalIngresosModal(true)}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Ingresos</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20">
-              <Banknote className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-32" /> : <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.totalIncomeMonth ?? 0)}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              Ingresos del mes ({stats?.selectedMonthLabel ?? "—"})
-            </p>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-white to-sky-50/30 dark:from-gray-900 dark:to-sky-950/20' : 'bg-gradient-to-br from-white to-red-50/30 dark:from-gray-900 dark:to-red-950/20'}`}
-          role="button"
-          tabIndex={0}
+        <KPICard
+          label="Balance"
+          icon={Wallet}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.balance ?? 0) : ""}
+          valueTone={(stats?.balance ?? 0) >= 0 ? "positive" : "negative"}
+          subtitle={`Ingresos − gastos (${stats?.selectedMonthLabel ?? "mes"})`}
           onClick={() => setShowBalanceModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowBalanceModal(true)}
-        >
-          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500/10 to-transparent' : 'bg-gradient-to-br from-red-500/10 to-transparent'}`} />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Balance</CardTitle>
-            </div>
-            <div className={`p-3 rounded-xl shadow-lg ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500 to-sky-600 shadow-sky-500/20' : 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/20'}`}>
-              <Wallet className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-32" /> : (
-              <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
-                {formatCLP(stats?.balance ?? 0)}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground font-medium">
-              Ingresos − gastos ({stats?.selectedMonthLabel ?? "mes"})
-            </p>
-          </CardContent>
-        </Card>
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-pink-50/30 dark:from-gray-900 dark:to-pink-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Inventario</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg shadow-pink-500/20">
-              <Car className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.totalVehicles || 0}</div>}
-            <div className="text-xs text-muted-foreground font-medium">
-              {!stats ? <Skeleton className="h-4 w-24" /> : `${stats.availableVehicles || 0} disponibles`}
-            </div>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Inventario"
+          icon={Car}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.totalVehicles ?? 0}
+          subtitle={stats ? `${stats.availableVehicles || 0} disponibles` : undefined}
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30 dark:from-gray-900 dark:to-purple-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Leads Activos</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg shadow-purple-500/20">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.activeLeads || 0}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              En conversión
-            </p>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Leads activos"
+          icon={Users}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.activeLeads ?? 0}
+          subtitle="En conversión"
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-amber-50/30 dark:from-gray-900 dark:to-amber-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Citas</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg shadow-amber-500/20">
-              <Calendar className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.scheduledAppointments || 0}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              Programadas
-            </p>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Citas"
+          icon={Calendar}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.scheduledAppointments ?? 0}
+          subtitle="Programadas"
+        />
       </div>
 
       {/* Próximas Citas y Tareas - Lado a lado */}
