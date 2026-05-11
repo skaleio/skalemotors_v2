@@ -38,9 +38,18 @@ export function getCorsHeaders(req: Request): Record<string, string> {
   };
 }
 
-// Legacy export, sigue siendo `*` para no romper funciones todavía no migradas.
+// Constante compartida. Si `ALLOWED_ORIGINS` está seteado en Supabase Secrets,
+// usa el primer origen permitido (lockdown CORS). Si no, fallback a `*` (legacy).
+// Para validación per-request real (multi-origen con echo del origen del request),
+// usar getCorsHeaders(req).
+function resolveDefaultAllowOrigin(): string {
+  const allowed = getAllowedOrigins();
+  if (allowed && allowed.length > 0) return allowed[0];
+  return "*";
+}
+
 export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": resolveDefaultAllowOrigin(),
   "Vary": "Origin",
   "Access-Control-Allow-Headers": ALLOWED_HEADERS,
   "Access-Control-Allow-Methods": ALLOWED_METHODS,
