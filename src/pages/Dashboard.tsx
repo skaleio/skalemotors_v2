@@ -24,7 +24,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+import { CHART_PALETTE, CHART_PRIMARY } from "@/lib/chartPalette";
+
+const COLORS = CHART_PALETTE;
 
 const categoryLabels: Record<string, string> = {
   nuevo: 'Nuevos',
@@ -407,160 +409,77 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card
-          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-green-50/30 dark:from-gray-900 dark:to-green-950/20 cursor-pointer"
-          role="button"
-          tabIndex={0}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <KPICard
+          label="Ventas del mes"
+          icon={DollarSign}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.salesRevenue || 0) : ""}
+          delta={stats && salesChange !== 0 ? { value: salesChange } : undefined}
+          subtitle={stats ? `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}` : undefined}
           onClick={() => setShowVentasMesModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowVentasMesModal(true)}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ventas del Mes</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg shadow-green-500/20">
-              <DollarSign className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? (
-              <Skeleton className="h-9 w-32" />
-            ) : (
-              <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.salesRevenue || 0)}</div>
-            )}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground font-medium">{!stats ? <Skeleton className="h-4 w-20" /> : `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}`}</span>
-              {stats && salesChange !== 0 && (
-                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${salesChange > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                  {salesChange > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                  {Math.abs(salesChange).toFixed(1)}%
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-emerald-50/30 dark:from-gray-900 dark:to-emerald-950/20 cursor-pointer"
-          role="button"
-          tabIndex={0}
+        <KPICard
+          label="Total ingresos"
+          icon={Banknote}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
+          subtitle={`Ingresos del mes (${stats?.selectedMonthLabel ?? "—"})`}
           onClick={() => setShowTotalIngresosModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowTotalIngresosModal(true)}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Ingresos</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20">
-              <Banknote className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-32" /> : <div className="text-3xl font-bold tracking-tight">{formatCLP(stats.totalIncomeMonth ?? 0)}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              Ingresos del mes ({stats?.selectedMonthLabel ?? "—"})
-            </p>
-          </CardContent>
-        </Card>
+        />
 
-        <Card
-          className={`relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-white to-sky-50/30 dark:from-gray-900 dark:to-sky-950/20' : 'bg-gradient-to-br from-white to-red-50/30 dark:from-gray-900 dark:to-red-950/20'}`}
-          role="button"
-          tabIndex={0}
+        <KPICard
+          label="Balance"
+          icon={Wallet}
+          loading={!stats}
+          loadingWidth="lg"
+          value={stats ? formatCLP(stats.balance ?? 0) : ""}
+          valueTone={(stats?.balance ?? 0) >= 0 ? "positive" : "negative"}
+          subtitle={`Ingresos − gastos (${stats?.selectedMonthLabel ?? "mes"})`}
           onClick={() => setShowBalanceModal(true)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShowBalanceModal(true)}
-        >
-          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500/10 to-transparent' : 'bg-gradient-to-br from-red-500/10 to-transparent'}`} />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Balance</CardTitle>
-            </div>
-            <div className={`p-3 rounded-xl shadow-lg ${(stats?.balance ?? 0) >= 0 ? 'bg-gradient-to-br from-sky-500 to-sky-600 shadow-sky-500/20' : 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/20'}`}>
-              <Wallet className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-32" /> : (
-              <div className={`text-3xl font-bold tracking-tight ${(stats?.balance ?? 0) >= 0 ? 'text-sky-700 dark:text-sky-300' : 'text-red-700 dark:text-red-300'}`}>
-                {formatCLP(stats?.balance ?? 0)}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground font-medium">
-              Ingresos − gastos ({stats?.selectedMonthLabel ?? "mes"})
-            </p>
-          </CardContent>
-        </Card>
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-pink-50/30 dark:from-gray-900 dark:to-pink-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Inventario</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg shadow-pink-500/20">
-              <Car className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.totalVehicles || 0}</div>}
-            <div className="text-xs text-muted-foreground font-medium">
-              {!stats ? <Skeleton className="h-4 w-24" /> : `${stats.availableVehicles || 0} disponibles`}
-            </div>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Inventario"
+          icon={Car}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.totalVehicles ?? 0}
+          subtitle={stats ? `${stats.availableVehicles || 0} disponibles` : undefined}
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30 dark:from-gray-900 dark:to-purple-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Leads Activos</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg shadow-purple-500/20">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.activeLeads || 0}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              En conversión
-            </p>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Leads activos"
+          icon={Users}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.activeLeads ?? 0}
+          subtitle="En conversión"
+        />
 
-        <Card className="relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-amber-50/30 dark:from-gray-900 dark:to-amber-950/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-500/10 to-transparent rounded-full -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div className="space-y-1">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Citas</CardTitle>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg shadow-amber-500/20">
-              <Calendar className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!stats ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold tracking-tight">{stats.scheduledAppointments || 0}</div>}
-            <p className="text-xs text-muted-foreground font-medium">
-              Programadas
-            </p>
-          </CardContent>
-        </Card>
+        <KPICard
+          label="Citas"
+          icon={Calendar}
+          loading={!stats}
+          loadingWidth="sm"
+          value={stats?.scheduledAppointments ?? 0}
+          subtitle="Programadas"
+        />
       </div>
 
       {/* Próximas Citas y Tareas - Lado a lado */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Próximas Citas */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-pink-500 rounded-lg">
-                    <Calendar className="h-4 w-4 text-white" />
-                  </div>
-                  Próximas Citas
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  Próximas citas
                 </CardTitle>
                 <CardDescription className="text-xs">Tus citas programadas</CardDescription>
               </div>
@@ -672,14 +591,12 @@ export default function Dashboard() {
 
         {/* Tareas Pendientes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-orange-500 rounded-lg">
-                    <AlertCircle className="h-4 w-4 text-white" />
-                  </div>
-                  Tareas Pendientes
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  Tareas pendientes
                 </CardTitle>
                 <CardDescription className="text-xs">Acciones que requieren tu atención</CardDescription>
               </div>
@@ -779,14 +696,12 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Ventas por Mes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-pink-500 rounded-lg">
-                    <TrendingUp className="h-4 w-4 text-white" />
-                  </div>
-                  Tendencia de Ventas
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  Tendencia de ventas
                 </CardTitle>
                 <CardDescription className="text-xs">Últimos 6 meses</CardDescription>
               </div>
@@ -798,8 +713,8 @@ export default function Dashboard() {
                 <LineChart data={stats.salesByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={CHART_PRIMARY} stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor={CHART_PRIMARY} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
@@ -831,10 +746,10 @@ export default function Dashboard() {
                   <Line
                     type="monotone"
                     dataKey="sales"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', r: 4, strokeWidth: 3, stroke: '#fff' }}
-                    activeDot={{ r: 6, strokeWidth: 3, stroke: '#fff' }}
+                    stroke={CHART_PRIMARY}
+                    strokeWidth={2}
+                    dot={{ fill: CHART_PRIMARY, r: 3, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
                     fill="url(#colorSales)"
                   />
                 </LineChart>
@@ -850,14 +765,12 @@ export default function Dashboard() {
 
         {/* Inventario por Categoría */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-purple-500 rounded-lg">
-                    <BarChart3 className="h-4 w-4 text-white" />
-                  </div>
-                  Distribución de Inventario
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  Distribución de inventario
                 </CardTitle>
                 <CardDescription className="text-xs">Por categoría de vehículo</CardDescription>
               </div>
@@ -937,13 +850,11 @@ export default function Dashboard() {
       <div className="grid gap-6 md:grid-cols-2">
         {/* Ventas Recientes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-amber-500 rounded-lg">
-                    <DollarSign className="h-4 w-4 text-white" />
-                  </div>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
                   Ventas Recientes
                 </CardTitle>
                 <CardDescription className="text-xs">Últimas 5 transacciones</CardDescription>
@@ -1005,13 +916,11 @@ export default function Dashboard() {
 
         {/* Leads por Estado */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <Users className="h-4 w-4 text-white" />
-                  </div>
+                  <Users className="h-4 w-4 text-muted-foreground" />
                   Pipeline de Ventas
                 </CardTitle>
                 <CardDescription className="text-xs">Leads por estado</CardDescription>
@@ -1030,8 +939,8 @@ export default function Dashboard() {
                 >
                   <defs>
                     <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.6}/>
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.9}/>
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0.6}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
@@ -1086,7 +995,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-500" />
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
               Ventas del mes {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
@@ -1166,7 +1075,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-emerald-500" />
+              <Banknote className="h-5 w-5 text-muted-foreground" />
               Total ingresos
             </DialogTitle>
             <DialogDescription>
@@ -1257,7 +1166,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-sky-500" />
+              <Wallet className="h-5 w-5 text-muted-foreground" />
               Balance {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
