@@ -16,6 +16,7 @@ import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks
 import { formatCLP } from "@/lib/format";
 import { appointmentService } from "@/lib/services/appointments";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
+import { leadService } from "@/lib/services/leads";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
 import { addDays, endOfDay, format, isSameDay, isToday, startOfDay } from "date-fns";
@@ -255,11 +256,14 @@ export default function Dashboard() {
         });
         setShowCallLeadDialog(true);
       } else if (task.action_type === 'enviar_cotizacion') {
+        const meta = (typeof task.metadata === 'object' && task.metadata !== null)
+          ? (task.metadata as { vehicle_name?: string })
+          : {};
         setQuoteData({
           ...quoteData,
           leadId: task.entity_id,
           clientName: task.title.replace(/^Enviar cotización a\s+/i, '').trim() || task.title,
-          vehicle: (task.metadata as { vehicle_name?: string })?.vehicle_name ?? '',
+          vehicle: meta.vehicle_name ?? '',
           price: '',
           notes: task.description ?? '',
         });
