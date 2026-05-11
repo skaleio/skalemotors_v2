@@ -24,7 +24,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+import { CHART_PALETTE, CHART_PRIMARY } from "@/lib/chartPalette";
+
+const COLORS = CHART_PALETTE;
 
 const categoryLabels: Record<string, string> = {
   nuevo: 'Nuevos',
@@ -472,14 +474,12 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Próximas Citas */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-pink-500 rounded-lg">
-                    <Calendar className="h-4 w-4 text-white" />
-                  </div>
-                  Próximas Citas
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  Próximas citas
                 </CardTitle>
                 <CardDescription className="text-xs">Tus citas programadas</CardDescription>
               </div>
@@ -591,14 +591,12 @@ export default function Dashboard() {
 
         {/* Tareas Pendientes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-orange-500 rounded-lg">
-                    <AlertCircle className="h-4 w-4 text-white" />
-                  </div>
-                  Tareas Pendientes
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  Tareas pendientes
                 </CardTitle>
                 <CardDescription className="text-xs">Acciones que requieren tu atención</CardDescription>
               </div>
@@ -698,14 +696,12 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Ventas por Mes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-pink-500 rounded-lg">
-                    <TrendingUp className="h-4 w-4 text-white" />
-                  </div>
-                  Tendencia de Ventas
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  Tendencia de ventas
                 </CardTitle>
                 <CardDescription className="text-xs">Últimos 6 meses</CardDescription>
               </div>
@@ -717,8 +713,8 @@ export default function Dashboard() {
                 <LineChart data={stats.salesByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={CHART_PRIMARY} stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor={CHART_PRIMARY} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
@@ -750,10 +746,10 @@ export default function Dashboard() {
                   <Line
                     type="monotone"
                     dataKey="sales"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', r: 4, strokeWidth: 3, stroke: '#fff' }}
-                    activeDot={{ r: 6, strokeWidth: 3, stroke: '#fff' }}
+                    stroke={CHART_PRIMARY}
+                    strokeWidth={2}
+                    dot={{ fill: CHART_PRIMARY, r: 3, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
                     fill="url(#colorSales)"
                   />
                 </LineChart>
@@ -769,14 +765,12 @@ export default function Dashboard() {
 
         {/* Inventario por Categoría */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-purple-500 rounded-lg">
-                    <BarChart3 className="h-4 w-4 text-white" />
-                  </div>
-                  Distribución de Inventario
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  Distribución de inventario
                 </CardTitle>
                 <CardDescription className="text-xs">Por categoría de vehículo</CardDescription>
               </div>
@@ -856,13 +850,11 @@ export default function Dashboard() {
       <div className="grid gap-6 md:grid-cols-2">
         {/* Ventas Recientes */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-amber-500 rounded-lg">
-                    <DollarSign className="h-4 w-4 text-white" />
-                  </div>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
                   Ventas Recientes
                 </CardTitle>
                 <CardDescription className="text-xs">Últimas 5 transacciones</CardDescription>
@@ -924,13 +916,11 @@ export default function Dashboard() {
 
         {/* Leads por Estado */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
-          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <Users className="h-4 w-4 text-white" />
-                  </div>
+                  <Users className="h-4 w-4 text-muted-foreground" />
                   Pipeline de Ventas
                 </CardTitle>
                 <CardDescription className="text-xs">Leads por estado</CardDescription>
@@ -949,8 +939,8 @@ export default function Dashboard() {
                 >
                   <defs>
                     <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.6}/>
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.9}/>
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0.6}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
@@ -1005,7 +995,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-500" />
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
               Ventas del mes {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
@@ -1085,7 +1075,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-emerald-500" />
+              <Banknote className="h-5 w-5 text-muted-foreground" />
               Total ingresos
             </DialogTitle>
             <DialogDescription>
@@ -1176,7 +1166,7 @@ export default function Dashboard() {
         <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-sky-500" />
+              <Wallet className="h-5 w-5 text-muted-foreground" />
               Balance {stats?.selectedMonthLabel ? `(${stats.selectedMonthLabel})` : ""}
             </DialogTitle>
             <DialogDescription>
