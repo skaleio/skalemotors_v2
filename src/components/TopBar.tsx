@@ -13,10 +13,11 @@ import {
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
-import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Receipt, Search, Target, UserPlus, Users, X } from "lucide-react";
+import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Moon, Receipt, Search, Sun, Target, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import { AppBreadcrumb } from "@/components/AppBreadcrumb";
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,7 @@ export function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { navigateWithLoading } = useNavigationWithLoading();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const { vehicles } = useVehicles({ branchId: user?.branch_id ?? undefined, enabled: !!user });
   const { leads } = useLeads({
@@ -225,10 +226,9 @@ export function TopBar() {
   };
 
   return (
-    <header className="relative h-16 flex items-center border-b bg-background px-3 md:px-6 gap-4">
-      {/* Izquierda: hamburguesa pegada + branding + lupa */}
-      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 md:flex-initial">
-        {/* Menú lateral (hamburguesa) - pegado a la izquierda */}
+    <header className="relative h-14 flex items-center border-b border-border bg-background/80 backdrop-blur-sm px-3 md:px-5 gap-3">
+      {/* Izquierda: hamburguesa + logo mobile + breadcrumb desktop */}
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
         <SidebarTrigger className="h-8 w-8 shrink-0" />
 
         {/* Branding (mobile) */}
@@ -240,34 +240,56 @@ export function TopBar() {
           SKALEMOTORS
         </button>
 
-        {/* Search: icono cuadrado + input solo al hacer click */}
+        {/* Breadcrumb (desktop) */}
+        <AppBreadcrumb className="hidden md:flex" />
+      </div>
+
+      {/* Derecha: search + acción rápida + notificaciones + tema + usuario */}
+      <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+        {/* Search trigger: campo prominente desktop, ícono mobile */}
         <div ref={searchRef} className="relative">
+          {/* Mobile: ícono */}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon"
-            className="h-9 w-9 rounded-xl border-white/15 bg-white/4 hover:bg-white/8"
+            className="h-9 w-9 md:hidden"
             onClick={() => {
               setIsSearchExpanded(true);
               setTimeout(() => searchInputRef.current?.focus(), 0);
             }}
             aria-label="Abrir búsqueda"
           >
-            <Search className={`h-4 w-4 ${theme === 'dark' ? 'text-slate-300' : 'text-muted-foreground'}`} />
+            <Search className="h-4 w-4 text-muted-foreground" />
           </Button>
 
+          {/* Desktop: input trigger con ⌘K hint */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSearchExpanded(true);
+              setTimeout(() => searchInputRef.current?.focus(), 0);
+            }}
+            className="hidden md:flex h-9 w-[280px] items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground hover:bg-accent/30 transition-colors"
+            aria-label="Buscar"
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 text-left">Buscar vehículos, leads...</span>
+            <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </button>
+
           {isSearchExpanded && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 ml-[calc(100%+8px)] w-[240px] md:w-[360px]">
+            <div className="absolute right-0 top-full mt-1 w-[280px] md:w-[360px] z-50">
               <div className="relative">
                 <Input
                   ref={searchInputRef}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setIsSearchOpen(searchResults.length > 0)}
-                  className={`pr-9 ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-400'
-                      : 'bg-background border-input'
-                    }`}
+                  placeholder="Buscar..."
+                  className="pr-9"
                 />
                 <button
                   type="button"
@@ -277,7 +299,7 @@ export function TopBar() {
                     setIsSearchOpen(false);
                     setIsSearchExpanded(false);
                   }}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/10 ${theme === 'dark' ? 'text-slate-300' : 'text-muted-foreground'}`}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground"
                   aria-label="Cerrar búsqueda"
                 >
                   <X className="h-4 w-4" />
@@ -286,49 +308,34 @@ export function TopBar() {
 
               {/* Search Results Dropdown */}
               {isSearchOpen && (
-                <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg shadow-lg border z-50 max-h-80 overflow-y-auto ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700'
-                    : 'bg-white border-gray-200'
-                  }`}>
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-md shadow-popover border border-border bg-popover text-popover-foreground z-50 max-h-80 overflow-y-auto">
                   {isSearching ? (
-                    <div className="flex items-center justify-center p-4 text-sm text-slate-400">
+                    <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Buscando...
                     </div>
                   ) : searchResults.length === 0 ? (
-                    <div className={`p-4 text-center text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
-                      }`}>
+                    <div className="p-4 text-center text-sm text-muted-foreground">
                       No se encontraron resultados para "{searchQuery}"
                     </div>
                   ) : (
-                    <div className="py-2">
+                    <div className="py-1">
                       {searchResults.map((result) => (
                         <button
                           key={result.id}
                           onClick={() => navigateToSearchResult(result)}
-                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-opacity-80 transition-colors ${theme === 'dark'
-                              ? 'hover:bg-slate-700 text-white'
-                              : 'hover:bg-gray-50 text-gray-900'
-                            }`}
+                          className="w-full flex items-center gap-3 p-2.5 text-left hover:bg-accent/40 transition-colors"
                         >
-                          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${theme === 'dark'
-                              ? result.type === 'vehicle'
-                                ? 'bg-emerald-900/20 text-emerald-300'
-                                : 'bg-pink-900/20 text-pink-300'
-                              : result.type === 'vehicle'
-                                ? 'bg-emerald-100 text-emerald-600'
-                                : 'bg-pink-100 text-pink-600'
-                            }`}>
+                          <div className="w-8 h-8 rounded-md flex items-center justify-center bg-muted text-muted-foreground">
                             {result.type === 'vehicle' ? (
                               <Car className="h-4 w-4" />
                             ) : (
                               <Users className="h-4 w-4" />
                             )}
                           </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{result.title}</div>
-                            <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'
-                              }`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-foreground truncate">{result.title}</div>
+                            <div className="text-xs text-muted-foreground truncate">
                               {result.description}
                             </div>
                           </div>
@@ -341,20 +348,6 @@ export function TopBar() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Centro: logo (solo desktop), ocupa el espacio restante sin solapar la derecha */}
-      <div className="flex-1 min-w-0 hidden md:flex items-center justify-center">
-        <button
-          onClick={() => navigate('/app')}
-          className="skale-logo top-bar-logo animate-pulse cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap"
-        >
-          SKALEMOTORS
-        </button>
-      </div>
-
-      {/* Derecha: Acción Rápida, notificaciones, usuario */}
-      <div className="flex items-center gap-2 md:gap-4 shrink-0">
 
         {/* Quick Actions Menu - Oculto en Dashboard Principal */}
         {!isDashboardPrincipal && (
@@ -365,9 +358,9 @@ export function TopBar() {
               }}
             >
               <DropdownMenuTrigger asChild>
-                <Button className="bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0">
-                  <Command className="h-4 w-4 mr-2" />
-                  Acción Rápida
+                <Button size="sm" className="gap-2">
+                  <Command className="h-3.5 w-3.5" />
+                  Acción rápida
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-80 p-0 border-0 shadow-2xl bg-white/95 backdrop-blur-sm max-h-[85vh] flex flex-col overflow-hidden">
@@ -592,8 +585,8 @@ export function TopBar() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative ml-3">
-              <Bell className={`h-4 w-4 transition-transform ${bellBounce ? 'animate-bounce text-pink-500' : ''}`} />
+            <Button variant="ghost" size="icon" className="relative h-9 w-9">
+              <Bell className={`h-4 w-4 transition-transform ${bellBounce ? 'animate-bounce text-primary' : ''}`} />
               {unreadCount > 0 && (
                 <>
                   <span className="absolute -top-1 -right-1 flex h-5 w-5">
@@ -744,17 +737,32 @@ export function TopBar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Theme toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="h-4 w-4 text-muted-foreground" />
+          )}
+        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <ProfileAvatarImage avatarUrl={user?.avatar_url} size={32} cacheKey={user?.updated_at} priority="high" />
-                <AvatarFallback>
+            <Button variant="ghost" className="flex items-center gap-2 h-9 px-2">
+              <Avatar className="h-7 w-7">
+                <ProfileAvatarImage avatarUrl={user?.avatar_url} size={28} cacheKey={user?.updated_at} priority="high" />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
                   {user?.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden md:inline">{user?.full_name || 'Usuario'}</span>
-              <ChevronDown className="h-4 w-4" />
+              <span className="hidden md:inline text-sm">{user?.full_name || 'Usuario'}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
