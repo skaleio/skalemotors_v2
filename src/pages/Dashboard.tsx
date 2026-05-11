@@ -391,9 +391,14 @@ export default function Dashboard() {
       toast({ title: "Faltan datos", description: "Elegí fecha y hora", variant: "destructive" });
       return;
     }
+    const parsed = new Date(`${rescheduleData.date}T${rescheduleData.time}`);
+    if (isNaN(parsed.getTime())) {
+      toast({ title: "Fecha u hora inválida", description: "Verificá los campos antes de reagendar.", variant: "destructive" });
+      return;
+    }
     setIsSavingAppointment(true);
     try {
-      const scheduledAt = new Date(`${rescheduleData.date}T${rescheduleData.time}`).toISOString();
+      const scheduledAt = parsed.toISOString();
       const updates: { scheduled_at: string; notes?: string } = { scheduled_at: scheduledAt };
       if (rescheduleData.reason.trim()) {
         updates.notes = `Reagendada: ${rescheduleData.reason.trim()}`;
