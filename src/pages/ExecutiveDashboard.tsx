@@ -6,9 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
 import { CHART_PALETTE, CHART_PRIMARY, CHART_TOOLTIP_PROPS } from "@/lib/chartPalette";
-import { ArrowUpRight, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, Award, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, Sparkles, TrendingUp, Trophy, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /** Paleta de 12 colores para la pie de gastos: CHART_PALETTE + variantes a 0.7 opacidad. */
@@ -151,6 +151,62 @@ export default function ExecutiveDashboard() {
     ? Math.round(stats.salesRevenue / stats.salesThisMonth)
     : 0;
 
+  /** Deltas vs mes anterior usando los últimos 2 puntos de salesByMonth. */
+  const deltas = useMemo(() => {
+    const arr = stats?.salesByMonth;
+    if (!arr || arr.length < 2) return { sales: 0, revenue: 0 };
+    const last = arr[arr.length - 1];
+    const prev = arr[arr.length - 2];
+    const salesDelta = prev.sales ? ((last.sales - prev.sales) / prev.sales) * 100 : 0;
+    const revenueDelta = prev.revenue ? ((last.revenue - prev.revenue) / prev.revenue) * 100 : 0;
+    return { sales: salesDelta, revenue: revenueDelta };
+  }, [stats?.salesByMonth]);
+
+  /** Series para mini sparklines en KPI cards (últimos 6 meses). */
+  const salesSparkline = useMemo(
+    () => stats?.salesByMonth?.map((m) => m.sales) ?? [],
+    [stats?.salesByMonth],
+  );
+  const revenueSparkline = useMemo(
+    () => stats?.salesByMonth?.map((m) => m.revenue) ?? [],
+    [stats?.salesByMonth],
+  );
+
+  /** Margen total del mes: suma de margin de cada venta listada. */
+  const totalMarginMonth = useMemo(() => {
+    if (!stats?.salesThisMonthList) return 0;
+    return stats.salesThisMonthList.reduce((sum, s) => sum + (s.margin || 0), 0);
+  }, [stats?.salesThisMonthList]);
+
+  /** Top 5 vendedores del mes — agrupa salesThisMonthList por seller, suma margin y cuenta. */
+  const topSellers = useMemo(() => {
+    if (!stats?.salesThisMonthList?.length) return [];
+    const grouped = new Map<string, { seller: string; sales: number; revenue: number; margin: number }>();
+    for (const s of stats.salesThisMonthList) {
+      const key = s.seller || "Sin asignar";
+      const prev = grouped.get(key) ?? { seller: key, sales: 0, revenue: 0, margin: 0 };
+      prev.sales += 1;
+      prev.revenue += s.amount || 0;
+      prev.margin += s.margin || 0;
+      grouped.set(key, prev);
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.margin - a.margin).slice(0, 5);
+  }, [stats?.salesThisMonthList]);
+
+  /** Top 5 modelos vendidos del mes. */
+  const topVehicles = useMemo(() => {
+    if (!stats?.salesThisMonthList?.length) return [];
+    const grouped = new Map<string, { vehicle: string; count: number; revenue: number }>();
+    for (const s of stats.salesThisMonthList) {
+      const key = s.vehicle || "—";
+      const prev = grouped.get(key) ?? { vehicle: key, count: 0, revenue: 0 };
+      prev.count += 1;
+      prev.revenue += s.amount || 0;
+      grouped.set(key, prev);
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [stats?.salesThisMonthList]);
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -176,7 +232,10 @@ export default function ExecutiveDashboard() {
           loading={showSkeleton}
           loadingWidth="lg"
           value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
+          delta={stats && deltas.revenue !== 0 ? { value: deltas.revenue } : undefined}
           subtitle={`Ingresos · ${periodLabel || "—"}`}
+          sparkline={revenueSparkline}
+          sparklineColor="hsl(var(--chart-2))"
         />
         <KPICard
           label="Vehículos vendidos"
@@ -184,7 +243,9 @@ export default function ExecutiveDashboard() {
           loading={showSkeleton}
           loadingWidth="sm"
           value={stats?.salesThisMonth ?? 0}
+          delta={stats && deltas.sales !== 0 ? { value: deltas.sales } : undefined}
           subtitle={`Ventas · ${periodLabel || "—"}`}
+          sparkline={salesSparkline}
         />
         <KPICard
           label="Tasa de conversión"
@@ -549,7 +610,7 @@ export default function ExecutiveDashboard() {
       </div>
 
       {/* Métricas adicionales */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard
           label="Ticket promedio"
           icon={TrendingUp}
@@ -557,6 +618,17 @@ export default function ExecutiveDashboard() {
           loadingWidth="lg"
           value={stats ? formatCLP(avgTicket) : ""}
           subtitle="Por vehículo vendido"
+          info="Promedio de precio de venta del período. Suma de ingresos por venta ÷ unidades vendidas."
+        />
+        <KPICard
+          label="Margen del mes"
+          icon={Sparkles}
+          loading={showSkeleton}
+          loadingWidth="lg"
+          value={stats ? formatCLP(totalMarginMonth) : ""}
+          valueTone={totalMarginMonth > 0 ? "positive" : "default"}
+          subtitle="Ganancia bruta sobre ventas"
+          info="Suma del margen (precio venta − costo) de cada venta del mes. La ganancia bruta antes de gastos generales."
         />
         <KPICard
           label="Stock disponible"
@@ -572,13 +644,124 @@ export default function ExecutiveDashboard() {
           loading={showSkeleton}
           loadingWidth="sm"
           value={`${conversionRate}%`}
-          subtitle={
-            <span className="inline-flex items-center gap-1 text-success">
-              <ArrowUpRight className="h-3 w-3" />
-              Excelente
-            </span>
-          }
+          subtitle="Ventas / leads activos"
+          info="Porcentaje de leads que terminan en venta. Cuanto más alto, más efectivo es el equipo comercial."
         />
+      </div>
+
+      {/* Top vendedores + Top vehículos */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="border-b">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Award className="h-4 w-4 text-muted-foreground" />
+                Top vendedores
+              </CardTitle>
+              <CardDescription className="text-xs">Ranking del mes por margen aportado</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : topSellers.length > 0 ? (
+              <div className="space-y-1.5">
+                {topSellers.map((s, index) => {
+                  const maxMargin = topSellers[0]?.margin || 1;
+                  const pct = Math.max(2, Math.round((s.margin / maxMargin) * 100));
+                  return (
+                    <div key={s.seller} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/20 transition-colors">
+                      <div className="flex items-center justify-center w-7 h-7 rounded-md bg-muted text-muted-foreground font-medium text-xs shrink-0 skale-num">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <p className="text-sm font-medium truncate">{s.seller}</p>
+                          <span className="text-xs text-success skale-num shrink-0">{formatCLP(s.margin)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full bg-[hsl(var(--chart-2))]"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                            {s.sales} {s.sales === 1 ? "venta" : "ventas"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <ChartEmptyState
+                icon={Award}
+                title="Sin ventas en el período"
+                description="Cuando registres ventas, los vendedores aparecerán acá ordenados por margen aportado."
+                linkTo="/app/sales"
+                linkLabel="Ir a Ventas"
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Trophy className="h-4 w-4 text-muted-foreground" />
+                Top vehículos vendidos
+              </CardTitle>
+              <CardDescription className="text-xs">Modelos más vendidos en {periodLabel || "el período"}</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {showSkeleton ? (
+              <ChartSkeleton />
+            ) : topVehicles.length > 0 ? (
+              <div className="space-y-1.5">
+                {topVehicles.map((v, index) => {
+                  const maxCount = topVehicles[0]?.count || 1;
+                  const pct = Math.max(2, Math.round((v.count / maxCount) * 100));
+                  return (
+                    <div key={v.vehicle} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/20 transition-colors">
+                      <div className="flex items-center justify-center w-7 h-7 rounded-md bg-muted text-muted-foreground font-medium text-xs shrink-0 skale-num">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <p className="text-sm font-medium truncate">{v.vehicle}</p>
+                          <span className="text-xs text-muted-foreground skale-num shrink-0">{formatCLP(v.revenue)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full bg-[hsl(var(--chart-1))]"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                            {v.count} {v.count === 1 ? "venta" : "ventas"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <ChartEmptyState
+                icon={Car}
+                title="Sin ventas en el período"
+                description="Acá vas a ver los modelos más vendidos del mes ordenados por cantidad."
+                linkTo="/app/sales"
+                linkLabel="Ir a Ventas"
+              />
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -18,6 +18,8 @@ import {
   LogOut,
   MoreVertical,
   PieChart,
+  Pin,
+  PinOff,
   Plug,
   Plus,
   Receipt,
@@ -32,7 +34,7 @@ import {
   Users,
   Wallet
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
@@ -127,8 +129,11 @@ const itemBaseCls = "group w-full flex items-center gap-2.5 h-8 px-3 text-sm rou
 const itemInactiveCls = "text-muted-foreground hover:text-foreground hover:bg-accent/40";
 const itemActiveCls = "text-accent-foreground bg-accent border-l-2 border-primary font-medium";
 
+const PIN_STORAGE_KEY = "skale-sidebar-pinned";
+const HOVER_CLOSE_DELAY_MS = 200;
+
 export function AppSidebar() {
-  const { state, setOpen } = useSidebar();
+  const { state, setOpen, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
@@ -138,6 +143,62 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
 
   const isVendorOnly = user?.role === "vendedor";
+
+  /* Pin / hover-overlay: en desktop el sidebar puede estar 'pinned' (fijo
+     expandido como hoy) o 'unpinned' (colapsado por default; al pasar el
+     mouse se despliega como overlay flotante sin empujar el contenido).
+     El estado persiste en localStorage. En mobile se ignora todo esto y
+     queda el sheet/drawer de shadcn. */
+  const [pinned, setPinned] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(PIN_STORAGE_KEY);
+    return stored === null ? true : stored !== "false";
+  });
+  const [hovering, setHovering] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persistir pin en localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PIN_STORAGE_KEY, String(pinned));
+    }
+  }, [pinned]);
+
+  // Sincronizar el state interno del SidebarProvider con pinned/hovering.
+  // En mobile no aplicamos (lo maneja el sheet).
+  useEffect(() => {
+    if (isMobile) return;
+    if (pinned) {
+      setOpen(true);
+    } else {
+      setOpen(hovering);
+    }
+  }, [pinned, hovering, isMobile, setOpen]);
+
+  // Cleanup del timer al desmontar
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (pinned || isMobile) return;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHovering(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (pinned || isMobile) return;
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = setTimeout(() => setHovering(false), HOVER_CLOSE_DELAY_MS);
+  };
+
+  /** Overlay activo: sidebar flotando sobre el contenido (no en flow). */
+  const isOverlay = !isMobile && !pinned && hovering;
 
   const categoriesToShow = useMemo(() => {
     if (isVendorOnly) {
@@ -332,22 +393,52 @@ export function AppSidebar() {
   return (
     <TooltipProvider delayDuration={300}>
       <Sidebar
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         className={cn(
           "app-sidebar bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-sidebar",
-          isCollapsed ? "w-14" : "w-60"
+          isCollapsed ? "w-14" : "w-60",
+          // Overlay mode: sidebar flota sobre el contenido sin empujarlo.
+          isOverlay && "!fixed !inset-y-0 !left-0 !z-50 !w-60 shadow-2xl shadow-black/20",
         )}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center shrink-0">
+        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center shrink-0 gap-2">
           {!isCollapsed ? (
-            <button
-              type="button"
-              onClick={() => navigate('/app')}
-              className="skale-logo text-base tracking-wide truncate min-w-0"
-              aria-label="Ir al dashboard"
-            >
-              SKALEMOTORS
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => navigate('/app')}
+                className="skale-logo text-base tracking-wide truncate min-w-0 flex-1 text-left"
+                aria-label="Ir al dashboard"
+              >
+                SKALEMOTORS
+              </button>
+              {/* Pin button — solo desktop */}
+              {!isMobile && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setPinned((p) => !p)}
+                      className={cn(
+                        "shrink-0 h-7 w-7 rounded-md inline-flex items-center justify-center transition-colors",
+                        pinned
+                          ? "text-primary bg-primary/10 hover:bg-primary/15"
+                          : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                      )}
+                      aria-label={pinned ? "Despinear menú lateral" : "Fijar menú lateral"}
+                      aria-pressed={pinned}
+                    >
+                      {pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-xs">
+                    {pinned ? "Despinear (modo flotante al hover)" : "Fijar menú expandido"}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </>
           ) : (
             <button
               type="button"
