@@ -403,52 +403,15 @@ export function AppSidebar() {
         )}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center shrink-0">
-          {!isCollapsed ? (
-            <>
-              <button
-                type="button"
-                onClick={() => navigate('/app')}
-                className="skale-logo min-w-0 text-left whitespace-nowrap"
-                aria-label="Ir al dashboard"
-              >
-                SKALEMOTORS
-              </button>
-              {/* Pin button — esquina superior derecha del sidebar, separado del logo */}
-              {!isMobile && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setPinned((p) => !p)}
-                      className={cn(
-                        "ml-auto shrink-0 h-7 w-7 rounded-md inline-flex items-center justify-center transition-colors",
-                        pinned
-                          ? "text-primary bg-primary/10 hover:bg-primary/15"
-                          : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                      )}
-                      aria-label={pinned ? "Despinear menú lateral" : "Fijar menú lateral"}
-                      aria-pressed={pinned}
-                    >
-                      {pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">
-                    {pinned ? "Despinear (modo flotante al hover)" : "Fijar menú expandido"}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => navigate('/app')}
-              className="skale-logo text-base tracking-wide mx-auto"
-              aria-label="Ir al dashboard"
-            >
-              SK
-            </button>
-          )}
+        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center justify-center shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate('/app')}
+            className="skale-logo whitespace-nowrap"
+            aria-label="Ir al dashboard"
+          >
+            {isCollapsed ? "SK" : "SKALEMOTORS"}
+          </button>
         </SidebarHeader>
 
         <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:overflow-y-auto">
@@ -530,9 +493,10 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="border-t border-sidebar-border p-2 group-data-[collapsible=icon]:p-2">
+          <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2.5 p-2 rounded-md hover:bg-accent/40 transition-colors group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1.5">
+              <button className="flex-1 min-w-0 flex items-center gap-2.5 p-2 rounded-md hover:bg-accent/40 transition-colors group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1.5">
                 <Avatar className="h-7 w-7 shrink-0">
                   <ProfileAvatarImage avatarUrl={user?.avatar_url} size={28} cacheKey={user?.updated_at} priority="high" />
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
@@ -613,6 +577,32 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Pin button — al lado del avatar (desktop). En collapsed va debajo. */}
+          {!isMobile && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setPinned((p) => !p)}
+                  className={cn(
+                    "shrink-0 h-8 w-8 rounded-md inline-flex items-center justify-center transition-colors",
+                    pinned
+                      ? "text-primary bg-primary/10 hover:bg-primary/15"
+                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                  )}
+                  aria-label={pinned ? "Despinear menú lateral" : "Fijar menú lateral"}
+                  aria-pressed={pinned}
+                >
+                  {pinned ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                {pinned ? "Despinear (modo flotante al hover)" : "Fijar menú expandido"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          </div>
         </SidebarFooter>
       </Sidebar>
     </TooltipProvider>

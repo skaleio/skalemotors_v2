@@ -244,6 +244,18 @@ export function TopBar() {
         <AppBreadcrumb className="hidden md:flex" />
       </div>
 
+      {/* Centro: logo SKALEMOTORS con glow rosa y pulso suave (desktop grande). */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden lg:block">
+        <button
+          type="button"
+          onClick={() => navigate('/app')}
+          className="skale-logo top-bar-logo animate-pulse pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
+          aria-label="Ir al dashboard"
+        >
+          SKALEMOTORS
+        </button>
+      </div>
+
       {/* Derecha: search + acción rápida + notificaciones + tema + usuario */}
       <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
         {/* Search trigger: campo prominente desktop, ícono mobile */}
