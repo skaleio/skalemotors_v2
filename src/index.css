@@ -239,18 +239,26 @@ html[data-mobile-app="true"] #root > * {
     display: inline-block;
   }
 
-  /* Excepción: en el sidebar y topbar CLARO (fondos blancos), el logo debe ser oscuro */
+  /* En sidebar y topbar light — logo en slate oscuro con brillo sutil */
   .app-sidebar .skale-logo,
   .top-bar-logo {
-    text-shadow: 0 0 5px rgba(236, 72, 153, 0.2), 0 0 15px rgba(236, 72, 153, 0.3);
-    color: #0f172a; /* Slate 900 */
+    text-shadow: 0 0 6px rgba(236, 72, 153, 0.18);
+    color: #0f172a;
   }
 
-  /* En tema oscuro, todos los logos (incluyendo topbar y sidebar) deben brillar y ser claros */
+  /* Logo dentro del sidebar: tamaño compacto para que "SKALEMOTORS" entre
+     con el pin button al lado (header h-14, ancho útil ~180px en w-60). */
+  .app-sidebar .skale-logo {
+    font-size: 0.92rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  /* Dark — rosa pálido con brillo sutil (sin el halo blanco que saturaba el header) */
   .dark .skale-logo,
   .dark .app-sidebar .skale-logo,
   .dark .top-bar-logo {
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 20px rgba(236, 72, 153, 0.5), 0 0 30px rgba(236, 72, 153, 0.3);
+    text-shadow: 0 0 8px rgba(236, 72, 153, 0.45), 0 0 18px rgba(236, 72, 153, 0.22);
     color: #fbcfe8;
   }
 

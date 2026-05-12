@@ -409,7 +409,7 @@ export function AppSidebar() {
               <button
                 type="button"
                 onClick={() => navigate('/app')}
-                className="skale-logo text-base tracking-wide truncate min-w-0 flex-1 text-left"
+                className="skale-logo flex-1 min-w-0 text-left whitespace-nowrap overflow-hidden"
                 aria-label="Ir al dashboard"
               >
                 SKALEMOTORS
