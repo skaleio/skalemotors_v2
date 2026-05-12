@@ -79,14 +79,32 @@ export default async function handler(req: Request): Promise<Response> {
   // Auth: primero key per-branch via lead_ingest_keys (preferido).
   // Fallback temporal: LEAD_STATE_API_KEY global (rotación gradual con n8n).
   // Cuando n8n esté usando keys per-branch, eliminar el secret y este fallback.
+  // Usamos fetch directo a PostgREST (no supabase.rpc) con timeout 5s para
+  // evitar que un cuelgue del client bloquee la function entera (visto en v16).
   const provided = getApiKey(req).replace(/^Bearer\s+/i, "").trim();
   if (!provided) {
     return jsonResponse(401, { ok: false, error: "Missing API key" });
   }
 
-  const { data: verifyResult, error: verifyError } = await supabase
-    .rpc("verify_lead_ingest_key", { p_key: provided, p_branch_id: branchId });
-  const perBranchOk = !verifyError && verifyResult && (verifyResult as { ok?: boolean }).ok === true;
+  let perBranchOk = false;
+  try {
+    const verifyRes = await fetch(`${supabaseUrl}/rest/v1/rpc/verify_lead_ingest_key`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceRoleKey,
+        "Authorization": `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify({ p_key: provided, p_branch_id: branchId }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (verifyRes.ok) {
+      const verifyJson = (await verifyRes.json()) as { ok?: boolean } | null;
+      perBranchOk = verifyJson?.ok === true;
+    }
+  } catch (_) {
+    perBranchOk = false;
+  }
 
   if (!perBranchOk) {
     const legacyKey = Deno.env.get("LEAD_STATE_API_KEY");
