@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,18 @@ export function useConfirmDialog() {
       setState(null);
     }
   };
+
+  // Si el componente padre desmonta con el dialog abierto (navegación
+  // rápida, redirect por timeout de sesión), resolver con `false` para no
+  // dejar la promise colgada en memoria.
+  useEffect(() => {
+    return () => {
+      setState((prev) => {
+        if (prev) prev.resolve(false);
+        return null;
+      });
+    };
+  }, []);
 
   const ConfirmDialog = state ? (
     <AlertDialog open onOpenChange={(open) => !open && close(false)}>
