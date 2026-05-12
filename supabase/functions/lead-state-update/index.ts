@@ -45,15 +45,7 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
   }
 
-  const expectedKey = Deno.env.get("LEAD_STATE_API_KEY");
-  if (!expectedKey) {
-    return jsonResponse(500, { ok: false, error: "Server misconfiguration: API key not set" });
-  }
-  const provided = getApiKey(req);
-  if (!provided || !provided.includes(expectedKey)) {
-    return jsonResponse(401, { ok: false, error: "Invalid API key" });
-  }
-
+  // Parse early para tener branch_id disponible al validar la key per-branch.
   let body: Payload;
   try {
     body = await req.json();
@@ -83,6 +75,26 @@ export default async function handler(req: Request): Promise<Response> {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
+
+  // Auth: primero key per-branch via lead_ingest_keys (preferido).
+  // Fallback temporal: LEAD_STATE_API_KEY global (rotación gradual con n8n).
+  // Cuando n8n esté usando keys per-branch, eliminar el secret y este fallback.
+  const provided = getApiKey(req).replace(/^Bearer\s+/i, "").trim();
+  if (!provided) {
+    return jsonResponse(401, { ok: false, error: "Missing API key" });
+  }
+
+  const { data: verifyResult, error: verifyError } = await supabase
+    .rpc("verify_lead_ingest_key", { p_key: provided, p_branch_id: branchId });
+  const perBranchOk = !verifyError && verifyResult && (verifyResult as { ok?: boolean }).ok === true;
+
+  if (!perBranchOk) {
+    const legacyKey = Deno.env.get("LEAD_STATE_API_KEY");
+    const legacyOk = legacyKey && provided.includes(legacyKey);
+    if (!legacyOk) {
+      return jsonResponse(401, { ok: false, error: "Invalid API key" });
+    }
+  }
 
   const stateConfidence = body.state_confidence === null || body.state_confidence === undefined
     ? null
