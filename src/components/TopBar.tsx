@@ -244,8 +244,8 @@ export function TopBar() {
         <AppBreadcrumb className="hidden md:flex" />
       </div>
 
-      {/* Centro: logo SKALEMOTORS con glow rosa y pulso suave (desktop grande). */}
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden lg:block">
+      {/* Centro: logo SKALEMOTORS con glow rosa y pulso suave (visible md+). */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block z-0">
         <button
           type="button"
           onClick={() => navigate('/app')}
