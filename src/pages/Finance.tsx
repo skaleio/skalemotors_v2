@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -223,6 +224,7 @@ function ingresoDescription(row: MovimientoRow): string {
 
 export default function Finance() {
   const { user } = useAuth();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod);
   useEnsureMonthClosed();
   const [gastos, setGastos] = useState<GastoEmpresaWithInversor[]>([]);
@@ -761,7 +763,12 @@ export default function Finance() {
         toast.error(`No se puede eliminar: hay ${count} gasto(s) con esta etiqueta. Cambia su tipo antes.`);
         return;
       }
-      if (!confirm("¿Eliminar esta etiqueta?")) return;
+      const ok = await askConfirm({
+        title: "¿Eliminar esta etiqueta?",
+        confirmLabel: "Eliminar",
+        destructive: true,
+      });
+      if (!ok) return;
       await expenseTypesService.remove(id);
       if (editEtiquetaId === id) setEditEtiquetaId(null);
       toast.success("Etiqueta eliminada.");
@@ -877,6 +884,7 @@ export default function Finance() {
 
   return (
     <div className="space-y-6">
+      {ConfirmDialog}
       {loadError && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 flex items-center justify-between gap-4">
           <p className="text-sm text-destructive">{loadError}</p>

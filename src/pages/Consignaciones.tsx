@@ -25,6 +25,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "@/hooks/use-toast";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -552,6 +554,7 @@ export default function Consignaciones() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [selectedRanker, setSelectedRanker] = useState<ConsignacionesAdminRankingRow | null>(null);
   const isAdminScope = user?.role === "admin" || user?.role === "jefe_jefe";
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
 
   // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -962,7 +965,7 @@ export default function Consignaciones() {
         prev.map((row) => (row.id === item.id ? { ...row, label: prevLabel } : row))
       );
       refetch().catch(() => {});
-      alert(error?.message || "No se pudo actualizar la etiqueta.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar la etiqueta." });
     }
   };
 
@@ -980,7 +983,7 @@ export default function Consignaciones() {
       console.error("Error actualizando estado:", error);
       // Revertir cambio optimista
       await refetch();
-      alert(error?.message || "No se pudo actualizar el estado.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el estado." });
     }
   };
 
@@ -1000,7 +1003,7 @@ export default function Consignaciones() {
       console.error("Error actualizando reunion:", error);
       // Revertir cambio optimista
       await refetch();
-      alert(error?.message || "No se pudo actualizar la reunion.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar la reunión." });
     }
   };
 
@@ -1026,7 +1029,7 @@ export default function Consignaciones() {
       console.error("Error actualizando precio:", error);
       // Revertir cambio optimista
       await refetch();
-      alert(error?.message || "No se pudo actualizar el precio.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el precio." });
     }
   };
 
@@ -1046,7 +1049,7 @@ export default function Consignaciones() {
     } catch (error: any) {
       console.error("Error actualizando consignación:", error);
       await refetch();
-      alert(error?.message || "No se pudo guardar el cambio.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo guardar el cambio." });
     }
   };
 
@@ -1056,7 +1059,13 @@ export default function Consignaciones() {
   };
 
   const handleDelete = async (item: ConsignacionWithRelations) => {
-    if (!confirm(`¿Eliminar la consignacion de ${item.owner_name}?`)) return;
+    const ok = await askConfirm({
+      title: `¿Eliminar la consignación de ${item.owner_name}?`,
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
 
     // Optimistic update
     const previousConsignaciones = [...consignaciones];
@@ -1077,12 +1086,13 @@ export default function Consignaciones() {
       console.error("Error eliminando consignacion:", error);
       // Revertir cambio optimista
       setConsignaciones(previousConsignaciones);
-      alert(error?.message || "No se pudo eliminar la consignacion.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo eliminar la consignación." });
     }
   };
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {ConfirmDialog}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Consignaciones</h1>

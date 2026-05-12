@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
   listFactors,
   enrollTotp,
@@ -17,6 +18,7 @@ import {
 
 export function MfaEnrollSection() {
   const qc = useQueryClient();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const [friendlyName, setFriendlyName] = useState("");
   const [pending, setPending] = useState<EnrollResult | null>(null);
   const [code, setCode] = useState("");
@@ -69,7 +71,13 @@ export function MfaEnrollSection() {
   }
 
   async function removeFactor(factorId: string) {
-    if (!confirm("¿Eliminar este dispositivo MFA? Vas a poder loguearte solo con password hasta enrollar uno nuevo.")) return;
+    const ok = await askConfirm({
+      title: "¿Eliminar este dispositivo MFA?",
+      description: "Vas a poder loguearte solo con password hasta enrollar uno nuevo.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await unenroll(factorId);
@@ -83,6 +91,8 @@ export function MfaEnrollSection() {
   }
 
   return (
+    <>
+      {ConfirmDialog}
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -189,5 +199,6 @@ export function MfaEnrollSection() {
         )}
       </CardContent>
     </Card>
+    </>
   );
 }

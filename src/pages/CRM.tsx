@@ -27,6 +27,7 @@ import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
@@ -546,6 +547,7 @@ export default function CRM() {
   }, [location.search]);
 
   const queryClient = useQueryClient();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const { leads, loading, error: leadsError, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
@@ -653,7 +655,13 @@ export default function CRM() {
   const [isDeleting, setIsDeleting] = useState(false);
   const handleDeleteLead = useCallback(async () => {
     if (!editingLead) return;
-    if (!confirm("¿Eliminar este lead? Esta acción no se puede deshacer.")) return;
+    const ok = await askConfirm({
+      title: "¿Eliminar este lead?",
+      description: "Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setIsDeleting(true);
     try {
       await leadService.delete(editingLead.id);
@@ -1313,6 +1321,7 @@ export default function CRM() {
 
   return (
     <div className="space-y-6">
+      {ConfirmDialog}
       {leadsError && (
         <div
           className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
