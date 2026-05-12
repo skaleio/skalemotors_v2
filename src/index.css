@@ -239,11 +239,11 @@ html[data-mobile-app="true"] #root > * {
     display: inline-block;
   }
 
-  /* En sidebar y topbar light — logo en slate oscuro con brillo sutil */
+  /* En sidebar y topbar light — logo en rosa de marca con glow */
   .app-sidebar .skale-logo,
   .top-bar-logo {
-    text-shadow: 0 0 6px rgba(236, 72, 153, 0.18);
-    color: #0f172a;
+    text-shadow: 0 0 8px rgba(236, 72, 153, 0.35), 0 0 16px rgba(236, 72, 153, 0.18);
+    color: hsl(var(--primary));
   }
 
   /* Logo dentro del sidebar: el pin button se movio al footer, asi que el
