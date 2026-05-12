@@ -1,7 +1,7 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
 import { getAvatarSrcSet, getOptimizedAvatarUrl } from "@/lib/avatar-utils";
-import { clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
+import { captureAppError, clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
 import { clearTenantContext, setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -163,6 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     if (lastNetworkError) {
       setLoading(false);
+      captureAppError(lastNetworkError, { area: "auth.fetchProfile.network", userId });
       toast.error("Sin conexión", {
         description: "Verificá tu internet y recargá la página.",
       });
@@ -172,6 +173,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       if (error) {
         setLoading(false);
+        captureAppError(error, { area: "auth.fetchProfile.db", userId });
         toast.error("Error cargando tu perfil", {
           description: "Recargá la página o pedí ayuda al admin si persiste.",
         });
@@ -650,8 +652,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signUp: AuthContextType["signUp"] = async (email, password, fullName, phone) => {
-    setLoading(true);
     try {
+      setLoading(true);
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
