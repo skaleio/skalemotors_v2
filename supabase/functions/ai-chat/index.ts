@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { buildBranchBrain } from "../_shared/brainBuilder.ts";
 import { captureEdgeError } from "../_shared/observability.ts";
+import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -78,11 +79,18 @@ async function getOrBuildBrain(
   return snapshotText;
 }
 
+type AnthropicCallResult = {
+  content: string;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+};
+
 async function callAnthropic(
   apiKey: string,
   system: string,
   messages: Array<{ role: "user" | "assistant"; content: string }>
-): Promise<string> {
+): Promise<AnthropicCallResult> {
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
@@ -104,13 +112,22 @@ async function callAnthropic(
     throw new Error(`Anthropic API error (${res.status}): ${err}`);
   }
 
-  const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+  const data = (await res.json()) as {
+    model?: string;
+    content?: Array<{ type: string; text?: string }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
   const block = data?.content?.find((b) => b.type === "text");
   const text = block?.text;
   if (typeof text !== "string") {
     throw new Error("Anthropic response missing content");
   }
-  return text.trim();
+  return {
+    content: text.trim(),
+    model: data?.model ?? MODEL,
+    tokensInput: Number(data?.usage?.input_tokens ?? 0),
+    tokensOutput: Number(data?.usage?.output_tokens ?? 0),
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -162,26 +179,25 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(400, { ok: false, error: "message is required" });
   }
 
-  // Validar que el branchId solicitado pertenece al tenant del usuario
-  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch
-  if (branchId) {
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("tenant_id, legacy_protected")
-      .eq("id", user.id)
+  // Resolver tenant_id del usuario (siempre, para usage logging).
+  const { data: userProfile } = await supabase
+    .from("users")
+    .select("tenant_id, legacy_protected")
+    .eq("id", user.id)
+    .single();
+
+  // Validar que el branchId solicitado pertenece al tenant del usuario.
+  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch.
+  if (branchId && userProfile && !userProfile.legacy_protected) {
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("id")
+      .eq("id", branchId)
+      .eq("tenant_id", userProfile.tenant_id)
       .single();
 
-    if (userProfile && !userProfile.legacy_protected) {
-      const { data: branch } = await supabase
-        .from("branches")
-        .select("id")
-        .eq("id", branchId)
-        .eq("tenant_id", userProfile.tenant_id)
-        .single();
-
-      if (!branch) {
-        return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
-      }
+    if (!branch) {
+      return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
     }
   }
 
@@ -205,8 +221,19 @@ export default async function handler(req: Request): Promise<Response> {
       { role: "user", content: message.trim() },
     ];
 
-    const text = await callAnthropic(apiKey, systemContent, messages);
-    return jsonResponse(200, { ok: true, text });
+    const result = await callAnthropic(apiKey, systemContent, messages);
+    await logAiUsage({
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+      tenantId: userProfile?.tenant_id ?? null,
+      userId: user.id,
+      branchId: branchId ?? null,
+      feature: "ai-chat",
+      model: result.model,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+    });
+    return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
     await captureEdgeError(e, {

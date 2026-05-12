@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { captureEdgeError } from "../_shared/observability.ts";
+import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -163,12 +164,19 @@ async function fetchBusinessContext(supabase: ReturnType<typeof createClient>, b
   return lines.join("\n");
 }
 
+type OpenAICallResult = {
+  content: string;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+};
+
 async function callOpenAI(
   apiKey: string,
   systemContent: string,
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
   model: string = DEFAULT_MODEL
-): Promise<string> {
+): Promise<OpenAICallResult> {
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -193,7 +201,12 @@ async function callOpenAI(
   if (typeof content !== "string") {
     throw new Error("OpenAI response missing content");
   }
-  return content.trim();
+  return {
+    content: content.trim(),
+    model: data?.model ?? model,
+    tokensInput: Number(data?.usage?.prompt_tokens ?? 0),
+    tokensOutput: Number(data?.usage?.completion_tokens ?? 0),
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -245,26 +258,25 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(400, { ok: false, error: "message is required" });
   }
 
-  // Validar que el branchId solicitado pertenece al tenant del usuario
-  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch
-  if (branchId) {
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("tenant_id, legacy_protected")
-      .eq("id", user.id)
+  // Resolver tenant_id del usuario para usage logging (siempre, no condicional a branchId).
+  const { data: userProfile } = await supabase
+    .from("users")
+    .select("tenant_id, legacy_protected")
+    .eq("id", user.id)
+    .single();
+
+  // Validar que el branchId solicitado pertenece al tenant del usuario.
+  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch.
+  if (branchId && userProfile && !userProfile.legacy_protected) {
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("id")
+      .eq("id", branchId)
+      .eq("tenant_id", userProfile.tenant_id)
       .single();
 
-    if (userProfile && !userProfile.legacy_protected) {
-      const { data: branch } = await supabase
-        .from("branches")
-        .select("id")
-        .eq("id", branchId)
-        .eq("tenant_id", userProfile.tenant_id)
-        .single();
-
-      if (!branch) {
-        return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
-      }
+    if (!branch) {
+      return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
     }
   }
 
@@ -279,8 +291,19 @@ export default async function handler(req: Request): Promise<Response> {
       { role: "user", content: message.trim() },
     ];
 
-    const text = await callOpenAI(apiKey, systemContent, messages);
-    return jsonResponse(200, { ok: true, text });
+    const result = await callOpenAI(apiKey, systemContent, messages);
+    await logAiUsage({
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+      tenantId: userProfile?.tenant_id ?? null,
+      userId: user.id,
+      branchId: branchId ?? null,
+      feature: "support-chat",
+      model: result.model,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+    });
+    return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
     await captureEdgeError(e, {

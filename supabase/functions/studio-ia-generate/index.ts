@@ -1,6 +1,7 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 
 /** Cliente Supabase en Edge; tipo explícito para que el IDE no infiera unknown. */
 type EdgeSupabaseClient = { from(table: string): SupabaseQueryChain };
@@ -195,12 +196,19 @@ Genera el guión completo listo para grabar, con secciones claras. Incluye al fi
   return { system, user };
 }
 
+type OpenAICallResult = {
+  content: string;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+};
+
 async function callOpenAI(
   apiKey: string,
   system: string,
   user: string,
   model: string = DEFAULT_MODEL
-): Promise<string> {
+): Promise<OpenAICallResult> {
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -228,7 +236,31 @@ async function callOpenAI(
   if (typeof content !== "string") {
     throw new Error("OpenAI response missing content");
   }
-  return content.trim();
+  return {
+    content: content.trim(),
+    model: data?.model ?? model,
+    tokensInput: Number(data?.usage?.prompt_tokens ?? 0),
+    tokensOutput: Number(data?.usage?.completion_tokens ?? 0),
+  };
+}
+
+async function resolveTenantFromBranch(
+  supabase: EdgeSupabaseClient | null,
+  branchId: string | null | undefined,
+): Promise<string | null> {
+  if (!supabase || !branchId) return null;
+  try {
+    const { data } = await (supabase as unknown as {
+      from(t: string): { select(c: string): { eq(k: string, v: string): { maybeSingle(): Promise<{ data: { tenant_id: string | null } | null }> } } };
+    })
+      .from("branches")
+      .select("tenant_id")
+      .eq("id", branchId)
+      .maybeSingle();
+    return data?.tenant_id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const LOG_PREFIX = "[studio-ia-generate]";
@@ -327,28 +359,43 @@ export default async function handler(req: Request): Promise<Response> {
     : null;
 
   try {
-    let text: string;
+    let result: OpenAICallResult;
+    let branchId: string | null = null;
     if (type === "vehicle_description") {
       console.log(`${LOG_PREFIX} loading system prompt (vehicle_description)`);
-      const baseSystem = await getSystemPrompt(supabase, "vehicle_description", (payload as VehicleDescriptionPayload).branch_id)
+      const p = payload as VehicleDescriptionPayload;
+      branchId = p.branch_id ?? null;
+      const baseSystem = await getSystemPrompt(supabase, "vehicle_description", branchId)
         ?? VEHICLE_DESCRIPTION_SYSTEM_PROMPT;
-      const { system, user } = await buildVehicleDescriptionPrompt(
-        payload as VehicleDescriptionPayload,
-        supabase,
-        baseSystem
-      );
+      const { system, user } = await buildVehicleDescriptionPrompt(p, supabase, baseSystem);
       console.log(`${LOG_PREFIX} calling OpenAI (vehicle_description)`);
-      text = await callOpenAI(apiKey, system, user);
+      result = await callOpenAI(apiKey, system, user);
     } else {
       console.log(`${LOG_PREFIX} loading system prompt (reel_script)`);
-      const baseSystem = await getSystemPrompt(supabase, "reel_script", (payload as ReelScriptPayload).branch_id)
+      const p = payload as ReelScriptPayload;
+      branchId = p.branch_id ?? null;
+      const baseSystem = await getSystemPrompt(supabase, "reel_script", branchId)
         ?? REEL_SCRIPT_DEFAULT_SYSTEM;
-      const { system, user } = buildReelScriptPrompt(payload as ReelScriptPayload, baseSystem);
+      const { system, user } = buildReelScriptPrompt(p, baseSystem);
       console.log(`${LOG_PREFIX} calling OpenAI (reel_script)`);
-      text = await callOpenAI(apiKey, system, user);
+      result = await callOpenAI(apiKey, system, user);
+    }
+    if (supabaseUrl && supabaseServiceKey) {
+      const tenantId = await resolveTenantFromBranch(supabase, branchId);
+      await logAiUsage({
+        supabaseUrl,
+        serviceRoleKey: supabaseServiceKey,
+        tenantId,
+        userId: null,
+        branchId,
+        feature: type === "vehicle_description" ? "studio-vehicle-description" : "studio-reel-script",
+        model: result.model,
+        tokensInput: result.tokensInput,
+        tokensOutput: result.tokensOutput,
+      });
     }
     console.log(`${LOG_PREFIX} success type=${type}`);
-    return jsonResponse(200, { ok: true, text });
+    return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     console.error(`${LOG_PREFIX} error:`, message);

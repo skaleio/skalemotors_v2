@@ -34,6 +34,7 @@ const Billing = lazy(() => import("./pages/Billing"));
 const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
 const Documents = lazy(() => import("./pages/Documents"));
 const Settings = lazy(() => import("./pages/Settings"));
+const MonitorPage = lazy(() => import("./pages/MonitorPage"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const Users = lazy(() => import("./pages/Users"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -245,6 +246,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Settings />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/settings/monitor" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MonitorPage />
                   </Layout>
                 </ProtectedRoute>
               } />
