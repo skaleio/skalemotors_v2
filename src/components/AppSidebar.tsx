@@ -403,18 +403,18 @@ export function AppSidebar() {
         )}
         collapsible="icon"
       >
-        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center shrink-0 gap-2">
+        <SidebarHeader className="border-b border-sidebar-border h-14 px-3 flex items-center shrink-0">
           {!isCollapsed ? (
             <>
               <button
                 type="button"
                 onClick={() => navigate('/app')}
-                className="skale-logo flex-1 min-w-0 text-left whitespace-nowrap overflow-hidden"
+                className="skale-logo min-w-0 text-left whitespace-nowrap"
                 aria-label="Ir al dashboard"
               >
                 SKALEMOTORS
               </button>
-              {/* Pin button — solo desktop */}
+              {/* Pin button — esquina superior derecha del sidebar, separado del logo */}
               {!isMobile && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -422,7 +422,7 @@ export function AppSidebar() {
                       type="button"
                       onClick={() => setPinned((p) => !p)}
                       className={cn(
-                        "shrink-0 h-7 w-7 rounded-md inline-flex items-center justify-center transition-colors",
+                        "ml-auto shrink-0 h-7 w-7 rounded-md inline-flex items-center justify-center transition-colors",
                         pinned
                           ? "text-primary bg-primary/10 hover:bg-primary/15"
                           : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
