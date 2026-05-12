@@ -1,7 +1,7 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import { supabase, type User } from "@/lib/supabase";
 import { getAvatarSrcSet, getOptimizedAvatarUrl } from "@/lib/avatar-utils";
-import { clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
+import { captureAppError, clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
 import { clearTenantContext, setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -58,11 +58,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
   const PROFILE_CACHE_KEY_PREFIX = "skale.user-profile";
 
-  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  const withTimeout = async <T,>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    timeoutMessage = "Timeout al obtener el perfil",
+  ): Promise<T> => {
     let timeoutId: number | null = null;
     const timeoutPromise = new Promise<T>((_, reject) => {
       timeoutId = window.setTimeout(() => {
-        reject(new Error("Timeout al obtener el perfil"));
+        reject(new Error(timeoutMessage));
       }, timeoutMs);
     });
     try {
@@ -75,6 +79,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const PROFILE_FETCH_TIMEOUT_MS = 20 * 1000; // 20 s para redes lentas
+  // Sin timeout, signInWithPassword puede colgarse indefinidamente (red flaky,
+  // proxy, captura). El botón "Iniciando sesión..." queda stuck porque el
+  // finally de Login no corre hasta que el await resuelva. 15s da margen real
+  // sin quedar atorado.
+  const SIGNIN_TIMEOUT_MS = 15 * 1000;
 
   const getProfileCacheKey = (userId: string) => `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
 
@@ -116,18 +125,58 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const doFetchUserProfile = async (userId: string): Promise<ProfileFetchReason> => {
-    try {
-      const { data, error } = await withTimeout(
-        supabase
-          .from("users")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle(),
-        PROFILE_FETCH_TIMEOUT_MS,
-      );
+    // Network retry: si la query throwa por timeout o red caída, reintenta
+    // con backoff exponencial (1s, 2s) hasta 3 intentos. Error de BD (RLS,
+    // constraint, etc.) NO se reintenta — no es transitorio.
+    const NETWORK_RETRIES = 3;
+    let lastNetworkError: unknown = null;
+    let data: Awaited<ReturnType<typeof supabase.from<"users">["select"]>>["data"] | null = null;
+    let error: Awaited<ReturnType<typeof supabase.from<"users">["select"]>>["error"] | null = null;
+    for (let attempt = 0; attempt < NETWORK_RETRIES; attempt++) {
+      try {
+        const result = await withTimeout(
+          supabase
+            .from("users")
+            .select("*")
+            .eq("id", userId)
+            .maybeSingle(),
+          PROFILE_FETCH_TIMEOUT_MS,
+        );
+        data = result.data;
+        error = result.error;
+        lastNetworkError = null;
+        break;
+      } catch (e) {
+        lastNetworkError = e;
+        if (attempt < NETWORK_RETRIES - 1) {
+          if (attempt === 1) {
+            toast.message("La conexión está lenta", {
+              description: "Reintentando cargar tu perfil...",
+              duration: 4000,
+            });
+          }
+          const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
+    }
 
+    if (lastNetworkError) {
+      setLoading(false);
+      captureAppError(lastNetworkError, { area: "auth.fetchProfile.network", userId });
+      toast.error("Sin conexión", {
+        description: "Verificá tu internet y recargá la página.",
+      });
+      return "error";
+    }
+
+    try {
       if (error) {
         setLoading(false);
+        captureAppError(error, { area: "auth.fetchProfile.db", userId });
+        toast.error("Error cargando tu perfil", {
+          description: "Recargá la página o pedí ayuda al admin si persiste.",
+        });
         return "error";
       }
 
@@ -192,11 +241,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
 
-      const { data } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+      // Wrappear con timeout para que un retry no cuelgue indefinidamente la
+      // cascada de auth si la red se cae a la mitad del backoff.
+      let data: { id: string; [k: string]: unknown } | null = null;
+      try {
+        const result = await withTimeout(
+          supabase
+            .from("users")
+            .select("*")
+            .eq("id", userId)
+            .maybeSingle(),
+          PROFILE_FETCH_TIMEOUT_MS,
+        );
+        data = result.data as typeof data;
+      } catch {
+        // Network/timeout en este retry: probar siguiente intento.
+        continue;
+      }
 
       if (data) {
         const updatedUser: User = {
@@ -352,6 +413,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
+      if (event === "TOKEN_REFRESHED") {
+        // Avisar a otras tabs antes de seguir el flujo. Sin esto, dos tabs
+        // pueden refrescar simultáneamente y la segunda recibe "Already Used"
+        // → ambas pierden sesión. El listener en la otra tab releerá la
+        // sesión del storage (ya actualizada) y evitará el race.
+        try { authChannelRef.current?.postMessage({ type: "TOKEN_REFRESHED" }); } catch { /* ignore */ }
+      }
+
       if (session?.user) {
         const sameUserAlreadyLoaded = currentUserRef.current?.id === session.user.id;
         const cachedProfile = readCachedProfile(session.user.id);
@@ -413,6 +482,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else if (msg.type === "PROFILE_UPDATED" && msg.userId && currentUserRef.current?.id === msg.userId) {
         // Otra pestaña actualizó el perfil → refrescar acá también
         void fetchUserProfile(msg.userId);
+      } else if (msg.type === "TOKEN_REFRESHED") {
+        // Otra pestaña refrescó el token. Releer storage para que esta tab
+        // use el access_token nuevo y NO mande el refresh_token viejo en su
+        // próximo intento (Supabase responde "Already Used" y ambas pierden
+        // sesión). El storage es compartido entre tabs, getSession lee fresco.
+        void supabase.auth.getSession().then(({ data }) => {
+          if (data.session) {
+            pendingSessionRef.current = data.session;
+            setSession(data.session);
+          }
+        }).catch(() => { /* ignore: cross-tab best effort */ });
       }
     };
     return () => {
@@ -507,10 +587,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(null);
       setLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"];
+      let error: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["error"];
+      try {
+        const result = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          SIGNIN_TIMEOUT_MS,
+          "SIGNIN_TIMEOUT",
+        );
+        data = result.data;
+        error = result.error;
+      } catch (timeoutErr) {
+        setUser(null);
+        currentUserRef.current = null;
+        setSession(null);
+        setLoading(false);
+        const msg = timeoutErr instanceof Error && timeoutErr.message === "SIGNIN_TIMEOUT"
+          ? "La conexión está demorando demasiado. Verificá tu internet e intentá de nuevo."
+          : "Error de conexión al iniciar sesión. Intentá de nuevo.";
+        return { error: new Error(msg) };
+      }
       log("signInWithPassword done", { hasSession: !!data?.session, hasError: !!error });
 
       if (error) {
@@ -558,7 +654,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signUp: AuthContextType["signUp"] = async (email, password, fullName, phone) => {
     try {
       setLoading(true);
-
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -572,7 +667,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
       if (authError) {
-        setLoading(false);
         return { error: authError };
       }
 
@@ -590,7 +684,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .maybeSingle();
 
         if (!userCheck) {
-          setLoading(false);
           return {
             error: new Error(
               "No pudimos completar el alta de tu cuenta. Pedile al administrador que te invite desde el panel de equipo."
@@ -607,8 +700,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       return { error: null };
     } catch {
-      setLoading(false);
       return { error: new Error("Error inesperado en el registro.") };
+    } finally {
+      // Garantía: cualquier path (éxito, error de auth, getSession fallido,
+      // exception) deja loading=false. Antes el happy path final dejaba
+      // loading=true si getSession devolvía null y fetchUserProfile no se
+      // llegaba a invocar — spinner infinito hasta el guard de 45s.
+      setLoading(false);
     }
   };
 
