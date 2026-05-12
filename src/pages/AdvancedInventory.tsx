@@ -1006,7 +1006,7 @@ export default function AdvancedInventory() {
                   wrapperStyle={{ paddingBottom: '20px' }}
                 />
                 <Bar dataKey="valor" fill={COLORS.vendido} name="Valor Total" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="costo" fill="#9ca3af" name="Costo Total" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="costo" fill="hsl(var(--muted-foreground))" name="Costo Total" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="margen" fill={COLORS.disponible} name="Margen Total" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

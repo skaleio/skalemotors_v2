@@ -5,30 +5,11 @@ import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/Fin
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
-import { CHART_PALETTE, CHART_PRIMARY } from "@/lib/chartPalette";
+import { CHART_PALETTE, CHART_PRIMARY, CHART_TOOLTIP_PROPS } from "@/lib/chartPalette";
 import { ArrowUpRight, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, TrendingUp, Trophy, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
-/** Tooltip legible en claro y oscuro (Recharts por defecto pinta texto oscuro). */
-const EXEC_TOOLTIP_PROPS = {
-  contentStyle: {
-    backgroundColor: "hsl(var(--popover))",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: "8px",
-    boxShadow: "0 8px 24px -8px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08)",
-    padding: "10px 14px",
-  },
-  labelStyle: {
-    color: "hsl(var(--popover-foreground))",
-    fontWeight: 600 as const,
-    marginBottom: 4,
-  },
-  itemStyle: {
-    color: "hsl(var(--popover-foreground))",
-  },
-};
 
 /** Paleta de 12 colores para la pie de gastos: CHART_PALETTE + variantes a 0.7 opacidad. */
 const COLORS_GASTOS = [
@@ -260,8 +241,8 @@ export default function ExecutiveDashboard() {
                     axisLine={false}
                   />
                   <Tooltip
-                    {...EXEC_TOOLTIP_PROPS}
-                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
+                    {...CHART_TOOLTIP_PROPS}
+                    contentStyle={{ ...CHART_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
                     formatter={(value: any, name: string) => {
                       if (name === 'Ventas') return [value, 'Ventas'];
                       return [formatCLP(value), 'Ingresos'];
@@ -336,8 +317,8 @@ export default function ExecutiveDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    {...EXEC_TOOLTIP_PROPS}
-                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
+                    {...CHART_TOOLTIP_PROPS}
+                    contentStyle={{ ...CHART_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
                     formatter={(value: number, name: string) => {
                       const total = stats!.vehiclesByCategory.reduce((s, i) => s + i.count, 0);
                       const pct = total ? Math.round((Number(value) / total) * 100) : 0;
@@ -402,8 +383,8 @@ export default function ExecutiveDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    {...EXEC_TOOLTIP_PROPS}
-                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
+                    {...CHART_TOOLTIP_PROPS}
+                    contentStyle={{ ...CHART_TOOLTIP_PROPS.contentStyle, borderRadius: "10px" }}
                     formatter={(value: number, name: string) => {
                       const total = stats!.expensesByType.reduce((s, i) => s + i.amount, 0);
                       const pct = total ? Math.round((Number(value) / total) * 100) : 0;
@@ -480,8 +461,8 @@ export default function ExecutiveDashboard() {
                     axisLine={false}
                   />
                   <Tooltip
-                    {...EXEC_TOOLTIP_PROPS}
-                    contentStyle={{ ...EXEC_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
+                    {...CHART_TOOLTIP_PROPS}
+                    contentStyle={{ ...CHART_TOOLTIP_PROPS.contentStyle, padding: "12px" }}
                     formatter={(value: any) => [value, 'Leads']}
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
                   />

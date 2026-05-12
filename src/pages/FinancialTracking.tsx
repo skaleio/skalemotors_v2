@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCLP } from "@/lib/format";
-import { CHART_PALETTE, CHART_PRIMARY } from "@/lib/chartPalette";
+import { CHART_PALETTE, CHART_PRIMARY, CHART_TOOLTIP_PROPS } from "@/lib/chartPalette";
 import type { DateRangePreset } from "@/hooks/useFinancialTracking";
 import { useFinancialTracking } from "@/hooks/useFinancialTracking";
 import {
@@ -65,20 +65,6 @@ const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [
   { value: "last_6_months", label: "Últimos 6 meses" },
   { value: "this_year", label: "Este año" },
 ];
-
-/** Tooltip consistente para todos los charts (popover tokenizado, sombra suave). */
-const CHART_TOOLTIP = {
-  contentStyle: {
-    backgroundColor: "hsl(var(--popover))",
-    color: "hsl(var(--popover-foreground))",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: "8px",
-    boxShadow: "0 8px 24px -8px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08)",
-    padding: "10px 14px",
-  },
-  labelStyle: { color: "hsl(var(--popover-foreground))", fontWeight: 600 as const, marginBottom: 4 },
-  itemStyle: { color: "hsl(var(--popover-foreground))" },
-};
 
 function formatShortDate(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -223,7 +209,7 @@ export default function FinancialTracking() {
                   <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                   <Tooltip
-                    {...CHART_TOOLTIP}
+                    {...CHART_TOOLTIP_PROPS}
                     formatter={(value: number) => [formatCLP(value), ""]}
                     labelFormatter={(label) => label}
                     cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
@@ -258,7 +244,7 @@ export default function FinancialTracking() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
                   <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
-                  <Tooltip {...CHART_TOOLTIP} formatter={(value: number) => [formatCLP(value), "Balance"]} labelFormatter={(label) => label} />
+                  <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value: number) => [formatCLP(value), "Balance"]} labelFormatter={(label) => label} />
                   <Line
                     type="monotone"
                     dataKey="balance"
@@ -300,7 +286,7 @@ export default function FinancialTracking() {
                   <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                   <Tooltip
-                    {...CHART_TOOLTIP}
+                    {...CHART_TOOLTIP_PROPS}
                     formatter={(value: number, name: string) => [name === "Ventas (unid.)" ? value : formatCLP(value), name]}
                     labelFormatter={(label) => label}
                     cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
@@ -347,7 +333,7 @@ export default function FinancialTracking() {
                       <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} stroke="hsl(var(--card))" strokeWidth={2} />
                     ))}
                   </Pie>
-                  <Tooltip {...CHART_TOOLTIP} formatter={(v: number) => [formatCLP(v), ""]} />
+                  <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(v: number) => [formatCLP(v), ""]} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -375,7 +361,7 @@ export default function FinancialTracking() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} width={55} />
-                  <Tooltip {...CHART_TOOLTIP} formatter={(v: number) => [formatCLP(v), "Gasto"]} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
+                  <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(v: number) => [formatCLP(v), "Gasto"]} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
                   <Bar dataKey="amount" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} maxBarSize={20} />
                 </BarChart>
               </ResponsiveContainer>
@@ -426,7 +412,7 @@ export default function FinancialTracking() {
                           <Cell key={i} fill={incomeColors[i]} stroke="hsl(var(--card))" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip {...CHART_TOOLTIP} formatter={(v: number) => [formatCLP(v), ""]} />
+                      <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(v: number) => [formatCLP(v), ""]} />
                     </PieChart>
                   </ResponsiveContainer>
                 );
@@ -456,7 +442,7 @@ export default function FinancialTracking() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
                   <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
-                  <Tooltip {...CHART_TOOLTIP} formatter={(value: number) => [formatCLP(value), "Acumulado"]} labelFormatter={(label) => label} />
+                  <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value: number) => [formatCLP(value), "Acumulado"]} labelFormatter={(label) => label} />
                   <Line
                     type="monotone"
                     dataKey="balanceAccumulated"

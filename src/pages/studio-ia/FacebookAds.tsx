@@ -40,7 +40,8 @@ import {
   type MetaAdsCampaign,
   type MetaAdsInsight,
 } from "@/lib/services/metaAdsApi";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART_AXIS_TICK, CHART_BAR_RADIUS, CHART_GRID_PROPS, CHART_PALETTE, CHART_TOOLTIP_PROPS } from "@/lib/chartPalette";
 
 const OBJECTIVE_LABELS: Record<string, string> = {
   OUTCOME_TRAFFIC: "Tráfico",
@@ -429,26 +430,28 @@ export default function FacebookAds() {
               </div>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
+                <CardHeader className="border-b">
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
                     Rendimiento en el tiempo
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   {chartData.length > 0 ? (
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                          <YAxis tick={{ fontSize: 11 }} />
+                          <CartesianGrid {...CHART_GRID_PROPS} />
+                          <XAxis dataKey="date" tick={CHART_AXIS_TICK} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} />
+                          <YAxis tick={CHART_AXIS_TICK} tickLine={false} axisLine={false} />
                           <Tooltip
+                            {...CHART_TOOLTIP_PROPS}
                             formatter={(value: number) => [value.toLocaleString(), ""]}
                             labelFormatter={(label) => `Fecha: ${label}`}
                           />
-                          <Bar dataKey="impresiones" name="Impresiones" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="clics" name="Clics" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="gasto" name="Gasto" fill="#f97316" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="impresiones" name="Impresiones" fill={CHART_PALETTE[0]} radius={CHART_BAR_RADIUS} maxBarSize={32} />
+                          <Bar dataKey="clics" name="Clics" fill={CHART_PALETTE[1]} radius={CHART_BAR_RADIUS} maxBarSize={32} />
+                          <Bar dataKey="gasto" name="Gasto" fill={CHART_PALETTE[2]} radius={CHART_BAR_RADIUS} maxBarSize={32} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

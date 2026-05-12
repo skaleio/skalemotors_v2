@@ -108,10 +108,10 @@ function formatDate(dateStr: string) {
 }
 
 const CHART_COLORS = {
-  consignaciones: "hsl(221, 83%, 53%)",
-  ventas: "hsl(160, 84%, 39%)",
-  facturacion: "hsl(38, 92%, 50%)",
-  facturacionFill: "hsl(38, 92%, 50%, 0.12)",
+  consignaciones: "hsl(var(--chart-1))",  // azul
+  ventas: "hsl(var(--chart-2))",          // verde
+  facturacion: "hsl(var(--chart-3))",     // ámbar
+  facturacionFill: "hsl(var(--chart-3) / 0.12)",
 };
 
 function ChartTooltip(
