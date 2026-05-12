@@ -34,7 +34,7 @@ import {
   Users,
   Wallet
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
@@ -415,81 +415,135 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:overflow-y-auto">
-          {categoriesToShow.map((category) => (
-            <Collapsible
-              key={category.title}
-              open={expandedCategories[category.title]}
-              onOpenChange={() => toggleCategory(category.title)}
-            >
-              <SidebarGroup className="py-1">
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel
-                    className={cn(
-                      "cursor-pointer rounded-md px-2 py-1.5 transition-colors hover:bg-accent/30",
-                      "group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:w-full"
-                    )}
-                    onClick={isCollapsed ? () => handleCollapsedCategoryClick(category) : undefined}
-                  >
-                    {renderCategoryLabel(category.title, category.icon, expandedCategories[category.title])}
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                {!isCollapsed && (
-                  <CollapsibleContent className="animate-in slide-in-from-top-1 duration-150 fade-in-0">
-                    <SidebarGroupContent>
-                      <SidebarMenu className="gap-0.5 pt-1">
-                        {category.items.map((item) => (
-                          <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton asChild>
-                              {renderItem(item)}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                )}
-              </SidebarGroup>
-            </Collapsible>
-          ))}
+          {isCollapsed ? (
+            // === MODO COLAPSADO: cada item con su icono y tooltip, divisores entre secciones ===
+            <SidebarMenu className="gap-0.5">
+              {categoriesToShow.map((category, ci) => (
+                <Fragment key={category.title}>
+                  {ci > 0 && <div className="h-px bg-sidebar-border mx-2 my-1.5" aria-hidden="true" />}
+                  {category.items.map((item) => {
+                    const active = isActive(item.url);
+                    const isLeads = item.url === "/app/leads";
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <NavLink
+                              to={item.url}
+                              end={item.url === "/"}
+                              onMouseEnter={isLeads ? prefetchLeads : undefined}
+                              className={cn(
+                                "group flex items-center justify-center h-9 w-full rounded-md border-l-2 transition-colors",
+                                active
+                                  ? "border-primary bg-accent text-primary"
+                                  : "border-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+                              )}
+                            >
+                              <item.icon className="h-4 w-4 shrink-0" />
+                            </NavLink>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="text-xs">{item.title}</TooltipContent>
+                        </Tooltip>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </Fragment>
+              ))}
+              {!isVendorOnly && (
+                <>
+                  <div className="h-px bg-sidebar-border mx-2 my-1.5" aria-hidden="true" />
+                  {settingsCategory.items.map((item) => {
+                    const active = isActive(item.url);
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <NavLink
+                              to={item.url}
+                              className={cn(
+                                "flex items-center justify-center h-9 w-full rounded-md border-l-2 transition-colors",
+                                active
+                                  ? "border-primary bg-accent text-primary"
+                                  : "border-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+                              )}
+                            >
+                              <item.icon className="h-4 w-4 shrink-0" />
+                            </NavLink>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="text-xs">{item.title}</TooltipContent>
+                        </Tooltip>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </>
+              )}
+              {isVendorOnly && <SidebarSalesRanking collapsed />}
+              {isVendorOnly && <SidebarConsignacionesRanking collapsed />}
+            </SidebarMenu>
+          ) : (
+            // === MODO EXPANDIDO: categorías con Collapsible ===
+            <>
+              {categoriesToShow.map((category) => (
+                <Collapsible
+                  key={category.title}
+                  open={expandedCategories[category.title]}
+                  onOpenChange={() => toggleCategory(category.title)}
+                >
+                  <SidebarGroup className="py-1">
+                    <CollapsibleTrigger asChild>
+                      <SidebarGroupLabel className="cursor-pointer rounded-md px-2 py-1.5 transition-colors hover:bg-accent/30">
+                        {renderCategoryLabel(category.title, category.icon, expandedCategories[category.title])}
+                      </SidebarGroupLabel>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="animate-in slide-in-from-top-1 duration-150 fade-in-0">
+                      <SidebarGroupContent>
+                        <SidebarMenu className="gap-0.5 pt-1">
+                          {category.items.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                              <SidebarMenuButton asChild>
+                                {renderItem(item)}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </SidebarGroup>
+                </Collapsible>
+              ))}
 
-          {!isVendorOnly ? (
-            <Collapsible
-              open={expandedCategories["Sistema"]}
-              onOpenChange={() => toggleCategory("Sistema")}
-            >
-              <SidebarGroup className="py-1">
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel
-                    className={cn(
-                      "cursor-pointer rounded-md px-2 py-1.5 transition-colors hover:bg-accent/30",
-                      "group-data-[collapsible=icon]:!opacity-100 group-data-[collapsible=icon]:!mt-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:px-1.5 group-data-[collapsible=icon]:w-full"
-                    )}
-                    onClick={isCollapsed ? () => handleCollapsedCategoryClick(settingsCategory) : undefined}
-                  >
-                    {renderCategoryLabel(settingsCategory.title, settingsCategory.icon, expandedCategories["Sistema"])}
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                {!isCollapsed && (
-                  <CollapsibleContent className="animate-in slide-in-from-top-1 duration-150 fade-in-0">
-                    <SidebarGroupContent>
-                      <SidebarMenu className="gap-0.5 pt-1">
-                        {settingsCategory.items.map((item) => (
-                          <SidebarMenuItem key={item.title}>
-                            <SidebarMenuButton asChild>
-                              {renderItem(item)}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                )}
-              </SidebarGroup>
-            </Collapsible>
-          ) : null}
+              {!isVendorOnly ? (
+                <Collapsible
+                  open={expandedCategories["Sistema"]}
+                  onOpenChange={() => toggleCategory("Sistema")}
+                >
+                  <SidebarGroup className="py-1">
+                    <CollapsibleTrigger asChild>
+                      <SidebarGroupLabel className="cursor-pointer rounded-md px-2 py-1.5 transition-colors hover:bg-accent/30">
+                        {renderCategoryLabel(settingsCategory.title, settingsCategory.icon, expandedCategories["Sistema"])}
+                      </SidebarGroupLabel>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="animate-in slide-in-from-top-1 duration-150 fade-in-0">
+                      <SidebarGroupContent>
+                        <SidebarMenu className="gap-0.5 pt-1">
+                          {settingsCategory.items.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                              <SidebarMenuButton asChild>
+                                {renderItem(item)}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </SidebarGroup>
+                </Collapsible>
+              ) : null}
 
-          {isVendorOnly && <SidebarSalesRanking collapsed={isCollapsed} />}
-          {isVendorOnly && <SidebarConsignacionesRanking collapsed={isCollapsed} />}
+              {isVendorOnly && <SidebarSalesRanking collapsed={false} />}
+              {isVendorOnly && <SidebarConsignacionesRanking collapsed={false} />}
+            </>
+          )}
         </SidebarContent>
 
         <SidebarFooter className="border-t border-sidebar-border p-2 group-data-[collapsible=icon]:p-2">

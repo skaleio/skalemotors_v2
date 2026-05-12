@@ -22,6 +22,7 @@ import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -258,108 +259,135 @@ export function TopBar() {
 
       {/* Derecha: search + acción rápida + notificaciones + tema + usuario */}
       <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-        {/* Search trigger: campo prominente desktop, ícono mobile */}
-        <div ref={searchRef} className="relative">
-          {/* Mobile: ícono */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 md:hidden"
-            onClick={() => {
-              setIsSearchExpanded(true);
-              setTimeout(() => searchInputRef.current?.focus(), 0);
-            }}
-            aria-label="Abrir búsqueda"
-          >
-            <Search className="h-4 w-4 text-muted-foreground" />
-          </Button>
+        {/* Search trigger — solo ícono lupa, abre dialog modal */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() => {
+            setIsSearchExpanded(true);
+            setTimeout(() => searchInputRef.current?.focus(), 0);
+          }}
+          aria-label="Buscar"
+        >
+          <Search className="h-4 w-4 text-muted-foreground" />
+        </Button>
 
-          {/* Desktop: input trigger con ⌘K hint */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsSearchExpanded(true);
+        {/* Search Dialog — ventana emergente con buscador global */}
+        <Dialog
+          open={isSearchExpanded}
+          onOpenChange={(open) => {
+            setIsSearchExpanded(open);
+            if (!open) {
+              setSearchQuery('');
+              setSearchResults([]);
+              setIsSearchOpen(false);
+            } else {
               setTimeout(() => searchInputRef.current?.focus(), 0);
-            }}
-            className="hidden md:flex h-9 w-[280px] items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground hover:bg-accent/30 transition-colors"
-            aria-label="Buscar"
-          >
-            <Search className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1 text-left">Buscar vehículos, leads...</span>
-            <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-              <span className="text-xs">⌘</span>K
-            </kbd>
-          </button>
-
-          {isSearchExpanded && (
-            <div className="absolute right-0 top-full mt-1 w-[280px] md:w-[360px] z-50">
-              <div className="relative">
-                <Input
-                  ref={searchInputRef}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setIsSearchOpen(searchResults.length > 0)}
-                  placeholder="Buscar..."
-                  className="pr-9"
-                />
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+            <DialogTitle className="sr-only">Buscar en SkaleMotors</DialogTitle>
+            <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar vehículos por marca/modelo/año/patente, leads por nombre/teléfono…"
+                className="border-0 shadow-none focus-visible:ring-0 px-0 h-9 text-sm"
+              />
+              {isSearching ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+              ) : searchQuery ? (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery('');
                     setSearchResults([]);
-                    setIsSearchOpen(false);
-                    setIsSearchExpanded(false);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-accent text-muted-foreground"
-                  aria-label="Cerrar búsqueda"
+                  className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent/40 transition-colors"
+                  aria-label="Limpiar búsqueda"
                 >
                   <X className="h-4 w-4" />
                 </button>
-              </div>
+              ) : null}
+            </div>
 
-              {/* Search Results Dropdown */}
-              {isSearchOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-md shadow-popover border border-border bg-popover text-popover-foreground z-50 max-h-80 overflow-y-auto">
-                  {isSearching ? (
-                    <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Buscando...
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-muted-foreground">
-                      No se encontraron resultados para "{searchQuery}"
-                    </div>
-                  ) : (
-                    <div className="py-1">
-                      {searchResults.map((result) => (
-                        <button
-                          key={result.id}
-                          onClick={() => navigateToSearchResult(result)}
-                          className="w-full flex items-center gap-3 p-2.5 text-left hover:bg-accent/40 transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-md flex items-center justify-center bg-muted text-muted-foreground">
-                            {result.type === 'vehicle' ? (
-                              <Car className="h-4 w-4" />
-                            ) : (
-                              <Users className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-foreground truncate">{result.title}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {result.description}
+            <div className="max-h-[60vh] overflow-y-auto">
+              {!searchQuery.trim() ? (
+                <div className="px-6 py-10 text-center">
+                  <Search className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-foreground mb-1">Buscá vehículos o leads</p>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    Por marca, modelo, año o patente en el inventario. Por nombre, teléfono o email en leads.
+                  </p>
+                </div>
+              ) : searchResults.length === 0 && !isSearching ? (
+                <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+                  Sin resultados para <span className="font-medium text-foreground">"{searchQuery}"</span>
+                </div>
+              ) : (
+                <div className="py-2">
+                  {(() => {
+                    const vehicleResults = searchResults.filter((r) => r.type === 'vehicle');
+                    const leadResults = searchResults.filter((r) => r.type === 'lead');
+                    return (
+                      <>
+                        {vehicleResults.length > 0 && (
+                          <div className="px-2 py-1">
+                            <div className="px-2 py-1.5 text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
+                              Vehículos · {vehicleResults.length}
                             </div>
+                            {vehicleResults.map((result) => (
+                              <button
+                                key={result.id}
+                                onClick={() => navigateToSearchResult(result)}
+                                className="w-full flex items-center gap-3 px-2 py-2 text-left rounded-md hover:bg-accent/40 transition-colors"
+                              >
+                                <div className="w-8 h-8 rounded-md flex items-center justify-center bg-muted text-muted-foreground shrink-0">
+                                  <Car className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm text-foreground truncate">{result.title}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{result.description}</div>
+                                </div>
+                              </button>
+                            ))}
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        )}
+                        {leadResults.length > 0 && (
+                          <div className="px-2 py-1">
+                            <div className="px-2 py-1.5 text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
+                              Leads · {leadResults.length}
+                            </div>
+                            {leadResults.map((result) => (
+                              <button
+                                key={result.id}
+                                onClick={() => navigateToSearchResult(result)}
+                                className="w-full flex items-center gap-3 px-2 py-2 text-left rounded-md hover:bg-accent/40 transition-colors"
+                              >
+                                <div className="w-8 h-8 rounded-md flex items-center justify-center bg-muted text-muted-foreground shrink-0">
+                                  <Users className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm text-foreground truncate">{result.title}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{result.description}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Quick Actions Menu - Oculto en Dashboard Principal */}
         {!isDashboardPrincipal && (
