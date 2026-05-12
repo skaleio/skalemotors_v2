@@ -1,6 +1,7 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -86,7 +87,14 @@ function buildPrompt(tool: Tool, data: Record<string, unknown>): { system: strin
   }
 }
 
-async function callAnthropic(apiKey: string, system: string, user: string): Promise<string> {
+type AnthropicCallResult = {
+  content: string;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+};
+
+async function callAnthropic(apiKey: string, system: string, user: string): Promise<AnthropicCallResult> {
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
@@ -108,13 +116,22 @@ async function callAnthropic(apiKey: string, system: string, user: string): Prom
     throw new Error(`Anthropic API error (${res.status}): ${err}`);
   }
 
-  const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+  const data = (await res.json()) as {
+    model?: string;
+    content?: Array<{ type: string; text?: string }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
   const block = data?.content?.find((b) => b.type === "text");
   const text = block?.text;
   if (typeof text !== "string") {
     throw new Error("Anthropic response missing content");
   }
-  return text.trim();
+  return {
+    content: text.trim(),
+    model: data?.model ?? MODEL,
+    tokensInput: Number(data?.usage?.input_tokens ?? 0),
+    tokensOutput: Number(data?.usage?.output_tokens ?? 0),
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -156,10 +173,43 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
+  const branchId = body.branchId ?? null;
+
   try {
     const { system, user } = buildPrompt(tool, data);
-    const text = await callAnthropic(apiKey, system, user);
-    return jsonResponse(200, { ok: true, text });
+    const result = await callAnthropic(apiKey, system, user);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseServiceKey) {
+      let tenantId: string | null = null;
+      if (branchId) {
+        try {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey);
+          const { data: branch } = await supabase
+            .from("branches")
+            .select("tenant_id")
+            .eq("id", branchId)
+            .maybeSingle();
+          tenantId = (branch as { tenant_id?: string | null } | null)?.tenant_id ?? null;
+        } catch {
+          tenantId = null;
+        }
+      }
+      await logAiUsage({
+        supabaseUrl,
+        serviceRoleKey: supabaseServiceKey,
+        tenantId,
+        userId: null,
+        branchId,
+        feature: `ai-generate:${tool}`,
+        model: result.model,
+        tokensInput: result.tokensInput,
+        tokensOutput: result.tokensOutput,
+      });
+    }
+
+    return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Unknown error";
     console.error("[ai-generate] error:", errMsg);

@@ -82,6 +82,62 @@ export default function ExecutiveDashboard() {
 
   const periodLabel = stats?.selectedMonthLabel ?? "";
 
+  /** Deltas vs mes anterior usando los últimos 2 puntos de salesByMonth. */
+  const deltas = useMemo(() => {
+    const arr = stats?.salesByMonth;
+    if (!arr || arr.length < 2) return { sales: 0, revenue: 0 };
+    const last = arr[arr.length - 1];
+    const prev = arr[arr.length - 2];
+    const salesDelta = prev.sales ? ((last.sales - prev.sales) / prev.sales) * 100 : 0;
+    const revenueDelta = prev.revenue ? ((last.revenue - prev.revenue) / prev.revenue) * 100 : 0;
+    return { sales: salesDelta, revenue: revenueDelta };
+  }, [stats?.salesByMonth]);
+
+  /** Series para mini sparklines en KPI cards (últimos 6 meses). */
+  const salesSparkline = useMemo(
+    () => stats?.salesByMonth?.map((m) => m.sales) ?? [],
+    [stats?.salesByMonth],
+  );
+  const revenueSparkline = useMemo(
+    () => stats?.salesByMonth?.map((m) => m.revenue) ?? [],
+    [stats?.salesByMonth],
+  );
+
+  /** Margen total del mes: suma de margin de cada venta listada. */
+  const totalMarginMonth = useMemo(() => {
+    if (!stats?.salesThisMonthList) return 0;
+    return stats.salesThisMonthList.reduce((sum, s) => sum + (s.margin || 0), 0);
+  }, [stats?.salesThisMonthList]);
+
+  /** Top 5 vendedores del mes — agrupa salesThisMonthList por seller, suma margin y cuenta. */
+  const topSellers = useMemo(() => {
+    if (!stats?.salesThisMonthList?.length) return [];
+    const grouped = new Map<string, { seller: string; sales: number; revenue: number; margin: number }>();
+    for (const s of stats.salesThisMonthList) {
+      const key = s.seller || "Sin asignar";
+      const prev = grouped.get(key) ?? { seller: key, sales: 0, revenue: 0, margin: 0 };
+      prev.sales += 1;
+      prev.revenue += s.amount || 0;
+      prev.margin += s.margin || 0;
+      grouped.set(key, prev);
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.margin - a.margin).slice(0, 5);
+  }, [stats?.salesThisMonthList]);
+
+  /** Top 5 modelos vendidos del mes. */
+  const topVehicles = useMemo(() => {
+    if (!stats?.salesThisMonthList?.length) return [];
+    const grouped = new Map<string, { vehicle: string; count: number; revenue: number }>();
+    for (const s of stats.salesThisMonthList) {
+      const key = s.vehicle || "—";
+      const prev = grouped.get(key) ?? { vehicle: key, count: 0, revenue: 0 };
+      prev.count += 1;
+      prev.revenue += s.amount || 0;
+      grouped.set(key, prev);
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [stats?.salesThisMonthList]);
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
@@ -150,62 +206,6 @@ export default function ExecutiveDashboard() {
   const avgTicket = stats?.salesThisMonth && stats.salesThisMonth > 0
     ? Math.round(stats.salesRevenue / stats.salesThisMonth)
     : 0;
-
-  /** Deltas vs mes anterior usando los últimos 2 puntos de salesByMonth. */
-  const deltas = useMemo(() => {
-    const arr = stats?.salesByMonth;
-    if (!arr || arr.length < 2) return { sales: 0, revenue: 0 };
-    const last = arr[arr.length - 1];
-    const prev = arr[arr.length - 2];
-    const salesDelta = prev.sales ? ((last.sales - prev.sales) / prev.sales) * 100 : 0;
-    const revenueDelta = prev.revenue ? ((last.revenue - prev.revenue) / prev.revenue) * 100 : 0;
-    return { sales: salesDelta, revenue: revenueDelta };
-  }, [stats?.salesByMonth]);
-
-  /** Series para mini sparklines en KPI cards (últimos 6 meses). */
-  const salesSparkline = useMemo(
-    () => stats?.salesByMonth?.map((m) => m.sales) ?? [],
-    [stats?.salesByMonth],
-  );
-  const revenueSparkline = useMemo(
-    () => stats?.salesByMonth?.map((m) => m.revenue) ?? [],
-    [stats?.salesByMonth],
-  );
-
-  /** Margen total del mes: suma de margin de cada venta listada. */
-  const totalMarginMonth = useMemo(() => {
-    if (!stats?.salesThisMonthList) return 0;
-    return stats.salesThisMonthList.reduce((sum, s) => sum + (s.margin || 0), 0);
-  }, [stats?.salesThisMonthList]);
-
-  /** Top 5 vendedores del mes — agrupa salesThisMonthList por seller, suma margin y cuenta. */
-  const topSellers = useMemo(() => {
-    if (!stats?.salesThisMonthList?.length) return [];
-    const grouped = new Map<string, { seller: string; sales: number; revenue: number; margin: number }>();
-    for (const s of stats.salesThisMonthList) {
-      const key = s.seller || "Sin asignar";
-      const prev = grouped.get(key) ?? { seller: key, sales: 0, revenue: 0, margin: 0 };
-      prev.sales += 1;
-      prev.revenue += s.amount || 0;
-      prev.margin += s.margin || 0;
-      grouped.set(key, prev);
-    }
-    return Array.from(grouped.values()).sort((a, b) => b.margin - a.margin).slice(0, 5);
-  }, [stats?.salesThisMonthList]);
-
-  /** Top 5 modelos vendidos del mes. */
-  const topVehicles = useMemo(() => {
-    if (!stats?.salesThisMonthList?.length) return [];
-    const grouped = new Map<string, { vehicle: string; count: number; revenue: number }>();
-    for (const s of stats.salesThisMonthList) {
-      const key = s.vehicle || "—";
-      const prev = grouped.get(key) ?? { vehicle: key, count: 0, revenue: 0 };
-      prev.count += 1;
-      prev.revenue += s.amount || 0;
-      grouped.set(key, prev);
-    }
-    return Array.from(grouped.values()).sort((a, b) => b.count - a.count).slice(0, 5);
-  }, [stats?.salesThisMonthList]);
 
   return (
     <div className="space-y-6 p-6">

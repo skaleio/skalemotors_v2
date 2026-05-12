@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Mail, Phone, Save, AlertCircle, CheckCircle, Lock, Camera, Trash2, Building2, Pencil, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { User, Mail, Phone, Save, AlertCircle, CheckCircle, Lock, Camera, Trash2, Building2, Pencil, Plus, Activity, ChevronRight } from 'lucide-react';
+import { isSuperAdminMonitorUser } from '@/hooks/useAiCostMonitor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -562,6 +564,28 @@ export default function Settings() {
       </div>
 
       <div className="grid gap-6">
+        {/* Monitor de Costos AI — sólo visible para super-admin (hessen@test.io) */}
+        {isSuperAdminMonitorUser(user?.email) && (
+          <Link to="/app/settings/monitor" className="block">
+            <Card className="hover:bg-accent/40 transition-colors cursor-pointer">
+              <CardContent className="flex items-center justify-between py-5">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-primary/10 p-2 text-primary">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">Monitor de Costos AI</div>
+                    <div className="text-sm text-muted-foreground">
+                      Uso de OpenAI / Anthropic cross-tenant. Sólo super-admin.
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         {/* Perfil */}
         <Card>
           <CardHeader>
