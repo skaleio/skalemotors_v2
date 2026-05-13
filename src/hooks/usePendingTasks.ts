@@ -124,6 +124,69 @@ export function useCompletePendingTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks-completed'] })
     },
   })
+}
+
+// Tareas completadas en los últimos N días. Hook separado del principal para no
+// inflar el caché del listado activo y poder consultarlo solo cuando se abre el tab.
+export function useCompletedPendingTasks(
+  input: UsePendingTasksInput,
+  options: { days?: number; enabled?: boolean } = {},
+) {
+  const opts: UsePendingTasksOptions =
+    typeof input === 'string' || input == null
+      ? { branchId: input ?? null }
+      : input
+
+  const { branchId, tenantId, role, userId } = opts
+  const isJefeJefe = role === 'jefe_jefe'
+  const isAdminWide = role === 'admin' || isJefeJefe
+  const days = options.days ?? 30
+
+  const baseEnabled = isAdminWide ? !!tenantId : !!branchId
+  const enabled = baseEnabled && (options.enabled ?? true)
+
+  const query = useQuery({
+    queryKey: ['pending-tasks-completed', { branchId, tenantId, role, userId, days, scope: isAdminWide ? 'tenant' : 'branch' }],
+    queryFn: async (): Promise<PendingTask[]> => {
+      if (!enabled) return []
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+      let q = supabase
+        .from('pending_tasks')
+        .select('*')
+        .not('completed_at', 'is', null)
+        .gte('completed_at', since)
+        .order('completed_at', { ascending: false })
+        .limit(200)
+
+      if (isAdminWide && tenantId) {
+        q = q.eq('tenant_id', tenantId)
+      } else if (branchId) {
+        q = q.eq('branch_id', branchId)
+      } else {
+        return []
+      }
+
+      if (!isJefeJefe && userId) {
+        q = q.or(`assigned_to.is.null,assigned_to.eq.${userId}`)
+      }
+
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    },
+    enabled,
+    staleTime: 60 * 1000,
+    placeholderData: (previousData: PendingTask[] | undefined) => previousData ?? [],
+  })
+
+  return {
+    tasks: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+  }
 }

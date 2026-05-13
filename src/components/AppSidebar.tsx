@@ -15,6 +15,7 @@ import {
   FileText,
   Keyboard,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   MoreVertical,
   PieChart,
@@ -77,6 +78,7 @@ const menuCategories = [
       { title: "CRM", url: "/app/crm", icon: Target },
       { title: "Leads", url: "/app/leads", icon: Users },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
+      { title: "Tareas", url: "/app/tasks", icon: ListChecks },
       { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
     ]
   },
