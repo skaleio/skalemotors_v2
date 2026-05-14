@@ -92,7 +92,10 @@
     /* Border radius más sobrio */
     --radius: 0.625rem;
 
-    --sidebar-background: 0 0% 100%;
+    /* Sidebar light: tono frío sutil (~98%) para diferenciarlo del main
+       (que va en bg-muted/20 ≈ blanco). Sin este offset el sidebar se
+       confunde con el contenido y se ve plano / barra de navegación. */
+    --sidebar-background: 220 14% 98%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 335 85% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -243,26 +246,25 @@ html[data-mobile-app="true"] #root > * {
     display: inline-block;
   }
 
-  /* En sidebar y topbar light — logo en rosa de marca con glow */
+  /* Sidebar y topbar: logo en rosa de marca sin glow neón (estilo SaaS pro). */
   .app-sidebar .skale-logo,
   .top-bar-logo {
-    text-shadow: 0 0 8px rgba(236, 72, 153, 0.35), 0 0 16px rgba(236, 72, 153, 0.18);
+    text-shadow: none;
     color: hsl(var(--primary));
   }
 
-  /* Logo dentro del sidebar: el pin button se movio al footer, asi que el
-     header tiene mas espacio. Tamano de presencia pero sin overflow. */
+  /* Logo dentro del sidebar: presencia sin overflow ni glow gamer. */
   .app-sidebar .skale-logo {
-    font-size: 1rem;          /* ~16px */
-    letter-spacing: 0.08em;
+    font-size: 0.9375rem;     /* ~15px */
+    letter-spacing: 0.06em;
     white-space: nowrap;
   }
 
-  /* Dark — rosa pálido con brillo sutil (sin el halo blanco que saturaba el header) */
+  /* Dark — rosa pálido limpio, sin halo. */
   .dark .skale-logo,
   .dark .app-sidebar .skale-logo,
   .dark .top-bar-logo {
-    text-shadow: 0 0 8px rgba(236, 72, 153, 0.45), 0 0 18px rgba(236, 72, 153, 0.22);
+    text-shadow: none;
     color: #fbcfe8;
   }
 

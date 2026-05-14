@@ -36,7 +36,7 @@ import {
   Users,
   Wallet
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
@@ -128,9 +128,9 @@ const ALL_CATEGORY_KEYS = [
   "Dashboard", "CRM & Leads", "Inventario & Vehículos", "Documentos", "Finanzas", "Sistema",
 ] as const;
 
-const itemBaseCls = "group w-full flex items-center gap-2.5 h-8 px-3 text-sm rounded-md border-l-2 border-transparent transition-colors";
-const itemInactiveCls = "text-muted-foreground hover:text-foreground hover:bg-accent/40";
-const itemActiveCls = "text-accent-foreground bg-accent border-l-2 border-primary font-medium";
+const itemBaseCls = "group w-full flex items-center gap-2.5 h-8 px-2.5 text-[13px] rounded-md transition-colors";
+const itemInactiveCls = "text-muted-foreground hover:text-foreground hover:bg-accent/50";
+const itemActiveCls = "text-accent-foreground bg-accent font-medium";
 
 const PIN_STORAGE_KEY = "skale-sidebar-pinned";
 const HOVER_CLOSE_DELAY_MS = 200;
@@ -381,14 +381,17 @@ export function AppSidebar() {
       );
     }
     return (
-      <div className="flex items-center justify-between w-full" onClick={onClick}>
-        <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground">
-          {title}
-        </span>
+      <div className="flex items-center justify-between w-full gap-2" onClick={onClick}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon className="h-[14px] w-[14px] shrink-0 text-muted-foreground/70" />
+          <span className="text-[12px] font-semibold text-foreground/80 truncate">
+            {title}
+          </span>
+        </div>
         {isOpen ? (
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
         )}
       </div>
     );
@@ -422,65 +425,56 @@ export function AppSidebar() {
 
         <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:overflow-y-auto">
           {isCollapsed ? (
-            // === MODO COLAPSADO: cada item con su icono y tooltip, divisores entre secciones ===
-            <SidebarMenu className="gap-0.5">
-              {categoriesToShow.map((category, ci) => (
-                <Fragment key={category.title}>
-                  {ci > 0 && <div className="h-px bg-sidebar-border mx-2 my-1.5" aria-hidden="true" />}
-                  {category.items.map((item) => {
-                    const active = isActive(item.url);
-                    const isLeads = item.url === "/app/leads";
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <NavLink
-                              to={item.url}
-                              end={item.url === "/"}
-                              onMouseEnter={isLeads ? prefetchLeads : undefined}
-                              className={cn(
-                                "group flex items-center justify-center h-9 w-full rounded-md border-l-2 transition-colors",
-                                active
-                                  ? "border-primary bg-accent text-primary"
-                                  : "border-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground"
-                              )}
-                            >
-                              <item.icon className="h-4 w-4 shrink-0" />
-                            </NavLink>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" className="text-xs">{item.title}</TooltipContent>
-                        </Tooltip>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </Fragment>
-              ))}
+            // === MODO COLAPSADO: SOLO 1 icono por sección/categoría (app-dock style) ===
+            <SidebarMenu className="gap-1">
+              {categoriesToShow.map((category) => {
+                const activeCategory = findCategoryForPath(currentPath) === category.title;
+                return (
+                  <SidebarMenuItem key={category.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => handleCollapsedCategoryClick(category)}
+                          className={cn(
+                            "group flex items-center justify-center h-10 w-full rounded-md transition-colors",
+                            activeCategory
+                              ? "bg-accent text-accent-foreground"
+                              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          )}
+                          aria-label={category.title}
+                        >
+                          <category.icon className="h-[18px] w-[18px] shrink-0" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs font-medium">{category.title}</TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                );
+              })}
               {!isVendorOnly && (
                 <>
-                  <div className="h-px bg-sidebar-border mx-2 my-1.5" aria-hidden="true" />
-                  {settingsCategory.items.map((item) => {
-                    const active = isActive(item.url);
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <NavLink
-                              to={item.url}
-                              className={cn(
-                                "flex items-center justify-center h-9 w-full rounded-md border-l-2 transition-colors",
-                                active
-                                  ? "border-primary bg-accent text-primary"
-                                  : "border-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground"
-                              )}
-                            >
-                              <item.icon className="h-4 w-4 shrink-0" />
-                            </NavLink>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" className="text-xs">{item.title}</TooltipContent>
-                        </Tooltip>
-                      </SidebarMenuItem>
-                    );
-                  })}
+                  <div className="h-px bg-sidebar-border mx-2 my-2" aria-hidden="true" />
+                  <SidebarMenuItem>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => handleCollapsedCategoryClick(settingsCategory)}
+                          className={cn(
+                            "group flex items-center justify-center h-10 w-full rounded-md transition-colors",
+                            findCategoryForPath(currentPath) === settingsCategory.title
+                              ? "bg-accent text-accent-foreground"
+                              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          )}
+                          aria-label={settingsCategory.title}
+                        >
+                          <settingsCategory.icon className="h-[18px] w-[18px] shrink-0" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs font-medium">{settingsCategory.title}</TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
                 </>
               )}
               {isVendorOnly && <SidebarSalesRanking collapsed />}
