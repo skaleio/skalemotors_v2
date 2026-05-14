@@ -25,6 +25,7 @@ const VendorManagement = lazy(() => import("./pages/VendorManagement"));
 const SalespersonRanking = lazy(() => import("./pages/SalespersonRanking"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Appointments = lazy(() => import("./pages/Appointments"));
+const PendingTasks = lazy(() => import("./pages/PendingTasks"));
 const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
@@ -127,6 +128,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <LeadsBoard />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/tasks" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PendingTasks />
                   </Layout>
                 </ProtectedRoute>
               } />
