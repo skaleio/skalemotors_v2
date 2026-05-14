@@ -1,14 +1,17 @@
-import { useTheme } from "next-themes";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  // Usar el theme resuelto del ThemeProvider propio (no next-themes, que no está
+  // configurado en este proyecto). Antes los toasts quedaban siempre en 'system'
+  // (default de next-themes ausente), visualmente desconectados del toggle real.
+  const { theme } = useTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       toastOptions={{
         classNames: {
