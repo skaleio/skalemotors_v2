@@ -217,6 +217,23 @@ const getConsignacionVehicleLabel = (item?: ConsignacionItem | null) => {
   return `${item.vehicle_year || ""} ${item.vehicle_make || ""} ${item.vehicle_model || ""}`.trim();
 };
 
+/** Tipos de carrocería: dropdown del formulario de lead. Valores guardados en
+ *  vehicle_interest (string libre en DB). Legacy free-text de leads previos se
+ *  preserva agregándolo como opción extra en el form de editar. */
+const VEHICLE_TYPE_OPTIONS = [
+  "SUV",
+  "CAMIONETA",
+  "HATCHBACK",
+  "SEDAN",
+  "FURGON",
+  "JEEP",
+  "DEPORTIVO",
+] as const;
+
+/** Forma de pago. payment_type es string libre en DB; mantenemos las 2 opciones
+ *  capitalizadas tal como aparecen en el resto del UI (CRM, exports). */
+const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
+
 /** Estados activos del pipeline (mismo modelo que CRM). */
 const PIPELINE_STATUS_LABELS: Record<string, string> = {
   contactado: "CONTACTADO",
@@ -1523,12 +1540,21 @@ function LeadsImpl({ user }: { user: User }) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="lead_vehicle">Vehiculo</Label>
-              <Input
-                id="lead_vehicle"
+              <Select
                 value={formState.vehicle}
-                onChange={(e) => setFormState({ ...formState, vehicle: e.target.value })}
-                placeholder="Ej: Toyota Corolla 2020"
-              />
+                onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
+              >
+                <SelectTrigger id="lead_vehicle">
+                  <SelectValue placeholder="Selecciona tipo de vehículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Región</Label>
@@ -1540,11 +1566,23 @@ function LeadsImpl({ user }: { user: User }) {
             </div>
             <div className="grid gap-2">
               <Label>Financiamiento/Contado</Label>
-              <Input
+              <Select
                 value={formState.payment_type}
-                onChange={(e) => setFormState({ ...formState, payment_type: e.target.value })}
-                placeholder="Ej: Financiamiento o Contado"
-              />
+                onValueChange={(value) =>
+                  setFormState({ ...formState, payment_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona forma de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Presupuesto</Label>
@@ -1701,12 +1739,30 @@ function LeadsImpl({ user }: { user: User }) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_vehicle">Vehiculo</Label>
-              <Input
-                id="edit_lead_vehicle"
+              <Select
                 value={editVehicleValue}
-                onChange={(e) => setEditForm({ ...editForm, vehicle: e.target.value })}
-                placeholder="Ej: Toyota Corolla 2020"
-              />
+                onValueChange={(value) => setEditForm({ ...editForm, vehicle: value })}
+              >
+                <SelectTrigger id="edit_lead_vehicle">
+                  <SelectValue placeholder="Selecciona tipo de vehículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                  {/* Preservar valor legacy free-text (ej: "Toyota Corolla 2020") para no perderlo al editar. */}
+                  {editVehicleValue &&
+                    !VEHICLE_TYPE_OPTIONS.includes(
+                      editVehicleValue as (typeof VEHICLE_TYPE_OPTIONS)[number],
+                    ) && (
+                      <SelectItem value={editVehicleValue}>
+                        {editVehicleValue} (anterior)
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Origen</Label>
@@ -1735,11 +1791,30 @@ function LeadsImpl({ user }: { user: User }) {
             </div>
             <div className="grid gap-2">
               <Label>Financiamiento/Contado</Label>
-              <Input
+              <Select
                 value={editForm.payment_type}
-                onChange={(e) => setEditForm({ ...editForm, payment_type: e.target.value })}
-                placeholder="Ej: Financiamiento o Contado"
-              />
+                onValueChange={(value) => setEditForm({ ...editForm, payment_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona forma de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                  {/* Preservar valor legacy free-text para no perderlo al editar. */}
+                  {editForm.payment_type &&
+                    !PAYMENT_TYPE_OPTIONS.includes(
+                      editForm.payment_type as (typeof PAYMENT_TYPE_OPTIONS)[number],
+                    ) && (
+                      <SelectItem value={editForm.payment_type}>
+                        {editForm.payment_type} (anterior)
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Presupuesto</Label>
