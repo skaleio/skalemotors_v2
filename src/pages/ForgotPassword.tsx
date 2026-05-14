@@ -36,9 +36,9 @@ export default function ForgotPassword() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-900 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <Card className="shadow-xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+          <Card className="shadow-xl border-0 bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="flex justify-center mb-4">
@@ -67,27 +67,27 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo y título */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <button 
               onClick={() => navigate('/')}
-              className="skale-logo text-4xl font-bold text-slate-800 dark:text-slate-200 hover:opacity-80 transition-opacity"
+              className="skale-logo text-4xl font-bold text-slate-800 dark:text-zinc-200 hover:opacity-80 transition-opacity"
             >
               SKALEMOTORS
             </button>
           </div>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">
+          <p className="text-slate-600 dark:text-zinc-400 text-sm">
             Ecosistema Automotriz #1
           </p>
         </div>
 
-        <Card className="shadow-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <Card className="shadow-2xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
           <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl text-center text-slate-800 dark:text-slate-200">Recuperar Contraseña</CardTitle>
-            <CardDescription className="text-center text-slate-600 dark:text-slate-400">
+            <CardTitle className="text-2xl text-center text-slate-800 dark:text-zinc-200">Recuperar Contraseña</CardTitle>
+            <CardDescription className="text-center text-slate-600 dark:text-zinc-400">
               Ingresa tu correo electrónico para recibir un enlace de recuperación
             </CardDescription>
           </CardHeader>
@@ -118,7 +118,7 @@ export default function ForgotPassword() {
 
               <Button
                 type="submit"
-                className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-medium py-2.5 transition-colors"
+                className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white font-medium py-2.5 transition-colors"
                 disabled={loading}
               >
                 {loading ? 'Enviando...' : 'Enviar Enlace de Recuperación'}
@@ -128,7 +128,7 @@ export default function ForgotPassword() {
             <div className="mt-6 text-center">
               <Link
                 to="/login"
-                className="inline-flex items-center text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                className="inline-flex items-center text-sm text-slate-600 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 Volver al Login

@@ -386,7 +386,7 @@ export default function Onboarding() {
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
               </div>
-              <div className="absolute -top-1 -right-1 w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg ring-4 ring-white dark:ring-slate-900">
+              <div className="absolute -top-1 -right-1 w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg ring-4 ring-white dark:ring-zinc-900">
                 <Check className="w-6 h-6 text-white" />
               </div>
             </div>
@@ -768,7 +768,7 @@ export default function Onboarding() {
                             Credenciales de Global Inventory API
                           </CardDescription>
                         </div>
-                        <Badge className={platformConnections.chileautos.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300"}>
+                        <Badge className={platformConnections.chileautos.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-zinc-700 dark:text-gray-300"}>
                           {platformConnections.chileautos.connected ? "Conectado" : "No conectado"}
                         </Badge>
                       </div>
@@ -861,7 +861,7 @@ export default function Onboarding() {
                             Access Token para API/MCP
                           </CardDescription>
                         </div>
-                        <Badge className={platformConnections.mercadolibre.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300"}>
+                        <Badge className={platformConnections.mercadolibre.connected ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-700 dark:bg-zinc-700 dark:text-gray-300"}>
                           {platformConnections.mercadolibre.connected ? "Conectado" : "No conectado"}
                         </Badge>
                       </div>
@@ -1137,7 +1137,7 @@ export default function Onboarding() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-slate-700">
+              <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-zinc-700">
                 <div>
                   <h3 className={`font-medium ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -1172,7 +1172,7 @@ export default function Onboarding() {
               }`}>
                 <CheckCircle className="w-20 h-20 text-white" />
               </div>
-              <div className="absolute -top-1 -right-1 w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg ring-4 ring-white dark:ring-slate-900 animate-bounce">
+              <div className="absolute -top-1 -right-1 w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg ring-4 ring-white dark:ring-zinc-900 animate-bounce">
                 <Star className="w-6 h-6 text-white" />
               </div>
             </div>
@@ -1330,7 +1330,7 @@ export default function Onboarding() {
               {Math.round(progress)}% completado
             </span>
           </div>
-          <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+          <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-pink-500 to-pink-600 transition-all duration-500 ease-out rounded-full"
               style={{ width: `${progress}%` }}

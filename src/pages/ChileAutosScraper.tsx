@@ -353,7 +353,7 @@ export default function ChileAutosScraper() {
       {/* Modelos objetivo: SUVs más comerciales para consignación */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-zinc-100">
             SUVs más comerciales
           </h2>
           <Badge variant="secondary" className="rounded-full text-[10px] px-2">
@@ -369,9 +369,9 @@ export default function ChileAutosScraper() {
                 type="button"
                 onClick={() => abrirModelo(auto.url, label)}
                 title={`${label} — Ver en ChileAutos`}
-                className="group flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 hover:shadow dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+                className="group flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 hover:shadow dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-slate-100">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-zinc-100">
                   <span className="text-[10px] font-normal uppercase text-muted-foreground">{auto.marca}</span>
                   <span className="ml-1">{auto.modelo}</span>
                 </span>
@@ -385,7 +385,7 @@ export default function ChileAutosScraper() {
       {/* City car y Sedán para consignación */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-zinc-100">
             City car y Sedán para consignación
           </h2>
           <Badge variant="secondary" className="rounded-full text-[10px] px-2">
@@ -401,9 +401,9 @@ export default function ChileAutosScraper() {
                 type="button"
                 onClick={() => abrirModelo(auto.url, label)}
                 title={`${label} — Ver en ChileAutos`}
-                className="group flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 hover:shadow dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+                className="group flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 hover:shadow dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-slate-100">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800 dark:text-zinc-100">
                   <span className="text-[10px] font-normal uppercase text-muted-foreground">{auto.marca}</span>
                   <span className="ml-1">{auto.modelo}</span>
                 </span>
@@ -534,7 +534,7 @@ export default function ChileAutosScraper() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/30">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Modelos más buscados</p>
             {searchMetrics.length > 0 ? (
               <ul className="space-y-2">
@@ -552,14 +552,14 @@ export default function ChileAutosScraper() {
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Listado guardado</p>
             {savedListings.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-800/20">
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center dark:border-zinc-700 dark:bg-zinc-800/20">
                 <BookmarkPlus className="mx-auto mb-3 h-10 w-10 text-slate-400" />
                 <p className="text-sm text-muted-foreground">
                   Aún no has guardado ningún auto.
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-700">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -573,7 +573,7 @@ export default function ChileAutosScraper() {
                   </TableHeader>
                   <TableBody>
                     {savedListings.map((s) => (
-                      <TableRow key={s.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <TableRow key={s.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-zinc-800/50">
                         <TableCell className="font-medium max-w-[220px]">
                           <span className="line-clamp-2">{s.title ?? "—"}</span>
                         </TableCell>
