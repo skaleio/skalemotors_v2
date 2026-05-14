@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VehicleMakeCombobox } from "@/components/VehicleMakeCombobox";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -46,6 +47,7 @@ import * as XLSX from "xlsx";
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
 const REGION_TAG_PREFIX = "region:";
+const MARCA_TAG_PREFIX = "marca:";
 const NEW_LEAD_PATH = "/leads?new=true";
 
 const normalizeTags = (tags: unknown) => {
@@ -615,6 +617,7 @@ function LeadsImpl({ user }: { user: User }) {
     rut: "",
     phone: "",
     status: "contactado",
+    make: "",
     vehicle: "",
     region: "",
     payment_type: "",
@@ -642,6 +645,7 @@ function LeadsImpl({ user }: { user: User }) {
     phone: "",
     email: "",
     status: "contactado",
+    make: "",
     vehicle: "",
     region: "",
     payment_type: "",
@@ -833,6 +837,7 @@ function LeadsImpl({ user }: { user: User }) {
       rut: "",
       phone: "",
       status: "contactado",
+      make: "",
       vehicle: "",
       region: "",
       payment_type: "",
@@ -1084,6 +1089,9 @@ function LeadsImpl({ user }: { user: User }) {
       if (vehicleLabel) {
         tags.push(`${VEHICULO_TAG_PREFIX}${vehicleLabel}`);
       }
+      if (formState.make.trim()) {
+        tags.push(`${MARCA_TAG_PREFIX}${formState.make.trim()}`);
+      }
 
       const created = await leadService.create({
         full_name: toTitleCase(formState.full_name.trim()),
@@ -1165,6 +1173,7 @@ function LeadsImpl({ user }: { user: User }) {
       phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
       status: statusForEditForm(lead.status),
+      make: getTagValue(tags, MARCA_TAG_PREFIX),
       vehicle: isConsignacion
         ? consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX)
         : getTagValue(tags, VEHICULO_TAG_PREFIX),
@@ -1199,11 +1208,16 @@ function LeadsImpl({ user }: { user: User }) {
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
       };
 
-      updates.tags = buildTagsWithVehicleAndOrigin(
+      // Preservar/actualizar tag marca:X aparte (no lo maneja buildTagsWithVehicleAndOrigin).
+      let nextTags = buildTagsWithVehicleAndOrigin(
         editingLead.tags,
         editForm.vehicle,
-        editForm.origen
-      ) as any;
+        editForm.origen,
+      );
+      nextTags = nextTags.filter((t) => !t.startsWith(MARCA_TAG_PREFIX));
+      const trimmedMake = editForm.make.trim();
+      if (trimmedMake) nextTags = [...nextTags, `${MARCA_TAG_PREFIX}${trimmedMake}`];
+      updates.tags = nextTags as any;
 
       const updated = await leadService.update(editingLead.id, updates);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
@@ -1560,6 +1574,15 @@ function LeadsImpl({ user }: { user: User }) {
               </div>
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="lead_make">Marca</Label>
+              <VehicleMakeCombobox
+                id="lead_make"
+                value={formState.make}
+                onChange={(value) => setFormState({ ...formState, make: value })}
+                placeholder="Selecciona o escribe la marca"
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="lead_vehicle">Vehiculo</Label>
               <Select
                 value={formState.vehicle}
@@ -1756,6 +1779,15 @@ function LeadsImpl({ user }: { user: User }) {
                 value={editForm.rut}
                 onChange={(e) => setEditForm({ ...editForm, rut: e.target.value })}
                 placeholder="Ej: 12.345.678-9"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit_lead_make">Marca</Label>
+              <VehicleMakeCombobox
+                id="edit_lead_make"
+                value={editForm.make}
+                onChange={(value) => setEditForm({ ...editForm, make: value })}
+                placeholder="Selecciona o escribe la marca"
               />
             </div>
             <div className="grid gap-2">
