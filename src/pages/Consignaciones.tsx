@@ -148,6 +148,19 @@ const STOCK_ONLINE_COLUMN_LABELS = {
 const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
 
+/** Tipos de carrocería: dropdown del formulario de consignación. Valor guardado
+ *  en consignaciones.carroceria (string libre en DB). Legacy free-text de
+ *  consignaciones previas se preserva como SelectItem extra "(anterior)". */
+const CARROCERIA_OPTIONS = [
+  "SUV",
+  "CAMIONETA",
+  "HATCHBACK",
+  "SEDAN",
+  "FURGON",
+  "JEEP",
+  "DEPORTIVO",
+] as const;
+
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
   return tags.filter((tag) => typeof tag === "string") as string[];
@@ -1890,12 +1903,31 @@ export default function Consignaciones() {
             </div>
             <div>
               <Label htmlFor="carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
-              <Input
-                id="carroceria"
+              <Select
                 value={formState.carroceria}
-                onChange={(e) => setFormState({ ...formState, carroceria: e.target.value })}
-                placeholder="Ej: HATCHBACK, SUV, PICK UP"
-              />
+                onValueChange={(value) => setFormState({ ...formState, carroceria: value })}
+              >
+                <SelectTrigger id="carroceria">
+                  <SelectValue placeholder="Selecciona tipo de vehículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CARROCERIA_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                  {/* Preservar valor legacy free-text (ej: "PICK UP") al editar
+                      una consignación vieja, sin perder el dato. */}
+                  {formState.carroceria &&
+                    !CARROCERIA_OPTIONS.includes(
+                      formState.carroceria as (typeof CARROCERIA_OPTIONS)[number],
+                    ) && (
+                      <SelectItem value={formState.carroceria}>
+                        {formState.carroceria} (anterior)
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="vehicle_km">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
