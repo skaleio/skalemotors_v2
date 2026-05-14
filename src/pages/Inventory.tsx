@@ -59,6 +59,8 @@ import { useQuery } from "@tanstack/react-query";
 import { formatCLP } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { vehicleService } from "@/lib/services/vehicles";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 import {
   listListingsForBranch,
   listConnections,
@@ -688,6 +690,16 @@ export default function Inventory() {
   const totalValue = filteredVehicles.reduce((sum, v) => sum + Number(v.price || 0), 0);
   const totalMargin = filteredVehicles.reduce((sum, v) => sum + Number(v.margin || 0), 0);
 
+  const {
+    pagedItems: pagedVehicles,
+    page: vehiclesPage,
+    setPage: setVehiclesPage,
+    pageSize: vehiclesPageSize,
+    setPageSize: setVehiclesPageSize,
+    totalPages: vehiclesTotalPages,
+    totalItems: vehiclesTotalItems,
+  } = usePagination(filteredVehicles, 25);
+
   const vehicleStatusOrder = useMemo(
     () =>
       ["disponible", "reservado", "en_reparacion", "fuera_de_servicio", "vendido"] as const,
@@ -825,7 +837,7 @@ export default function Inventory() {
 
   const handleCreateVehicle = async () => {
     if (!user?.branch_id) {
-      alert("Error: No hay sucursal asignada. Por favor contacta al administrador.");
+      toast({ variant: "destructive", title: "Sin sucursal asignada", description: "Contactá al administrador para que te asigne una sucursal." });
       console.error("No hay sucursal asignada");
       return;
     }
@@ -967,7 +979,7 @@ export default function Inventory() {
         errorMessage = "Tu sesión ha expirado. Por favor, recarga la página e inicia sesión nuevamente.";
       }
 
-      alert(`Error al crear vehículo:\n\n${errorMessage}\n\nSi el problema persiste, contacta al administrador.`);
+      toast({ variant: "destructive", title: "Error al crear vehículo", description: errorMessage });
     } finally {
       setIsSaving(false);
     }
@@ -975,7 +987,7 @@ export default function Inventory() {
 
   const handleUpdateVehicle = async () => {
     if (!vehicleToEdit || !user?.branch_id) {
-      alert("Error: No hay vehículo seleccionado o sucursal asignada.");
+      toast({ variant: "destructive", title: "Faltan datos", description: "No hay vehículo seleccionado o sucursal asignada." });
       return;
     }
 
@@ -1093,7 +1105,7 @@ export default function Inventory() {
         details: error?.details,
         hint: error?.hint
       });
-      alert(`Error al actualizar vehículo: ${error?.message || "Error desconocido"}\n\nRevisa la consola para más detalles.`);
+      toast({ variant: "destructive", title: "Error al actualizar vehículo", description: error?.message || "Intentá de nuevo o pedí ayuda al admin." });
     } finally {
       setIsSaving(false);
     }
@@ -1132,12 +1144,12 @@ export default function Inventory() {
 
   const handleSellVehicle = async () => {
     if (!vehicleToSell || !user?.branch_id) {
-      alert("Error: No hay vehículo seleccionado o sucursal asignada.");
+      toast({ variant: "destructive", title: "Faltan datos", description: "No hay vehículo seleccionado o sucursal asignada." });
       return;
     }
 
     if (saleData.salePrice <= 0) {
-      alert("Por favor ingresa un precio de venta válido");
+      toast({ variant: "destructive", title: "Precio inválido", description: "Ingresá un precio de venta mayor a 0." });
       return;
     }
 
@@ -1185,10 +1197,10 @@ export default function Inventory() {
         refetch();
       }, 100);
 
-      alert('¡Venta registrada exitosamente! 🎉');
+      toast({ title: "✅ Venta registrada", description: "La venta quedó guardada correctamente." });
     } catch (error: any) {
       console.error('❌ Error registrando venta:', error);
-      alert(`Error al registrar venta: ${error?.message || 'Error desconocido'}`);
+      toast({ variant: "destructive", title: "Error al registrar venta", description: error?.message || "Intentá de nuevo o pedí ayuda al admin." });
     } finally {
       setIsSaving(false);
     }
@@ -1258,7 +1270,7 @@ export default function Inventory() {
 
   const handleExportInventory = async () => {
     if (!user?.branch_id) {
-      alert("Error: No hay sucursal asignada. Por favor contacta al administrador.");
+      toast({ variant: "destructive", title: "Sin sucursal asignada", description: "Contactá al administrador para que te asigne una sucursal." });
       return;
     }
 
@@ -1270,7 +1282,7 @@ export default function Inventory() {
           : await vehicleService.getAll({ branchId: user.branch_id });
 
       if (vehiclesToExport.length === 0) {
-        alert("No hay vehículos para exportar.");
+        toast({ title: "Sin vehículos", description: "No hay vehículos para exportar con los filtros actuales." });
         return;
       }
 
@@ -1319,7 +1331,7 @@ export default function Inventory() {
       setShowExportDialog(false);
     } catch (error) {
       console.error("Error exportando:", error);
-      alert("No se pudo exportar. Revisa la consola para más detalles.");
+      toast({ variant: "destructive", title: "Error al exportar", description: "No se pudo generar el archivo. Intentá de nuevo." });
     } finally {
       setIsExporting(false);
     }
@@ -1511,7 +1523,7 @@ export default function Inventory() {
                   </TableCell>
                 </TableRow>
               )}
-              {!loading && !vehiclesError && filteredVehicles.map((vehicle) => (
+              {!loading && !vehiclesError && pagedVehicles.map((vehicle) => (
                 <TableRow
                   key={vehicle.id}
                   className="cursor-pointer"
@@ -1824,6 +1836,17 @@ export default function Inventory() {
                   : "Aún no hay vehículos en inventario."}
               </p>
             </div>
+          )}
+
+          {!loading && !vehiclesError && filteredVehicles.length > 0 && (
+            <PaginationControls
+              page={vehiclesPage}
+              totalPages={vehiclesTotalPages}
+              pageSize={vehiclesPageSize}
+              totalItems={vehiclesTotalItems}
+              onPageChange={setVehiclesPage}
+              onPageSizeChange={setVehiclesPageSize}
+            />
           )}
         </CardContent>
       </Card>

@@ -31,6 +31,8 @@ import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase, type User } from "@/lib/supabase";
@@ -750,6 +752,16 @@ function LeadsImpl({ user }: { user: User }) {
     return { total, contactado, negociando, paraCierre };
   }, [leads]);
 
+  const {
+    pagedItems: pagedLeads,
+    page: leadsPage,
+    setPage: setLeadsPage,
+    pageSize: leadsPageSize,
+    setPageSize: setLeadsPageSize,
+    totalPages: leadsTotalPages,
+    totalItems: leadsTotalItems,
+  } = usePagination(filteredLeads, 25);
+
   const allFilteredSelected = filteredLeads.length > 0
     && filteredLeads.every((lead) => selectedLeadIds.has(lead.id));
 
@@ -804,7 +816,7 @@ function LeadsImpl({ user }: { user: User }) {
     } catch (error: any) {
       console.error("Error actualizando estado del lead:", error);
       queryClient.invalidateQueries({ queryKey: ["leads"] });
-      alert(error?.message || "No se pudo actualizar el estado del lead.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el estado del lead." });
     }
   }, [leads, queryClient]);
 
@@ -1202,7 +1214,7 @@ function LeadsImpl({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
     } catch (error: any) {
       console.error("Error actualizando lead:", error);
-      alert(error?.message || "No se pudo actualizar el lead.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el lead." });
     } finally {
       setIsUpdating(false);
     }
@@ -1236,7 +1248,7 @@ function LeadsImpl({ user }: { user: User }) {
       closeDeleteDialog();
     } catch (error: any) {
       console.error("Error eliminando lead:", error);
-      alert(error?.message || "No se pudo eliminar el lead.");
+      toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo eliminar el lead." });
     }
   };
 
@@ -1476,7 +1488,7 @@ function LeadsImpl({ user }: { user: User }) {
 
       <LeadsTable
         loading={loading}
-        filteredLeads={filteredLeads}
+        filteredLeads={pagedLeads}
         consignacionByLeadId={consignacionByLeadId}
         selectedLeadIds={selectedLeadIds}
         allSelected={allFilteredSelected}
@@ -1486,6 +1498,15 @@ function LeadsImpl({ user }: { user: User }) {
         openEditDialog={openEditDialog}
         openDeleteDialog={openDeleteDialog}
         openDetailsDialog={openDetailsDialog}
+      />
+
+      <PaginationControls
+        page={leadsPage}
+        totalPages={leadsTotalPages}
+        pageSize={leadsPageSize}
+        totalItems={leadsTotalItems}
+        onPageChange={setLeadsPage}
+        onPageSizeChange={setLeadsPageSize}
       />
 
       <Dialog

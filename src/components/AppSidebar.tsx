@@ -1,4 +1,5 @@
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { leadService } from "@/lib/services/leads";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -139,6 +140,7 @@ export function AppSidebar() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
 
@@ -391,6 +393,8 @@ export function AppSidebar() {
   };
 
   return (
+    <>
+      {ConfirmDialog}
     <TooltipProvider delayDuration={300}>
       <Sidebar
         onMouseEnter={handleMouseEnter}
@@ -618,11 +622,19 @@ export function AppSidebar() {
 
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                onClick={() => {
-                  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-                    signOut();
+                onSelect={(e) => {
+                  e.preventDefault();
+                  void (async () => {
+                    const ok = await askConfirm({
+                      title: "¿Cerrar sesión?",
+                      description: "Vas a salir de tu cuenta en esta pestaña.",
+                      confirmLabel: "Cerrar sesión",
+                      destructive: true,
+                    });
+                    if (!ok) return;
+                    await signOut();
                     navigate('/login');
-                  }
+                  })();
                 }}
               >
                 <LogOut className="h-4 w-4 mr-2" />
@@ -660,5 +672,6 @@ export function AppSidebar() {
         </SidebarFooter>
       </Sidebar>
     </TooltipProvider>
+    </>
   );
 }
