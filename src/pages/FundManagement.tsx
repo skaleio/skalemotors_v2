@@ -73,7 +73,7 @@ function formatCurrency(value: number) {
 type ChartView = "day" | "month";
 
 const CONSIGNACION_STATUS: Record<string, { label: string; className: string }> = {
-  nuevo: { label: "Nuevo", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+  nuevo: { label: "Nuevo", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" },
   en_revision: { label: "En revisión", className: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" },
   en_venta: { label: "En venta", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
   negociando: { label: "Negociando", className: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800" },
@@ -252,7 +252,7 @@ export default function FundManagement() {
       </div>
 
       {/* Consignaciones diarias, ventas diarias y gráfico por día/mes */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-900/50 dark:to-blue-950/20">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-zinc-900/50 dark:to-blue-950/20">
         <CardHeader className="border-b bg-muted/30">
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -510,7 +510,7 @@ export default function FundManagement() {
       </Card>
 
       {/* Bloque: Gestión Hessen Motors */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-violet-50/30 dark:from-slate-900/50 dark:to-violet-950/20">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-violet-50/30 dark:from-zinc-900/50 dark:to-violet-950/20">
         <CardHeader className="border-b bg-muted/30">
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-violet-600" />
@@ -787,7 +787,7 @@ export default function FundManagement() {
       </Dialog>
 
       {/* Bloque: Métricas de Dinero */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-emerald-50/30 dark:from-slate-900/50 dark:to-emerald-950/20">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-emerald-50/30 dark:from-zinc-900/50 dark:to-emerald-950/20">
         <CardHeader className="border-b bg-muted/30">
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-emerald-600" />
@@ -1214,7 +1214,7 @@ export default function FundManagement() {
       </Card>
 
       {/* Bloque: Rendimiento y Clientes */}
-      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-amber-50/30 dark:from-slate-900/50 dark:to-amber-950/20">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-amber-50/30 dark:from-zinc-900/50 dark:to-amber-950/20">
         <CardHeader className="border-b bg-muted/30">
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-amber-600" />

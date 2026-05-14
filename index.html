@@ -28,6 +28,34 @@
     <meta name="twitter:title" content="SKALEMOTORS - Ecosistema Automotriz #1" />
     <meta name="twitter:description" content="SKALEMOTORS - El ecosistema automotriz #1 en Chile" />
     <meta name="twitter:image" content="/favicon.svg" />
+
+    <!-- theme-color: el script de abajo la actualiza al theme resuelto. Default light para que el render del primer paint coincida si no hay localStorage. -->
+    <meta name="theme-color" content="#ffffff" />
+
+    <!--
+      Anti-FOUC del theme: aplica .dark + color-scheme + meta theme-color ANTES del
+      primer paint, leyendo la misma key que el ThemeProvider. Cualquier cambio en
+      la lógica debe espejarse en src/contexts/ThemeContext.tsx (readStoredMode +
+      resolveTheme + applyThemeToDocument) para no introducir flicker.
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = window.localStorage.getItem('skale-theme');
+          var mode = (raw === 'light' || raw === 'dark' || raw === 'system') ? raw : 'system';
+          var resolved = mode === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : mode;
+          var root = document.documentElement;
+          if (resolved === 'dark') root.classList.add('dark');
+          root.style.colorScheme = resolved;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0a0a0a' : '#ffffff');
+        } catch (e) {
+          /* localStorage bloqueado / SSR-like: el ThemeProvider corregirá al hidratar */
+        }
+      })();
+    </script>
   </head>
 
   <body translate="no">
