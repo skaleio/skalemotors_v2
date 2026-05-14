@@ -103,29 +103,33 @@
   }
 
   .dark {
+    /* Superficies neutras (sin tinte azul). hue=0 sat=0% = grises puros.
+       Jerarquía L%: background 3 < card 6 < secondary/muted 10 < border 16.
+       Antes hue=222 sat=47% daba un azul oscuro que se confundía con negro. */
+
     /* Brand Identity Dark */
-    --brand: 220 14% 96%;
-    --brand-foreground: 222 47% 11%;
+    --brand: 0 0% 96%;
+    --brand-foreground: 0 0% 11%;
 
-    /* Core Colors Dark */
-    --background: 222 47% 4%;
-    --foreground: 220 14% 96%;
+    /* Core Colors Dark — negro neutro */
+    --background: 0 0% 3%;
+    --foreground: 0 0% 96%;
 
-    --card: 222 47% 7%;
-    --card-foreground: 220 14% 96%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 222 47% 7%;
-    --popover-foreground: 220 14% 96%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 96%;
 
     /* Primary Dark — rosa con +brightness (unificado con light) */
     --primary: 330 81% 65%;       /* #f472b6 */
-    --primary-foreground: 222 47% 11%;
+    --primary-foreground: 0 0% 11%;
 
-    --secondary: 222 47% 10%;
-    --secondary-foreground: 220 14% 96%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 96%;
 
-    --muted: 222 47% 10%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 65%;
 
     /* Accent Dark — rosa muy oscuro, hover suave en superficies oscuras */
     --accent: 330 70% 18%;
@@ -136,7 +140,7 @@
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 11%;
+    --warning-foreground: 0 0% 11%;
 
     --danger: 0 63% 51%;
     --danger-foreground: 0 0% 100%;
@@ -146,14 +150,14 @@
 
     /* Info Dark */
     --info: 199 89% 58%;
-    --info-foreground: 222 47% 11%;
+    --info-foreground: 0 0% 11%;
 
-    /* Borders and inputs Dark — hairlines visibles */
-    --border: 222 47% 14%;
-    --input: 222 47% 14%;
+    /* Borders and inputs Dark — hairlines visibles sobre fondo casi negro */
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
     --ring: 330 81% 65%;
 
-    /* Chart palette Dark — más brillante para contraste sobre slate */
+    /* Chart palette Dark — más brillante para contraste sobre fondo negro */
     --chart-1: 217 91% 68%;
     --chart-2: 142 71% 55%;
     --chart-3: 38 92% 58%;
@@ -161,14 +165,14 @@
     --chart-5: 199 89% 60%;
     --chart-6: 12 80% 70%;
 
-    /* Sidebar Dark — alineada al primary rosa (sin cian) */
-    --sidebar-background: 222 47% 4%;
-    --sidebar-foreground: 220 14% 96%;
+    /* Sidebar Dark — paralelo a las superficies principales (neutro) */
+    --sidebar-background: 0 0% 3%;
+    --sidebar-foreground: 0 0% 96%;
     --sidebar-primary: 330 81% 65%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 222 47% 10%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 222 47% 14%;
+    --sidebar-primary-foreground: 0 0% 11%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 0 0% 16%;
     --sidebar-ring: 330 81% 65%;
   }
 }
