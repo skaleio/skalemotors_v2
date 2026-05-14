@@ -129,6 +129,7 @@ comment on function public.sync_unpublished_vehicles_to_pending_tasks(int) is
   'Alerta: vehículos en inventario (status=disponible) con publicado=false por más de N días. Admin-only, idempotente por (entity_id, alert_reason=unpublished).';
 
 revoke all on function public.sync_unpublished_vehicles_to_pending_tasks(int) from public;
+revoke execute on function public.sync_unpublished_vehicles_to_pending_tasks(int) from anon;
 grant execute on function public.sync_unpublished_vehicles_to_pending_tasks(int) to authenticated;
 grant execute on function public.sync_unpublished_vehicles_to_pending_tasks(int) to service_role;
 
@@ -152,6 +153,11 @@ begin
   end if;
   return new;
 end $$;
+
+-- Trigger fn no debe ser invocable como RPC pública.
+revoke all on function public.close_vehicle_unpublished_pending_task() from public;
+revoke all on function public.close_vehicle_unpublished_pending_task() from anon;
+revoke all on function public.close_vehicle_unpublished_pending_task() from authenticated;
 
 drop trigger if exists trg_close_vehicle_unpublished_pending_task on public.vehicles;
 create trigger trg_close_vehicle_unpublished_pending_task
@@ -268,6 +274,7 @@ comment on function public.sync_leads_contacted_no_attempts_to_pending_tasks(int
   'Alerta urgente: leads en status=contactado con contact_attempts=0 por más de N horas. Admin-only, idempotente por (entity_id, alert_reason=contacted_no_attempts).';
 
 revoke all on function public.sync_leads_contacted_no_attempts_to_pending_tasks(int) from public;
+revoke execute on function public.sync_leads_contacted_no_attempts_to_pending_tasks(int) from anon;
 grant execute on function public.sync_leads_contacted_no_attempts_to_pending_tasks(int) to authenticated;
 grant execute on function public.sync_leads_contacted_no_attempts_to_pending_tasks(int) to service_role;
 
@@ -291,6 +298,11 @@ begin
   end if;
   return new;
 end $$;
+
+-- Trigger fn no debe ser invocable como RPC pública.
+revoke all on function public.close_lead_contacted_no_attempts_pending_task() from public;
+revoke all on function public.close_lead_contacted_no_attempts_pending_task() from anon;
+revoke all on function public.close_lead_contacted_no_attempts_pending_task() from authenticated;
 
 drop trigger if exists trg_close_lead_contacted_no_attempts on public.leads;
 create trigger trg_close_lead_contacted_no_attempts
@@ -418,6 +430,7 @@ comment on function public.sync_leads_searching_car_to_pending_tasks(int) is
   'Alerta: leads con preferred_vehicle_id en status activo creados hace más de N días. Admin-only, idempotente por (entity_id, alert_reason=searching_car).';
 
 revoke all on function public.sync_leads_searching_car_to_pending_tasks(int) from public;
+revoke execute on function public.sync_leads_searching_car_to_pending_tasks(int) from anon;
 grant execute on function public.sync_leads_searching_car_to_pending_tasks(int) to authenticated;
 grant execute on function public.sync_leads_searching_car_to_pending_tasks(int) to service_role;
 
@@ -441,6 +454,11 @@ begin
   end if;
   return new;
 end $$;
+
+-- Trigger fn no debe ser invocable como RPC pública.
+revoke all on function public.close_lead_searching_car_pending_task() from public;
+revoke all on function public.close_lead_searching_car_pending_task() from anon;
+revoke all on function public.close_lead_searching_car_pending_task() from authenticated;
 
 drop trigger if exists trg_close_lead_searching_car on public.leads;
 create trigger trg_close_lead_searching_car
