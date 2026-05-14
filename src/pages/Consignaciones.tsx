@@ -46,6 +46,7 @@ import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
 import { VehicleImage } from "@/components/VehicleImage";
 import { AdminConsignacionesPanel } from "@/components/AdminConsignacionesPanel";
+import { VehicleMakeCombobox } from "@/components/VehicleMakeCombobox";
 import { ReasignarConsignacionMenu } from "@/components/ReasignarConsignacionMenu";
 import type { ConsignacionesAdminRankingRow } from "@/hooks/useConsignacionesAdminRanking";
 import { ArrowLeft } from "lucide-react";
@@ -2041,10 +2042,12 @@ export default function Consignaciones() {
                 </div>
                 <div>
                   <Label htmlFor="vehicle_make">Marca (opcional, para búsquedas)</Label>
-                  <Input
+                  <VehicleMakeCombobox
                     id="vehicle_make"
                     value={formState.vehicle_make}
-                    onChange={(e) => setFormState({ ...formState, vehicle_make: e.target.value })}
+                    onChange={(value) =>
+                      setFormState({ ...formState, vehicle_make: value })
+                    }
                     placeholder="Ej: Peugeot"
                   />
                 </div>
