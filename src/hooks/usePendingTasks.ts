@@ -47,7 +47,8 @@ export function usePendingTasks(input: UsePendingTasksInput) {
         })
       }
 
-      // Staleness RPCs (admin-only; auto-gate interno, seguros de llamar por otros roles).
+      // Staleness + alertas inteligentes (admin-only; auto-gate interno, seguros para otros roles).
+      // Defaults razonables hardcodeados: cambiarlos requiere editar acá.
       await Promise.all([
         supabase.rpc('sync_stale_consignaciones_to_pending_tasks', { dias_sin_publicar: 7 }).then(({ error }) => {
           const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
@@ -56,6 +57,18 @@ export function usePendingTasks(input: UsePendingTasksInput) {
         supabase.rpc('sync_stale_leads_to_pending_tasks', { dias_sin_movimiento: 3 }).then(({ error }) => {
           const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
           if (error && !rpcNotFound) console.warn('sync_stale_leads_to_pending_tasks:', error.message)
+        }),
+        supabase.rpc('sync_unpublished_vehicles_to_pending_tasks', { dias_sin_publicar: 3 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_unpublished_vehicles_to_pending_tasks:', error.message)
+        }),
+        supabase.rpc('sync_leads_contacted_no_attempts_to_pending_tasks', { horas_sin_intento: 24 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_leads_contacted_no_attempts_to_pending_tasks:', error.message)
+        }),
+        supabase.rpc('sync_leads_searching_car_to_pending_tasks', { dias_buscando: 5 }).then(({ error }) => {
+          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+          if (error && !rpcNotFound) console.warn('sync_leads_searching_car_to_pending_tasks:', error.message)
         }),
       ])
 
