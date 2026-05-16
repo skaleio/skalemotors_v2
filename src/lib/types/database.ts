@@ -774,7 +774,7 @@ export interface Database {
           rut: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
+          status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre'
           priority: 'baja' | 'media' | 'alta'
           assigned_to: string | null
           crm_seguimiento_socio: 'Mike' | 'Antonio' | 'Jota' | null
@@ -815,7 +815,7 @@ export interface Database {
           rut?: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
+          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
@@ -856,7 +856,7 @@ export interface Database {
           rut?: string | null
           phone?: string
           source?: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'vendido' | 'perdido' | 'para_cierre'
+          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre'
           priority?: 'baja' | 'media' | 'alta'
           assigned_to?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null

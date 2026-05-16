@@ -107,6 +107,7 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
 const statusLabels: Record<string, string> = {
   contactado: "CONTACTADO",
   negociando: "NEGOCIANDO",
+  en_espera: "EN ESPERA",
   para_cierre: "PARA CIERRE",
   negocio_cerrado: "NEGOCIO CONCRETADO",
 };
@@ -117,38 +118,52 @@ const ACTIVE_PIPELINE_STATUS_ES: Record<string, string> = {
   interesado: "Interesado",
   cotizando: "Cotizando",
   negociando: "Negociando",
+  en_espera: "En espera",
   para_cierre: "Para cierre",
 };
 
 /**
- * Valor seguro para <Select> del pipeline CRM (4 estados).
+ * Valor seguro para <Select> del pipeline CRM (5 columnas + cierre).
  * Mapea estados legacy al bucket correspondiente.
  */
 function safePipelineSelectValue(status: string | null | undefined): string {
   const s = (status || "").toLowerCase();
   if (s === "negociando" || s === "cotizando") return "negociando";
+  if (s === "en_espera") return "en_espera";
   if (s === "para_cierre") return "para_cierre";
   if (s === "vendido") return "negocio_cerrado";
   if (s === "contactado" || s === "nuevo" || s === "interesado") return "contactado";
   return "contactado";
 }
 
-type CrmStageKey = "contactado" | "negociando" | "para_cierre" | "negocio_cerrado";
+/** Convierte clave de columna CRM a `leads.status` en Postgres. */
+function crmPipelineStageToDbStatus(stageKey: string): Lead["status"] {
+  if (stageKey === "negocio_cerrado") return "vendido";
+  if (
+    stageKey === "contactado"
+    || stageKey === "negociando"
+    || stageKey === "en_espera"
+    || stageKey === "para_cierre"
+  ) {
+    return stageKey as Lead["status"];
+  }
+  return "contactado";
+}
+
+type CrmStageKey = "contactado" | "negociando" | "en_espera" | "para_cierre" | "negocio_cerrado";
 
 /** MIME para DataTransfer (evita colisiones con texto plano). */
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
 
 /** Valor `leads.status` al soltar en una columna del pipeline. */
 function pipelineDbStatusForStage(stageKey: CrmStageKey): string {
-  if (stageKey === "contactado") return "contactado";
-  if (stageKey === "negociando") return "negociando";
-  if (stageKey === "para_cierre") return "para_cierre";
-  return "vendido";
+  return crmPipelineStageToDbStatus(stageKey);
 }
 
 const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
   negociando: { border: "border-orange-500", badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
+  en_espera: { border: "border-violet-500", badge: "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300", dot: "bg-violet-500" },
   para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
   negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
 };
@@ -160,6 +175,7 @@ const CRM_PIPELINE_ACTIVE_STATUSES = new Set([
   "interesado",
   "negociando",
   "cotizando",
+  "en_espera",
   "para_cierre",
 ]);
 
@@ -333,6 +349,7 @@ const LeadCard = memo(function LeadCard({
       || st === "interesado"
       || st === "negociando"
       || st === "cotizando"
+      || st === "en_espera"
       || st === "para_cierre"
     );
   }, [lead.status]);
@@ -717,7 +734,7 @@ export default function CRM() {
             full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
             phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
             email: editForm.email.trim() || null,
-            status: editForm.status,
+            status: crmPipelineStageToDbStatus(editForm.status),
             region: editForm.region.trim() || null,
             payment_type: editForm.payment_type.trim() || null,
             budget: editForm.budget.trim() || null,
@@ -726,7 +743,7 @@ export default function CRM() {
             assigned_to: editForm.assigned_to,
             crm_seguimiento_socio: editForm.crm_seguimiento_socio,
           }
-        : { status: leadStatus };
+        : { status: crmPipelineStageToDbStatus(leadStatus) };
 
       const updated = await leadService.update(editingLead.id, updates as any);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
@@ -764,6 +781,7 @@ export default function CRM() {
         label: "NEGOCIANDO",
         statuses: ["negociando", "cotizando"],
       },
+      { key: "en_espera" as const, label: "EN ESPERA", statuses: ["en_espera"] },
       { key: "para_cierre" as const, label: "PARA CIERRE", statuses: ["para_cierre"] },
       { key: "negocio_cerrado" as const, label: "NEGOCIO CONCRETADO", statuses: ["vendido"] },
     ],
@@ -804,7 +822,7 @@ export default function CRM() {
       : 0;
     const avanzados = base.filter((lead) => {
       const st = (lead.status || "").toLowerCase();
-      return st === "negociando" || st === "cotizando" || st === "para_cierre" || st === "vendido" || st === "perdido";
+      return st === "negociando" || st === "cotizando" || st === "en_espera" || st === "para_cierre" || st === "vendido" || st === "perdido";
     }).length;
     const tasaAvanceNegociando = total + noRespondieron > 0
       ? Math.round((avanzados / (total + noRespondieron)) * 1000) / 10
@@ -1518,7 +1536,7 @@ export default function CRM() {
           </CardTitle>
           <CardDescription>
             Consolidado desde el campo <span className="font-medium text-foreground/80">vehículo de interés</span> de
-            tus clientes en etapas activas del pipeline (contactado → para cierre). Coincide con la búsqueda y la vista que
+            tus clientes en etapas activas del pipeline (contactado → en espera → para cierre). Coincide con la búsqueda y la vista que
             tengas arriba; los vendidos y perdidos no entran aquí.{" "}
             <span className="font-medium text-foreground/80">Clic</span> en una tarjeta para ver la lista de esos leads.
           </CardDescription>
@@ -1653,7 +1671,7 @@ export default function CRM() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
 

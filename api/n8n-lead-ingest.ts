@@ -152,7 +152,7 @@ const VALID_SOURCES = [
 
 const VALID_STATUSES = [
   "nuevo", "contactado", "interesado", "cotizando",
-  "negociando", "vendido", "perdido", "para_cierre",
+  "negociando", "en_espera", "vendido", "perdido", "para_cierre",
 ] as const;
 
 const VALID_PRIORITIES = ["baja", "media", "alta"] as const;

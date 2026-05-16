@@ -60,7 +60,7 @@ function optionalAssignedToUuid(value: unknown): string | undefined {
 }
 
 const SOURCES = ["web", "referido", "walk_in", "telefono", "redes_sociales", "evento", "otro"] as const;
-const PIPELINE_STATUSES = ["contactado", "negociando", "para_cierre"] as const;
+const PIPELINE_STATUSES = ["contactado", "negociando", "en_espera", "para_cierre"] as const;
 const PRIORITIES = ["baja", "media", "alta"] as const;
 
 type Payload = {

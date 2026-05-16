@@ -242,6 +242,7 @@ const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
 const PIPELINE_STATUS_LABELS: Record<string, string> = {
   contactado: "CONTACTADO",
   negociando: "NEGOCIANDO",
+  en_espera: "EN ESPERA",
   para_cierre: "PARA CIERRE",
 };
 
@@ -253,6 +254,7 @@ const CLOSED_STATUS_LABELS: Record<string, string> = {
 const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
   contactado: { dot: "bg-blue-500", text: "text-blue-600" },
   negociando: { dot: "bg-orange-500", text: "text-orange-600" },
+  en_espera: { dot: "bg-violet-500", text: "text-violet-700" },
   para_cierre: { dot: "bg-emerald-500", text: "text-emerald-700" },
 };
 
@@ -261,11 +263,12 @@ const CLOSED_STYLES: Record<string, { dot: string; text: string }> = {
   perdido: { dot: "bg-red-500", text: "text-red-600" },
 };
 
-type LeadPipelineStage = "contactado" | "negociando" | "para_cierre";
+type LeadPipelineStage = "contactado" | "negociando" | "en_espera" | "para_cierre";
 
 function getLeadPipelineStage(status?: string | null): LeadPipelineStage {
   const s = (status || "").toLowerCase();
   if (s === "negociando" || s === "cotizando") return "negociando";
+  if (s === "en_espera") return "en_espera";
   if (s === "para_cierre") return "para_cierre";
   return "contactado";
 }
@@ -722,7 +725,12 @@ function LeadsImpl({ user }: { user: User }) {
 
   const resolvedStatusFilter = useMemo(() => {
     if (statusFilter === "all") return "all";
-    if (statusFilter === "contactado" || statusFilter === "negociando" || statusFilter === "para_cierre") {
+    if (
+      statusFilter === "contactado"
+      || statusFilter === "negociando"
+      || statusFilter === "en_espera"
+      || statusFilter === "para_cierre"
+    ) {
       return statusFilter;
     }
     return "all";
@@ -752,8 +760,9 @@ function LeadsImpl({ user }: { user: User }) {
     const openLeads = leads.filter((l) => !isClosedLeadStatus(l.status));
     const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
     const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
+    const enEspera = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "en_espera").length;
     const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
-    return { total, contactado, negociando, paraCierre };
+    return { total, contactado, negociando, enEspera, paraCierre };
   }, [leads]);
 
   const {
@@ -1024,7 +1033,11 @@ function LeadsImpl({ user }: { user: User }) {
 
       const dateStr = new Date().toISOString().slice(0, 10);
       const stageSlug =
-        pipelineStage === "para_cierre" ? "para-cierre" : pipelineStage;
+        pipelineStage === "para_cierre"
+          ? "para-cierre"
+          : pipelineStage === "en_espera"
+            ? "en-espera"
+            : pipelineStage;
       const worksheet = XLSX.utils.json_to_sheet(rows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
@@ -1390,6 +1403,9 @@ function LeadsImpl({ user }: { user: User }) {
               <DropdownMenuItem onSelect={() => handleExportLeads("negociando")}>
                 {PIPELINE_STATUS_LABELS.negociando}
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportLeads("en_espera")}>
+                {PIPELINE_STATUS_LABELS.en_espera}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleExportLeads("para_cierre")}>
                 {PIPELINE_STATUS_LABELS.para_cierre}
               </DropdownMenuItem>
@@ -1402,7 +1418,7 @@ function LeadsImpl({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <Card className="border-l-4 border-slate-400">
           <CardHeader className="pb-2">
             <CardDescription>Leads total</CardDescription>
@@ -1421,7 +1437,13 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-orange-600">{leadStats.negociando}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-emerald-500">
+        <Card className="border-l-4 border-violet-500">
+          <CardHeader className="pb-2">
+            <CardDescription>EN ESPERA</CardDescription>
+            <CardTitle className="text-2xl text-violet-700">{leadStats.enEspera}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-emerald-500 md:col-span-2 lg:col-span-1">
           <CardHeader className="pb-2">
             <CardDescription>PARA CIERRE</CardDescription>
             <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>

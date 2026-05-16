@@ -86,6 +86,7 @@ const LEAD_STATUS_LABELS_ES: Record<string, string> = {
   negociando: "Negociando",
   vendido: "Vendido",
   perdido: "Perdido",
+  en_espera: "En espera",
   para_cierre: "Para cierre",
 };
 
