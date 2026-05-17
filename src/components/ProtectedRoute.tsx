@@ -1,5 +1,6 @@
 import DashboardLoader from "@/components/DashboardLoader";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMfaGate } from "@/hooks/useMfaGate";
 import { useToast } from "@/hooks/use-toast";
 import { type AppPermission, hasPermission, isFinancePermission } from "@/lib/rbac";
 import { ReactNode, useEffect } from "react";
@@ -43,6 +44,7 @@ function AccessDeniedRedirect({ variant }: { variant: "finance" | "generic" }) {
 
 export default function ProtectedRoute({ children, requiredRole, requiredPermission }: ProtectedRouteProps) {
   const { user, loading, isSigningOut, needsOnboarding, signOut } = useAuth();
+  const mfa = useMfaGate();
   const location = useLocation();
 
   // Usuarios legacy (ej. hessen@test.io) tienen legacy_protected=true y pueden
@@ -55,7 +57,7 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
     }
   }, [user, needsTenant, signOut]);
 
-  if (loading) {
+  if (loading || mfa.loading) {
     return (
       <DashboardLoader
         message={isSigningOut ? "Cerrando sesión..." : "Cargando..."}
@@ -67,6 +69,14 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
   // Segundo cinturón de seguridad: sin perfil activo (o sin tenant para no-legacy)
   if (!user || !user.is_active || (needsTenant && !user.tenant_id)) {
     return <Navigate to="/login" state={{ from: location, error: "sin_acceso" }} replace />;
+  }
+
+  if (mfa.mustEnroll && location.pathname !== "/app/mfa-required") {
+    return <Navigate to="/app/mfa-required" replace />;
+  }
+
+  if (mfa.mustVerify && location.pathname !== "/login/mfa") {
+    return <Navigate to="/login/mfa" state={{ from: location.pathname }} replace />;
   }
 
   if (needsOnboarding && location.pathname !== "/onboarding") {

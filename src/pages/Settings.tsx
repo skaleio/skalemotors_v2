@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
 import { MfaEnrollSection } from '@/components/settings/MfaEnrollSection';
+import { PrivacyComplianceSection } from '@/components/settings/PrivacyComplianceSection';
 import { CRM_COLOR_PRESETS } from '@/lib/crmAssigneeColor';
 
 const AVATAR_BUCKET = 'avatars';
@@ -1202,6 +1203,8 @@ export default function Settings() {
         <LeadIngestApiKeysSection showLinkToIntegrationsPage />
 
         <MfaEnrollSection />
+
+        <PrivacyComplianceSection />
       </div>
     </div>
   );

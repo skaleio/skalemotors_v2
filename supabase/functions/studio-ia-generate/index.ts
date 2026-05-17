@@ -2,6 +2,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
+import { requireAuth, assertBranchInTenant } from "../_shared/authGuard.ts";
+import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
 
 /** Cliente Supabase en Edge; tipo explícito para que el IDE no infiera unknown. */
 type EdgeSupabaseClient = { from(table: string): SupabaseQueryChain };
@@ -327,6 +329,11 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   if (isWebhookForward) {
+    const webhookSecret = Deno.env.get("STUDIO_IA_WEBHOOK_SECRET")?.trim();
+    const incomingSecret = req.headers.get("x-studio-ia-secret")?.trim();
+    if (!webhookSecret || incomingSecret !== webhookSecret) {
+      return jsonResponse(401, { ok: false, error: "Unauthorized webhook" });
+    }
     console.log(`${LOG_PREFIX} request start type=vehicle_description_webhook`);
     try {
       const result = await forwardToN8nWebhook(payload);
@@ -350,21 +357,43 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  console.log(`${LOG_PREFIX} request start type=${type}`);
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabase = supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : null;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return jsonResponse(500, { ok: false, error: "Supabase no configurado" });
+  }
+
+  const auth = await requireAuth(req, supabaseUrl, supabaseServiceKey);
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const { ctx } = auth;
+  const supabase = ctx.supabase;
+
+  console.log(`${LOG_PREFIX} request start type=${type}`);
+
+  const branchId = type === "vehicle_description"
+    ? ((payload as VehicleDescriptionPayload).branch_id ?? null)
+    : ((payload as ReelScriptPayload).branch_id ?? null);
+
+  if (branchId && ctx.tenantId && !ctx.legacyProtected) {
+    const okBranch = await assertBranchInTenant(supabase, branchId, ctx.tenantId);
+    if (!okBranch) {
+      return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
+    }
+  }
+
+  const tenantId = ctx.tenantId ?? (await resolveTenantFromBranch(supabase, branchId));
+  const budget = await assertTenantAiBudget(supabase, tenantId);
+  if (!budget.allowed) {
+    return aiBudgetExceededResponse(corsHeaders, budget);
+  }
 
   try {
     let result: OpenAICallResult;
-    let branchId: string | null = null;
     if (type === "vehicle_description") {
       console.log(`${LOG_PREFIX} loading system prompt (vehicle_description)`);
       const p = payload as VehicleDescriptionPayload;
-      branchId = p.branch_id ?? null;
       const baseSystem = await getSystemPrompt(supabase, "vehicle_description", branchId)
         ?? VEHICLE_DESCRIPTION_SYSTEM_PROMPT;
       const { system, user } = await buildVehicleDescriptionPrompt(p, supabase, baseSystem);
@@ -373,27 +402,24 @@ export default async function handler(req: Request): Promise<Response> {
     } else {
       console.log(`${LOG_PREFIX} loading system prompt (reel_script)`);
       const p = payload as ReelScriptPayload;
-      branchId = p.branch_id ?? null;
       const baseSystem = await getSystemPrompt(supabase, "reel_script", branchId)
         ?? REEL_SCRIPT_DEFAULT_SYSTEM;
       const { system, user } = buildReelScriptPrompt(p, baseSystem);
       console.log(`${LOG_PREFIX} calling OpenAI (reel_script)`);
       result = await callOpenAI(apiKey, system, user);
     }
-    if (supabaseUrl && supabaseServiceKey) {
-      const tenantId = await resolveTenantFromBranch(supabase, branchId);
-      await logAiUsage({
-        supabaseUrl,
-        serviceRoleKey: supabaseServiceKey,
-        tenantId,
-        userId: null,
-        branchId,
-        feature: type === "vehicle_description" ? "studio-vehicle-description" : "studio-reel-script",
-        model: result.model,
-        tokensInput: result.tokensInput,
-        tokensOutput: result.tokensOutput,
-      });
-    }
+
+    await logAiUsage({
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+      tenantId,
+      userId: ctx.user.id,
+      branchId,
+      feature: type === "vehicle_description" ? "studio-vehicle-description" : "studio-reel-script",
+      model: result.model,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+    });
     console.log(`${LOG_PREFIX} success type=${type}`);
     return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {

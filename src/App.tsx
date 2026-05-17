@@ -48,6 +48,8 @@ const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const MfaVerify = lazy(() => import("./pages/MfaVerify"));
+const MfaRequired = lazy(() => import("./pages/MfaRequired"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,6 +84,11 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/login/mfa" element={
+                <ProtectedRoute>
+                  <MfaVerify />
+                </ProtectedRoute>
+              } />
               <Route path="/onboarding" element={
                 <ProtectedRoute>
                   <Onboarding />
@@ -247,6 +254,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Documents />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/mfa-required" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <MfaRequired />
                   </Layout>
                 </ProtectedRoute>
               } />

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { captureEdgeError } from "../_shared/observability.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
+import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -278,6 +279,11 @@ export default async function handler(req: Request): Promise<Response> {
     if (!branch) {
       return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
     }
+  }
+
+  const budget = await assertTenantAiBudget(supabase, userProfile?.tenant_id ?? null);
+  if (!budget.allowed) {
+    return aiBudgetExceededResponse(corsHeaders, budget);
   }
 
   try {

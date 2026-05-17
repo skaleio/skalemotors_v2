@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { buildBranchBrain } from "../_shared/brainBuilder.ts";
 import { captureEdgeError } from "../_shared/observability.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
+import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -205,6 +206,11 @@ export default async function handler(req: Request): Promise<Response> {
   if (branchId) {
     const { data: branch } = await supabase.from("branches").select("name").eq("id", branchId).maybeSingle();
     if (branch?.name) branchName = branch.name;
+  }
+
+  const budget = await assertTenantAiBudget(supabase, userProfile?.tenant_id ?? null);
+  if (!budget.allowed) {
+    return aiBudgetExceededResponse(corsHeaders, budget);
   }
 
   try {

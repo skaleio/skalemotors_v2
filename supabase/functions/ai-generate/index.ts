@@ -1,7 +1,8 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
+import { requireAuth, assertBranchInTenant } from "../_shared/authGuard.ts";
+import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -151,6 +152,18 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return jsonResponse(500, { ok: false, error: "Supabase no configurado" });
+  }
+
+  const auth = await requireAuth(req, supabaseUrl, supabaseServiceKey);
+  if (!auth.ok) {
+    return auth.response;
+  }
+  const { ctx } = auth;
+
   let body: RequestBody;
   try {
     body = await req.json();
@@ -175,39 +188,33 @@ export default async function handler(req: Request): Promise<Response> {
 
   const branchId = body.branchId ?? null;
 
+  if (branchId && ctx.tenantId && !ctx.legacyProtected) {
+    const okBranch = await assertBranchInTenant(ctx.supabase, branchId, ctx.tenantId);
+    if (!okBranch) {
+      return jsonResponse(403, { ok: false, error: "Access to this branch is not allowed" });
+    }
+  }
+
+  const budget = await assertTenantAiBudget(ctx.supabase, ctx.tenantId);
+  if (!budget.allowed) {
+    return aiBudgetExceededResponse(corsHeaders, budget);
+  }
+
   try {
     const { system, user } = buildPrompt(tool, data);
     const result = await callAnthropic(apiKey, system, user);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (supabaseUrl && supabaseServiceKey) {
-      let tenantId: string | null = null;
-      if (branchId) {
-        try {
-          const supabase = createClient(supabaseUrl, supabaseServiceKey);
-          const { data: branch } = await supabase
-            .from("branches")
-            .select("tenant_id")
-            .eq("id", branchId)
-            .maybeSingle();
-          tenantId = (branch as { tenant_id?: string | null } | null)?.tenant_id ?? null;
-        } catch {
-          tenantId = null;
-        }
-      }
-      await logAiUsage({
-        supabaseUrl,
-        serviceRoleKey: supabaseServiceKey,
-        tenantId,
-        userId: null,
-        branchId,
-        feature: `ai-generate:${tool}`,
-        model: result.model,
-        tokensInput: result.tokensInput,
-        tokensOutput: result.tokensOutput,
-      });
-    }
+    await logAiUsage({
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+      tenantId: ctx.tenantId,
+      userId: ctx.user.id,
+      branchId,
+      feature: `ai-generate:${tool}`,
+      model: result.model,
+      tokensInput: result.tokensInput,
+      tokensOutput: result.tokensOutput,
+    });
 
     return jsonResponse(200, { ok: true, text: result.content });
   } catch (e) {

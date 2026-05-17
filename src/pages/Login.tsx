@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
+import { getAal, listFactors } from '@/lib/services/mfa'
+import { roleRequiresMfa } from '@/lib/mfaPolicy'
 import { StaticLoginBackground } from '@/components/StaticLoginBackground'
 import { scheduleWhenIdle } from '@/lib/scheduleIdle'
 
@@ -105,6 +107,21 @@ export default function Login() {
         const from = (location.state as { from?: RouterLocation } | null)?.from
         const defaultPath = role === "vendedor" ? "/app/crm" : "/app"
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
+        try {
+          const factors = await listFactors()
+          const verified = factors.filter((f) => f.status === "verified")
+          const aal = await getAal()
+          if (verified.length > 0 && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+            navigate("/login/mfa", { replace: true, state: { from: to } })
+            return
+          }
+          if (roleRequiresMfa(role) && verified.length === 0) {
+            navigate("/app/mfa-required", { replace: true })
+            return
+          }
+        } catch {
+          // Si MFA no está disponible en el plan, continuar al destino normal.
+        }
         navigate(to, { replace: true })
       }
     } catch {
