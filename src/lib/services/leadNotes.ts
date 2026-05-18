@@ -3,6 +3,11 @@ import type { Database } from '../types/database'
 
 export type LeadNote = Database['public']['Tables']['lead_notes']['Row']
 type LeadNoteInsert = Database['public']['Tables']['lead_notes']['Insert']
+type LeadNoteUpdate = Database['public']['Tables']['lead_notes']['Update']
+
+type LeadNoteWithAuthor = LeadNote & {
+  author?: { id: string; full_name: string | null; email: string | null } | null
+}
 
 export const leadNoteService = {
   async listByLead(leadId: string) {
@@ -13,9 +18,7 @@ export const leadNoteService = {
       .order('created_at', { ascending: true })
 
     if (error) throw error
-    return data as (LeadNote & {
-      author?: { id: string; full_name: string | null; email: string | null } | null
-    })[]
+    return data as LeadNoteWithAuthor[]
   },
 
   async create(params: {
@@ -43,6 +46,26 @@ export const leadNoteService = {
       .single()
 
     if (error) throw error
-    return data
+    return data as LeadNoteWithAuthor
+  },
+
+  async update(noteId: string, body: string) {
+    const trimmed = body.trim()
+    if (!trimmed) throw new Error('La nota no puede estar vacía.')
+
+    const payload: LeadNoteUpdate = {
+      body: trimmed,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from('lead_notes')
+      .update(payload)
+      .eq('id', noteId)
+      .select('*, author:users!created_by(id, full_name, email)')
+      .single()
+
+    if (error) throw error
+    return data as LeadNoteWithAuthor
   },
 }

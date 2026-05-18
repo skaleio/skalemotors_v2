@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,6 +15,48 @@ function formatNoteDate(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function wasEdited(createdAt: string, updatedAt: string | null | undefined) {
+  if (!updatedAt) return false;
+  return new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 1000;
+}
+
+function NoteTimestamps({
+  createdAt,
+  updatedAt,
+  authorName,
+}: {
+  createdAt: string;
+  updatedAt?: string | null;
+  authorName?: string | null;
+}) {
+  const edited = wasEdited(createdAt, updatedAt);
+
+  return (
+    <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
+      <p>
+        <span className="font-medium text-foreground/55">Creada:</span>{" "}
+        <time dateTime={createdAt} className="text-foreground/75">
+          {formatNoteDate(createdAt)}
+        </time>
+      </p>
+      {edited && updatedAt ? (
+        <p>
+          <span className="font-medium text-foreground/55">Última edición:</span>{" "}
+          <time dateTime={updatedAt} className="text-foreground/75">
+            {formatNoteDate(updatedAt)}
+          </time>
+        </p>
+      ) : null}
+      {authorName ? (
+        <p>
+          <span className="font-medium text-foreground/55">Registrada por:</span>{" "}
+          <span className="text-foreground/75">{authorName}</span>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 type LeadNotesSectionProps = {
@@ -31,6 +73,8 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const queryKey = ["lead-notes", leadId] as const;
@@ -47,6 +91,25 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey });
   }, [queryClient, queryKey]);
+
+  const closeComposer = useCallback(() => {
+    setComposerOpen(false);
+    setDraft("");
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingNoteId(null);
+    setEditDraft("");
+  }, []);
+
+  const startEdit = useCallback(
+    (noteId: string, body: string) => {
+      setEditingNoteId(noteId);
+      setEditDraft(body);
+      closeComposer();
+    },
+    [closeComposer],
+  );
 
   const handleSaveNote = useCallback(async () => {
     const body = draft.trim();
@@ -68,8 +131,7 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
         branchId: branchId ?? user?.branch_id ?? null,
         createdBy: user?.id ?? null,
       });
-      setDraft("");
-      setComposerOpen(false);
+      closeComposer();
       invalidate();
       toast.success("Nota agregada");
     } catch (err) {
@@ -78,7 +140,34 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
     } finally {
       setIsSaving(false);
     }
-  }, [draft, tenantId, leadId, branchId, user?.branch_id, user?.id, invalidate]);
+  }, [draft, tenantId, leadId, branchId, user?.branch_id, user?.id, invalidate, closeComposer]);
+
+  const handleUpdateNote = useCallback(async () => {
+    if (!editingNoteId) return;
+    const body = editDraft.trim();
+    if (!body) {
+      toast.error("La nota no puede quedar vacía.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await leadNoteService.update(editingNoteId, body);
+      cancelEdit();
+      invalidate();
+      toast.success("Nota actualizada");
+    } catch (err) {
+      console.error("[LeadNotesSection] update", err);
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar la nota.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingNoteId, editDraft, cancelEdit, invalidate]);
+
+  const openAddComposer = useCallback(() => {
+    cancelEdit();
+    setComposerOpen(true);
+  }, [cancelEdit]);
 
   return (
     <div className={cn("grid gap-2", className)}>
@@ -110,21 +199,63 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
 
         {notes.map((note) => {
           const authorName = note.author?.full_name?.trim() || note.author?.email?.trim();
+          const isEditing = editingNoteId === note.id;
+
+          if (isEditing) {
+            return (
+              <div
+                key={note.id}
+                className="space-y-2 rounded-md border border-primary/30 bg-background px-3 py-2 shadow-sm"
+              >
+                <Textarea
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  rows={3}
+                  autoFocus
+                  disabled={isSaving}
+                  aria-label="Editar nota"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={handleUpdateNote} disabled={isSaving || !editDraft.trim()}>
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Guardar cambios
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={cancelEdit}>
+                    Cancelar
+                  </Button>
+                </div>
+                <NoteTimestamps
+                  createdAt={note.created_at}
+                  updatedAt={note.updated_at}
+                  authorName={authorName}
+                />
+              </div>
+            );
+          }
+
           return (
             <article
               key={note.id}
-              className="rounded-md border border-border/45 bg-background/90 px-3 py-2 shadow-sm"
+              className="group relative rounded-md border border-border/45 bg-background/90 px-3 py-2 pr-10 shadow-sm"
             >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1 h-7 w-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                onClick={() => startEdit(note.id, note.body)}
+                disabled={isSaving || composerOpen}
+                aria-label="Editar nota"
+                title="Editar nota"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                <time dateTime={note.created_at}>{formatNoteDate(note.created_at)}</time>
-                {authorName ? (
-                  <>
-                    {" · "}
-                    <span className="font-medium text-foreground/70">{authorName}</span>
-                  </>
-                ) : null}
-              </p>
+              <NoteTimestamps
+                createdAt={note.created_at}
+                updatedAt={note.updated_at}
+                authorName={authorName}
+              />
             </article>
           );
         })}
@@ -145,16 +276,7 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Guardar nota
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={isSaving}
-              onClick={() => {
-                setComposerOpen(false);
-                setDraft("");
-              }}
-            >
+            <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={closeComposer}>
               Cancelar
             </Button>
           </div>
@@ -165,7 +287,8 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
           variant="outline"
           size="sm"
           className="w-full sm:w-auto"
-          onClick={() => setComposerOpen(true)}
+          onClick={openAddComposer}
+          disabled={isSaving || editingNoteId !== null}
         >
           <Plus className="mr-1.5 h-4 w-4" aria-hidden />
           Agregar nota
