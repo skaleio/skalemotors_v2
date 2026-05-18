@@ -14,6 +14,7 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Moon, Receipt, Search, Sun, Target, UserPlus, Users, X } from "lucide-react";
+import { usePreloadUserAvatar } from "@/hooks/usePreloadUserAvatar";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -44,6 +45,7 @@ interface SearchResult {
 }
 
 export function TopBar() {
+  usePreloadUserAvatar();
   const navigate = useNavigate();
   const location = useLocation();
   const { navigateWithLoading } = useNavigationWithLoading();
