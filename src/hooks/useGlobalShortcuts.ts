@@ -44,10 +44,12 @@ function useShortcutHandlers() {
 
 export function useGlobalShortcuts() {
   const { navigateWithLoading } = useNavigationWithLoading();
-  const { shortcuts } = useShortcutsPreferences();
+  const { shortcuts, shortcutsEnabled } = useShortcutsPreferences();
   const handlersRef = useShortcutHandlers();
 
   useEffect(() => {
+    if (!shortcutsEnabled) return;
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isTyping =
@@ -117,5 +119,5 @@ export function useGlobalShortcuts() {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [shortcuts, navigateWithLoading]);
+  }, [shortcuts, shortcutsEnabled, navigateWithLoading]);
 }

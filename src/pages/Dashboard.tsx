@@ -25,6 +25,7 @@ import { addDays, endOfDay, format, isSameDay, isToday, startOfDay } from "date-
 import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SalesPipelineChart } from "@/components/dashboard/SalesPipelineChart";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { CHART_PALETTE, CHART_PRIMARY } from "@/lib/chartPalette";
@@ -35,16 +36,6 @@ const categoryLabels: Record<string, string> = {
   nuevo: 'Nuevos',
   usado: 'Usados',
   consignado: 'Consignados'
-};
-
-const statusLabels: Record<string, string> = {
-  nuevo: 'Nuevos',
-  contactado: 'Contactados',
-  interesado: 'Interesados',
-  cotizando: 'Cotizando',
-  negociando: 'Negociando',
-  vendido: 'Vendidos',
-  perdido: 'Perdidos'
 };
 
 /** Etiquetas para tipos de cita (tabla appointments, tipos en DB) */
@@ -79,6 +70,23 @@ export default function Dashboard() {
     userId: user?.id,
   });
   const completeTaskMutation = useCompletePendingTask();
+
+  const completePendingTask = (taskId: string, options?: { silent?: boolean }) => {
+    completeTaskMutation.mutate(taskId, {
+      onSuccess: () => {
+        if (!options?.silent) {
+          toast({ title: "Tarea completada" });
+        }
+      },
+      onError: (err) => {
+        toast({
+          title: "No se pudo marcar la tarea",
+          description: err instanceof Error ? err.message : "Error desconocido",
+          variant: "destructive",
+        });
+      },
+    });
+  };
 
   // Próximas citas: solo las que vienen del módulo Citas, ventana de 3 días para tener tiempo de preparación
   const appointmentsWindow = useMemo(() => {
@@ -213,7 +221,8 @@ export default function Dashboard() {
         });
         setShowQuoteDialog(true);
       } else {
-        navigate(`/leads?id=${task.entity_id}`);
+        completePendingTask(task.id, { silent: true });
+        navigate(`/app/leads?id=${task.entity_id}`);
       }
     } else if (task.entity_type === 'appointment' && task.entity_id) {
       navigate(`/appointments?id=${task.entity_id}`);
@@ -222,7 +231,7 @@ export default function Dashboard() {
     } else if (task.entity_type === 'consignacion' && task.entity_id) {
       navigate(`/app/consignaciones?consignacion=${task.entity_id}`);
     } else {
-      navigate('/leads');
+      navigate('/app/leads');
     }
   };
 
@@ -736,8 +745,11 @@ export default function Dashboard() {
                             task={task}
                             variant="urgent"
                             onAction={() => handleTaskAction(task)}
-                            onComplete={() => completeTaskMutation.mutate(task.id)}
-                            isCompleting={completeTaskMutation.isPending}
+                            onComplete={() => completePendingTask(task.id)}
+                            isCompleting={
+                              completeTaskMutation.isPending
+                              && completeTaskMutation.variables === task.id
+                            }
                           />
                         ))}
                       </div>
@@ -756,8 +768,11 @@ export default function Dashboard() {
                             task={task}
                             variant="today"
                             onAction={() => handleTaskAction(task)}
-                            onComplete={() => completeTaskMutation.mutate(task.id)}
-                            isCompleting={completeTaskMutation.isPending}
+                            onComplete={() => completePendingTask(task.id)}
+                            isCompleting={
+                              completeTaskMutation.isPending
+                              && completeTaskMutation.variables === task.id
+                            }
                           />
                         ))}
                       </div>
@@ -776,8 +791,11 @@ export default function Dashboard() {
                             task={task}
                             variant="later"
                             onAction={() => handleTaskAction(task)}
-                            onComplete={() => completeTaskMutation.mutate(task.id)}
-                            isCompleting={completeTaskMutation.isPending}
+                            onComplete={() => completePendingTask(task.id)}
+                            isCompleting={
+                              completeTaskMutation.isPending
+                              && completeTaskMutation.variables === task.id
+                            }
                           />
                         ))}
                       </div>
@@ -1026,67 +1044,12 @@ export default function Dashboard() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                   Pipeline de Ventas
                 </CardTitle>
-                <CardDescription className="text-xs">Leads por estado</CardDescription>
+                <CardDescription className="text-xs">Embudo por etapa del CRM</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats?.leadsByStatus && stats.leadsByStatus.length > 0 ? (
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart
-                  data={stats.leadsByStatus.map(item => ({
-                    ...item,
-                    name: statusLabels[item.status] || item.status
-                  }))}
-                  margin={{ top: 5, right: 20, left: 0, bottom: 60 }}
-                >
-                  <defs>
-                    <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.9}/>
-                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0.6}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 500 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    tickLine={false}
-                    axisLine={{ stroke: 'hsl(var(--border))' }}
-                  />
-                  <YAxis
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                      padding: '12px'
-                    }}
-                    formatter={(value: any) => [value, 'Leads']}
-                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.1 }}
-                    labelStyle={{ fontWeight: 600, marginBottom: '4px' }}
-                  />
-                  <Bar
-                    dataKey="count"
-                    fill="url(#colorBar)"
-                    radius={[8, 8, 0, 0]}
-                    maxBarSize={50}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground">
-                <Users className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No hay leads registrados</p>
-              </div>
-            )}
+            <SalesPipelineChart leadsByStatus={stats?.leadsByStatus ?? []} />
           </CardContent>
         </Card>
 

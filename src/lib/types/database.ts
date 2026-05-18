@@ -797,6 +797,7 @@ export interface Database {
           pasajeros_filas: string | null
           transmision: string | null
           pie_disponible: string | null
+          cuotas_mensuales: string | null
           marca_preferida: string | null
           anos_minimo: string | null
           preferencia: string | null
@@ -838,6 +839,7 @@ export interface Database {
           pasajeros_filas?: string | null
           transmision?: string | null
           pie_disponible?: string | null
+          cuotas_mensuales?: string | null
           marca_preferida?: string | null
           anos_minimo?: string | null
           preferencia?: string | null
@@ -879,6 +881,7 @@ export interface Database {
           pasajeros_filas?: string | null
           transmision?: string | null
           pie_disponible?: string | null
+          cuotas_mensuales?: string | null
           marca_preferida?: string | null
           anos_minimo?: string | null
           preferencia?: string | null
@@ -889,6 +892,35 @@ export interface Database {
           updated_at?: string
           closed_at?: string | null
           deleted_at?: string | null
+        }
+      }
+      lead_notes: {
+        Row: {
+          id: string
+          lead_id: string
+          tenant_id: string
+          branch_id: string | null
+          body: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          tenant_id: string
+          branch_id?: string | null
+          body: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          body?: string
+          created_by?: string | null
+          created_at?: string
         }
       }
       lead_activities: {

@@ -31,7 +31,8 @@ type EventKey =
   | "lead_assigned"
   | "lead_stale"
   | "consignacion_created"
-  | "consignacion_stale";
+  | "consignacion_stale"
+  | "vehicle_unpublished";
 
 type EventMeta = {
   key: EventKey;
@@ -77,8 +78,8 @@ const EVENT_TYPES: readonly EventMeta[] = [
     short: "Estancados",
     icon: Clock,
     iconClass: "text-red-500",
-    description: "Leads sin cambiar de estado > 3 días",
-    roles: ["admin"],
+    description: "Leads del CRM sin movimiento ni actualización > 4 días",
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "vendedor"],
   },
   {
     key: "consignacion_created",
@@ -91,12 +92,21 @@ const EVENT_TYPES: readonly EventMeta[] = [
   },
   {
     key: "consignacion_stale",
-    label: "Sin publicar",
-    short: "Sin publicar",
+    label: "Consignación sin publicar",
+    short: "Consign.",
     icon: Clock,
     iconClass: "text-amber-500",
-    description: "Consignaciones > 7 días sin publicarse",
-    roles: ["admin"],
+    description: "Consignaciones en revisión > 7 días sin publicarse",
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario"],
+  },
+  {
+    key: "vehicle_unpublished",
+    label: "Inventario sin publicar",
+    short: "Inventario",
+    icon: Car,
+    iconClass: "text-amber-600",
+    description: "Vehículos disponibles > 5 días sin publicarse",
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario"],
   },
 ] as const;
 
@@ -129,8 +139,10 @@ export default function Alerts() {
 
   const { notifications, unreadCount, isLoading } = useNotifications({
     userId: user?.id,
+    role: user?.role,
     limit: 100,
     includeArchived,
+    syncStaleAlerts: true,
   });
 
   const markReadMutation = useMarkNotificationRead();
@@ -169,7 +181,21 @@ export default function Alerts() {
 
   const openNotification = (n: Notification) => {
     if (!n.read_at) markReadMutation.mutate(n.id);
-    if (n.action_url) navigateWithLoading(n.action_url);
+    if (n.action_url) {
+      navigateWithLoading(n.action_url);
+      return;
+    }
+    if (n.entity_type === "lead" && n.entity_id) {
+      navigateWithLoading(`/app/leads?openLead=${n.entity_id}`);
+      return;
+    }
+    if (n.entity_type === "consignacion") {
+      navigateWithLoading("/app/consignaciones");
+      return;
+    }
+    if (n.entity_type === "vehicle") {
+      navigateWithLoading("/app/inventory");
+    }
   };
 
   const emptyHint = (() => {

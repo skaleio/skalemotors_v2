@@ -59,12 +59,17 @@ export function PendingTaskRow({
           {task.action_label}
         </Button>
         <Button
+          type="button"
           size="sm"
           variant="ghost"
           className="text-muted-foreground"
-          onClick={onComplete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onComplete();
+          }}
           disabled={isCompleting}
           title="Marcar como hecha"
+          aria-label="Marcar tarea como hecha"
         >
           <CheckCircle2 className="h-4 w-4" />
         </Button>

@@ -1,7 +1,8 @@
+import { canSyncStaleAlerts, syncPendingTasksIfDue } from '@/lib/services/pendingTasks'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/lib/types/database'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export type Notification = Database['public']['Tables']['notifications']['Row']
 
@@ -9,12 +10,22 @@ const LIST_KEY = ['notifications'] as const
 
 type UseNotificationsOptions = {
   userId: string | undefined
+  role?: string | null
   limit?: number
   includeArchived?: boolean
+  /** Ejecuta sync de leads/consignaciones/vehículos estancados al montar (throttle 5 min). */
+  syncStaleAlerts?: boolean
 }
 
-export function useNotifications({ userId, limit = 30, includeArchived = false }: UseNotificationsOptions) {
+export function useNotifications({
+  userId,
+  role,
+  limit = 30,
+  includeArchived = false,
+  syncStaleAlerts = false,
+}: UseNotificationsOptions) {
   const queryClient = useQueryClient()
+  const staleSyncStartedRef = useRef(false)
 
   const query = useQuery({
     queryKey: [...LIST_KEY, userId, limit, includeArchived],
@@ -35,6 +46,17 @@ export function useNotifications({ userId, limit = 30, includeArchived = false }
     staleTime: 30 * 1000,
     placeholderData: (prev: Notification[] | undefined) => prev ?? [],
   })
+
+  useEffect(() => {
+    if (!syncStaleAlerts || !userId || !canSyncStaleAlerts(role)) return
+    if (staleSyncStartedRef.current) return
+    staleSyncStartedRef.current = true
+
+    void (async () => {
+      await syncPendingTasksIfDue()
+      await queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    })()
+  }, [syncStaleAlerts, userId, role, queryClient])
 
   // Realtime: INSERT/UPDATE sobre notifications del usuario
   useEffect(() => {

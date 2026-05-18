@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
@@ -34,6 +35,14 @@ import { useDeletedLeads } from "@/hooks/useDeletedLeads";
 import { useLeads } from "@/hooks/useLeads";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
+import {
+  CRM_MOVABLE_STAGE_KEYS,
+  CRM_PIPELINE_STATUS_LABELS,
+  type CrmStageKey,
+  crmStageToDbStatus,
+  leadBelongsToCrmStage,
+  safePipelineSelectValue,
+} from "@/lib/crmPipeline";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase, type User } from "@/lib/supabase";
@@ -239,12 +248,7 @@ const VEHICLE_TYPE_OPTIONS = [
 const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
 
 /** Estados activos del pipeline (mismo modelo que CRM). */
-const PIPELINE_STATUS_LABELS: Record<string, string> = {
-  contactado: "CONTACTADO",
-  negociando: "NEGOCIANDO",
-  en_espera: "EN ESPERA",
-  para_cierre: "PARA CIERRE",
-};
+const PIPELINE_STATUS_LABELS = CRM_PIPELINE_STATUS_LABELS;
 
 const CLOSED_STATUS_LABELS: Record<string, string> = {
   vendido: "Cerrado (vendido)",
@@ -263,14 +267,10 @@ const CLOSED_STYLES: Record<string, { dot: string; text: string }> = {
   perdido: { dot: "bg-red-500", text: "text-red-600" },
 };
 
-type LeadPipelineStage = "contactado" | "negociando" | "en_espera" | "para_cierre";
+type LeadPipelineStage = CrmStageKey;
 
 function getLeadPipelineStage(status?: string | null): LeadPipelineStage {
-  const s = (status || "").toLowerCase();
-  if (s === "negociando" || s === "cotizando") return "negociando";
-  if (s === "en_espera") return "en_espera";
-  if (s === "para_cierre") return "para_cierre";
-  return "contactado";
+  return safePipelineSelectValue(status);
 }
 
 /** Bucket para filtro / stats: pipeline activo o cerrado (no mezcla vendido con CONTACTADO). */
@@ -287,11 +287,6 @@ function isClosedLeadStatus(status?: string | null): boolean {
   return s === "vendido" || s === "perdido";
 }
 
-/** Valor del <Select> en tabla / formularios de pipeline (solo 3). */
-function safePipelineSelectValue(status?: string | null): LeadPipelineStage {
-  return getLeadPipelineStage(status);
-}
-
 /** Estado para el formulario de edición (pipeline o cerrado). */
 function statusForEditForm(status?: string | null): string {
   const s = (status || "").toLowerCase();
@@ -299,8 +294,10 @@ function statusForEditForm(status?: string | null): string {
   return getLeadPipelineStage(status);
 }
 
+const DEFAULT_PIPELINE_STYLE = PIPELINE_STYLES.contactado;
+
 const getStatusMeta = (value?: string | null) => {
-  const s = (value || "").toLowerCase();
+  const s = (value ?? "").trim().toLowerCase();
   if (s === "vendido") {
     return { label: CLOSED_STATUS_LABELS.vendido, styles: CLOSED_STYLES.vendido };
   }
@@ -308,9 +305,15 @@ const getStatusMeta = (value?: string | null) => {
     return { label: CLOSED_STATUS_LABELS.perdido, styles: CLOSED_STYLES.perdido };
   }
   const stage = getLeadPipelineStage(value);
+  if (stage === "negocio_cerrado") {
+    return {
+      label: PIPELINE_STATUS_LABELS.negocio_cerrado,
+      styles: CLOSED_STYLES.vendido,
+    };
+  }
   return {
-    label: PIPELINE_STATUS_LABELS[stage],
-    styles: PIPELINE_STYLES[stage],
+    label: PIPELINE_STATUS_LABELS[stage] ?? PIPELINE_STATUS_LABELS.contactado,
+    styles: PIPELINE_STYLES[stage] ?? DEFAULT_PIPELINE_STYLE,
   };
 };
 
@@ -500,8 +503,9 @@ const LeadsTable = memo(function LeadsTable({
                             <span className={`text-xs font-medium ${meta.styles.text}`}>{meta.label}</span>
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => {
-                              const styles = PIPELINE_STYLES[key];
+                            {CRM_MOVABLE_STAGE_KEYS.map((key) => {
+                              const label = PIPELINE_STATUS_LABELS[key];
+                              const styles = PIPELINE_STYLES[key] ?? DEFAULT_PIPELINE_STYLE;
                               return (
                                 <SelectItem key={key} value={key}>
                                   <span className="flex items-center gap-2">
@@ -591,6 +595,7 @@ function LeadsImpl({ user }: { user: User }) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { shortcutsEnabled } = useShortcutsPreferences();
   const { leads, loading, isFetching, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
@@ -635,6 +640,8 @@ function LeadsImpl({ user }: { user: User }) {
   const [editingLead, setEditingLead] = useState<(typeof leads)[number] | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [detailsLead, setDetailsLead] = useState<Lead | null>(null);
+  /** Evita reabrir el modal al cerrar mientras `?id=` sigue en la URL un instante. */
+  const deepLinkOpenedIdRef = useRef<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLead, setDeletingLead] = useState<(typeof leads)[number] | null>(null);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
@@ -658,6 +665,8 @@ function LeadsImpl({ user }: { user: User }) {
   });
 
   useEffect(() => {
+    if (!shortcutsEnabled) return;
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       const isShortcut = (event.ctrlKey || event.metaKey) && key === "l";
@@ -691,7 +700,7 @@ function LeadsImpl({ user }: { user: User }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, shortcutsEnabled, showCreateDialog]);
 
   useEffect(() => {
     if (user?.branch_id) {
@@ -811,9 +820,14 @@ function LeadsImpl({ user }: { user: User }) {
     return map;
   }, [consignaciones]);
 
-  const handleStatusChange = useCallback(async (leadId: string, nextStatus: string) => {
+  const handleStatusChange = useCallback(async (leadId: string, nextStageKey: string) => {
     const currentLead = leads.find((item) => item.id === leadId);
-    if (!currentLead || currentLead.status === nextStatus) return;
+    if (!currentLead) return;
+
+    const targetStage = nextStageKey as CrmStageKey;
+    if (leadBelongsToCrmStage(currentLead.status, targetStage)) return;
+
+    const nextStatus = crmStageToDbStatus(targetStage);
 
     // Optimistic update para evitar el doble intento
     queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
@@ -824,7 +838,7 @@ function LeadsImpl({ user }: { user: User }) {
     });
 
     try {
-      await leadService.update(leadId, { status: nextStatus as any });
+      await leadService.update(leadId, { status: nextStatus as Lead["status"] });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
     } catch (error: any) {
       console.error("Error actualizando estado del lead:", error);
@@ -1257,10 +1271,71 @@ function LeadsImpl({ user }: { user: User }) {
     setShowDetailsDialog(true);
   }, []);
 
+  const leadIdFromUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("id") || params.get("openLead");
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!leadIdFromUrl) {
+      deepLinkOpenedIdRef.current = null;
+      return;
+    }
+    if (loading) return;
+    if (deepLinkOpenedIdRef.current === leadIdFromUrl) return;
+
+    const openFromDeepLink = (lead: Lead) => {
+      deepLinkOpenedIdRef.current = leadIdFromUrl;
+      openDetailsDialog(lead);
+    };
+
+    const fromList = leads.find((l) => l.id === leadIdFromUrl);
+    if (fromList) {
+      openFromDeepLink(fromList);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const lead = await leadService.getById(leadIdFromUrl);
+        if (!cancelled && deepLinkOpenedIdRef.current !== leadIdFromUrl) {
+          openFromDeepLink(lead);
+        }
+      } catch {
+        if (cancelled) return;
+        deepLinkOpenedIdRef.current = leadIdFromUrl;
+        toast({
+          variant: "destructive",
+          title: "Lead no encontrado",
+          description: "No se pudo abrir el detalle de este lead.",
+        });
+        const params = new URLSearchParams(location.search);
+        params.delete("id");
+        params.delete("openLead");
+        const q = params.toString();
+        navigate(`${location.pathname}${q ? `?${q}` : ""}`, { replace: true });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leadIdFromUrl, loading, leads, location.pathname, location.search, navigate, openDetailsDialog]);
+
   const closeDetailsDialog = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    const idInUrl = params.get("id") || params.get("openLead");
+    if (idInUrl) {
+      deepLinkOpenedIdRef.current = idInUrl;
+      params.delete("id");
+      params.delete("openLead");
+      const q = params.toString();
+      navigate(`${location.pathname}${q ? `?${q}` : ""}`, { replace: true });
+    }
     setShowDetailsDialog(false);
     setDetailsLead(null);
-  }, []);
+  }, [location.pathname, location.search, navigate]);
 
   const closeDeleteDialog = () => {
     setShowDeleteDialog(false);
@@ -1471,9 +1546,9 @@ function LeadsImpl({ user }: { user: User }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
-                {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => (
+                {CRM_MOVABLE_STAGE_KEYS.map((key) => (
                   <SelectItem key={key} value={key}>
-                    {label}
+                    {PIPELINE_STATUS_LABELS[key]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1674,9 +1749,9 @@ function LeadsImpl({ user }: { user: User }) {
                   <SelectValue placeholder="Selecciona estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(PIPELINE_STATUS_LABELS).map(([key, label]) => (
+                  {CRM_MOVABLE_STAGE_KEYS.map((key) => (
                     <SelectItem key={key} value={key}>
-                      {label}
+                      {PIPELINE_STATUS_LABELS[key]}
                     </SelectItem>
                   ))}
                 </SelectContent>

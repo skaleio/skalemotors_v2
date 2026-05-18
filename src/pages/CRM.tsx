@@ -20,8 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
+import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
@@ -29,6 +30,16 @@ import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
+import {
+  CRM_PIPELINE_ACTIVE_DB_STATUSES,
+  CRM_PIPELINE_STAGES,
+  CRM_PIPELINE_STATUS_LABELS,
+  type CrmStageKey,
+  crmStageToDbStatus,
+  getLeadCrmStageKey,
+  leadBelongsToCrmStage,
+  safePipelineSelectValue,
+} from "@/lib/crmPipeline";
 import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
@@ -104,13 +115,7 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
   "Seguimiento semanal": { dot: "bg-blue-500", text: "text-blue-600" },
 };
 
-const statusLabels: Record<string, string> = {
-  contactado: "CONTACTADO",
-  negociando: "NEGOCIANDO",
-  en_espera: "EN ESPERA",
-  para_cierre: "PARA CIERRE",
-  negocio_cerrado: "NEGOCIO CONCRETADO",
-};
+const statusLabels = CRM_PIPELINE_STATUS_LABELS;
 
 const ACTIVE_PIPELINE_STATUS_ES: Record<string, string> = {
   nuevo: "Nuevo",
@@ -122,43 +127,8 @@ const ACTIVE_PIPELINE_STATUS_ES: Record<string, string> = {
   para_cierre: "Para cierre",
 };
 
-/**
- * Valor seguro para <Select> del pipeline CRM (5 columnas + cierre).
- * Mapea estados legacy al bucket correspondiente.
- */
-function safePipelineSelectValue(status: string | null | undefined): string {
-  const s = (status || "").toLowerCase();
-  if (s === "negociando" || s === "cotizando") return "negociando";
-  if (s === "en_espera") return "en_espera";
-  if (s === "para_cierre") return "para_cierre";
-  if (s === "vendido") return "negocio_cerrado";
-  if (s === "contactado" || s === "nuevo" || s === "interesado") return "contactado";
-  return "contactado";
-}
-
-/** Convierte clave de columna CRM a `leads.status` en Postgres. */
-function crmPipelineStageToDbStatus(stageKey: string): Lead["status"] {
-  if (stageKey === "negocio_cerrado") return "vendido";
-  if (
-    stageKey === "contactado"
-    || stageKey === "negociando"
-    || stageKey === "en_espera"
-    || stageKey === "para_cierre"
-  ) {
-    return stageKey as Lead["status"];
-  }
-  return "contactado";
-}
-
-type CrmStageKey = "contactado" | "negociando" | "en_espera" | "para_cierre" | "negocio_cerrado";
-
 /** MIME para DataTransfer (evita colisiones con texto plano). */
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
-
-/** Valor `leads.status` al soltar en una columna del pipeline. */
-function pipelineDbStatusForStage(stageKey: CrmStageKey): string {
-  return crmPipelineStageToDbStatus(stageKey);
-}
 
 const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
@@ -167,17 +137,6 @@ const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: st
   para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
   negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
 };
-
-/** Estados del embudo donde el cliente sigue activo (excluye vendido y perdido). */
-const CRM_PIPELINE_ACTIVE_STATUSES = new Set([
-  "contactado",
-  "nuevo",
-  "interesado",
-  "negociando",
-  "cotizando",
-  "en_espera",
-  "para_cierre",
-]);
 
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
@@ -214,6 +173,8 @@ function leadPipelinePreviewRows(lead: LeadWithAssignee): { label: string; value
   add("Región", lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX));
   add("Financ./Contado", lead.payment_type);
   add("Presupuesto", lead.budget);
+  add("Pie", lead.pie_disponible);
+  add("Cuotas mens.", lead.cuotas_mensuales);
   return rows;
 }
 
@@ -340,17 +301,14 @@ const LeadCard = memo(function LeadCard({
         userId: lead.assigned_to,
         crmColor: lead.assigned_user?.crm_color ?? null,
       });
-  /** Semáforo de intentos: visible en contactado, negociando y para cierre (no en vendido). */
+  /** Semáforo de intentos: visible en columnas activas del pipeline (no en vendido). */
   const showContactAttemptsSemaforo = useMemo(() => {
-    const st = (lead.status || "").toLowerCase();
+    const stage = getLeadCrmStageKey(lead.status);
     return (
-      st === "contactado"
-      || st === "nuevo"
-      || st === "interesado"
-      || st === "negociando"
-      || st === "cotizando"
-      || st === "en_espera"
-      || st === "para_cierre"
+      stage === "contactado"
+      || stage === "negociando"
+      || stage === "en_espera"
+      || stage === "para_cierre"
     );
   }, [lead.status]);
   const attemptStyles: Record<number, string> = {
@@ -627,7 +585,8 @@ export default function CRM() {
     region: "",
     payment_type: "",
     budget: "",
-    notes: "",
+    pie: "",
+    cuotas_mensuales: "",
     vehicle: "",
     status: "contactado",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
@@ -713,7 +672,8 @@ export default function CRM() {
       region: editingLead.region || getTagValue(editingLead.tags, REGION_TAG_PREFIX) || "",
       payment_type: editingLead.payment_type || "",
       budget: editingLead.budget || "",
-      notes: editingLead.notes || "",
+      pie: editingLead.pie_disponible || "",
+      cuotas_mensuales: editingLead.cuotas_mensuales || "",
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
       status: safePipelineSelectValue(editingLead.status),
       assigned_to: editingLead.assigned_to ?? null,
@@ -725,68 +685,7 @@ export default function CRM() {
     setIsEditingForm(true);
   }, [editingLead]);
 
-  const handleUpdateLead = useCallback(async () => {
-    if (!editingLead) return;
-    setIsUpdating(true);
-    try {
-      const updates: Record<string, unknown> = isEditingForm
-        ? {
-            full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
-            phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
-            email: editForm.email.trim() || null,
-            status: crmPipelineStageToDbStatus(editForm.status),
-            region: editForm.region.trim() || null,
-            payment_type: editForm.payment_type.trim() || null,
-            budget: editForm.budget.trim() || null,
-            notes: editForm.notes.trim() || null,
-            tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
-            assigned_to: editForm.assigned_to,
-            crm_seguimiento_socio: editForm.crm_seguimiento_socio,
-          }
-        : { status: crmPipelineStageToDbStatus(leadStatus) };
-
-      const updated = await leadService.update(editingLead.id, updates as any);
-      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
-        if (!Array.isArray(current)) return current;
-        return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
-      });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      if (isEditingForm) {
-        setEditingLead(updated as Lead);
-        setIsEditingForm(false);
-      } else {
-        closeEditDialog();
-      }
-    } catch (error: unknown) {
-      console.error("[CRM] handleUpdateLead", { leadId: editingLead.id, isEditingForm, error });
-      toast({
-        title: "No se pudo actualizar el lead",
-        description: describeSupabaseError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  }, [editingLead, leadStatus, isEditingForm, editForm, queryClient, closeEditDialog]);
-
-  const stages = useMemo(
-    () => [
-      {
-        key: "contactado" as const,
-        label: "CONTACTADO",
-        statuses: ["contactado", "nuevo", "interesado"],
-      },
-      {
-        key: "negociando" as const,
-        label: "NEGOCIANDO",
-        statuses: ["negociando", "cotizando"],
-      },
-      { key: "en_espera" as const, label: "EN ESPERA", statuses: ["en_espera"] },
-      { key: "para_cierre" as const, label: "PARA CIERRE", statuses: ["para_cierre"] },
-      { key: "negocio_cerrado" as const, label: "NEGOCIO CONCRETADO", statuses: ["vendido"] },
-    ],
-    [],
-  );
+  const stages = CRM_PIPELINE_STAGES;
 
   /**
    * Métricas globales del CRM. Se calculan sobre TODOS los leads del usuario
@@ -882,7 +781,7 @@ export default function CRM() {
       ...stage,
       leads: filteredLeads
         .filter((lead) => {
-          if (!stage.statuses.includes(lead.status)) return false;
+          if (!leadBelongsToCrmStage(lead.status, stage.key)) return false;
           if (stage.key === "negocio_cerrado") {
             return isVendidoInLocalCalendarMonth(lead, crmCalendarMonthKey);
           }
@@ -900,7 +799,7 @@ export default function CRM() {
   /** Demanda de stock: agrupa vehículo de interés en leads activos del embudo (respeta búsqueda y supervisión). */
   const vehicleDemandSummary = useMemo(() => {
     const base = filteredLeads.filter((lead) =>
-      CRM_PIPELINE_ACTIVE_STATUSES.has((lead.status || "").toLowerCase()),
+      CRM_PIPELINE_ACTIVE_DB_STATUSES.has((lead.status || "").toLowerCase()),
     );
     const bucket = new Map<string, number>();
     let sinVehiculo = 0;
@@ -923,7 +822,7 @@ export default function CRM() {
   const leadsForDemandInterest = useMemo(() => {
     if (!demandVehicleInterestKey) return [] as LeadWithAssignee[];
     return filteredLeads.filter((lead) => {
-      if (!CRM_PIPELINE_ACTIVE_STATUSES.has((lead.status || "").toLowerCase())) return false;
+      if (!CRM_PIPELINE_ACTIVE_DB_STATUSES.has((lead.status || "").toLowerCase())) return false;
       return getLeadVehicleInterestText(lead) === demandVehicleInterestKey;
     });
   }, [filteredLeads, demandVehicleInterestKey]);
@@ -933,6 +832,40 @@ export default function CRM() {
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
   const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pipelineMoveNotice, setPipelineMoveNotice] = useState<CrmPipelineMoveNotice | null>(null);
+  const pipelineMoveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissPipelineMoveNotice = useCallback(() => {
+    if (pipelineMoveNoticeTimerRef.current) {
+      clearTimeout(pipelineMoveNoticeTimerRef.current);
+      pipelineMoveNoticeTimerRef.current = null;
+    }
+    setPipelineMoveNotice(null);
+  }, []);
+
+  const showPipelineMoveNotice = useCallback(
+    (lead: Lead, fromStatus: string | null | undefined, toStage: CrmStageKey) => {
+      const fromStage = getLeadCrmStageKey(fromStatus) ?? toStage;
+      if (fromStage === toStage) return;
+
+      if (pipelineMoveNoticeTimerRef.current) {
+        clearTimeout(pipelineMoveNoticeTimerRef.current);
+      }
+
+      setPipelineMoveNotice({
+        id: crypto.randomUUID(),
+        leadName: lead.full_name?.trim() || "Sin nombre",
+        fromStage,
+        toStage,
+      });
+
+      pipelineMoveNoticeTimerRef.current = setTimeout(() => {
+        setPipelineMoveNotice(null);
+        pipelineMoveNoticeTimerRef.current = null;
+      }, 4800);
+    },
+    [],
+  );
 
   const [showCloseDealDialog, setShowCloseDealDialog] = useState(false);
   const [closeDealLead, setCloseDealLead] = useState<Lead | null>(null);
@@ -969,9 +902,66 @@ export default function CRM() {
     [],
   );
 
+  const handleUpdateLead = useCallback(async () => {
+    if (!editingLead) return;
+
+    const targetStageKey = (isEditingForm ? editForm.status : leadStatus) as CrmStageKey;
+    const currentStageKey = getLeadCrmStageKey(editingLead.status);
+    if (
+      targetStageKey === "negocio_cerrado"
+      && currentStageKey !== "negocio_cerrado"
+    ) {
+      openCloseDealForLead(editingLead);
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const updates: Record<string, unknown> = isEditingForm
+        ? {
+            full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
+            phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
+            email: editForm.email.trim() || null,
+            status: crmStageToDbStatus(editForm.status),
+            region: editForm.region.trim() || null,
+            payment_type: editForm.payment_type.trim() || null,
+            budget: editForm.budget.trim() || null,
+            pie_disponible: editForm.pie.trim() || null,
+            cuotas_mensuales: editForm.cuotas_mensuales.trim() || null,
+            tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
+            assigned_to: editForm.assigned_to,
+            crm_seguimiento_socio: editForm.crm_seguimiento_socio,
+          }
+        : { status: crmStageToDbStatus(leadStatus) };
+
+      const updated = await leadService.update(editingLead.id, updates as any);
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
+      });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (isEditingForm) {
+        setEditingLead(updated as Lead);
+        setIsEditingForm(false);
+      } else {
+        closeEditDialog();
+      }
+    } catch (error: unknown) {
+      console.error("[CRM] handleUpdateLead", { leadId: editingLead.id, isEditingForm, error });
+      toast({
+        title: "No se pudo actualizar el lead",
+        description: describeSupabaseError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [editingLead, leadStatus, isEditingForm, editForm, queryClient, closeEditDialog, openCloseDealForLead]);
+
   useEffect(() => {
     return () => {
       if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
+      if (pipelineMoveNoticeTimerRef.current) clearTimeout(pipelineMoveNoticeTimerRef.current);
     };
   }, []);
 
@@ -1094,9 +1084,11 @@ export default function CRM() {
   }, []);
 
   const handleStageDrop = useCallback(
-    async (e: DragEvent, stageKey: CrmStageKey, stageStatuses: string[]) => {
+    async (e: DragEvent, stageKey: CrmStageKey) => {
       e.preventDefault();
+      e.stopPropagation();
       setDragOverStageKey(null);
+
       const leadId =
         e.dataTransfer.getData(DRAG_LEAD_MIME) || e.dataTransfer.getData("text/plain").trim();
       if (!leadId) {
@@ -1104,19 +1096,18 @@ export default function CRM() {
         return;
       }
 
-      const lead = filteredLeads.find((l) => l.id === leadId);
+      const lead = leads.find((l) => l.id === leadId) ?? filteredLeads.find((l) => l.id === leadId);
       if (!lead) {
         setDraggingLeadId(null);
+        toast({
+          title: "No se encontró el lead",
+          description: "Actualiza la página e intenta mover la tarjeta de nuevo.",
+          variant: "destructive",
+        });
         return;
       }
 
-      if (stageStatuses.includes(lead.status)) {
-        setDraggingLeadId(null);
-        return;
-      }
-
-      const nextStatus = pipelineDbStatusForStage(stageKey);
-      if (lead.status === nextStatus) {
+      if (leadBelongsToCrmStage(lead.status, stageKey)) {
         setDraggingLeadId(null);
         return;
       }
@@ -1127,6 +1118,7 @@ export default function CRM() {
         return;
       }
 
+      const nextStatus = crmStageToDbStatus(stageKey) as Lead["status"];
       const previousStatus = lead.status;
       setMovingLeadId(leadId);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
@@ -1135,7 +1127,7 @@ export default function CRM() {
       });
 
       try {
-        const updated = await leadService.update(leadId, { status: nextStatus as Lead["status"] });
+        const updated = await leadService.update(leadId, { status: nextStatus });
         queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
           if (!Array.isArray(current)) return current;
           return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
@@ -1147,10 +1139,9 @@ export default function CRM() {
           setLandedLeadId(null);
           landHighlightTimerRef.current = null;
         }, 700);
+        showPipelineMoveNotice(lead, previousStatus, stageKey);
       } catch (err) {
         console.error("[CRM] handleStageDrop", { leadId, from: previousStatus, to: nextStatus, err });
-        // Rollback explícito al status previo (no dependemos solo de invalidate, que
-        // puede no refetchear si la query sigue "fresca" por staleTime).
         queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
           if (!Array.isArray(current)) return current;
           return current.map((l: Lead) => (l.id === leadId ? { ...l, status: previousStatus } : l));
@@ -1166,7 +1157,7 @@ export default function CRM() {
         setDraggingLeadId(null);
       }
     },
-    [filteredLeads, queryClient, openCloseDealForLead],
+    [leads, filteredLeads, queryClient, openCloseDealForLead, showPipelineMoveNotice],
   );
 
   const handleConfirmCloseDeal = useCallback(async () => {
@@ -1671,6 +1662,8 @@ export default function CRM() {
         </DialogContent>
       </Dialog>
 
+      <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
@@ -1689,7 +1682,7 @@ export default function CRM() {
                   if (dragOverStageKey === stage.key) setDragOverStageKey(null);
                 }
               }}
-              onDrop={(e) => void handleStageDrop(e, stage.key, stage.statuses)}
+              onDrop={(e) => void handleStageDrop(e, stage.key)}
               className={cn(
                 `border-t-4 transition-shadow duration-200 ${style?.border || ""}`,
                 draggingLeadId && "cursor-copy",
@@ -1758,7 +1751,7 @@ export default function CRM() {
                         onExternalDrop={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          void handleStageDrop(e, stage.key, stage.statuses);
+                          void handleStageDrop(e, stage.key);
                         }}
                       />
                     ))
@@ -1957,16 +1950,16 @@ export default function CRM() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="crm-edit-payment">Financiamiento / Contado</Label>
-                      <Input
-                        id="crm-edit-payment"
-                        value={editForm.payment_type}
-                        onChange={(e) => setEditForm((f) => ({ ...f, payment_type: e.target.value }))}
-                        placeholder="Ej: Contado"
-                      />
-                    </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="crm-edit-payment">Financiamiento / Contado</Label>
+                    <Input
+                      id="crm-edit-payment"
+                      value={editForm.payment_type}
+                      onChange={(e) => setEditForm((f) => ({ ...f, payment_type: e.target.value }))}
+                      placeholder="Ej: Contado"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-budget">Presupuesto</Label>
                       <Input
@@ -1974,6 +1967,24 @@ export default function CRM() {
                         value={editForm.budget}
                         onChange={(e) => setEditForm((f) => ({ ...f, budget: e.target.value }))}
                         placeholder="Ej: 10-12 millones"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-pie">Pie</Label>
+                      <Input
+                        id="crm-edit-pie"
+                        value={editForm.pie}
+                        onChange={(e) => setEditForm((f) => ({ ...f, pie: e.target.value }))}
+                        placeholder="Ej: 2.500.000"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-cuotas">Cuotas mensuales</Label>
+                      <Input
+                        id="crm-edit-cuotas"
+                        value={editForm.cuotas_mensuales}
+                        onChange={(e) => setEditForm((f) => ({ ...f, cuotas_mensuales: e.target.value }))}
+                        placeholder="Ej: 350.000"
                       />
                     </div>
                   </div>
@@ -1986,16 +1997,12 @@ export default function CRM() {
                       placeholder="Ej: Toyota Corolla 2020"
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="crm-edit-notes">Nota</Label>
-                    <Textarea
-                      id="crm-edit-notes"
-                      value={editForm.notes}
-                      onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                      placeholder="Notas sobre el lead..."
-                      rows={3}
-                    />
-                  </div>
+                  <LeadNotesSection
+                    leadId={editingLead.id}
+                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                    branchId={editingLead.branch_id ?? user?.branch_id}
+                    legacyNotes={editingLead.notes}
+                  />
                   <div className="grid gap-2">
                     <Label htmlFor="crm-edit-socio">Encargado del seguimiento (socio)</Label>
                     <Select
@@ -2109,11 +2116,15 @@ export default function CRM() {
                   {(() => {
                     const paymentType = editingLead.payment_type?.trim();
                     const budget = editingLead.budget?.trim();
+                    const pie = editingLead.pie_disponible?.trim();
+                    const cuotas = editingLead.cuotas_mensuales?.trim();
                     const pairs: Array<{ label: string; value: string }> = [];
                     if (paymentType) pairs.push({ label: "Financiamiento / Contado", value: paymentType });
                     if (budget) pairs.push({ label: "Presupuesto", value: budget });
+                    if (pie) pairs.push({ label: "Pie", value: pie });
+                    if (cuotas) pairs.push({ label: "Cuotas mensuales", value: cuotas });
                     return pairs.length ? (
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {pairs.map((p) => (
                           <div key={p.label}>
                             <p className="text-sm text-muted-foreground">{p.label}</p>
@@ -2142,7 +2153,6 @@ export default function CRM() {
                   {(editingLead.uso_principal
                     || editingLead.pasajeros_filas
                     || editingLead.transmision
-                    || editingLead.pie_disponible
                     || editingLead.marca_preferida
                     || editingLead.anos_minimo
                     || editingLead.preferencia
@@ -2157,7 +2167,7 @@ export default function CRM() {
                         if (editingLead.uso_principal) chatbotFields.push({ label: "Uso principal", value: editingLead.uso_principal });
                         if (editingLead.transmision) chatbotFields.push({ label: "Transmisión", value: editingLead.transmision });
                         if (editingLead.pasajeros_filas) chatbotFields.push({ label: "Pasajeros / Filas", value: editingLead.pasajeros_filas });
-                        if (editingLead.pie_disponible) chatbotFields.push({ label: "PIE disponible", value: editingLead.pie_disponible });
+                        /* pie: ver sección financiera */
                         if (editingLead.marca_preferida) chatbotFields.push({ label: "Marca preferida", value: editingLead.marca_preferida });
                         if (editingLead.anos_minimo) chatbotFields.push({ label: "Año mínimo", value: editingLead.anos_minimo });
                         if (editingLead.preferencia) chatbotFields.push({ label: "Preferencia", value: editingLead.preferencia });
@@ -2197,23 +2207,12 @@ export default function CRM() {
                       )}
                     </div>
                   )}
-                  {editingLead.notes && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nota</p>
-                      <p className="text-base whitespace-pre-wrap">{editingLead.notes}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Última modificación:{" "}
-                        <span className="font-medium text-foreground/80">
-                          {formatLeadTimestamp(editingLead.updated_at) || "—"}
-                        </span>
-                        {" · "}
-                        Creado:{" "}
-                        <span className="font-medium text-foreground/80">
-                          {formatLeadTimestamp(editingLead.created_at) || "—"}
-                        </span>
-                      </p>
-                    </div>
-                  )}
+                  <LeadNotesSection
+                    leadId={editingLead.id}
+                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                    branchId={editingLead.branch_id ?? user?.branch_id}
+                    legacyNotes={editingLead.notes}
+                  />
                   <div>
                     <p className="text-sm text-muted-foreground">Encargado (socio)</p>
                     <p className="text-base flex items-center gap-2">
@@ -2335,3 +2334,4 @@ export default function CRM() {
     </div>
   );
 }
+

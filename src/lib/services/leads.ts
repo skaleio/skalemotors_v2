@@ -1,3 +1,4 @@
+import { coerceCrmPipelineStatus } from '../crmPipeline'
 import { supabase } from '../supabase'
 import type { Database } from '../types/database'
 
@@ -21,6 +22,8 @@ const ALLOWED_LEAD_STATUSES = new Set<string>([
 ])
 
 function coerceLeadStatus(status: unknown, fallback: string): string {
+  const mapped = coerceCrmPipelineStatus(status, '')
+  if (mapped && ALLOWED_LEAD_STATUSES.has(mapped)) return mapped
   const s = typeof status === 'string' ? status.trim().toLowerCase() : ''
   if (s && ALLOWED_LEAD_STATUSES.has(s)) return s
   return fallback

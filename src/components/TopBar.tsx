@@ -168,7 +168,12 @@ export function TopBar() {
     setIsSearchOpen(false);
   };
 
-  const { notifications, unreadCount } = useNotifications({ userId: user?.id, limit: 20 });
+  const { notifications, unreadCount } = useNotifications({
+    userId: user?.id,
+    role: user?.role,
+    limit: 20,
+    syncStaleAlerts: true,
+  });
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
   const dismissMutation = useDismissNotification();
@@ -200,6 +205,8 @@ export function TopBar() {
         return <Car className="h-5 w-5 text-indigo-500" />;
       case 'consignacion_stale':
         return <Clock className="h-5 w-5 text-amber-500" />;
+      case 'vehicle_unpublished':
+        return <Car className="h-5 w-5 text-amber-600" />;
       case 'lead_stale':
         return <Clock className="h-5 w-5 text-red-500" />;
       case 'lead_contactado':
@@ -225,7 +232,21 @@ export function TopBar() {
 
   const openNotification = (notification: Notification) => {
     if (!notification.read_at) markAsRead(notification.id);
-    if (notification.action_url) navigateWithLoading(notification.action_url);
+    if (notification.action_url) {
+      navigateWithLoading(notification.action_url);
+      return;
+    }
+    if (notification.entity_type === "lead" && notification.entity_id) {
+      navigateWithLoading(`/app/leads?openLead=${notification.entity_id}`);
+      return;
+    }
+    if (notification.entity_type === "consignacion") {
+      navigateWithLoading("/app/consignaciones");
+      return;
+    }
+    if (notification.entity_type === "vehicle") {
+      navigateWithLoading("/app/inventory");
+    }
   };
 
   return (

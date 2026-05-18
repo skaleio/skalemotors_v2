@@ -1,5 +1,7 @@
+import { canSyncStaleAlerts, pendingTasksService, syncPendingTasksIfDue } from '@/lib/services/pendingTasks'
 import { supabase } from '@/lib/supabase'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import type { Database } from '@/lib/types/database'
 
 export type PendingTask = Database['public']['Tables']['pending_tasks']['Row']
@@ -16,6 +18,57 @@ type UsePendingTasksOptions = {
 // o un objeto con contexto completo del usuario (branchId + tenantId + role + userId).
 type UsePendingTasksInput = string | null | undefined | UsePendingTasksOptions
 
+function pendingTasksQueryKey(opts: UsePendingTasksOptions) {
+  const { branchId, tenantId, role, userId } = opts
+  const isAdminWide = role === 'admin' || role === 'jefe_jefe'
+  return ['pending-tasks', { branchId, tenantId, role, userId, scope: isAdminWide ? 'tenant' : 'branch' }] as const
+}
+
+async function fetchPendingTasks(opts: UsePendingTasksOptions): Promise<PendingTask[]> {
+  const { branchId, tenantId, role, userId } = opts
+  const isJefeJefe = role === 'jefe_jefe'
+  const isAdminWide = role === 'admin' || isJefeJefe
+  const enabled = isAdminWide ? !!tenantId : !!branchId
+
+  if (!enabled) return []
+
+  if (ENABLE_PENDING_TASK_SYNC_RPCS) {
+    await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
+      const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+      if (error && !rpcNotFound) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
+    })
+    await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
+      const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
+      if (error && !rpcNotFound) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
+    })
+  }
+
+  let q = supabase
+    .from('pending_tasks')
+    .select('*')
+    .is('completed_at', null)
+    .order('due_at', { ascending: true, nullsFirst: true })
+    .order('created_at', { ascending: false })
+
+  if (isAdminWide && tenantId) {
+    q = q.eq('tenant_id', tenantId)
+  } else if (branchId) {
+    q = q.eq('branch_id', branchId)
+  } else {
+    return []
+  }
+
+  if (!isJefeJefe && userId) {
+    q = q.or(`assigned_to.is.null,assigned_to.eq.${userId}`)
+  }
+
+  const { data, error } = await q
+  if (error) throw error
+  const list = data ?? []
+  const order: Record<string, number> = { urgent: 0, today: 1, later: 2 }
+  return [...list].sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2))
+}
+
 export function usePendingTasks(input: UsePendingTasksInput) {
   const queryClient = useQueryClient()
 
@@ -24,87 +77,31 @@ export function usePendingTasks(input: UsePendingTasksInput) {
       ? { branchId: input ?? null }
       : input
 
-  const { branchId, tenantId, role, userId } = opts
-  const isJefeJefe = role === 'jefe_jefe'
-  const isAdminWide = role === 'admin' || isJefeJefe
-
-  // enabled: admin/jefe_jefe necesita tenantId; el resto necesita branchId
+  const { branchId, tenantId, role } = opts
+  const isAdminWide = role === 'admin' || role === 'jefe_jefe'
   const enabled = isAdminWide ? !!tenantId : !!branchId
+  const queryKey = pendingTasksQueryKey(opts)
+  const syncScopeRef = useRef<string | null>(null)
 
   const query = useQuery({
-    queryKey: ['pending-tasks', { branchId, tenantId, role, userId, scope: isAdminWide ? 'tenant' : 'branch' }],
-    queryFn: async (): Promise<PendingTask[]> => {
-      if (!enabled) return []
-
-      if (ENABLE_PENDING_TASK_SYNC_RPCS) {
-        await supabase.rpc('sync_lead_reminders_to_pending_tasks', { ventana_horas: 48 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_lead_reminders_to_pending_tasks:', error.message)
-        })
-        await supabase.rpc('sync_old_inventory_vehicles_to_pending_tasks', { dias_inventario: 45, dias_sin_modificar: 30 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_old_inventory_vehicles_to_pending_tasks:', error.message)
-        })
-      }
-
-      // Staleness + alertas inteligentes (admin-only; auto-gate interno, seguros para otros roles).
-      // Defaults razonables hardcodeados: cambiarlos requiere editar acá.
-      await Promise.all([
-        supabase.rpc('sync_stale_consignaciones_to_pending_tasks', { dias_sin_publicar: 7 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_stale_consignaciones_to_pending_tasks:', error.message)
-        }),
-        supabase.rpc('sync_stale_leads_to_pending_tasks', { dias_sin_movimiento: 3 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_stale_leads_to_pending_tasks:', error.message)
-        }),
-        supabase.rpc('sync_unpublished_vehicles_to_pending_tasks', { dias_sin_publicar: 3 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_unpublished_vehicles_to_pending_tasks:', error.message)
-        }),
-        supabase.rpc('sync_leads_contacted_no_attempts_to_pending_tasks', { horas_sin_intento: 24 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_leads_contacted_no_attempts_to_pending_tasks:', error.message)
-        }),
-        supabase.rpc('sync_leads_searching_car_to_pending_tasks', { dias_buscando: 5 }).then(({ error }) => {
-          const rpcNotFound = error?.code === 'PGRST202' || error?.message?.includes('Could not find the function')
-          if (error && !rpcNotFound) console.warn('sync_leads_searching_car_to_pending_tasks:', error.message)
-        }),
-      ])
-
-      // Scope de lectura: admin/jefe_jefe = tenant-wide; otros = su branch.
-      let q = supabase
-        .from('pending_tasks')
-        .select('*')
-        .is('completed_at', null)
-        .order('due_at', { ascending: true, nullsFirst: true })
-        .order('created_at', { ascending: false })
-
-      if (isAdminWide && tenantId) {
-        q = q.eq('tenant_id', tenantId)
-      } else if (branchId) {
-        q = q.eq('branch_id', branchId)
-      } else {
-        return []
-      }
-
-      // Scope per-user: jefe_jefe ve todo; el resto ve no-asignadas (broadcast al
-      // branch) o asignadas a sí mismo. Las consignaciones tienen assigned_to=created_by
-      // tras la migración 20260820120000_consignaciones_user_scoped.
-      if (!isJefeJefe && userId) {
-        q = q.or(`assigned_to.is.null,assigned_to.eq.${userId}`)
-      }
-
-      const { data, error } = await q
-      if (error) throw error
-      const list = data ?? []
-      const order: Record<string, number> = { urgent: 0, today: 1, later: 2 }
-      return [...list].sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2))
-    },
+    queryKey,
+    queryFn: () => fetchPendingTasks(opts),
     enabled,
     staleTime: 2 * 60 * 1000,
     placeholderData: (previousData: PendingTask[] | undefined) => previousData ?? [],
   })
+
+  useEffect(() => {
+    if (!enabled || !canSyncStaleAlerts(role)) return
+    const scope = `${tenantId ?? ''}:${branchId ?? ''}:${role ?? ''}`
+    if (syncScopeRef.current === scope) return
+    syncScopeRef.current = scope
+
+    void (async () => {
+      await syncPendingTasksIfDue()
+      await queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
+    })()
+  }, [enabled, tenantId, branchId, role, queryClient])
 
   const urgentCount = (query.data ?? []).filter((t) => t.priority === 'urgent').length
   const urgentTasks = (query.data ?? []).filter((t) => t.priority === 'urgent')
@@ -128,14 +125,25 @@ export function useCompletePendingTask() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (taskId: string) => {
-      const { error } = await supabase
-        .from('pending_tasks')
-        .update({ completed_at: new Date().toISOString() })
-        .eq('id', taskId)
-      if (error) throw error
+    mutationFn: (taskId: string) => pendingTasksService.complete(taskId),
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['pending-tasks'] })
+      const snapshots = queryClient.getQueriesData<PendingTask[]>({ queryKey: ['pending-tasks'] })
+
+      snapshots.forEach(([key, data]) => {
+        if (data) {
+          queryClient.setQueryData(key, data.filter((t) => t.id !== taskId))
+        }
+      })
+
+      return { snapshots }
     },
-    onSuccess: () => {
+    onError: (_err, _taskId, context) => {
+      context?.snapshots.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data)
+      })
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] })
       queryClient.invalidateQueries({ queryKey: ['pending-tasks-completed'] })
     },

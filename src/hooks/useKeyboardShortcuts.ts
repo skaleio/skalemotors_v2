@@ -1,12 +1,16 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useShortcutsPreferences } from '@/contexts/ShortcutsPreferencesContext';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { shortcutsEnabled } = useShortcutsPreferences();
 
   useEffect(() => {
+    if (!shortcutsEnabled) return;
+
     const handleKeyDown = (event: KeyboardEvent) => {
       // Verificar si estamos en un input, textarea o contenteditable
       const target = event.target as HTMLElement;
@@ -57,7 +61,7 @@ export function useKeyboardShortcuts() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [navigate, signOut]);
+  }, [navigate, signOut, shortcutsEnabled]);
 }
 
 
