@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAal, listFactors } from "@/lib/services/mfa";
-import { roleRequiresMfa } from "@/lib/mfaPolicy";
+import { MFA_GATE_ENABLED, roleRequiresMfa } from "@/lib/mfaPolicy";
 
 export type MfaGateState = {
   loading: boolean;
@@ -12,7 +12,7 @@ export type MfaGateState = {
 
 export function useMfaGate(): MfaGateState {
   const { user, session } = useAuth();
-  const enabled = Boolean(session && user);
+  const enabled = MFA_GATE_ENABLED && Boolean(session && user);
 
   const factorsQuery = useQuery({
     queryKey: ["mfa", "factors", user?.id],
@@ -34,8 +34,9 @@ export function useMfaGate(): MfaGateState {
 
   const current = aalQuery.data?.currentLevel ?? null;
   const next = aalQuery.data?.nextLevel ?? null;
-  const mustVerify = hasVerifiedFactor && next === "aal2" && current !== "aal2";
-  const mustEnroll = privileged && !hasVerifiedFactor;
+  const mustVerify =
+    MFA_GATE_ENABLED && hasVerifiedFactor && next === "aal2" && current !== "aal2";
+  const mustEnroll = MFA_GATE_ENABLED && privileged && !hasVerifiedFactor;
 
   const loading = enabled && (factorsQuery.isLoading || aalQuery.isLoading);
 
