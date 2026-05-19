@@ -46,7 +46,8 @@ import {
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
 import {
-  formatLeadCitaDisplayLine,
+  formatLeadScheduleDisplayLine,
+  parseCrmLeadQuickAppointmentMotive,
   pickActiveCrmLeadQuickAppointment,
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
@@ -675,6 +676,7 @@ function LeadsImpl({ user }: { user: User }) {
     notes: "",
     origen: "lead" as "lead" | "consignacion",
     citaDayKey: null as string | null,
+    citaMotivo: "",
     crmQuickAppointmentId: null as string | null,
   });
   const editCitaSyncedRef = useRef(false);
@@ -709,10 +711,15 @@ function LeadsImpl({ user }: { user: User }) {
     const appt = leadQuickAppointmentQuery.data ?? null;
     setEditForm((f) => {
       if (!appt) {
-        return { ...f, citaDayKey: null, crmQuickAppointmentId: null };
+        return { ...f, citaDayKey: null, citaMotivo: "", crmQuickAppointmentId: null };
       }
       const dayKey = format(parseISO(appt.scheduled_at), "yyyy-MM-dd");
-      return { ...f, citaDayKey: dayKey, crmQuickAppointmentId: appt.id };
+      return {
+        ...f,
+        citaDayKey: dayKey,
+        citaMotivo: parseCrmLeadQuickAppointmentMotive(appt.description),
+        crmQuickAppointmentId: appt.id,
+      };
     });
   }, [
     showEditDialog,
@@ -1272,6 +1279,7 @@ function LeadsImpl({ user }: { user: User }) {
       notes: lead.notes || "",
       origen: isConsignacion ? "consignacion" : "lead",
       citaDayKey: null,
+      citaMotivo: "",
       crmQuickAppointmentId: null,
     });
     setShowEditDialog(true);
@@ -1321,6 +1329,7 @@ function LeadsImpl({ user }: { user: User }) {
         userId: user?.id ?? null,
         existingId: editForm.crmQuickAppointmentId,
         dayKey: editForm.citaDayKey,
+        motive: editForm.citaMotivo,
       });
       await queryClient.invalidateQueries({ queryKey: ["appointments"] });
       await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", editingLead.id] });
@@ -1333,9 +1342,10 @@ function LeadsImpl({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       if (editForm.citaDayKey) {
         toast({
-          title: "Cita guardada",
-          description: `${formatLeadCitaDisplayLine(
+          title: "Fecha guardada",
+          description: `${formatLeadScheduleDisplayLine(
             new Date(`${editForm.citaDayKey}T10:00:00`).toISOString(),
+            editForm.citaMotivo,
           )} · visible en Citas`,
         });
       }
@@ -2084,7 +2094,15 @@ function LeadsImpl({ user }: { user: User }) {
             <LeadCrmQuickAppointmentPicker
               id="leads-edit-cita"
               dayKey={editForm.citaDayKey}
-              onDayChange={(dayKey) => setEditForm({ ...editForm, citaDayKey: dayKey })}
+              motive={editForm.citaMotivo}
+              onDayChange={(dayKey) =>
+                setEditForm({
+                  ...editForm,
+                  citaDayKey: dayKey,
+                  ...(dayKey ? {} : { citaMotivo: "" }),
+                })
+              }
+              onMotiveChange={(citaMotivo) => setEditForm({ ...editForm, citaMotivo })}
               disabled={isUpdating || leadQuickAppointmentQuery.isLoading}
             />
             <div className="grid gap-2">
@@ -2143,10 +2161,13 @@ function LeadsImpl({ user }: { user: User }) {
               {detailsQuickAppointmentQuery.data?.scheduled_at ? (
                 <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
                   <p className="text-sm font-semibold tracking-wide text-primary">
-                    {formatLeadCitaDisplayLine(detailsQuickAppointmentQuery.data.scheduled_at)}
+                    {formatLeadScheduleDisplayLine(
+                      detailsQuickAppointmentQuery.data.scheduled_at,
+                      parseCrmLeadQuickAppointmentMotive(detailsQuickAppointmentQuery.data.description),
+                    )}
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Sincronizado con Citas · edita el lead para cambiar la fecha
+                    Sincronizado con Citas · edita el lead para cambiar fecha o motivo
                   </p>
                 </div>
               ) : null}

@@ -177,8 +177,8 @@ export const appointmentService = {
   },
 
   /**
-   * Cita rápida desde el modal CRM: crea o actualiza un evento en `appointments` ligado al lead.
-   * Sin día (`dayKey` vacío): cancela la cita gestionada si existía.
+   * Recordatorio desde modal CRM/Leads: crea o actualiza un evento en `appointments` ligado al lead.
+   * Sin día (`dayKey` vacío): cancela el evento gestionado si existía.
    */
   async upsertCrmLeadQuickAppointment(params: {
     leadId: string
@@ -187,8 +187,10 @@ export const appointmentService = {
     branchId: string | null
     userId: string | null
     existingId: string | null
-    /** `yyyy-MM-dd` en calendario local, o null para quitar la cita */
+    /** `yyyy-MM-dd` en calendario local, o null para quitar */
     dayKey: string | null
+    /** Motivo libre: cita, volver a llamar, posible compra, etc. */
+    motive?: string | null
   }) {
     const trimmedDay = params.dayKey?.trim() ?? ''
 
@@ -206,7 +208,12 @@ export const appointmentService = {
     const [y, m, d] = parts
     const start = new Date(y, m - 1, d, CRM_LEAD_QUICK_APPOINTMENT_START_HOUR, 0, 0, 0)
     const end = new Date(start.getTime() + CRM_LEAD_QUICK_APPOINTMENT_DURATION_MIN * 60 * 1000)
-    const description = `Seguimiento CRM · ${params.leadDisplayName.trim() || 'Lead'}`.slice(0, 500)
+    const motive = params.motive?.trim() ?? ''
+    const leadName = params.leadDisplayName.trim() || 'Lead'
+    const description = (
+      motive ||
+      `Seguimiento · ${leadName}`
+    ).slice(0, 500)
 
     const payload = {
       title: CRM_LEAD_QUICK_APPOINTMENT_TITLE,

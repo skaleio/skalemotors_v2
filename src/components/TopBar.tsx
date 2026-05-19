@@ -13,12 +13,13 @@ import {
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
-import { Bell, Calculator, Calendar, Car, Check, CheckCircle, ChevronDown, CircleDollarSign, ClipboardList, Clock, Command, CreditCard, FileText, Info, Loader2, Moon, Receipt, Search, Sun, Target, UserPlus, Users, X } from "lucide-react";
+import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
 import { usePreloadUserAvatar } from "@/hooks/usePreloadUserAvatar";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AppBreadcrumb } from "@/components/AppBreadcrumb";
+import { openGlobalQuickActions } from "@/components/GlobalQuickActions";
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -412,238 +413,15 @@ export function TopBar() {
           </DialogContent>
         </Dialog>
 
-        {/* Quick Actions Menu - Oculto en Dashboard Principal */}
+        {/* Acción rápida — mismo modal que Ctrl+K (tokens de tema claro/oscuro) */}
         {!isDashboardPrincipal && (
           <div className="hidden md:block">
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (!open) (document.activeElement as HTMLElement)?.blur();
-              }}
-            >
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" className="gap-2">
-                  <Command className="h-3.5 w-3.5" />
-                  Acción rápida
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-80 p-0 border-0 shadow-2xl bg-white/95 backdrop-blur-sm max-h-[85vh] flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-gray-100 shrink-0">
-                  <h3 className="font-semibold text-gray-900 text-sm">Acciones Rápidas</h3>
-                  <p className="text-xs text-gray-500 mt-1">Accede rápidamente a las funciones más utilizadas</p>
-                </div>
-
-                <div className="p-2 overflow-y-auto min-h-0 flex-1">
-                  {/* CRM */}
-                  <div className="mb-3">
-                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">CRM</div>
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => {
-                          const onLeadsPage = location.pathname === "/app/leads" || location.pathname === "/leads";
-                          if (onLeadsPage) {
-                            window.dispatchEvent(new CustomEvent("openNewLeadForm"));
-                          } else {
-                            navigateWithLoading("/app/leads?new=true");
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-pink-100 group-hover:bg-pink-200 rounded-md transition-colors">
-                          <Users className="h-4 w-4 text-pink-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Nuevo Lead</div>
-                          <div className="text-xs text-gray-500">Agregar prospecto</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+L</div>
-                      </button>
-
-                      <button
-                        onClick={() => navigateWithLoading('/app/crm')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-green-100 group-hover:bg-green-200 rounded-md transition-colors">
-                          <Target className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">CRM Pipeline</div>
-                          <div className="text-xs text-gray-500">Gestionar ventas</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+P</div>
-                      </button>
-
-                      <button
-                        onClick={() => navigateWithLoading('/app/quotes')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-purple-100 group-hover:bg-purple-200 rounded-md transition-colors">
-                          <FileText className="h-4 w-4 text-purple-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Nueva Cotización</div>
-                          <div className="text-xs text-gray-500">Crear propuesta</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+Q</div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          const onSalesPage = location.pathname === "/app/sales";
-                          if (onSalesPage) {
-                            window.dispatchEvent(new CustomEvent("openNewSaleForm"));
-                          } else {
-                            navigateWithLoading("/app/sales?new=true");
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-emerald-100 group-hover:bg-emerald-200 rounded-md transition-colors">
-                          <CircleDollarSign className="h-4 w-4 text-emerald-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Nueva Venta</div>
-                          <div className="text-xs text-gray-500">Registrar venta de vehículo</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+E</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Operaciones */}
-                  <div className="mb-3">
-                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Operaciones</div>
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => navigateWithLoading('/app/appointments')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-orange-100 group-hover:bg-orange-200 rounded-md transition-colors">
-                          <Calendar className="h-4 w-4 text-orange-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Nueva Cita</div>
-                          <div className="text-xs text-gray-500">Programar reunión</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+A</div>
-                      </button>
-
-                      <button
-                        onClick={() => navigateWithLoading('/app/financial-calculator')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-emerald-100 group-hover:bg-emerald-200 rounded-md transition-colors">
-                          <CreditCard className="h-4 w-4 text-emerald-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Financiamiento</div>
-                          <div className="text-xs text-gray-500">Calcular cuotas</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+F</div>
-                      </button>
-
-                      <button
-                        onClick={() => navigateWithLoading('/app/tasacion')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-cyan-100 group-hover:bg-cyan-200 rounded-md transition-colors">
-                          <Calculator className="h-4 w-4 text-cyan-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Tasación</div>
-                          <div className="text-xs text-gray-500">Valorar vehículo por patente</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+M</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Inventario */}
-                  <div className="mb-3">
-                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Inventario</div>
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => {
-                          const onInventoryPage = location.pathname === "/app/consignaciones";
-                          if (onInventoryPage) {
-                            window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
-                          } else {
-                            navigateWithLoading("/app/consignaciones?new=true");
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-indigo-100 group-hover:bg-indigo-200 rounded-md transition-colors">
-                          <Car className="h-4 w-4 text-indigo-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Agregar Vehículo</div>
-                          <div className="text-xs text-gray-500">Nuevo stock</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+V</div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          const onConsignacionesPage = location.pathname === "/app/consignaciones";
-                          if (onConsignacionesPage) {
-                            window.dispatchEvent(new CustomEvent("openNewConsignacionForm"));
-                          } else {
-                            navigateWithLoading("/app/consignaciones?new=true");
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-teal-100 group-hover:bg-teal-200 rounded-md transition-colors">
-                          <ClipboardList className="h-4 w-4 text-teal-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Agregar Consignación</div>
-                          <div className="text-xs text-gray-500">Nuevo vehículo en consignación</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+C</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Finanzas */}
-                  <div className="mb-3">
-                    <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Finanzas</div>
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => navigateWithLoading('/app/billing')}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-700 rounded-lg transition-all duration-150 group"
-                      >
-                        <div className="p-1.5 bg-rose-100 group-hover:bg-rose-200 rounded-md transition-colors">
-                          <Receipt className="h-4 w-4 text-rose-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">Nueva Factura</div>
-                          <div className="text-xs text-gray-500">Emitir documento</div>
-                        </div>
-                        <div className="text-xs text-gray-400 group-hover:text-pink-500">Ctrl+I</div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-gray-500">
-                      Usa <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">K</kbd> para buscar
-                    </div>
-                    <button
-                      onClick={() => navigateWithLoading('/app/settings')}
-                      className="text-xs text-pink-600 hover:text-pink-800 font-medium"
-                    >
-                      Configuración
-                    </button>
-                  </div>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button size="sm" className="gap-2" onClick={openGlobalQuickActions}>
+              <Command className="h-3.5 w-3.5" />
+              Acción rápida
+            </Button>
           </div>
         )}
-
 
         {/* Notifications */}
         <DropdownMenu>

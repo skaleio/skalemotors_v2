@@ -1,5 +1,5 @@
 /** Valores canónicos de transmisión en formularios de leads (CRM / Leads). */
-export const LEAD_TRANSMISSION_OPTIONS = ["Manual", "Automático"] as const;
+export const LEAD_TRANSMISSION_OPTIONS = ["Manual", "Automático", "Ambos"] as const;
 
 export type LeadTransmissionOption = (typeof LEAD_TRANSMISSION_OPTIONS)[number];
 
@@ -8,6 +8,7 @@ export const LEAD_TRANSMISSION_UNSET = "__lead_transmision_sin__";
 function normalizeCanonical(raw: string): LeadTransmissionOption | null {
   const s = raw.trim().toLowerCase();
   if (!s) return null;
+  if (s === "ambos" || s === "both" || s.startsWith("ambos")) return "Ambos";
   if (s.startsWith("man")) return "Manual";
   if (s.startsWith("auto") || s.includes("autom")) return "Automático";
   return null;

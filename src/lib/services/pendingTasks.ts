@@ -1,7 +1,10 @@
 import { supabase } from "@/lib/supabase";
 
 const PENDING_TASKS_SYNC_AT_KEY = "skale:pending-tasks-sync-at";
+const PENDING_TASKS_SYNC_SKIP_UNTIL_KEY = "skale:pending-tasks-sync-skip-until";
 const PENDING_TASKS_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+/** Tras descartar una tarea, no volver a sincronizar alertas por un rato (evita recrearlas antes del deploy SQL). */
+const PENDING_TASKS_SYNC_SKIP_AFTER_DISMISS_MS = 30 * 60 * 1000;
 
 /** Roles que pueden disparar el sync de alertas (las RPC validan el mismo set). */
 export const STALE_ALERTS_SYNC_ROLES = [
@@ -24,9 +27,22 @@ const SYNC_RPCS = [
   { name: "sync_leads_searching_car_to_pending_tasks", args: { dias_buscando: 5 } },
 ] as const;
 
+/** Evita que el sync de alertas recree tareas justo después de marcarlas como hechas. */
+export function deferPendingTasksSyncAfterDismiss(): void {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.setItem(
+    PENDING_TASKS_SYNC_SKIP_UNTIL_KEY,
+    String(Date.now() + PENDING_TASKS_SYNC_SKIP_AFTER_DISMISS_MS),
+  );
+}
+
 /** RPCs de alertas; no deben correr en cada refetch tras completar una tarea. */
 export async function syncPendingTasksIfDue(): Promise<void> {
   if (typeof sessionStorage === "undefined") return;
+
+  const skipUntilRaw = sessionStorage.getItem(PENDING_TASKS_SYNC_SKIP_UNTIL_KEY);
+  const skipUntil = skipUntilRaw ? Number(skipUntilRaw) : 0;
+  if (skipUntil && Date.now() < skipUntil) return;
 
   const lastRaw = sessionStorage.getItem(PENDING_TASKS_SYNC_AT_KEY);
   const last = lastRaw ? Number(lastRaw) : 0;
@@ -92,5 +108,7 @@ export const pendingTasksService = {
         "No se pudo marcar la tarea. Puede que ya esté completada o no tengas permiso.",
       );
     }
+
+    deferPendingTasksSyncAfterDismiss();
   },
 };

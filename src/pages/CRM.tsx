@@ -33,7 +33,8 @@ import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import {
-  formatLeadCitaDisplayLine,
+  formatLeadScheduleDisplayLine,
+  parseCrmLeadQuickAppointmentMotive,
   pickActiveCrmLeadQuickAppointment,
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
@@ -607,6 +608,7 @@ export default function CRM() {
     crm_seguimiento_socio: null as "Mike" | "Antonio" | "Jota" | null,
     /** Día de cita rápida (`yyyy-MM-dd`) sincronizado con `appointments`. */
     citaDayKey: null as string | null,
+    citaMotivo: "",
     crmQuickAppointmentId: null as string | null,
   });
 
@@ -634,10 +636,15 @@ export default function CRM() {
     const appt = crmQuickAppointmentQuery.data ?? null;
     setEditForm((f) => {
       if (!appt) {
-        return { ...f, citaDayKey: null, crmQuickAppointmentId: null };
+        return { ...f, citaDayKey: null, citaMotivo: "", crmQuickAppointmentId: null };
       }
       const dayKey = format(parseISO(appt.scheduled_at), "yyyy-MM-dd");
-      return { ...f, citaDayKey: dayKey, crmQuickAppointmentId: appt.id };
+      return {
+        ...f,
+        citaDayKey: dayKey,
+        citaMotivo: parseCrmLeadQuickAppointmentMotive(appt.description),
+        crmQuickAppointmentId: appt.id,
+      };
     });
   }, [
     isEditingForm,
@@ -734,6 +741,7 @@ export default function CRM() {
         ? editingLead.crm_seguimiento_socio
         : null,
       citaDayKey: null,
+      citaMotivo: "",
       crmQuickAppointmentId: null,
     });
     setLeadStatus(safePipelineSelectValue(editingLead.status));
@@ -1001,6 +1009,7 @@ export default function CRM() {
           userId: user?.id ?? null,
           existingId: editForm.crmQuickAppointmentId,
           dayKey: editForm.citaDayKey,
+          motive: editForm.citaMotivo,
         });
         await queryClient.invalidateQueries({ queryKey: ["appointments"] });
         await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", editingLead.id] });
@@ -1016,11 +1025,10 @@ export default function CRM() {
         setIsEditingForm(false);
         if (editForm.citaDayKey) {
           toast({
-            title: "Cita guardada",
-            description: `${formatLeadCitaDisplayLine(
-              new Date(
-                `${editForm.citaDayKey}T10:00:00`,
-              ).toISOString(),
+            title: "Fecha guardada",
+            description: `${formatLeadScheduleDisplayLine(
+              new Date(`${editForm.citaDayKey}T10:00:00`).toISOString(),
+              editForm.citaMotivo,
             )} · visible en Citas`,
           });
         }
@@ -2098,7 +2106,15 @@ export default function CRM() {
                   <LeadCrmQuickAppointmentPicker
                     id="crm-edit-cita"
                     dayKey={editForm.citaDayKey}
-                    onDayChange={(dayKey) => setEditForm((f) => ({ ...f, citaDayKey: dayKey }))}
+                    motive={editForm.citaMotivo}
+                    onDayChange={(dayKey) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        citaDayKey: dayKey,
+                        ...(dayKey ? {} : { citaMotivo: "" }),
+                      }))
+                    }
+                    onMotiveChange={(citaMotivo) => setEditForm((f) => ({ ...f, citaMotivo }))}
                     disabled={isUpdating || crmQuickAppointmentQuery.isLoading}
                   />
                   <LeadNotesSection
@@ -2201,10 +2217,13 @@ export default function CRM() {
                   {crmQuickAppointmentQuery.data?.scheduled_at ? (
                     <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
                       <p className="text-sm font-semibold tracking-wide text-primary">
-                        {formatLeadCitaDisplayLine(crmQuickAppointmentQuery.data.scheduled_at)}
+                        {formatLeadScheduleDisplayLine(
+                          crmQuickAppointmentQuery.data.scheduled_at,
+                          parseCrmLeadQuickAppointmentMotive(crmQuickAppointmentQuery.data.description),
+                        )}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Sincronizado con Citas · edita la fecha con el lápiz
+                        Sincronizado con Citas · edita con el lápiz para cambiar fecha o motivo
                       </p>
                     </div>
                   ) : null}
