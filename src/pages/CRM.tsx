@@ -22,14 +22,21 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
+import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
+import {
+  formatLeadCitaDisplayLine,
+  pickActiveCrmLeadQuickAppointment,
+  type AppointmentRow,
+} from "@/lib/crmLeadQuickAppointment";
 import {
   CRM_PIPELINE_ACTIVE_DB_STATUSES,
   CRM_PIPELINE_STAGES,
@@ -41,8 +48,10 @@ import {
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
 import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
+import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
+import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
@@ -53,7 +62,8 @@ import { Car, CheckCircle2, ChevronDown, ChevronUp, Eye, Pencil, Search, Target,
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { useLocation } from "react-router-dom";
+import { format, parseISO } from "date-fns";
+import { Link, useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -175,6 +185,7 @@ function leadPipelinePreviewRows(lead: LeadWithAssignee): { label: string; value
   add("Presupuesto", lead.budget);
   add("Pie", lead.pie_disponible);
   add("Cuotas mens.", lead.cuotas_mensuales);
+  add("Transmisión", lead.transmision);
   return rows;
 }
 
@@ -588,13 +599,53 @@ export default function CRM() {
     pie: "",
     cuotas_mensuales: "",
     vehicle: "",
+    transmision: "",
     status: "contactado",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
     /** Mike / Antonio / Jota (`leads.crm_seguimiento_socio`) */
     crm_seguimiento_socio: null as "Mike" | "Antonio" | "Jota" | null,
+    /** Día de cita rápida (`yyyy-MM-dd`) sincronizado con `appointments`. */
+    citaDayKey: null as string | null,
+    crmQuickAppointmentId: null as string | null,
   });
 
+  const editCitaSyncedRef = useRef(false);
+
+  const crmQuickAppointmentQuery = useQuery({
+    queryKey: ["crmLeadQuickAppointment", editingLead?.id],
+    enabled: Boolean(showEditDialog && editingLead?.id && user?.tenant_id),
+    queryFn: async () => {
+      const rows = await appointmentService.getAll({ leadId: editingLead!.id });
+      return pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
+    },
+  });
+
+  useEffect(() => {
+    if (!isEditingForm) {
+      editCitaSyncedRef.current = false;
+      return;
+    }
+    if (!editingLead?.id) return;
+    if (!crmQuickAppointmentQuery.isFetched) return;
+    if (editCitaSyncedRef.current) return;
+    editCitaSyncedRef.current = true;
+
+    const appt = crmQuickAppointmentQuery.data ?? null;
+    setEditForm((f) => {
+      if (!appt) {
+        return { ...f, citaDayKey: null, crmQuickAppointmentId: null };
+      }
+      const dayKey = format(parseISO(appt.scheduled_at), "yyyy-MM-dd");
+      return { ...f, citaDayKey: dayKey, crmQuickAppointmentId: appt.id };
+    });
+  }, [
+    isEditingForm,
+    editingLead?.id,
+    crmQuickAppointmentQuery.isFetched,
+    crmQuickAppointmentQuery.data?.id,
+    crmQuickAppointmentQuery.data?.scheduled_at,
+  ]);
   const { sellers: crmAssigneeOptions } = useBranchSellers({
     tenantId: user?.tenant_id ?? null,
     scope: "tenant",
@@ -665,6 +716,7 @@ export default function CRM() {
 
   const startEditing = useCallback(() => {
     if (!editingLead) return;
+    editCitaSyncedRef.current = false;
     setEditForm({
       full_name: editingLead.full_name || "",
       phone: (editingLead.phone || "").replace(/^(\+56\s*)/g, ""),
@@ -675,11 +727,14 @@ export default function CRM() {
       pie: editingLead.pie_disponible || "",
       cuotas_mensuales: editingLead.cuotas_mensuales || "",
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
+      transmision: leadTransmissionForForm(editingLead.transmision),
       status: safePipelineSelectValue(editingLead.status),
       assigned_to: editingLead.assigned_to ?? null,
       crm_seguimiento_socio: isCrmSeguimientoSocio(editingLead.crm_seguimiento_socio)
         ? editingLead.crm_seguimiento_socio
         : null,
+      citaDayKey: null,
+      crmQuickAppointmentId: null,
     });
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
@@ -928,6 +983,7 @@ export default function CRM() {
             budget: editForm.budget.trim() || null,
             pie_disponible: editForm.pie.trim() || null,
             cuotas_mensuales: editForm.cuotas_mensuales.trim() || null,
+            transmision: leadTransmissionForSave(editForm.transmision),
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
             crm_seguimiento_socio: editForm.crm_seguimiento_socio,
@@ -935,6 +991,21 @@ export default function CRM() {
         : { status: crmStageToDbStatus(leadStatus) };
 
       const updated = await leadService.update(editingLead.id, updates as any);
+
+      if (isEditingForm) {
+        await appointmentService.upsertCrmLeadQuickAppointment({
+          leadId: editingLead.id,
+          leadDisplayName: editForm.full_name.trim() || editingLead.full_name || "Lead",
+          tenantId: editingLead.tenant_id ?? user?.tenant_id ?? null,
+          branchId: editingLead.branch_id ?? user?.branch_id ?? null,
+          userId: user?.id ?? null,
+          existingId: editForm.crmQuickAppointmentId,
+          dayKey: editForm.citaDayKey,
+        });
+        await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", editingLead.id] });
+      }
+
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
@@ -943,6 +1014,16 @@ export default function CRM() {
       if (isEditingForm) {
         setEditingLead(updated as Lead);
         setIsEditingForm(false);
+        if (editForm.citaDayKey) {
+          toast({
+            title: "Cita guardada",
+            description: `${formatLeadCitaDisplayLine(
+              new Date(
+                `${editForm.citaDayKey}T10:00:00`,
+              ).toISOString(),
+            )} · visible en Citas`,
+          });
+        }
       } else {
         closeEditDialog();
       }
@@ -956,7 +1037,18 @@ export default function CRM() {
     } finally {
       setIsUpdating(false);
     }
-  }, [editingLead, leadStatus, isEditingForm, editForm, queryClient, closeEditDialog, openCloseDealForLead]);
+  }, [
+    editingLead,
+    leadStatus,
+    isEditingForm,
+    editForm,
+    queryClient,
+    closeEditDialog,
+    openCloseDealForLead,
+    user?.id,
+    user?.tenant_id,
+    user?.branch_id,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1997,6 +2089,18 @@ export default function CRM() {
                       placeholder="Ej: Toyota Corolla 2020"
                     />
                   </div>
+                  <LeadTransmissionSelect
+                    id="crm-edit-transmision"
+                    value={editForm.transmision}
+                    onChange={(transmision) => setEditForm((f) => ({ ...f, transmision }))}
+                    disabled={isUpdating}
+                  />
+                  <LeadCrmQuickAppointmentPicker
+                    id="crm-edit-cita"
+                    dayKey={editForm.citaDayKey}
+                    onDayChange={(dayKey) => setEditForm((f) => ({ ...f, citaDayKey: dayKey }))}
+                    disabled={isUpdating || crmQuickAppointmentQuery.isLoading}
+                  />
                   <LeadNotesSection
                     leadId={editingLead.id}
                     tenantId={editingLead.tenant_id ?? user?.tenant_id}
@@ -2094,6 +2198,16 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
+                  {crmQuickAppointmentQuery.data?.scheduled_at ? (
+                    <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
+                      <p className="text-sm font-semibold tracking-wide text-primary">
+                        {formatLeadCitaDisplayLine(crmQuickAppointmentQuery.data.scheduled_at)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Sincronizado con Citas · edita la fecha con el lápiz
+                      </p>
+                    </div>
+                  ) : null}
                   {(() => {
                     const rut = editingLead.rut?.trim();
                     const email = editingLead.email?.trim();
@@ -2123,6 +2237,8 @@ export default function CRM() {
                     if (budget) pairs.push({ label: "Presupuesto", value: budget });
                     if (pie) pairs.push({ label: "Pie", value: pie });
                     if (cuotas) pairs.push({ label: "Cuotas mensuales", value: cuotas });
+                    const transmision = editingLead.transmision?.trim();
+                    if (transmision) pairs.push({ label: "Transmisión", value: transmision });
                     return pairs.length ? (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {pairs.map((p) => (
@@ -2152,7 +2268,6 @@ export default function CRM() {
                   )}
                   {(editingLead.uso_principal
                     || editingLead.pasajeros_filas
-                    || editingLead.transmision
                     || editingLead.marca_preferida
                     || editingLead.anos_minimo
                     || editingLead.preferencia
@@ -2165,7 +2280,6 @@ export default function CRM() {
                       {(() => {
                         const chatbotFields: Array<{ label: string; value: string }> = [];
                         if (editingLead.uso_principal) chatbotFields.push({ label: "Uso principal", value: editingLead.uso_principal });
-                        if (editingLead.transmision) chatbotFields.push({ label: "Transmisión", value: editingLead.transmision });
                         if (editingLead.pasajeros_filas) chatbotFields.push({ label: "Pasajeros / Filas", value: editingLead.pasajeros_filas });
                         /* pie: ver sección financiera */
                         if (editingLead.marca_preferida) chatbotFields.push({ label: "Marca preferida", value: editingLead.marca_preferida });

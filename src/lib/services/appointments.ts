@@ -1,3 +1,8 @@
+import {
+  CRM_LEAD_QUICK_APPOINTMENT_DURATION_MIN,
+  CRM_LEAD_QUICK_APPOINTMENT_START_HOUR,
+  CRM_LEAD_QUICK_APPOINTMENT_TITLE,
+} from '@/lib/crmLeadQuickAppointment'
 import { supabase } from '../supabase'
 import type { Database } from '../types/database'
 
@@ -169,7 +174,61 @@ export const appointmentService = {
 
     if (error) throw error
     return data as Appointment[]
-  }
+  },
+
+  /**
+   * Cita rápida desde el modal CRM: crea o actualiza un evento en `appointments` ligado al lead.
+   * Sin día (`dayKey` vacío): cancela la cita gestionada si existía.
+   */
+  async upsertCrmLeadQuickAppointment(params: {
+    leadId: string
+    leadDisplayName: string
+    tenantId: string | null
+    branchId: string | null
+    userId: string | null
+    existingId: string | null
+    /** `yyyy-MM-dd` en calendario local, o null para quitar la cita */
+    dayKey: string | null
+  }) {
+    const trimmedDay = params.dayKey?.trim() ?? ''
+
+    if (!trimmedDay) {
+      if (params.existingId) {
+        await this.update(params.existingId, { status: 'cancelada' })
+      }
+      return
+    }
+
+    const parts = trimmedDay.split('-').map((x) => parseInt(x, 10))
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      throw new Error('Fecha de cita inválida')
+    }
+    const [y, m, d] = parts
+    const start = new Date(y, m - 1, d, CRM_LEAD_QUICK_APPOINTMENT_START_HOUR, 0, 0, 0)
+    const end = new Date(start.getTime() + CRM_LEAD_QUICK_APPOINTMENT_DURATION_MIN * 60 * 1000)
+    const description = `Seguimiento CRM · ${params.leadDisplayName.trim() || 'Lead'}`.slice(0, 500)
+
+    const payload = {
+      title: CRM_LEAD_QUICK_APPOINTMENT_TITLE,
+      description,
+      type: 'meeting',
+      status: 'programada' as const,
+      scheduled_at: start.toISOString(),
+      end_at: end.toISOString(),
+      duration_minutes: CRM_LEAD_QUICK_APPOINTMENT_DURATION_MIN,
+      lead_id: params.leadId,
+      tenant_id: params.tenantId,
+      branch_id: params.branchId,
+      user_id: params.userId,
+    }
+
+    if (params.existingId) {
+      await this.update(params.existingId, payload)
+      return
+    }
+
+    await this.create(payload)
+  },
 }
 
 

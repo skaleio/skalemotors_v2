@@ -27,6 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
+import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { toast } from "@/hooks/use-toast";
@@ -43,11 +45,19 @@ import {
   leadBelongsToCrmStage,
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
+import {
+  formatLeadCitaDisplayLine,
+  pickActiveCrmLeadQuickAppointment,
+  type AppointmentRow,
+} from "@/lib/crmLeadQuickAppointment";
+import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -630,6 +640,7 @@ function LeadsImpl({ user }: { user: User }) {
     region: "",
     payment_type: "",
     budget: "",
+    transmision: "",
     notes: "",
     reminderEnabled: false,
     reminderDueDate: "",
@@ -660,9 +671,56 @@ function LeadsImpl({ user }: { user: User }) {
     region: "",
     payment_type: "",
     budget: "",
+    transmision: "",
     notes: "",
     origen: "lead" as "lead" | "consignacion",
+    citaDayKey: null as string | null,
+    crmQuickAppointmentId: null as string | null,
   });
+  const editCitaSyncedRef = useRef(false);
+
+  const leadQuickAppointmentQuery = useQuery({
+    queryKey: ["crmLeadQuickAppointment", editingLead?.id],
+    enabled: Boolean(showEditDialog && editingLead?.id && user?.tenant_id),
+    queryFn: async () => {
+      const rows = await appointmentService.getAll({ leadId: editingLead!.id });
+      return pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
+    },
+  });
+
+  const detailsQuickAppointmentQuery = useQuery({
+    queryKey: ["crmLeadQuickAppointment", detailsLead?.id],
+    enabled: Boolean(showDetailsDialog && detailsLead?.id && user?.tenant_id),
+    queryFn: async () => {
+      const rows = await appointmentService.getAll({ leadId: detailsLead!.id });
+      return pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
+    },
+  });
+
+  useEffect(() => {
+    if (!showEditDialog || !editingLead?.id) {
+      editCitaSyncedRef.current = false;
+      return;
+    }
+    if (!leadQuickAppointmentQuery.isFetched) return;
+    if (editCitaSyncedRef.current) return;
+    editCitaSyncedRef.current = true;
+
+    const appt = leadQuickAppointmentQuery.data ?? null;
+    setEditForm((f) => {
+      if (!appt) {
+        return { ...f, citaDayKey: null, crmQuickAppointmentId: null };
+      }
+      const dayKey = format(parseISO(appt.scheduled_at), "yyyy-MM-dd");
+      return { ...f, citaDayKey: dayKey, crmQuickAppointmentId: appt.id };
+    });
+  }, [
+    showEditDialog,
+    editingLead?.id,
+    leadQuickAppointmentQuery.isFetched,
+    leadQuickAppointmentQuery.data?.id,
+    leadQuickAppointmentQuery.data?.scheduled_at,
+  ]);
 
   useEffect(() => {
     if (!shortcutsEnabled) return;
@@ -865,6 +923,7 @@ function LeadsImpl({ user }: { user: User }) {
       region: "",
       payment_type: "",
       budget: "",
+      transmision: "",
       notes: "",
       reminderEnabled: false,
       reminderDueDate: tomorrow,
@@ -1133,6 +1192,7 @@ function LeadsImpl({ user }: { user: User }) {
         region: formState.region.trim() ? formState.region.trim() : null,
         payment_type: formState.payment_type ? formState.payment_type : null,
         budget: formState.budget.trim() ? formState.budget.trim() : null,
+        transmision: leadTransmissionForSave(formState.transmision),
         notes: formState.notes.trim() ? formState.notes.trim() : null,
         tags: buildTags(tags) as any,
       });
@@ -1189,6 +1249,7 @@ function LeadsImpl({ user }: { user: User }) {
   };
 
   const openEditDialog = useCallback((lead: Lead) => {
+    editCitaSyncedRef.current = false;
     const tags = normalizeTags(lead.tags);
     const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
     const consignacion = consignacionByLeadId.get(lead.id);
@@ -1207,8 +1268,11 @@ function LeadsImpl({ user }: { user: User }) {
       region: lead.region || getTagValue(tags, REGION_TAG_PREFIX),
       payment_type: lead.payment_type || "",
       budget: lead.budget || "",
+      transmision: leadTransmissionForForm(lead.transmision),
       notes: lead.notes || "",
       origen: isConsignacion ? "consignacion" : "lead",
+      citaDayKey: null,
+      crmQuickAppointmentId: null,
     });
     setShowEditDialog(true);
   }, [consignacionByLeadId]);
@@ -1232,6 +1296,7 @@ function LeadsImpl({ user }: { user: User }) {
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
         budget: editForm.budget.trim() ? editForm.budget.trim() : null,
+        transmision: leadTransmissionForSave(editForm.transmision),
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
       };
 
@@ -1247,12 +1312,33 @@ function LeadsImpl({ user }: { user: User }) {
       updates.tags = nextTags as any;
 
       const updated = await leadService.update(editingLead.id, updates);
+
+      await appointmentService.upsertCrmLeadQuickAppointment({
+        leadId: editingLead.id,
+        leadDisplayName: editForm.full_name.trim() || editingLead.full_name || "Lead",
+        tenantId: editingLead.tenant_id ?? user?.tenant_id ?? null,
+        branchId: editingLead.branch_id ?? user?.branch_id ?? null,
+        userId: user?.id ?? null,
+        existingId: editForm.crmQuickAppointmentId,
+        dayKey: editForm.citaDayKey,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", editingLead.id] });
+
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
       });
       closeEditDialog();
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (editForm.citaDayKey) {
+        toast({
+          title: "Cita guardada",
+          description: `${formatLeadCitaDisplayLine(
+            new Date(`${editForm.citaDayKey}T10:00:00`).toISOString(),
+          )} · visible en Citas`,
+        });
+      }
     } catch (error: any) {
       console.error("Error actualizando lead:", error);
       toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el lead." });
@@ -1705,6 +1791,12 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Ej: Metropolitana de Santiago"
               />
             </div>
+            <LeadTransmissionSelect
+              id="lead-create-transmision"
+              value={formState.transmision}
+              onChange={(transmision) => setFormState({ ...formState, transmision })}
+              disabled={isCreating}
+            />
             <div className="grid gap-2">
               <Label>Financiamiento/Contado</Label>
               <Select
@@ -1939,6 +2031,12 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Ej: Metropolitana de Santiago"
               />
             </div>
+            <LeadTransmissionSelect
+              id="lead-edit-transmision"
+              value={editForm.transmision}
+              onChange={(transmision) => setEditForm({ ...editForm, transmision })}
+              disabled={isUpdating}
+            />
             <div className="grid gap-2">
               <Label>Financiamiento/Contado</Label>
               <Select
@@ -1983,6 +2081,12 @@ function LeadsImpl({ user }: { user: User }) {
                 rows={3}
               />
             </div>
+            <LeadCrmQuickAppointmentPicker
+              id="leads-edit-cita"
+              dayKey={editForm.citaDayKey}
+              onDayChange={(dayKey) => setEditForm({ ...editForm, citaDayKey: dayKey })}
+              disabled={isUpdating || leadQuickAppointmentQuery.isLoading}
+            />
             <div className="grid gap-2">
               <Label>Estado</Label>
               <Select value={editForm.status} onValueChange={(value) => setEditForm({ ...editForm, status: value })}>
@@ -2036,6 +2140,16 @@ function LeadsImpl({ user }: { user: User }) {
                   </div>
                 </div>
               </div>
+              {detailsQuickAppointmentQuery.data?.scheduled_at ? (
+                <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
+                  <p className="text-sm font-semibold tracking-wide text-primary">
+                    {formatLeadCitaDisplayLine(detailsQuickAppointmentQuery.data.scheduled_at)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Sincronizado con Citas · edita el lead para cambiar la fecha
+                  </p>
+                </div>
+              ) : null}
               <div className="rounded-md border bg-muted/30 px-3 py-2.5">
                 <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
                 <ContactAttemptsBar
@@ -2281,3 +2395,4 @@ function LeadsImpl({ user }: { user: User }) {
     </div>
   );
 }
+
