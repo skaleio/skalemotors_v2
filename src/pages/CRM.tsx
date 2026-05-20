@@ -12,14 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
@@ -39,7 +31,6 @@ import {
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
 import {
-  CRM_PIPELINE_ACTIVE_DB_STATUSES,
   CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
   type CrmStageKey,
@@ -59,7 +50,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Car, CheckCircle2, ChevronDown, ChevronUp, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -128,16 +119,6 @@ const labelStyles: Record<string, { dot: string; text: string }> = {
 
 const statusLabels = CRM_PIPELINE_STATUS_LABELS;
 
-const ACTIVE_PIPELINE_STATUS_ES: Record<string, string> = {
-  nuevo: "Nuevo",
-  contactado: "Contactado",
-  interesado: "Interesado",
-  cotizando: "Cotizando",
-  negociando: "Negociando",
-  en_espera: "En espera",
-  para_cierre: "Para cierre",
-};
-
 /** MIME para DataTransfer (evita colisiones con texto plano). */
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
 
@@ -165,13 +146,6 @@ const getConsignacionLabel = (tags: unknown): string | null => {
 };
 
 /** Filas de datos del lead para mostrar en la tarjeta del pipeline (sin abrir el diálogo). */
-/** Texto unificado del vehículo de interés (columna + tag legacy). */
-function getLeadVehicleInterestText(lead: Pick<Lead, "vehicle_interest" | "tags">): string {
-  const raw = (lead.vehicle_interest?.trim() || getTagValue(lead.tags, VEHICULO_TAG_PREFIX)).trim();
-  if (!raw) return "";
-  return raw.replace(/\s+/g, " ");
-}
-
 function leadPipelinePreviewRows(lead: LeadWithAssignee): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = [];
   const add = (label: string, raw?: string | null) => {
@@ -858,37 +832,6 @@ export default function CRM() {
         }),
     }));
   }, [filteredLeads, stages, crmCalendarMonthKey]);
-
-  /** Demanda de stock: agrupa vehículo de interés en leads activos del embudo (respeta búsqueda y supervisión). */
-  const vehicleDemandSummary = useMemo(() => {
-    const base = filteredLeads.filter((lead) =>
-      CRM_PIPELINE_ACTIVE_DB_STATUSES.has((lead.status || "").toLowerCase()),
-    );
-    const bucket = new Map<string, number>();
-    let sinVehiculo = 0;
-    for (const lead of base) {
-      const v = getLeadVehicleInterestText(lead);
-      if (!v) {
-        sinVehiculo += 1;
-        continue;
-      }
-      bucket.set(v, (bucket.get(v) ?? 0) + 1);
-    }
-    const entries = [...bucket.entries()]
-      .map(([vehicle, count]) => ({ vehicle, count }))
-      .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.vehicle.localeCompare(b.vehicle, "es")));
-    return { entries, sinVehiculo, pipelineCount: base.length };
-  }, [filteredLeads]);
-
-  const [demandVehicleInterestKey, setDemandVehicleInterestKey] = useState<string | null>(null);
-
-  const leadsForDemandInterest = useMemo(() => {
-    if (!demandVehicleInterestKey) return [] as LeadWithAssignee[];
-    return filteredLeads.filter((lead) => {
-      if (!CRM_PIPELINE_ACTIVE_DB_STATUSES.has((lead.status || "").toLowerCase())) return false;
-      return getLeadVehicleInterestText(lead) === demandVehicleInterestKey;
-    });
-  }, [filteredLeads, demandVehicleInterestKey]);
 
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
@@ -1616,151 +1559,6 @@ export default function CRM() {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Car className="h-4 w-4" aria-hidden />
-            </span>
-            Vehículos a buscar en stock
-          </CardTitle>
-          <CardDescription>
-            Consolidado desde el campo <span className="font-medium text-foreground/80">vehículo de interés</span> de
-            tus clientes en etapas activas del pipeline (contactado → en espera → para cierre). Coincide con la búsqueda y la vista que
-            tengas arriba; los vendidos y perdidos no entran aquí.{" "}
-            <span className="font-medium text-foreground/80">Clic</span> en una tarjeta para ver la lista de esos leads.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {vehicleDemandSummary.pipelineCount === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No hay leads activos en el embudo con los filtros actuales.
-            </p>
-          ) : vehicleDemandSummary.entries.length === 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Ningún lead activo tiene aún un vehículo de interés cargado. Completalo en la ficha del lead para armar esta
-                lista de búsqueda.
-              </p>
-              {vehicleDemandSummary.sinVehiculo > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Hay {vehicleDemandSummary.sinVehiculo}{" "}
-                  {vehicleDemandSummary.sinVehiculo === 1 ? "lead" : "leads"} sin dato de vehículo.
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {vehicleDemandSummary.entries.map(({ vehicle, count }) => (
-                  <li
-                    key={vehicle}
-                    role="button"
-                    tabIndex={0}
-                    title="Ver leads que buscan esta opción"
-                    className="flex min-h-[3rem] cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    onClick={() => setDemandVehicleInterestKey(vehicle)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setDemandVehicleInterestKey(vehicle);
-                      }
-                    }}
-                  >
-                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">{vehicle}</span>
-                    <Badge variant="secondary" className="shrink-0 tabular-nums">
-                      ×{count}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-              {vehicleDemandSummary.sinVehiculo > 0 ? (
-                <p className="text-xs text-muted-foreground border-t pt-3">
-                  Además, {vehicleDemandSummary.sinVehiculo}{" "}
-                  {vehicleDemandSummary.sinVehiculo === 1 ? "lead activo no tiene" : "leads activos no tienen"} vehículo
-                  indicado — conviene cargarlo para no perder búsquedas.
-                </p>
-              ) : null}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog
-        open={demandVehicleInterestKey !== null}
-        onOpenChange={(open) => {
-          if (!open) setDemandVehicleInterestKey(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Leads que buscan esto</DialogTitle>
-            <DialogDescription className="sr-only">
-              Lista de clientes activos en el pipeline con el mismo texto de vehículo de interés.
-            </DialogDescription>
-            {demandVehicleInterestKey ? (
-              <p className="break-words pt-1 text-sm font-medium text-foreground">{demandVehicleInterestKey}</p>
-            ) : null}
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-            {leadsForDemandInterest.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No hay leads en esta lista con los filtros actuales. Prueba cerrar otros filtros o actualizar la página.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Estado embudo</TableHead>
-                    <TableHead>Vendedor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leadsForDemandInterest.map((lead) => (
-                    <TableRow
-                      key={lead.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => {
-                        setDemandVehicleInterestKey(null);
-                        openEditDialog(lead);
-                      }}
-                    >
-                      <TableCell className="max-w-[160px] font-medium">
-                        <span className="line-clamp-2">{lead.full_name}</span>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{formatChilePhoneForDisplay(lead.phone)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal capitalize">
-                          {ACTIVE_PIPELINE_STATUS_ES[(lead.status || "").toLowerCase()] ||
-                            lead.status ||
-                            "—"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[130px] truncate text-sm text-muted-foreground">
-                        {lead.assigned_user?.full_name || "Sin asignar"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Clic en una fila para abrir la ficha del lead en el CRM.
-          </p>
-
-          <DialogFooter className="shrink-0 sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setDemandVehicleInterestKey(null)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
