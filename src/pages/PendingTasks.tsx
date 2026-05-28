@@ -4,6 +4,7 @@ import { CheckCircle2, ClipboardList, Inbox, Loader2, RefreshCw } from "lucide-r
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { DailySalesReportPanel } from "@/components/tasks/DailySalesReportSupervision";
 import { PendingTaskRow, TaskIcon } from "@/components/tasks/PendingTaskRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,13 @@ import {
   usePendingTasks,
   type PendingTask,
 } from "@/hooks/usePendingTasks";
+import { DAILY_REPORT_ALERT_REASON } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
+
+function isDailySalesReportTask(task: PendingTask): boolean {
+  const meta = task.metadata as { alert_reason?: string } | null;
+  return meta?.alert_reason === DAILY_REPORT_ALERT_REASON;
+}
 
 type PriorityFilter = "all" | PendingTask["priority"];
 type EntityFilter = "all" | PendingTask["entity_type"];
@@ -157,6 +164,7 @@ export default function PendingTasks() {
   const [entityFilter, setEntityFilter] = useState<EntityFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [onlyMine, setOnlyMine] = useState(false);
+  const [mainTab, setMainTab] = useState<"alertas" | "informe">("alertas");
   const [tab, setTab] = useState<"pendientes" | "completadas">("pendientes");
 
   const userCtx = {
@@ -202,6 +210,10 @@ export default function PendingTasks() {
     priorityFilter === "all" ? groups : groups.filter((g) => g.variant === priorityFilter);
 
   const handleAction = (task: PendingTask) => {
+    if (isDailySalesReportTask(task)) {
+      setMainTab("informe");
+      return;
+    }
     const route = ENTITY_ROUTE[task.entity_type];
     if (!route) {
       toast({
@@ -234,7 +246,7 @@ export default function PendingTasks() {
             Tareas pendientes
           </h1>
           <p className="text-muted-foreground mt-1">
-            Alertas generadas por el sistema y recordatorios capturados desde WhatsApp.
+            Alertas del sistema, informe diario de ventas y recordatorios desde WhatsApp.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
@@ -247,6 +259,17 @@ export default function PendingTasks() {
         </Button>
       </div>
 
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as typeof mainTab)}>
+        <TabsList>
+          <TabsTrigger value="alertas">Alertas</TabsTrigger>
+          <TabsTrigger value="informe">Informe diario</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="informe" className="mt-6">
+          <DailySalesReportPanel />
+        </TabsContent>
+
+        <TabsContent value="alertas" className="space-y-6 mt-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Urgentes" value={urgentCount} variant="urgent" />
         <StatCard label="Hoy" value={todayCount} variant="today" />
@@ -389,6 +412,8 @@ export default function PendingTasks() {
               ))}
             </>
           )}
+        </TabsContent>
+      </Tabs>
         </TabsContent>
       </Tabs>
     </div>

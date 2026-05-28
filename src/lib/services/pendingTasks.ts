@@ -36,6 +36,35 @@ export function deferPendingTasksSyncAfterDismiss(): void {
   );
 }
 
+/** Sync completo al iniciar sesión (sin throttle de 5 min). */
+export async function syncPendingTasksOnLogin(): Promise<void> {
+  await Promise.all([
+    ...SYNC_RPCS.map(({ name, args }) =>
+      supabase.rpc(name, args).then(({ error }) => {
+        const rpcNotFound =
+          error?.code === "PGRST202"
+          || error?.message?.includes("Could not find the function");
+        if (error && !rpcNotFound) {
+          console.warn(`${name}:`, error.message);
+        }
+      }),
+    ),
+    supabase
+      .rpc("sync_old_inventory_vehicles_to_pending_tasks", {
+        dias_inventario: 45,
+        dias_sin_modificar: 30,
+      })
+      .then(({ error }) => {
+        const rpcNotFound =
+          error?.code === "PGRST202"
+          || error?.message?.includes("Could not find the function");
+        if (error && !rpcNotFound) {
+          console.warn("sync_old_inventory_vehicles_to_pending_tasks:", error.message);
+        }
+      }),
+  ]);
+}
+
 /** RPCs de alertas; no deben correr en cada refetch tras completar una tarea. */
 export async function syncPendingTasksIfDue(): Promise<void> {
   if (typeof sessionStorage === "undefined") return;

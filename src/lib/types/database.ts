@@ -1055,6 +1055,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      daily_sales_reports: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          user_id: string
+          report_date: string
+          payload: Json
+          submitted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          user_id: string
+          report_date: string
+          payload?: Json
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          user_id?: string
+          report_date?: string
+          payload?: Json
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       notifications: {
         Row: {
           id: string
@@ -1349,6 +1384,47 @@ export interface Database {
           raw_payload?: Json | null
         }
       }
+      tenant_ycloud_config: {
+        Row: {
+          tenant_id: string
+          api_key: string
+          webhook_secret: string | null
+          ycloud_webhook_endpoint_id: string | null
+          status: 'active' | 'disconnected' | 'error'
+          last_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          tenant_id: string
+          api_key: string
+          webhook_secret?: string | null
+          ycloud_webhook_endpoint_id?: string | null
+          status?: 'active' | 'disconnected' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          tenant_id?: string
+          api_key?: string
+          webhook_secret?: string | null
+          ycloud_webhook_endpoint_id?: string | null
+          status?: 'active' | 'disconnected' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      tenant_ycloud_config_public: {
+        Row: {
+          tenant_id: string
+          status: string
+          webhook_configured: boolean
+          api_key_configured: boolean
+          updated_at: string
+        }
+      }
       whatsapp_inboxes: {
         Row: {
           id: string
@@ -1356,6 +1432,12 @@ export interface Database {
           provider_phone_number_id: string
           display_number: string | null
           branch_id: string
+          tenant_id: string | null
+          waba_id: string | null
+          status: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error: string | null
+          connected_by: string | null
+          connected_at: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -1366,6 +1448,12 @@ export interface Database {
           provider_phone_number_id: string
           display_number?: string | null
           branch_id: string
+          tenant_id?: string | null
+          waba_id?: string | null
+          status?: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error?: string | null
+          connected_by?: string | null
+          connected_at?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -1376,9 +1464,56 @@ export interface Database {
           provider_phone_number_id?: string
           display_number?: string | null
           branch_id?: string
+          tenant_id?: string | null
+          waba_id?: string | null
+          status?: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error?: string | null
+          connected_by?: string | null
+          connected_at?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      whatsapp_inbox_credentials: {
+        Row: {
+          inbox_id: string
+          access_token: string
+          token_expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          inbox_id: string
+          access_token: string
+          token_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          inbox_id?: string
+          access_token?: string
+          token_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      whatsapp_inboxes_public: {
+        Row: {
+          id: string
+          tenant_id: string | null
+          branch_id: string
+          provider: string
+          provider_phone_number_id: string
+          display_number: string | null
+          waba_id: string | null
+          status: string
+          last_error: string | null
+          connected_by: string | null
+          connected_at: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
         }
       }
       sales: {
@@ -1841,6 +1976,14 @@ export interface Database {
           p_key_id: string
         }
         Returns: Json
+      }
+      sync_daily_sales_report_tasks: {
+        Args: {
+          p_report_date?: string
+        }
+        Returns: {
+          pending_tasks_created: number
+        }[]
       }
     }
   }

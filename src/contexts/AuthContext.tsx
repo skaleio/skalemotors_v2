@@ -1,5 +1,12 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
+import {
+  canRefreshPersistedSession,
+  fastLocalSignOut,
+  isAccessTokenExpired,
+  readPersistedAuthSession,
+} from "@/lib/authSessionCleanup";
 import { supabase, type User } from "@/lib/supabase";
+import { toast } from "sonner";
 import { captureAppError, clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
 import { clearTenantContext, setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
@@ -55,6 +62,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   /** Tiempo máx. esperando getSession (red lenta); no cerrar sesión por esto */
   const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
+  /** Bootstrap: margen para refresh de sesión tras días sin abrir la app */
+  const AUTH_BOOTSTRAP_TIMEOUT_MS = 20 * 1000;
   const PROFILE_CACHE_KEY_PREFIX = "skale.user-profile";
 
   const withTimeout = async <T,>(
@@ -298,7 +307,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [user]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      let session: Session | null = null;
+      try {
+        const { data } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_BOOTSTRAP_TIMEOUT_MS,
+          "AUTH_BOOTSTRAP_TIMEOUT",
+        );
+        session = data.session;
+      } catch {
+        const persisted = readPersistedAuthSession();
+        if (persisted && canRefreshPersistedSession(persisted)) {
+          try {
+            const { data } = await withTimeout(
+              supabase.auth.refreshSession(),
+              AUTH_BOOTSTRAP_TIMEOUT_MS,
+              "AUTH_REFRESH_TIMEOUT",
+            );
+            session = data.session ?? persisted;
+          } catch {
+            session = persisted;
+          }
+        } else {
+          session = null;
+        }
+      }
+
+      if (cancelled) return;
+
       if (!session?.user) {
         pendingSessionRef.current = null;
         setSession(null);
@@ -331,15 +370,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false);
         // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
         // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
-        const ok = await fetchUserProfile(currentSession.user.id);
-        if (!ok) {
-          // Perfil desapareció de DB — invalidar sesión
+        const reason = await fetchUserProfileWithReason(currentSession.user.id);
+        if (reason === "disabled" || reason === "no-profile") {
           try { await supabase.auth.signOut(); } catch { /* ignore */ }
           try { window.localStorage.removeItem(getProfileCacheKey(currentSession.user.id)); } catch { /* ignore */ }
           setUser(null);
           currentUserRef.current = null;
           setSession(null);
         }
+        // "error" de red: conservar sesión + cache (no forzar login diario por Wi‑Fi lenta)
       } else {
         // Sin cache válido: verificar DB antes de dar acceso (no mostrar app con fallback)
         // pendingSessionRef ya está seteado; el timeout guard lleva la carga si la red falla
@@ -353,7 +392,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         // Si ok: fetchUserProfile ya llamó setUser + setLoading(false)
       }
-    });
+    };
+
+    void bootstrap();
 
     const {
       data: { subscription },
@@ -423,7 +464,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // ==========================================================================
@@ -470,13 +514,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // ==========================================================================
-  // Revalidación de perfil al volver a la pestaña / recuperar red.
-  // Cubre: admin cambió rol/activación mientras el vendedor estaba en otra tab.
-  // Throttle a 30s para no martillar la DB con 9 usuarios haciendo tab-switch.
+  // Al volver a la pestaña: renovar JWT vencido (sesión guardada en el dispositivo)
+  // y revalidar perfil. Tras un día sin abrir, el access token suele estar vencido
+  // pero el refresh_token sigue válido — hay que renovar, no borrar la sesión.
   // ==========================================================================
   useEffect(() => {
     const REVALIDATE_THROTTLE_MS = 30 * 1000;
-    const tryRevalidate = () => {
+    const REFRESH_THROTTLE_MS = 5 * 1000;
+    let lastRefreshAttempt = 0;
+
+    const tryRefreshAuthSession = async () => {
+      const now = Date.now();
+      if (now - lastRefreshAttempt < REFRESH_THROTTLE_MS) return;
+      const persisted = readPersistedAuthSession();
+      if (!persisted || !canRefreshPersistedSession(persisted)) return;
+      if (!isAccessTokenExpired(persisted)) return;
+      lastRefreshAttempt = now;
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (error || !data.session) return;
+        pendingSessionRef.current = data.session;
+        setSession(data.session);
+        try {
+          authChannelRef.current?.postMessage({ type: "TOKEN_REFRESHED" });
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        /* ignore: autoRefreshToken o siguiente visibility lo reintenta */
+      }
+    };
+
+    const tryRevalidateProfile = () => {
       const uid = currentUserRef.current?.id;
       if (!uid) return;
       const now = Date.now();
@@ -484,10 +553,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       lastProfileRevalidateRef.current = now;
       void fetchUserProfile(uid);
     };
+
     const onVisible = () => {
-      if (document.visibilityState === "visible") tryRevalidate();
+      if (document.visibilityState !== "visible") return;
+      void tryRefreshAuthSession();
+      tryRevalidateProfile();
     };
-    const onOnline = () => tryRevalidate();
+    const onOnline = () => {
+      void tryRefreshAuthSession();
+      tryRevalidateProfile();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
     return () => {
@@ -512,12 +587,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadingTimeoutRef.current = window.setTimeout(() => {
       const pending = pendingSessionRef.current;
       if (pending?.user) {
-        // Sin perfil verificado tras timeout — sign out por seguridad
-        supabase.auth.signOut().catch(() => {});
+        const cached = readCachedProfile(pending.user.id);
+        const hasValidCache = !!(cached?.tenant_id || cached?.legacy_protected);
+        if (!hasValidCache) {
+          supabase.auth.signOut().catch(() => {});
+          setUser(null);
+          currentUserRef.current = null;
+          setSession(null);
+        } else if (cached) {
+          setUser(cached);
+          currentUserRef.current = cached;
+        }
+      } else {
+        setUser(null);
+        currentUserRef.current = null;
+        setSession(null);
       }
-      setUser(null);
-      currentUserRef.current = null;
-      setSession(null);
       setLoading(false);
     }, AUTH_LOADING_TIMEOUT_MS);
 
@@ -540,10 +625,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
     try {
       log("start");
-      // Limpieza de sesión previa (evita que auto-refresh restaure al usuario
-      // anterior si signInWithPassword falla).
-      try { await supabase.auth.signOut(); } catch { /* ignore */ }
-      log("pre-signOut done");
+      // Limpieza local rápida (sin revocar refresh en servidor): evita que un token
+      // viejo dispare refresh en red y retrase signInWithPassword.
+      await fastLocalSignOut(supabase);
+      log("pre-local-signOut done");
       // Si había un usuario cargado (cambio de cuenta en mismo tab), purgar cache
       // de TanStack para que datos del user previo no aparezcan al loguearse
       // el nuevo. Las query keys que no incluyen tenant_id (sales, appointments,
@@ -587,8 +672,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (data.session?.user) {
         setSession(data.session);
-        log("fetching profile", { uid: data.session.user.id });
-        const reason = await fetchUserProfileWithReason(data.session.user.id);
+        const uid = data.session.user.id;
+        const cachedProfile = readCachedProfile(uid);
+        const hasValidCache = !!(cachedProfile?.tenant_id || cachedProfile?.legacy_protected);
+        if (hasValidCache && cachedProfile) {
+          setUser(cachedProfile);
+          currentUserRef.current = cachedProfile;
+          setTenantContext({
+            tenantId: cachedProfile.tenant_id,
+            role: cachedProfile.role,
+            userId: cachedProfile.id,
+            legacyProtected: cachedProfile.legacy_protected,
+          });
+          setObservabilityUserContext({
+            id: cachedProfile.id,
+            email: cachedProfile.email,
+            role: cachedProfile.role,
+            tenantId: cachedProfile.tenant_id,
+          });
+          setLoading(false);
+        }
+        log("fetching profile", { uid });
+        const reason = await fetchUserProfileWithReason(uid);
         log("fetchUserProfile done", { reason });
         if (reason !== "ok") {
           try { await supabase.auth.signOut(); } catch { /* ignore */ }

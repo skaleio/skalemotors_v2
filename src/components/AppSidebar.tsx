@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageCircle,
   MoreVertical,
   PieChart,
   Pin,
@@ -77,6 +78,7 @@ const menuCategories = [
     icon: Target,
     items: [
       { title: "CRM", url: "/app/crm", icon: Target },
+      { title: "WhatsApp", url: "/app/whatsapp", icon: MessageCircle },
       { title: "Leads", url: "/app/leads", icon: Users },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
       { title: "Tareas", url: "/app/tasks", icon: ListChecks },

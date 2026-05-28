@@ -6,6 +6,7 @@ import { PageLoader } from "@/components/PageLoader";
 import { GlobalQuickActions } from "@/components/GlobalQuickActions";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import SupportChat from "@/components/SupportChat";
+import { LoginAlertsDialog } from "@/components/LoginAlertsDialog";
 import { PrefetchLeads } from "@/components/PrefetchLeads";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -51,6 +52,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
+      <LoginAlertsDialog />
       <PrefetchLeads />
       <div
         className={isMobileLayout ? "fixed inset-0 z-0 w-full flex flex-col overflow-hidden bg-background" : "min-h-screen w-full flex"}

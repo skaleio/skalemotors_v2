@@ -20,6 +20,11 @@ import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
+import {
+  fetchDelegatableSellers,
+  resolveDelegatableSellersScope,
+  useBranchSellersOptionsFromUser,
+} from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -525,15 +530,11 @@ export default function CRM() {
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
 
-  const { sellers: vendorList } = useBranchSellers({
-    tenantId: user?.tenant_id ?? null,
-    branchId: canSupervise && !["admin","gerente","jefe_jefe","financiero"].includes(user?.role ?? "")
-      ? (user?.branch_id ?? null)
-      : null,
-    scope: ["admin","gerente","jefe_jefe","financiero"].includes(user?.role ?? "") ? "tenant" : "branch",
+  const vendorListQuery = useBranchSellersOptionsFromUser(user, {
     roles: ["vendedor"],
     enabled: canSupervise,
   });
+  const { sellers: vendorList } = useBranchSellers(vendorListQuery);
 
   const supervisedVendorName = useMemo(
     () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
@@ -627,12 +628,11 @@ export default function CRM() {
     crmQuickAppointmentQuery.data?.id,
     crmQuickAppointmentQuery.data?.scheduled_at,
   ]);
-  const { sellers: crmAssigneeOptions } = useBranchSellers({
-    tenantId: user?.tenant_id ?? null,
-    scope: "tenant",
+  const crmAssigneeQuery = useBranchSellersOptionsFromUser(user, {
     roles: ["vendedor", "jefe_sucursal"],
     enabled: !!user?.tenant_id && showEditDialog && isEditingForm,
   });
+  const { sellers: crmAssigneeOptions } = useBranchSellers(crmAssigneeQuery);
 
   useEffect(() => {
     if (!user) return;
@@ -1019,30 +1019,29 @@ export default function CRM() {
       const merged: CloseDealSellerOption[] = [];
       const isVendedor = user.role === "vendedor";
 
-      if (!isVendedor && user.branch_id) {
-        const { data, error } = await supabase
-          .from("users")
-          .select("id, full_name")
-          .eq("branch_id", user.branch_id)
-          .eq("is_active", true)
-          .order("full_name", { ascending: true });
-
-        if (cancelled) return;
-
-        if (error) {
-          console.error("CRM: vendedores sucursal", error);
-          if (assignedId && assignedId !== user.id) {
-            merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
+      if (!isVendedor) {
+        const delegateScope = resolveDelegatableSellersScope(user, ["vendedor"]);
+        if (delegateScope) {
+          try {
+            const rows = await fetchDelegatableSellers(delegateScope);
+            if (cancelled) return;
+            for (const r of rows) {
+              if (user.id && r.id === user.id) continue;
+              merged.push({
+                key: closeDealSellerKeyUser(r.id),
+                label: r.full_name || r.email || r.id,
+              });
+            }
+          } catch (err) {
+            console.error("CRM: vendedores delegables", err);
           }
-        } else {
-          const rows = data || [];
-          for (const r of rows) {
-            if (user.id && r.id === user.id) continue;
-            merged.push({ key: closeDealSellerKeyUser(r.id), label: r.full_name });
-          }
-          if (assignedId && assignedId !== user.id && !merged.some((r) => r.key === closeDealSellerKeyUser(assignedId))) {
-            merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
-          }
+        }
+        if (
+          assignedId &&
+          assignedId !== user.id &&
+          !merged.some((r) => r.key === closeDealSellerKeyUser(assignedId))
+        ) {
+          merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
         }
       } else if (!isVendedor && assignedId && assignedId !== user.id) {
         merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });

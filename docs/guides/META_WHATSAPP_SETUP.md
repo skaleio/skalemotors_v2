@@ -41,19 +41,24 @@ Además, para el flujo hacia n8n:
    - `message_deliveries`
    - `message_reads`
 
-## 4) Configurar `whatsapp_inboxes` en Supabase
+## 4) Conectar por automotora (SaaS)
 
-1. Ejecuta la migración:
-   - `supabase/migrations/20260320120000_meta_whatsapp_provider_default.sql`
-2. Registra un inbox para tu sucursal:
-   - `provider = 'meta'`
-   - `provider_phone_number_id = META_PHONE_NUMBER_ID`
-   - `branch_id = <tu-branch_uuid>`
-   - `display_number` (opcional)
-3. Con esto, `supabase/functions/whatsapp-send` podrá resolver automáticamente el `inbox_id`.
+Cada sucursal conecta su propio número desde la app:
+
+1. Aplica migraciones (incluye `20260522143000_whatsapp_saas_inbox_credentials.sql`).
+2. En **Integraciones → WhatsApp Business (Meta)** ingresa:
+   - Token de acceso (System User con permisos WhatsApp)
+   - Phone Number ID (desde WhatsApp Manager)
+   - WABA ID (opcional)
+3. Edge Functions:
+   - `whatsapp-connect` / `whatsapp-disconnect` / `whatsapp-status`
+   - `whatsapp-send` usa el token guardado por sucursal (tabla `whatsapp_inbox_credentials`).
+
+**Piloto legacy (un solo número global):** solo si `WHATSAPP_LEGACY_GLOBAL_FALLBACK=true` en secrets y `META_ACCESS_TOKEN` + `META_PHONE_NUMBER_ID`. No usar en producción multi-tenant.
 
 ## 5) Notas
 
 - Por ahora, la pantalla de **llamadas de voz** no está soportada con Meta (solo mensajería por texto).
 - Los webhooks de Meta validan firma con `X-Hub-Signature-256` usando `META_APP_SECRET`.
+- Próximo paso producto: **Meta Embedded Signup** (OAuth embebido) en lugar de pegar token manualmente.
 

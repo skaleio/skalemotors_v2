@@ -37,6 +37,7 @@ const Documents = lazy(() => import("./pages/Documents"));
 const Settings = lazy(() => import("./pages/Settings"));
 const MonitorPage = lazy(() => import("./pages/MonitorPage"));
 const Integrations = lazy(() => import("./pages/Integrations"));
+const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
 const Users = lazy(() => import("./pages/Users"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Alerts = lazy(() => import("./pages/Alerts"));
@@ -282,6 +283,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Integrations />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/whatsapp" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <WhatsAppInbox />
                   </Layout>
                 </ProtectedRoute>
               } />

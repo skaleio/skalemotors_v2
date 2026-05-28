@@ -118,26 +118,53 @@ async function resolveInbox(
   if (providerPhoneNumberId) {
     const { data: inbox } = await supabase
       .from("whatsapp_inboxes")
-      .select("id, branch_id")
+      .select("id, branch_id, tenant_id")
       .eq("provider", "meta")
       .eq("provider_phone_number_id", String(providerPhoneNumberId))
       .eq("is_active", true)
       .maybeSingle();
-    return { inboxId: inbox?.id ?? null, branchId: inbox?.branch_id ?? null };
+    return {
+      inboxId: inbox?.id ?? null,
+      branchId: inbox?.branch_id ?? null,
+      tenantId: inbox?.tenant_id ?? null,
+    };
   }
 
   if (displayNumber) {
     const { data: inbox } = await supabase
       .from("whatsapp_inboxes")
-      .select("id, branch_id")
+      .select("id, branch_id, tenant_id")
       .eq("provider", "meta")
       .eq("display_number", String(displayNumber))
       .eq("is_active", true)
       .maybeSingle();
-    return { inboxId: inbox?.id ?? null, branchId: inbox?.branch_id ?? null };
+    return {
+      inboxId: inbox?.id ?? null,
+      branchId: inbox?.branch_id ?? null,
+      tenantId: inbox?.tenant_id ?? null,
+    };
   }
 
-  return { inboxId: null as string | null, branchId: null as string | null };
+  return {
+    inboxId: null as string | null,
+    branchId: null as string | null,
+    tenantId: null as string | null,
+  };
+}
+
+async function resolveTenantId(
+  supabase: any,
+  branchId: string | null,
+  inboxTenantId: string | null,
+): Promise<string | null> {
+  if (inboxTenantId) return inboxTenantId;
+  if (!branchId) return null;
+  const { data: branch } = await supabase
+    .from("branches")
+    .select("tenant_id")
+    .eq("id", branchId)
+    .maybeSingle();
+  return (branch?.tenant_id as string | null) ?? null;
 }
 
 async function resolveLeadId(
@@ -248,11 +275,12 @@ async function handler(req: Request): Promise<Response> {
         const providerPhoneNumberId = metadata.phone_number_id ? String(metadata.phone_number_id) : null;
         const displayNumber = metadata.display_phone_number ? String(metadata.display_phone_number) : null;
 
-        const { inboxId, branchId } = await resolveInbox(
+        const { inboxId, branchId, tenantId: inboxTenantId } = await resolveInbox(
           supabase,
           providerPhoneNumberId,
           displayNumber,
         );
+        const tenantId = await resolveTenantId(supabase, branchId, inboxTenantId);
 
         const contacts = asArray(value.contacts);
         const contact0 = contacts[0] ? asRecord(contacts[0]) : {};
@@ -288,6 +316,7 @@ async function handler(req: Request): Promise<Response> {
             lead_id: leadId,
             user_id: null,
             branch_id: branchId,
+            tenant_id: tenantId,
             inbox_id: inboxId,
             contact_phone: from,
             contact_name: contactName,

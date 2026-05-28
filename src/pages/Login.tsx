@@ -69,6 +69,12 @@ export default function Login() {
     if (err instanceof Error && err.message === 'NO_PROFILE') {
       return 'Tu cuenta no tiene acceso configurado. Contacta al administrador.'
     }
+    if (err instanceof Error && err.message === 'SIGNIN_IN_PROGRESS') {
+      return 'Ya hay un inicio de sesión en curso. Espera un momento.'
+    }
+    if (err instanceof Error && err.message.includes('demorando demasiado')) {
+      return err.message
+    }
     if (attempts >= 5) return 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.'
     return 'Credenciales incorrectas. Verifica tu correo y contraseña.'
   }

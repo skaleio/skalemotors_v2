@@ -1,5 +1,15 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireAuth } from "../_shared/authGuard.ts";
+import {
+  findActiveInboxForBranch,
+  getLegacyGlobalCredentials,
+  legacyGlobalWhatsAppEnabled,
+  loadInboxCredentials,
+  loadTenantYCloudApiKey,
+  type WhatsAppInboxRow,
+} from "../_shared/whatsappInbox.ts";
+import { normalizePhone, sendWhatsAppTextMessage } from "../_shared/whatsappMeta.ts";
+import { sendYCloudTextMessage } from "../_shared/ycloudApi.ts";
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -14,13 +24,19 @@ function getEnv(name: string): string {
   return v;
 }
 
-function normalizePhone(phone: unknown): string {
-  const s = String(phone ?? "").trim();
-  if (!s) throw new Error("Missing phone");
-  const cleaned = s.startsWith("+")
-    ? "+" + s.slice(1).replace(/[^\d]/g, "")
-    : s.replace(/[^\d]/g, "");
-  return cleaned;
+async function loadInboxById(
+  admin: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+  inboxId: string,
+): Promise<WhatsAppInboxRow | null> {
+  const { data } = await admin
+    .from("whatsapp_inboxes")
+    .select(
+      "id, tenant_id, branch_id, provider, provider_phone_number_id, display_number, waba_id, status, is_active",
+    )
+    .eq("id", inboxId)
+    .eq("is_active", true)
+    .maybeSingle();
+  return (data as WhatsAppInboxRow | null) ?? null;
 }
 
 async function handler(req: Request): Promise<Response> {
@@ -31,11 +47,11 @@ async function handler(req: Request): Promise<Response> {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
   }
 
-  // Auth: requiere JWT de Supabase (frontend llamará con supabase.functions.invoke)
-  const authHeader = req.headers.get("authorization") || "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse(401, { ok: false, error: "Missing auth" });
-  }
+  const supabaseUrl = getEnv("SUPABASE_URL");
+  const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+  const auth = await requireAuth(req, supabaseUrl, serviceRoleKey);
+  if (!auth.ok) return auth.response;
 
   let body: unknown;
   try {
@@ -47,123 +63,151 @@ async function handler(req: Request): Promise<Response> {
   const b = (body ?? {}) as Record<string, unknown>;
   const to = normalizePhone(b.to);
   const text = String(b.text ?? "").trim();
-  const inboxId = String(b.inbox_id ?? "").trim() || null;
+  const inboxIdParam = String(b.inbox_id ?? "").trim() || null;
 
   if (!text) return jsonResponse(400, { ok: false, error: "Missing text" });
 
-  const supabaseUrl = getEnv("SUPABASE_URL");
-  const anonKey = getEnv("SUPABASE_ANON_KEY");
-  const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-
-  // Cliente para identificar usuario (con JWT del caller)
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData?.user) {
-    return jsonResponse(401, { ok: false, error: "Invalid auth" });
-  }
-  const userId = userData.user.id;
-
-  // Cliente service-role para escribir y para consultar inbox/branch
-  const admin = createClient(supabaseUrl, serviceRoleKey);
+  const admin = auth.ctx.supabase;
+  const userId = auth.ctx.user.id;
 
   const { data: profile } = await admin
     .from("users")
-    .select("id, branch_id, full_name")
+    .select("id, branch_id, tenant_id, legacy_protected")
     .eq("id", userId)
     .maybeSingle();
 
   const branchId = profile?.branch_id ?? null;
+  const tenantId = profile?.tenant_id ?? auth.ctx.tenantId ?? null;
 
-  // Determinar inbox
-  let resolvedInboxId = inboxId;
-  let resolvedProviderPhoneNumberId: string | null = null;
-  if (!resolvedInboxId) {
-    const { data: inbox } = await admin
-      .from("whatsapp_inboxes")
-      .select("id, provider_phone_number_id")
-      .eq("branch_id", branchId)
-      .eq("provider", "meta")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  let inbox: WhatsAppInboxRow | null = null;
 
-    resolvedInboxId = inbox?.id ?? null;
-    resolvedProviderPhoneNumberId = inbox?.provider_phone_number_id ?? null;
-  } else if (resolvedInboxId) {
-    // H3 fix: validar que el inbox pertenece al branch del usuario que llama.
-    // Sin este check, un usuario podía enviar mensajes vía un inbox de otro tenant
-    // pasando un inbox_id arbitrario en el body.
-    const { data: inbox } = await admin
-      .from("whatsapp_inboxes")
-      .select("id, provider_phone_number_id, branch_id")
-      .eq("id", resolvedInboxId)
-      .maybeSingle();
-
+  if (inboxIdParam) {
+    inbox = await loadInboxById(admin, inboxIdParam);
     if (!inbox) {
-      return jsonResponse(404, { ok: false, error: "Inbox not found" });
+      return jsonResponse(404, { ok: false, error: "Inbox no encontrado" });
     }
-    if (branchId && inbox.branch_id !== branchId) {
-      return jsonResponse(403, { ok: false, error: "Inbox does not belong to your branch" });
+    if (branchId && inbox.branch_id !== branchId && !auth.ctx.legacyProtected) {
+      const role = auth.ctx.role ?? "";
+      if (role !== "admin" && role !== "gerente") {
+        return jsonResponse(403, { ok: false, error: "Inbox does not belong to your branch" });
+      }
+      if (tenantId && inbox.tenant_id && inbox.tenant_id !== tenantId) {
+        return jsonResponse(403, { ok: false, error: "Inbox does not belong to your tenant" });
+      }
     }
-    resolvedProviderPhoneNumberId = inbox.provider_phone_number_id ?? null;
+  } else if (branchId) {
+    inbox = await findActiveInboxForBranch(admin, branchId);
   }
 
-  // ===========================
-  // Enviar por Meta WhatsApp
-  // ===========================
-  const metaAccessToken = Deno.env.get("META_ACCESS_TOKEN") || "";
-  if (!metaAccessToken) {
-    return jsonResponse(500, { ok: false, error: "Missing META_ACCESS_TOKEN env var" });
-  }
-
-  const providerPhoneNumberId =
-    resolvedProviderPhoneNumberId ?? Deno.env.get("META_PHONE_NUMBER_ID") ?? "";
-  if (!providerPhoneNumberId) {
-    return jsonResponse(500, { ok: false, error: "Missing META_PHONE_NUMBER_ID or whatsapp_inboxes.provider_phone_number_id" });
-  }
-
-  const url = `https://graph.facebook.com/v21.0/${providerPhoneNumberId}/messages`;
-  const metaPayload = {
-    messaging_product: "whatsapp",
-    to,
-    type: "text",
-    text: { body: text },
-  };
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${metaAccessToken}`,
-    },
-    body: JSON.stringify(metaPayload),
-  });
-
-  const respText = await resp.text();
-  let respJson: unknown = null;
-  try {
-    respJson = JSON.parse(respText) as unknown;
-  } catch {
-    // ok
-  }
-
-  if (!resp.ok) {
-    return jsonResponse(502, {
+  if (inbox && inbox.status !== "active") {
+    return jsonResponse(400, {
       ok: false,
-      error: "Meta WhatsApp send failed",
-      details: respJson ?? respText,
+      error: "WhatsApp no está conectado para esta sucursal. Ve a Integraciones.",
+      code: "WHATSAPP_NOT_CONNECTED",
     });
   }
 
-  const providerMessageId =
-    (typeof respJson === "object" && respJson !== null)
-      ? ((respJson as Record<string, unknown>)?.messages?.[0] as any)?.id ?? null
-      : null;
+  let providerMessageId: string | null = null;
+  let sendRaw: unknown = null;
+  const resolvedInboxId = inbox?.id ?? null;
+  const provider = inbox?.provider ?? "meta";
 
-  // Guardar en Supabase (saliente)
+  if (inbox?.provider === "ycloud" && inbox.tenant_id) {
+    const apiKey = await loadTenantYCloudApiKey(admin, inbox.tenant_id);
+    if (!apiKey) {
+      return jsonResponse(400, {
+        ok: false,
+        error: "Configura YCloud en Integraciones (API key del tenant).",
+        code: "WHATSAPP_NOT_CONNECTED",
+      });
+    }
+    const sendResult = await sendYCloudTextMessage({
+      apiKey,
+      from: inbox.provider_phone_number_id,
+      to,
+      text,
+    });
+    if (!sendResult.ok) {
+      return jsonResponse(502, {
+        ok: false,
+        error: sendResult.error ?? "YCloud send failed",
+        details: sendResult.raw,
+      });
+    }
+    providerMessageId = sendResult.providerMessageId;
+    sendRaw = sendResult.raw;
+  } else if (inbox?.provider === "meta") {
+    const creds = await loadInboxCredentials(admin, inbox.id);
+    let accessToken = creds?.access_token ?? null;
+    let phoneNumberId = inbox.provider_phone_number_id;
+
+    if (!accessToken) {
+      const legacy = profile?.legacy_protected || auth.ctx.legacyProtected
+        ? getLegacyGlobalCredentials()
+        : legacyGlobalWhatsAppEnabled()
+          ? getLegacyGlobalCredentials()
+          : null;
+      if (legacy) {
+        accessToken = legacy.accessToken;
+        phoneNumberId = legacy.phoneNumberId;
+      }
+    }
+
+    if (!accessToken || !phoneNumberId) {
+      return jsonResponse(400, {
+        ok: false,
+        error: "Conecta WhatsApp en Integraciones antes de enviar mensajes.",
+        code: "WHATSAPP_NOT_CONNECTED",
+      });
+    }
+
+    const sendResult = await sendWhatsAppTextMessage({
+      accessToken,
+      phoneNumberId,
+      to,
+      text,
+    });
+    if (!sendResult.ok) {
+      return jsonResponse(502, {
+        ok: false,
+        error: sendResult.error ?? "Meta WhatsApp send failed",
+        details: sendResult.raw,
+      });
+    }
+    providerMessageId = sendResult.providerMessageId;
+    sendRaw = sendResult.raw;
+  } else {
+    const legacy = profile?.legacy_protected || auth.ctx.legacyProtected
+      ? getLegacyGlobalCredentials()
+      : legacyGlobalWhatsAppEnabled()
+        ? getLegacyGlobalCredentials()
+        : null;
+
+    if (!legacy) {
+      return jsonResponse(400, {
+        ok: false,
+        error: "Conecta WhatsApp en Integraciones antes de enviar mensajes.",
+        code: "WHATSAPP_NOT_CONNECTED",
+      });
+    }
+
+    const sendResult = await sendWhatsAppTextMessage({
+      accessToken: legacy.accessToken,
+      phoneNumberId: legacy.phoneNumberId,
+      to,
+      text,
+    });
+    if (!sendResult.ok) {
+      return jsonResponse(502, {
+        ok: false,
+        error: sendResult.error ?? "Meta WhatsApp send failed",
+        details: sendResult.raw,
+      });
+    }
+    providerMessageId = sendResult.providerMessageId;
+    sendRaw = sendResult.raw;
+  }
+
   const { error: insertErr } = await admin.from("messages").insert({
     type: "whatsapp",
     direction: "saliente",
@@ -175,16 +219,16 @@ async function handler(req: Request): Promise<Response> {
     lead_id: null,
     user_id: userId,
     branch_id: branchId,
+    tenant_id: tenantId ?? inbox?.tenant_id ?? null,
     inbox_id: resolvedInboxId,
     contact_phone: to,
     contact_name: null,
-    provider: "meta",
-    provider_message_id: providerMessageId ? String(providerMessageId) : null,
-    raw_payload: respJson ?? { raw: respText },
+    provider: inbox ? provider : "meta",
+    provider_message_id: providerMessageId,
+    raw_payload: sendRaw,
   });
 
   if (insertErr) {
-    // No rompemos el envío por un insert fallido, pero lo reportamos.
     return jsonResponse(200, {
       ok: true,
       sent: true,
@@ -199,9 +243,8 @@ async function handler(req: Request): Promise<Response> {
     sent: true,
     provider_message_id: providerMessageId,
     inbox_id: resolvedInboxId,
+    provider: inbox ? provider : "meta",
   });
 }
 
 Deno.serve((req) => handler(req));
-
-

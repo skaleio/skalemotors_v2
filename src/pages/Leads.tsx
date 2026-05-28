@@ -641,6 +641,8 @@ function LeadsImpl({ user }: { user: User }) {
     region: "",
     payment_type: "",
     budget: "",
+    pie: "",
+    cuotas_mensuales: "",
     transmision: "",
     notes: "",
     reminderEnabled: false,
@@ -672,6 +674,8 @@ function LeadsImpl({ user }: { user: User }) {
     region: "",
     payment_type: "",
     budget: "",
+    pie: "",
+    cuotas_mensuales: "",
     transmision: "",
     notes: "",
     origen: "lead" as "lead" | "consignacion",
@@ -930,6 +934,8 @@ function LeadsImpl({ user }: { user: User }) {
       region: "",
       payment_type: "",
       budget: "",
+      pie: "",
+      cuotas_mensuales: "",
       transmision: "",
       notes: "",
       reminderEnabled: false,
@@ -1104,6 +1110,8 @@ function LeadsImpl({ user }: { user: User }) {
           Región: sanitizeForSpreadsheet(region),
           "Financiamiento/Contado": sanitizeForSpreadsheet(lead.payment_type || ""),
           Presupuesto: sanitizeForSpreadsheet(lead.budget || ""),
+          Pie: sanitizeForSpreadsheet(lead.pie_disponible || ""),
+          "Cuotas mensuales": sanitizeForSpreadsheet(lead.cuotas_mensuales || ""),
           Estado: sanitizeForSpreadsheet(getStatusMeta(lead.status).label),
           Fuente: sanitizeForSpreadsheet(lead.source || ""),
           Notas: sanitizeForSpreadsheet(lead.notes || ""),
@@ -1199,6 +1207,8 @@ function LeadsImpl({ user }: { user: User }) {
         region: formState.region.trim() ? formState.region.trim() : null,
         payment_type: formState.payment_type ? formState.payment_type : null,
         budget: formState.budget.trim() ? formState.budget.trim() : null,
+        pie_disponible: formState.pie.trim() ? formState.pie.trim() : null,
+        cuotas_mensuales: formState.cuotas_mensuales.trim() ? formState.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(formState.transmision),
         notes: formState.notes.trim() ? formState.notes.trim() : null,
         tags: buildTags(tags) as any,
@@ -1275,6 +1285,8 @@ function LeadsImpl({ user }: { user: User }) {
       region: lead.region || getTagValue(tags, REGION_TAG_PREFIX),
       payment_type: lead.payment_type || "",
       budget: lead.budget || "",
+      pie: lead.pie_disponible || "",
+      cuotas_mensuales: lead.cuotas_mensuales || "",
       transmision: leadTransmissionForForm(lead.transmision),
       notes: lead.notes || "",
       origen: isConsignacion ? "consignacion" : "lead",
@@ -1304,6 +1316,8 @@ function LeadsImpl({ user }: { user: User }) {
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
         budget: editForm.budget.trim() ? editForm.budget.trim() : null,
+        pie_disponible: editForm.pie.trim() ? editForm.pie.trim() : null,
+        cuotas_mensuales: editForm.cuotas_mensuales.trim() ? editForm.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(editForm.transmision),
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
       };
@@ -1827,13 +1841,35 @@ function LeadsImpl({ user }: { user: User }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Presupuesto</Label>
-              <Input
-                value={formState.budget}
-                onChange={(e) => setFormState({ ...formState, budget: e.target.value })}
-                placeholder="Ej: 10-12 millones"
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-budget">Presupuesto</Label>
+                <Input
+                  id="lead-create-budget"
+                  value={formState.budget}
+                  onChange={(e) => setFormState({ ...formState, budget: e.target.value })}
+                  placeholder="Ej: 10-12 millones"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-pie">Pie</Label>
+                <Input
+                  id="lead-create-pie"
+                  value={formState.pie}
+                  onChange={(e) => setFormState({ ...formState, pie: e.target.value })}
+                  placeholder="Ej: 2.500.000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-cuotas">Cuotas mensuales</Label>
+                <Input
+                  id="lead-create-cuotas"
+                  value={formState.cuotas_mensuales}
+                  onChange={(e) => setFormState({ ...formState, cuotas_mensuales: e.target.value })}
+                  placeholder="Ej: 350.000"
+                />
+                <p className="text-[11px] text-muted-foreground">Cuota que el cliente está dispuesto a pagar.</p>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label>Nota</Label>
@@ -2074,13 +2110,35 @@ function LeadsImpl({ user }: { user: User }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Presupuesto</Label>
-              <Input
-                value={editForm.budget}
-                onChange={(e) => setEditForm({ ...editForm, budget: e.target.value })}
-                placeholder="Ej: 10-12 millones"
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="lead-edit-budget">Presupuesto</Label>
+                <Input
+                  id="lead-edit-budget"
+                  value={editForm.budget}
+                  onChange={(e) => setEditForm({ ...editForm, budget: e.target.value })}
+                  placeholder="Ej: 10-12 millones"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-edit-pie">Pie</Label>
+                <Input
+                  id="lead-edit-pie"
+                  value={editForm.pie}
+                  onChange={(e) => setEditForm({ ...editForm, pie: e.target.value })}
+                  placeholder="Ej: 2.500.000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-edit-cuotas">Cuotas mensuales</Label>
+                <Input
+                  id="lead-edit-cuotas"
+                  value={editForm.cuotas_mensuales}
+                  onChange={(e) => setEditForm({ ...editForm, cuotas_mensuales: e.target.value })}
+                  placeholder="Ej: 350.000"
+                />
+                <p className="text-[11px] text-muted-foreground">Cuota que el cliente está dispuesto a pagar.</p>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label>Nota</Label>
@@ -2188,12 +2246,16 @@ function LeadsImpl({ user }: { user: User }) {
                 const region = detailsLead.region?.trim() || getTagValue(detailsLead.tags, REGION_TAG_PREFIX);
                 const paymentType = detailsLead.payment_type?.trim();
                 const budget = detailsLead.budget?.trim();
+                const pie = detailsLead.pie_disponible?.trim();
+                const cuotas = detailsLead.cuotas_mensuales?.trim();
                 const fields: Array<{ label: string; value: string }> = [];
                 if (rut) fields.push({ label: "RUT", value: rut });
                 if (email) fields.push({ label: "Correo", value: email });
                 if (region) fields.push({ label: "Región", value: region });
                 if (paymentType) fields.push({ label: "Financiamiento / Contado", value: paymentType });
                 if (budget) fields.push({ label: "Presupuesto", value: budget });
+                if (pie) fields.push({ label: "Pie", value: pie });
+                if (cuotas) fields.push({ label: "Cuotas mensuales", value: cuotas });
                 return fields.length ? (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {fields.map((f) => (
@@ -2229,7 +2291,6 @@ function LeadsImpl({ user }: { user: User }) {
               {(detailsLead.uso_principal
                 || detailsLead.pasajeros_filas
                 || detailsLead.transmision
-                || detailsLead.pie_disponible
                 || detailsLead.marca_preferida
                 || detailsLead.anos_minimo
                 || detailsLead.preferencia
@@ -2244,7 +2305,6 @@ function LeadsImpl({ user }: { user: User }) {
                     if (detailsLead.uso_principal) chatbotFields.push({ label: "Uso principal", value: detailsLead.uso_principal });
                     if (detailsLead.transmision) chatbotFields.push({ label: "Transmisión", value: detailsLead.transmision });
                     if (detailsLead.pasajeros_filas) chatbotFields.push({ label: "Pasajeros / Filas", value: detailsLead.pasajeros_filas });
-                    if (detailsLead.pie_disponible) chatbotFields.push({ label: "PIE disponible", value: detailsLead.pie_disponible });
                     if (detailsLead.marca_preferida) chatbotFields.push({ label: "Marca preferida", value: detailsLead.marca_preferida });
                     if (detailsLead.anos_minimo) chatbotFields.push({ label: "Año mínimo", value: detailsLead.anos_minimo });
                     if (detailsLead.preferencia) chatbotFields.push({ label: "Preferencia", value: detailsLead.preferencia });

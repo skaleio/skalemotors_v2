@@ -336,7 +336,35 @@ export const leadService = {
     }
 
     return stats
-  }
+  },
+
+  /** Leads nuevos recientes (popup al iniciar sesión). */
+  async countRecentNewLeads(params: {
+    branchId?: string | null
+    assignedTo?: string | null
+    hours?: number
+  }): Promise<number> {
+    const hours = params.hours ?? 48
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
+    let query = supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'nuevo')
+      .is('deleted_at', null)
+      .gte('created_at', since)
+
+    if (params.branchId) {
+      query = query.eq('branch_id', params.branchId)
+    }
+    if (params.assignedTo) {
+      query = query.or(`assigned_to.is.null,assigned_to.eq.${params.assignedTo}`)
+    }
+
+    const { count, error } = await query
+    if (error) throw error
+    return count ?? 0
+  },
 }
 
 
