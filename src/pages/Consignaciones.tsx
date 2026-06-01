@@ -852,6 +852,7 @@ export default function Consignaciones() {
         fecha: formState.fecha && formState.fecha.trim() ? formState.fecha.trim() : null,
         consignacion_price: parseCurrencyInput(formState.consignacion_price),
         sale_price: parseCurrencyInput(formState.sale_price),
+        tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id ?? null,
         created_by: user.id,
       } satisfies Database["public"]["Tables"]["consignaciones"]["Insert"];

@@ -167,6 +167,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -191,6 +192,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -215,6 +217,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -327,6 +330,178 @@ export interface Database {
           updated_at?: string
         }
       }
+      tenant_sites: {
+        Row: {
+          id: string
+          tenant_id: string
+          is_published: boolean
+          theme: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name: string | null
+          logo_url: string | null
+          favicon_url: string | null
+          font: string | null
+          primary_color: string
+          secondary_color: string | null
+          hero_title: string | null
+          hero_subtitle: string | null
+          hero_image_url: string | null
+          about_text: string | null
+          whatsapp_phone: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          address: string | null
+          social: Json
+          sections: Json
+          videos: Json
+          seo_title: string | null
+          seo_description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          is_published?: boolean
+          theme?: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name?: string | null
+          logo_url?: string | null
+          favicon_url?: string | null
+          font?: string | null
+          primary_color?: string
+          secondary_color?: string | null
+          hero_title?: string | null
+          hero_subtitle?: string | null
+          hero_image_url?: string | null
+          about_text?: string | null
+          whatsapp_phone?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address?: string | null
+          social?: Json
+          sections?: Json
+          videos?: Json
+          seo_title?: string | null
+          seo_description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          is_published?: boolean
+          theme?: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name?: string | null
+          logo_url?: string | null
+          favicon_url?: string | null
+          font?: string | null
+          primary_color?: string
+          secondary_color?: string | null
+          hero_title?: string | null
+          hero_subtitle?: string | null
+          hero_image_url?: string | null
+          about_text?: string | null
+          whatsapp_phone?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address?: string | null
+          social?: Json
+          sections?: Json
+          videos?: Json
+          seo_title?: string | null
+          seo_description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      vehicle_photo_assets: {
+        Row: {
+          id: string
+          tenant_id: string
+          vehicle_id: string
+          album: string
+          url: string
+          sort_order: number
+          is_cover: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          vehicle_id: string
+          album: string
+          url: string
+          sort_order?: number
+          is_cover?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          vehicle_id?: string
+          album?: string
+          url?: string
+          sort_order?: number
+          is_cover?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_photo_assets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_photo_assets_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tenant_domains: {
+        Row: {
+          id: string
+          tenant_id: string
+          domain: string
+          kind: 'subdomain' | 'custom'
+          is_primary: boolean
+          verification_status: 'pending' | 'verified' | 'error'
+          vercel_domain_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          domain: string
+          kind: 'subdomain' | 'custom'
+          is_primary?: boolean
+          verification_status?: 'pending' | 'verified' | 'error'
+          vercel_domain_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          domain?: string
+          kind?: 'subdomain' | 'custom'
+          is_primary?: boolean
+          verification_status?: 'pending' | 'verified' | 'error'
+          vercel_domain_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
         Row: {
           id: string
           tenant_id: string
@@ -392,6 +567,7 @@ export interface Database {
           transmision_display: string | null
           combustible_display: string | null
           publicado: boolean
+          publicado_web: boolean
           primary_image_url: string | null
           created_at: string
           updated_at: string
@@ -432,6 +608,7 @@ export interface Database {
           transmision_display?: string | null
           combustible_display?: string | null
           publicado?: boolean
+          publicado_web?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -471,6 +648,7 @@ export interface Database {
           transmision_display?: string | null
           combustible_display?: string | null
           publicado?: boolean
+          publicado_web?: boolean
           created_at?: string
           updated_at?: string
         }

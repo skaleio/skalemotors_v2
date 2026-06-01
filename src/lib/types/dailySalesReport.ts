@@ -66,33 +66,56 @@ export const SUPERVISOR_ROLES_FOR_DAILY_REPORT = [
   "jefe_sucursal",
 ] as const;
 
+export function emptyCallRow(): DailyReportCallRow {
+  return { customer_name: "", phone: "", vehicle: "", year: "", reason: "", result: "" };
+}
+
+export function emptyCreditRow(): DailyReportCreditRow {
+  return { customer_name: "", rut: "", institution: "", status: "" };
+}
+
+export function emptyPlatformRow(): DailyReportPlatformRow {
+  return { vehicle: "", year: "", platform: "", observation: "" };
+}
+
 export function emptyDailySalesReportPayload(): DailySalesReportPayload {
   return {
-    calls: Array.from({ length: 6 }, () => ({
-      customer_name: "",
-      phone: "",
-      vehicle: "",
-      year: "",
-      reason: "",
-      result: "",
-    })),
-    credits: Array.from({ length: 7 }, () => ({
-      customer_name: "",
-      rut: "",
-      institution: "",
-      status: "",
-    })),
+    calls: [emptyCallRow(), emptyCallRow()],
+    credits: [emptyCreditRow()],
     social_media: {
       total_posts: null,
-      vehicles_posted: ["", "", "", "", ""],
+      vehicles_posted: [""],
     },
-    platform_uploads: Array.from({ length: 5 }, () => ({
-      vehicle: "",
-      year: "",
-      platform: "",
-      observation: "",
-    })),
+    platform_uploads: [emptyPlatformRow()],
     daily_observations: "",
+  };
+}
+
+function rowHasData(values: Record<string, string | number | null | undefined>): boolean {
+  return Object.values(values).some((v) => String(v ?? "").trim() !== "");
+}
+
+export function countDailyReportProgress(payload: DailySalesReportPayload) {
+  const calls = payload.calls.filter((r) => rowHasData(r)).length;
+  const credits = payload.credits.filter((r) => rowHasData(r)).length;
+  const social =
+    payload.social_media.total_posts != null ||
+    payload.social_media.vehicles_posted.some((v) => v.trim());
+  const platforms = payload.platform_uploads.filter((r) => rowHasData(r)).length;
+  const observations = payload.daily_observations.trim().length > 0;
+  const sections = [
+    calls > 0,
+    credits > 0,
+    social,
+    platforms > 0,
+    observations,
+  ];
+  return {
+    calls,
+    credits,
+    platforms,
+    sectionsFilled: sections.filter(Boolean).length,
+    sectionsTotal: sections.length,
   };
 }
 
@@ -102,14 +125,27 @@ export function normalizeDailySalesReportPayload(
   const base = emptyDailySalesReportPayload();
   if (!raw) return base;
 
-  const calls = Array.isArray(raw.calls) ? raw.calls : [];
-  const credits = Array.isArray(raw.credits) ? raw.credits : [];
-  const platforms = Array.isArray(raw.platform_uploads) ? raw.platform_uploads : [];
-  const vehiclesPosted = raw.social_media?.vehicles_posted ?? [];
+  const calls = Array.isArray(raw.calls) ? raw.calls.map((r) => ({ ...emptyCallRow(), ...r })) : base.calls;
+  const credits = Array.isArray(raw.credits)
+    ? raw.credits.map((r) => ({ ...emptyCreditRow(), ...r }))
+    : base.credits;
+  const platforms = Array.isArray(raw.platform_uploads)
+    ? raw.platform_uploads.map((r) => ({ ...emptyPlatformRow(), ...r }))
+    : base.platform_uploads;
+  const vehiclesPosted = raw.social_media?.vehicles_posted ?? base.social_media.vehicles_posted;
+
+  const ensureTrailingEmpty = <T extends Record<string, string>>(
+    rows: T[],
+    empty: () => T,
+  ): T[] => {
+    if (rows.length === 0) return [empty()];
+    const last = rows[rows.length - 1];
+    return rowHasData(last) ? [...rows, empty()] : rows;
+  };
 
   return {
-    calls: base.calls.map((row, i) => ({ ...row, ...(calls[i] ?? {}) })),
-    credits: base.credits.map((row, i) => ({ ...row, ...(credits[i] ?? {}) })),
+    calls: ensureTrailingEmpty(calls, emptyCallRow),
+    credits: ensureTrailingEmpty(credits, emptyCreditRow),
     social_media: {
       total_posts:
         typeof raw.social_media?.total_posts === "number"
@@ -117,14 +153,15 @@ export function normalizeDailySalesReportPayload(
           : raw.social_media?.total_posts === null
             ? null
             : base.social_media.total_posts,
-      vehicles_posted: base.social_media.vehicles_posted.map(
-        (v, i) => vehiclesPosted[i] ?? v,
-      ),
+      vehicles_posted:
+        vehiclesPosted.length > 0
+          ? ensureTrailingEmpty(
+              vehiclesPosted.map((v) => ({ v })),
+              () => ({ v: "" }),
+            ).map((x) => x.v)
+          : [""],
     },
-    platform_uploads: base.platform_uploads.map((row, i) => ({
-      ...row,
-      ...(platforms[i] ?? {}),
-    })),
+    platform_uploads: ensureTrailingEmpty(platforms, emptyPlatformRow),
     daily_observations: raw.daily_observations ?? "",
   };
 }

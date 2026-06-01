@@ -11,6 +11,13 @@ describe("rbac permissions", () => {
     expect(hasPermission("vendedor", "finance:read")).toBe(false);
   });
 
+  it("fotografo tiene inventario sin finanzas", () => {
+    expect(hasPermission("fotografo", "inventory:read")).toBe(true);
+    expect(hasPermission("fotografo", "inventory:write")).toBe(true);
+    expect(hasPermission("fotografo", "finance:read")).toBe(false);
+    expect(hasPermission("fotografo", "consignaciones:write")).toBe(false);
+  });
+
   it("jefe_jefe tiene finanzas completas (rol SaaS)", () => {
     expect(hasPermission("jefe_jefe", "finance:write")).toBe(true);
     expect(hasPermission("jefe_sucursal", "finance:read")).toBe(false);

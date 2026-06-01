@@ -28,6 +28,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
+import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
@@ -2217,17 +2218,11 @@ function LeadsImpl({ user }: { user: User }) {
                 </div>
               </div>
               {detailsQuickAppointmentQuery.data?.scheduled_at ? (
-                <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
-                  <p className="text-sm font-semibold tracking-wide text-primary">
-                    {formatLeadScheduleDisplayLine(
-                      detailsQuickAppointmentQuery.data.scheduled_at,
-                      parseCrmLeadQuickAppointmentMotive(detailsQuickAppointmentQuery.data.description),
-                    )}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Sincronizado con Citas · edita el lead para cambiar fecha o motivo
-                  </p>
-                </div>
+                <LeadScheduleEventTag
+                  scheduledAtIso={detailsQuickAppointmentQuery.data.scheduled_at}
+                  description={detailsQuickAppointmentQuery.data.description}
+                  footnote="Sincronizado con Citas · edita el lead para cambiar fecha o motivo"
+                />
               ) : null}
               <div className="rounded-md border bg-muted/30 px-3 py-2.5">
                 <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>

@@ -14,6 +14,7 @@ const roleLabels: Record<string, string> = {
   jefe_jefe: "Jefe principal",
   jefe_sucursal: "Jefe sucursal",
   vendedor: "Vendedor",
+  fotografo: "Fotógrafo",
   financiero: "Financiero",
   servicio: "Servicio",
   inventario: "Inventario",

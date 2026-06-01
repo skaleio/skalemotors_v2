@@ -54,11 +54,13 @@ export const LOGIN_ALERT_ROLES = [
   "gerente",
   "jefe_sucursal",
   "vendedor",
+  "fotografo",
   "inventario",
 ] as const;
 
 const ENTITY_BY_ROLE: Record<string, PendingTask["entity_type"][]> = {
   vendedor: ["lead", "appointment"],
+  fotografo: ["vehicle", "consignacion"],
   inventario: ["vehicle", "consignacion"],
   gerente: ["lead", "appointment", "vehicle", "consignacion"],
   jefe_sucursal: ["lead", "appointment", "vehicle", "consignacion"],

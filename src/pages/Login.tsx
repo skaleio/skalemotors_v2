@@ -83,7 +83,12 @@ export default function Login() {
   useEffect(() => {
     if (user && !authLoading && !localLoading && !loginAttempted) {
       const from = (location.state as { from?: RouterLocation } | null)?.from
-      const defaultPath = user.role === "vendedor" ? "/app/crm" : "/app"
+      const defaultPath =
+        user.role === "vendedor"
+          ? "/app/crm"
+          : user.role === "fotografo"
+            ? "/app/consignaciones"
+            : "/app"
       const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
       navigate(to, { replace: true })
     }
@@ -111,7 +116,12 @@ export default function Login() {
       } else {
         setFailedAttempts(0)
         const from = (location.state as { from?: RouterLocation } | null)?.from
-        const defaultPath = role === "vendedor" ? "/app/crm" : "/app"
+        const defaultPath =
+          role === "vendedor"
+            ? "/app/crm"
+            : role === "fotografo"
+              ? "/app/consignaciones"
+              : "/app"
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
         if (MFA_GATE_ENABLED) {
           try {

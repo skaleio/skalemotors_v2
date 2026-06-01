@@ -55,17 +55,21 @@ export function Layout({ children }: LayoutProps) {
       <LoginAlertsDialog />
       <PrefetchLeads />
       <div
-        className={isMobileLayout ? "fixed inset-0 z-0 w-full flex flex-col overflow-hidden bg-background" : "min-h-screen w-full flex"}
+        className={
+          isMobileLayout
+            ? "fixed inset-0 z-0 flex w-full flex-col overflow-hidden bg-background"
+            : "flex h-svh min-h-0 w-full overflow-hidden bg-background"
+        }
         style={isMobileLayout ? { height: "100dvh", maxHeight: "100dvh" } : undefined}
         data-mobile-device={isMobileLayout ? "true" : undefined}
         data-layout-version={isMobileLayout ? "mobile" : "desktop"}
       >
         <AppSidebar />
-        <div className="flex-1 flex min-h-0 flex-col relative z-0 min-w-0 overflow-hidden">
+        <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <header className="shrink-0">
             <TopBar />
           </header>
-          <main className={isMobileLayout ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6 bg-muted/20 min-w-0 overscroll-contain" : "flex-1 min-h-0 p-6 bg-muted/20 min-w-0"}>
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-muted/20 p-4 min-w-0 md:p-6">
             <PageRestore>
               {children}
             </PageRestore>

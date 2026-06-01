@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
+import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
@@ -2012,17 +2013,11 @@ export default function CRM() {
                     </div>
                   </div>
                   {crmQuickAppointmentQuery.data?.scheduled_at ? (
-                    <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2">
-                      <p className="text-sm font-semibold tracking-wide text-primary">
-                        {formatLeadScheduleDisplayLine(
-                          crmQuickAppointmentQuery.data.scheduled_at,
-                          parseCrmLeadQuickAppointmentMotive(crmQuickAppointmentQuery.data.description),
-                        )}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Sincronizado con Citas · edita con el lápiz para cambiar fecha o motivo
-                      </p>
-                    </div>
+                    <LeadScheduleEventTag
+                      scheduledAtIso={crmQuickAppointmentQuery.data.scheduled_at}
+                      description={crmQuickAppointmentQuery.data.description}
+                      footnote="Sincronizado con Citas · edita con el lápiz para cambiar fecha o motivo"
+                    />
                   ) : null}
                   {(() => {
                     const rut = editingLead.rut?.trim();

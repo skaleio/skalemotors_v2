@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useDailyReportDetail,
@@ -89,7 +90,7 @@ export function DailySalesReportSupervision() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -251,18 +252,22 @@ export function DailySalesReportPanel() {
     user?.role === "jefe_jefe" ||
     user?.role === "gerente" ||
     user?.role === "jefe_sucursal";
-  const canFill =
-    user?.role === "vendedor" || user?.role === "jefe_sucursal";
+  const canFill = user?.role === "vendedor" || user?.role === "jefe_sucursal";
 
   if (canSupervise && canFill) {
     return (
-      <div className="space-y-8">
-        <DailySalesReportSupervision />
-        <div className="border-t pt-8">
-          <h2 className="text-lg font-semibold mb-4">Mi informe del día</h2>
+      <Tabs defaultValue="informe" className="w-full space-y-4">
+        <TabsList>
+          <TabsTrigger value="informe">Mi informe</TabsTrigger>
+          <TabsTrigger value="supervision">Supervisión equipo</TabsTrigger>
+        </TabsList>
+        <TabsContent value="informe">
           <DailySalesReportForm />
-        </div>
-      </div>
+        </TabsContent>
+        <TabsContent value="supervision">
+          <DailySalesReportSupervision />
+        </TabsContent>
+      </Tabs>
     );
   }
 

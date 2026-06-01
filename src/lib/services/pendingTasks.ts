@@ -13,6 +13,7 @@ export const STALE_ALERTS_SYNC_ROLES = [
   "gerente",
   "jefe_sucursal",
   "inventario",
+  "fotografo",
 ] as const;
 
 export function canSyncStaleAlerts(role: string | null | undefined): boolean {

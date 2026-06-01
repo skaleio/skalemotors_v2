@@ -26,6 +26,8 @@ const SalespersonRanking = lazy(() => import("./pages/SalespersonRanking"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const PendingTasks = lazy(() => import("./pages/PendingTasks"));
+const PhotographerTasks = lazy(() => import("./pages/PhotographerTasks"));
+const Albums = lazy(() => import("./pages/Albums"));
 const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
@@ -37,6 +39,7 @@ const Documents = lazy(() => import("./pages/Documents"));
 const Settings = lazy(() => import("./pages/Settings"));
 const MonitorPage = lazy(() => import("./pages/MonitorPage"));
 const Integrations = lazy(() => import("./pages/Integrations"));
+const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
 const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
 const Users = lazy(() => import("./pages/Users"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -143,6 +146,20 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <PendingTasks />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/mis-tareas" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PhotographerTasks />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/albums" element={
+                <ProtectedRoute requiredRole={["admin", "fotografo"]}>
+                  <Layout>
+                    <Albums />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -283,6 +300,13 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Integrations />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/website" element={
+                <ProtectedRoute requiredRole={['admin', 'gerente', 'jefe_jefe', 'jefe_sucursal']}>
+                  <Layout>
+                    <WebsiteBuilder />
                   </Layout>
                 </ProtectedRoute>
               } />

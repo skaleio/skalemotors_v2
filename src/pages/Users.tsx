@@ -160,6 +160,7 @@ const ROLE_LABEL: Record<string, string> = {
   admin: "Administrador",
   gerente: "Gerente",
   vendedor: "Vendedor",
+  fotografo: "Fotógrafo",
   financiero: "Finanzas",
   servicio: "Servicio",
   inventario: "Inventario",

@@ -1,13 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatLeadScheduleDisplayLine } from "@/lib/crmLeadQuickAppointment";
+import { LeadScheduleCalendar } from "@/components/crm/LeadScheduleCalendar";
+import {
+  leadSchedulePanelClass,
+  leadSchedulePopoverContentClass,
+} from "@/components/crm/leadScheduleCalendarStyles";
 import { cn } from "@/lib/utils";
 import { format, parse } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays, Pencil, X } from "lucide-react";
 import { useState } from "react";
 
 type LeadCrmQuickAppointmentPickerProps = {
@@ -38,12 +41,8 @@ export function LeadCrmQuickAppointmentPicker({
       : undefined;
 
   const hasDate = selected && !Number.isNaN(selected.getTime());
-  const previewLine = hasDate
-    ? formatLeadScheduleDisplayLine(
-        new Date(`${dayKey}T12:00:00`).toISOString(),
-        motive,
-      )
-    : null;
+  const dateLabel = hasDate ? format(selected, "dd/MM/yy") : null;
+  const motiveTrimmed = motive.trim();
 
   const clearSchedule = () => {
     onDayChange(null);
@@ -53,34 +52,48 @@ export function LeadCrmQuickAppointmentPicker({
   return (
     <fieldset
       disabled={disabled}
-      className={cn(
-        "rounded-lg border border-border/70 bg-muted/25 p-3 space-y-3",
-        disabled && "opacity-60",
-        className,
-      )}
+      className={cn(leadSchedulePanelClass, "space-y-4 p-4", disabled && "opacity-60", className)}
     >
-      <legend className="px-1 text-sm font-medium leading-none">Seguimiento programado</legend>
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.12),transparent_55%)]"
+        aria-hidden
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="relative flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold tracking-tight text-zinc-100">Seguimiento programado</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">Fecha + motivo · sincroniza con Citas</p>
+        </div>
+        <CalendarDays className="h-5 w-5 shrink-0 text-amber-500/90" aria-hidden />
+      </div>
+
+      <div className="relative grid grid-cols-1 gap-4 sm:grid-cols-[11.5rem_minmax(0,1fr)] sm:items-end">
         <div className="grid gap-2">
-          <Label htmlFor={id}>Fecha</Label>
+          <Label htmlFor={id} className="text-xs font-medium text-zinc-400">
+            Fecha
+          </Label>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button
                 id={id}
                 type="button"
-                variant="outline"
                 className={cn(
-                  "h-10 w-full justify-start gap-2 font-normal",
-                  !hasDate && "text-muted-foreground",
+                  "h-10 w-full justify-center gap-2 rounded-xl border-0 font-medium shadow-md transition-all",
+                  hasDate
+                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                    : "border border-zinc-700/80 bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-white",
                 )}
               >
-                <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />
-                {hasDate ? format(selected, "dd/MM/yy") : "Elegir fecha"}
+                <Pencil className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                {dateLabel ?? "Elegir fecha"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
+            <PopoverContent
+              className={leadSchedulePopoverContentClass}
+              align="start"
+              sideOffset={8}
+            >
+              <LeadScheduleCalendar
                 mode="single"
                 locale={es}
                 selected={selected}
@@ -95,32 +108,48 @@ export function LeadCrmQuickAppointmentPicker({
           </Popover>
         </div>
 
-        <div className="grid gap-2 min-w-0">
-          <Label htmlFor={`${id}-motivo`}>Motivo</Label>
+        <div className="grid min-w-0 gap-2">
+          <Label htmlFor={`${id}-motivo`} className="text-xs font-medium text-zinc-400">
+            Motivo
+          </Label>
           <Input
             id={`${id}-motivo`}
             value={motive}
             onChange={(e) => onMotiveChange(e.target.value)}
             disabled={!hasDate}
-            className="h-10"
+            className={cn(
+              "h-10 rounded-xl border-zinc-700/80 bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-600",
+              "focus-visible:ring-emerald-500/40",
+              !hasDate && "cursor-not-allowed opacity-50",
+            )}
             placeholder={
-              hasDate
-                ? "Ej: Cita, volver a llamar, posible compra…"
-                : "Primero elige una fecha"
+              hasDate ? "Ej: Cita, volver a llamar, posible compra…" : "Elige una fecha primero"
             }
             maxLength={200}
           />
         </div>
       </div>
 
-      {previewLine ? (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
-          <p className="text-sm font-medium text-foreground truncate">{previewLine}</p>
+      {hasDate ? (
+        <div className="relative flex items-stretch overflow-hidden rounded-xl border border-zinc-700/70 bg-zinc-900/90 shadow-inner">
+          <span
+            className="w-1 shrink-0 bg-emerald-500"
+            aria-hidden
+          />
+          <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
+            <span className="shrink-0 text-xs font-bold tabular-nums text-zinc-200">
+              {format(selected, "dd/MM/yy")}
+            </span>
+            <span className="h-3 w-px shrink-0 bg-zinc-600" aria-hidden />
+            <span className="truncate text-xs text-zinc-400">
+              {motiveTrimmed || "Sin motivo"}
+            </span>
+          </div>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+            className="h-auto w-9 shrink-0 rounded-none text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
             onClick={clearSchedule}
             aria-label="Quitar fecha y motivo"
             title="Quitar"
@@ -130,8 +159,8 @@ export function LeadCrmQuickAppointmentPicker({
         </div>
       ) : null}
 
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        También aparece en Citas (10:00 por defecto; puedes ajustar la hora en el calendario).
+      <p className="relative text-[11px] leading-snug text-zinc-500">
+        Hora por defecto 10:00 en Citas; puedes cambiarla en el módulo de calendario.
       </p>
     </fieldset>
   );
