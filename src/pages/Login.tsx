@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAal, listFactors } from '@/lib/services/mfa'
+import { isFastAuthDev } from '@/lib/authTimings'
 import { MFA_GATE_ENABLED, roleRequiresMfa } from '@/lib/mfaPolicy'
 import { StaticLoginBackground } from '@/components/StaticLoginBackground'
 import { scheduleWhenIdle } from '@/lib/scheduleIdle'
@@ -123,7 +124,7 @@ export default function Login() {
               ? "/app/consignaciones"
               : "/app"
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
-        if (MFA_GATE_ENABLED) {
+        if (MFA_GATE_ENABLED && !isFastAuthDev()) {
           try {
             const factors = await listFactors()
             const verified = factors.filter((f) => f.status === "verified")

@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { ArrowRight, Gauge } from "lucide-react";
 import type { VehiculosProps } from "@/lib/website/sections";
-import { isLuxuryTheme } from "@/lib/website/theme";
+import { getThemeLayout } from "@/lib/website/theme";
 
 export interface PreviewVehicle {
   id: string;
@@ -147,7 +147,7 @@ export function VehiclesBlock({
   theme,
   anchorId = "stock",
 }: VehiclesBlockProps) {
-  const luxury = isLuxuryTheme(theme);
+  const layout = getThemeLayout(theme);
   const items = vehicles.slice(0, props.limit || 12);
 
   const sectionStyle: CSSProperties = {
@@ -155,7 +155,79 @@ export function VehiclesBlock({
     paddingBottom: "var(--sm-space-section)",
   };
 
-  if (luxury) {
+  if (layout === "classic") {
+    return (
+      <section id={anchorId} className="px-4 md:px-8" style={sectionStyle}>
+        <div className="mx-auto max-w-5xl">
+          <h2
+            className="text-center text-2xl font-semibold md:text-3xl"
+            style={{ color: "var(--sm-fg)", fontFamily: "var(--sm-font-heading)" }}
+          >
+            {props.title || "Nuestro stock"}
+          </h2>
+          <div className="mx-auto my-6 h-px w-16" style={{ backgroundColor: "var(--sm-primary)" }} />
+          {loading ? (
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="animate-pulse border p-4" style={{ borderColor: "var(--sm-border)" }}>
+                  <div className="aspect-[16/10] bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-center text-sm" style={{ color: "var(--sm-muted)" }}>
+              Próximamente publicaremos vehículos.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              {items.map((v) => {
+                const img = firstImage(v);
+                const label = [v.make, v.model].filter(Boolean).join(" ") || "Vehículo";
+                const inner = (
+                  <article
+                    className="overflow-hidden border-2 transition-shadow hover:shadow-md"
+                    style={{ borderColor: "var(--sm-border)", backgroundColor: "var(--sm-bg)" }}
+                  >
+                    <div className="aspect-[16/10]" style={{ backgroundColor: "var(--sm-border)" }}>
+                      {img ? (
+                        <img src={img} alt={label} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm" style={{ color: "var(--sm-muted)" }}>
+                          Sin foto
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t p-5" style={{ borderColor: "var(--sm-border)" }}>
+                      <p className="text-lg font-semibold" style={{ fontFamily: "var(--sm-font-heading)" }}>
+                        {label}
+                      </p>
+                      <p className="mt-1 text-sm" style={{ color: "var(--sm-muted)" }}>
+                        {[v.year, v.mileage ? `${new Intl.NumberFormat("es-CL").format(v.mileage)} km` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <p className="mt-3 text-xl font-bold" style={{ color: "var(--sm-primary)" }}>
+                        {formatClp(v.price)}
+                      </p>
+                    </div>
+                  </article>
+                );
+                return linkBasePath ? (
+                  <a key={v.id} href={`${linkBasePath}/${v.id}`} className="block">
+                    {inner}
+                  </a>
+                ) : (
+                  <div key={v.id}>{inner}</div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (layout === "luxury") {
     return (
       <section id={anchorId} className="px-4 md:px-6" style={sectionStyle}>
         <div className="mx-auto max-w-7xl">

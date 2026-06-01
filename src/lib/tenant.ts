@@ -28,10 +28,21 @@ export function getTenantContext(): TenantContext {
  * Crítico: si no se limpia, en logout queda el tenant_id del usuario anterior
  * y un nuevo login en el mismo tab puede mezclar UI hasta que se rehidrate.
  */
-export function clearTenantContext() {
+/** Solo el puntero de tenant activo (p. ej. antes de un nuevo signIn). */
+export function clearTenantContextStorageOnly() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(TENANT_STORAGE_KEY);
+  } catch {
+    // localStorage no disponible
+  }
+}
+
+/** Logout / cambio de cuenta: tenant + caches de perfil (evita mezcla cross-tenant). */
+export function clearTenantContext() {
+  if (typeof window === "undefined") return;
+  try {
+    clearTenantContextStorageOnly();
     const keysToRemove: string[] = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);

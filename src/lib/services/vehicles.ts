@@ -229,7 +229,10 @@ export const vehicleService = {
       total: data.length,
       available: data.filter(v => v.status === 'disponible').length,
       reserved: data.filter(v => v.status === 'reservado').length,
-      sold: data.filter(v => v.status === 'vendido').length,
+      sold: data.filter(
+        (v) => v.status === 'vendido' || v.status === 'vendido_por_dueno'
+      ).length,
+      withdrawn: data.filter((v) => v.status === 'retirado').length,
       totalValue: data.reduce((sum, v) => sum + Number(v.price || 0), 0),
       byCategory: {
         nuevo: data.filter(v => v.category === 'nuevo').length,

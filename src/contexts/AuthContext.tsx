@@ -1,10 +1,18 @@
 import { passwordRecoveryRedirectUrl } from "@/lib/authAppOrigin";
 import {
+  AUTH_PROFILE_SELECT,
+  clearProfileCacheForUser,
+  isProfileCacheValid,
+  readCachedProfile,
+  writeCachedProfile,
+} from "@/lib/authProfileCache";
+import {
   canRefreshPersistedSession,
   fastLocalSignOut,
   isAccessTokenExpired,
   readPersistedAuthSession,
 } from "@/lib/authSessionCleanup";
+import { getAuthTimings, isFastAuthDev } from "@/lib/authTimings";
 import { supabase, type User } from "@/lib/supabase";
 import { toast } from "sonner";
 import { captureAppError, clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
@@ -60,12 +68,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Última vez que se revalidó el perfil (para throttle en visibilitychange)
   const lastProfileRevalidateRef = useRef<number>(0);
 
-  /** Tiempo máx. esperando getSession (red lenta); no cerrar sesión por esto */
-  const AUTH_LOADING_TIMEOUT_MS = 45 * 1000;
-  /** Bootstrap: margen para refresh de sesión tras días sin abrir la app */
-  const AUTH_BOOTSTRAP_TIMEOUT_MS = 20 * 1000;
-  const PROFILE_CACHE_KEY_PREFIX = "skale.user-profile";
-
   const withTimeout = async <T,>(
     promise: Promise<T>,
     timeoutMs: number,
@@ -86,43 +88,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const PROFILE_FETCH_TIMEOUT_MS = 20 * 1000; // 20 s para redes lentas
-  // Sin timeout, signInWithPassword puede colgarse indefinidamente (red flaky,
-  // proxy, captura). El botón "Iniciando sesión..." queda stuck porque el
-  // finally de Login no corre hasta que el await resuelva. 15s da margen real
-  // sin quedar atorado.
-  const SIGNIN_TIMEOUT_MS = 15 * 1000;
-
-  const getProfileCacheKey = (userId: string) => `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
-  const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
-
-  type ProfileCacheEnvelope = { profile: User; cachedAt: number };
-
-  const readCachedProfile = (userId: string): User | null => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(getProfileCacheKey(userId));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as ProfileCacheEnvelope | User;
-      if (parsed && typeof parsed === "object" && "cachedAt" in parsed && "profile" in parsed) {
-        const env = parsed as ProfileCacheEnvelope;
-        if (Date.now() - env.cachedAt > PROFILE_CACHE_TTL_MS) return null;
-        return env.profile;
-      }
-      return parsed as User;
-    } catch {
-      return null;
-    }
+  const applyAuthenticatedUser = (profile: User) => {
+    setUser(profile);
+    currentUserRef.current = profile;
+    setTenantContext({
+      tenantId: profile.tenant_id,
+      role: profile.role,
+      userId: profile.id,
+      legacyProtected: profile.legacy_protected,
+    });
+    setObservabilityUserContext({
+      id: profile.id,
+      email: profile.email,
+      role: profile.role,
+      tenantId: profile.tenant_id,
+    });
+    writeCachedProfile(profile);
   };
 
-  const writeCachedProfile = (profile: User) => {
-    if (typeof window === "undefined") return;
+  const invalidateSessionAfterProfileFailure = async (userId: string) => {
     try {
-      const envelope: ProfileCacheEnvelope = { profile, cachedAt: Date.now() };
-      window.localStorage.setItem(getProfileCacheKey(profile.id), JSON.stringify(envelope));
+      await supabase.auth.signOut();
     } catch {
-      // ignorar si localStorage no está disponible
+      /* ignore */
     }
+    clearProfileCacheForUser(userId);
+    setUser(null);
+    currentUserRef.current = null;
+    setSession(null);
+    setNeedsOnboarding(false);
+    setLoading(false);
   };
 
   const fetchUserProfile = async (userId: string): Promise<boolean> => {
@@ -143,22 +138,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const doFetchUserProfile = async (userId: string): Promise<ProfileFetchReason> => {
-    // Network retry: si la query throwa por timeout o red caída, reintenta
-    // con backoff exponencial (1s, 2s) hasta 3 intentos. Error de BD (RLS,
-    // constraint, etc.) NO se reintenta — no es transitorio.
-    const NETWORK_RETRIES = 3;
+    const { profileFetchTimeoutMs, profileNetworkRetries, profileRetryBackoffMaxMs } =
+      getAuthTimings();
     let lastNetworkError: unknown = null;
     let data: Awaited<ReturnType<typeof supabase.from<"users">["select"]>>["data"] | null = null;
     let error: Awaited<ReturnType<typeof supabase.from<"users">["select"]>>["error"] | null = null;
-    for (let attempt = 0; attempt < NETWORK_RETRIES; attempt++) {
+    for (let attempt = 0; attempt < profileNetworkRetries; attempt++) {
       try {
         const result = await withTimeout(
           supabase
             .from("users")
-            .select("*")
+            .select(AUTH_PROFILE_SELECT)
             .eq("id", userId)
             .maybeSingle(),
-          PROFILE_FETCH_TIMEOUT_MS,
+          profileFetchTimeoutMs,
         );
         data = result.data;
         error = result.error;
@@ -166,15 +159,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         break;
       } catch (e) {
         lastNetworkError = e;
-        if (attempt < NETWORK_RETRIES - 1) {
-          if (attempt === 1) {
+        if (attempt < profileNetworkRetries - 1) {
+          if (!isFastAuthDev() && attempt === 1) {
             toast.message("La conexión está lenta", {
               description: "Reintentando cargar tu perfil...",
               duration: 4000,
             });
           }
-          const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
-          await new Promise((r) => setTimeout(r, delayMs));
+          const delayMs =
+            profileRetryBackoffMaxMs > 0
+              ? Math.min(1000 * Math.pow(2, attempt), profileRetryBackoffMaxMs)
+              : 0;
+          if (delayMs > 0) {
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
         }
       }
     }
@@ -254,22 +252,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const retryFetchUserProfile = async (userId: string, maxRetries = 3): Promise<ProfileFetchReason> => {
+  const retryFetchUserProfile = async (
+    userId: string,
+    maxRetries = isFastAuthDev() ? 1 : 3,
+  ): Promise<ProfileFetchReason> => {
+    const { profileFetchTimeoutMs, profileRetryBackoffMaxMs } = getAuthTimings();
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const delayMs =
+        profileRetryBackoffMaxMs > 0
+          ? Math.min(1000 * Math.pow(2, attempt), profileRetryBackoffMaxMs)
+          : 0;
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
 
-      // Wrappear con timeout para que un retry no cuelgue indefinidamente la
-      // cascada de auth si la red se cae a la mitad del backoff.
       let data: { id: string; [k: string]: unknown } | null = null;
       try {
         const result = await withTimeout(
           supabase
             .from("users")
-            .select("*")
+            .select(AUTH_PROFILE_SELECT)
             .eq("id", userId)
             .maybeSingle(),
-          PROFILE_FETCH_TIMEOUT_MS,
+          profileFetchTimeoutMs,
         );
         data = result.data as typeof data;
       } catch {
@@ -320,11 +325,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let cancelled = false;
 
     const bootstrap = async () => {
+      const { bootstrapTimeoutMs } = getAuthTimings();
       let session: Session | null = null;
       try {
         const { data } = await withTimeout(
           supabase.auth.getSession(),
-          AUTH_BOOTSTRAP_TIMEOUT_MS,
+          bootstrapTimeoutMs,
           "AUTH_BOOTSTRAP_TIMEOUT",
         );
         session = data.session;
@@ -334,7 +340,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             const { data } = await withTimeout(
               supabase.auth.refreshSession(),
-              AUTH_BOOTSTRAP_TIMEOUT_MS,
+              bootstrapTimeoutMs,
               "AUTH_REFRESH_TIMEOUT",
             );
             session = data.session ?? persisted;
@@ -359,36 +365,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(currentSession);
 
       const cachedProfile = readCachedProfile(currentSession.user.id);
-      // Cache válido = con tenant_id OR legacy_protected (hessen y similares)
-      const hasValidCache = !!(cachedProfile?.tenant_id || cachedProfile?.legacy_protected);
+      const hasValidCache = isProfileCacheValid(cachedProfile);
       if (hasValidCache && cachedProfile) {
-        // Cache válido: renderizar inmediatamente, luego verificar en background
-        setUser(cachedProfile);
-        currentUserRef.current = cachedProfile;
-        setTenantContext({
-          tenantId: cachedProfile.tenant_id,
-          role: cachedProfile.role,
-          userId: cachedProfile.id,
-          legacyProtected: cachedProfile.legacy_protected,
-        });
-        setObservabilityUserContext({
-          id: cachedProfile.id,
-          email: cachedProfile.email,
-          role: cachedProfile.role,
-          tenantId: cachedProfile.tenant_id,
-        });
+        applyAuthenticatedUser(cachedProfile);
+        setNeedsOnboarding(!cachedProfile.onboarding_completed);
         setLoading(false);
-        // NO llamar refreshSession() aquí: compite con autoRefreshToken y puede provocar
-        // "Invalid Refresh Token: Already Used" → cierre de sesión al recargar (ver gotrue#1290).
-        const reason = await fetchUserProfileWithReason(currentSession.user.id);
-        if (reason === "disabled" || reason === "no-profile") {
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
-          try { window.localStorage.removeItem(getProfileCacheKey(currentSession.user.id)); } catch { /* ignore */ }
-          setUser(null);
-          currentUserRef.current = null;
-          setSession(null);
-        }
-        // "error" de red: conservar sesión + cache (no forzar login diario por Wi‑Fi lenta)
+        void fetchUserProfileWithReason(currentSession.user.id).then((reason) => {
+          if (reason === "disabled" || reason === "no-profile") {
+            void invalidateSessionAfterProfileFailure(currentSession.user.id);
+          }
+        });
       } else {
         // Sin cache válido: verificar DB antes de dar acceso (no mostrar app con fallback)
         // pendingSessionRef ya está seteado; el timeout guard lleva la carga si la red falla
@@ -614,7 +600,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSession(null);
       }
       setLoading(false);
-    }, AUTH_LOADING_TIMEOUT_MS);
+    }, getAuthTimings().authLoadingTimeoutMs);
 
     return () => {
       if (loadingTimeoutRef.current) {
@@ -630,32 +616,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { error: new Error("SIGNIN_IN_PROGRESS") };
     }
     signingInRef.current = true;
+    const signInStartedAt = isFastAuthDev() ? performance.now() : 0;
     const log = (step: string, extra?: unknown) => {
-      if (import.meta.env.DEV) console.info(`[signIn] ${step}`, extra ?? "");
+      if (!isFastAuthDev()) return;
+      const ms = signInStartedAt ? Math.round(performance.now() - signInStartedAt) : 0;
+      console.info(`[signIn +${ms}ms] ${step}`, extra ?? "");
     };
     try {
       log("start");
-      // Limpieza local rápida (sin revocar refresh en servidor): evita que un token
-      // viejo dispare refresh en red y retrase signInWithPassword.
-      await fastLocalSignOut(supabase);
-      log("pre-local-signOut done");
-      // Si había un usuario cargado (cambio de cuenta en mismo tab), purgar cache
-      // de TanStack para que datos del user previo no aparezcan al loguearse
-      // el nuevo. Las query keys que no incluyen tenant_id (sales, appointments,
-      // expense-types, etc.) podrían mezclarse sin esto.
+      await fastLocalSignOut(supabase, { preserveProfileCaches: true });
+      log("pre-local-signOut done (profile cache kept)");
       try { queryClient.clear(); } catch { /* ignore */ }
-      clearTenantContext();
       setUser(null);
       currentUserRef.current = null;
       setSession(null);
-      setLoading(true);
 
+      const { signInTimeoutMs } = getAuthTimings();
       let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"];
       let error: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["error"];
       try {
         const result = await withTimeout(
           supabase.auth.signInWithPassword({ email, password }),
-          SIGNIN_TIMEOUT_MS,
+          signInTimeoutMs,
           "SIGNIN_TIMEOUT",
         );
         data = result.data;
@@ -682,38 +664,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (data.session?.user) {
         setSession(data.session);
+        pendingSessionRef.current = data.session;
         const uid = data.session.user.id;
         const cachedProfile = readCachedProfile(uid);
-        const hasValidCache = !!(cachedProfile?.tenant_id || cachedProfile?.legacy_protected);
+        const hasValidCache = isProfileCacheValid(cachedProfile);
+
         if (hasValidCache && cachedProfile) {
-          setUser(cachedProfile);
-          currentUserRef.current = cachedProfile;
-          setTenantContext({
-            tenantId: cachedProfile.tenant_id,
-            role: cachedProfile.role,
-            userId: cachedProfile.id,
-            legacyProtected: cachedProfile.legacy_protected,
-          });
-          setObservabilityUserContext({
-            id: cachedProfile.id,
-            email: cachedProfile.email,
-            role: cachedProfile.role,
-            tenantId: cachedProfile.tenant_id,
-          });
+          applyAuthenticatedUser(cachedProfile);
+          setNeedsOnboarding(!cachedProfile.onboarding_completed);
           setLoading(false);
+          log("cache hit — navigate now, revalidate in background", { uid });
+          void fetchUserProfileWithReason(uid).then((reason) => {
+            log("background profile", { reason });
+            if (reason === "disabled" || reason === "no-profile") {
+              void invalidateSessionAfterProfileFailure(uid);
+            }
+          });
+          return { error: null, role: cachedProfile.role };
         }
-        log("fetching profile", { uid });
+
+        log("fetching profile (no cache)", { uid });
         const reason = await fetchUserProfileWithReason(uid);
         log("fetchUserProfile done", { reason });
         if (reason !== "ok") {
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
-          setUser(null);
-          currentUserRef.current = null;
-          setSession(null);
-          setLoading(false);
+          await invalidateSessionAfterProfileFailure(uid);
           return { error: new Error(reason === "disabled" ? "ACCOUNT_DISABLED" : "NO_PROFILE") };
         }
-        log("success, role=", currentUserRef.current?.role);
+        log("success", { role: currentUserRef.current?.role });
       } else {
         setUser(null);
         currentUserRef.current = null;

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { tenantSiteService, type TenantSite } from '@/lib/services/tenantSite'
+import { vitrinaDomainApi } from '@/lib/services/vitrinaDomainApi'
 
 const SITE_KEY = ['tenant_site']
 const DOMAINS_KEY = ['tenant_domains']
@@ -25,9 +26,15 @@ export function useCreateTenantSite() {
   const { user } = useAuth()
   return useMutation({
     mutationFn: () => tenantSiteService.createMySite(user?.tenant_id),
-    onSuccess: (site) => {
+    onSuccess: async (site) => {
       queryClient.setQueryData(SITE_KEY, site)
       queryClient.invalidateQueries({ queryKey: SITE_KEY })
+      try {
+        await vitrinaDomainApi.provisionSubdomain()
+        queryClient.invalidateQueries({ queryKey: DOMAINS_KEY })
+      } catch {
+        /* El gerente puede activar el subdominio manualmente en Dominios */
+      }
     },
   })
 }

@@ -143,16 +143,55 @@ export const THEME_PRESETS: Record<ThemeId, DesignTokens> = {
   },
 };
 
-export const THEME_OPTIONS: { id: ThemeId; label: string; description: string }[] = [
-  { id: "miami", label: "Miami", description: "Oscura, rosado y blanco — estilo vitrina premium" },
-  { id: "moderna", label: "Moderna", description: "Limpia, clara, bordes redondeados" },
-  { id: "tradicional", label: "Tradicional", description: "Serif editorial, sobria" },
-  { id: "premium", label: "Premium", description: "Oscura, dorada, espaciosa" },
+/** Perfil de layout de la vitrina (estructura de página, no solo colores). */
+export type ThemeLayout = "modern" | "classic" | "luxury";
+
+const THEME_LAYOUT: Record<ThemeId, ThemeLayout> = {
+  moderna: "modern",
+  tradicional: "classic",
+  premium: "luxury",
+  miami: "luxury",
+};
+
+export const THEME_OPTIONS: {
+  id: ThemeId;
+  label: string;
+  description: string;
+  layout: ThemeLayout;
+}[] = [
+  {
+    id: "miami",
+    label: "Miami",
+    layout: "luxury",
+    description: "Vitrina oscura cinematográfica, barra de beneficios y cards premium",
+  },
+  {
+    id: "moderna",
+    label: "Moderna",
+    layout: "modern",
+    description: "Sitio claro tipo startup: hero en dos columnas y grilla de 3 autos",
+  },
+  {
+    id: "tradicional",
+    label: "Tradicional",
+    layout: "classic",
+    description: "Estilo editorial con serif: encabezado clásico y fichas grandes en 2 columnas",
+  },
+  {
+    id: "premium",
+    label: "Premium",
+    layout: "luxury",
+    description: "Lujo oscuro con dorado: mismo layout Miami con paleta elegante",
+  },
 ];
 
-/** Temas con layout tipo Roadify (header sticky, hero cinematográfico, cards oscuras). */
+export function getThemeLayout(theme: string | null | undefined): ThemeLayout {
+  return isThemeId(theme) ? THEME_LAYOUT[theme] : "modern";
+}
+
+/** Temas con layout tipo Roadify (header sticky oscuro, hero full, cards premium). */
 export function isLuxuryTheme(theme: string | null | undefined): boolean {
-  return theme === "miami" || theme === "premium";
+  return getThemeLayout(theme) === "luxury";
 }
 
 export function isThemeId(value: unknown): value is ThemeId {

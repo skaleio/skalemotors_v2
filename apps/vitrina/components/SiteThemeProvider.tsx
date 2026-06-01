@@ -4,6 +4,7 @@ import { useEffect, type CSSProperties, type ReactNode } from "react";
 
 import {
   buildTokens,
+  getThemeLayout,
   googleFontsHref,
   tokensToCssVars,
   type ThemeableSite,
@@ -21,6 +22,7 @@ export function SiteThemeProvider({ site, children, className }: SiteThemeProvid
   const tokens = buildTokens(site);
   const cssVars = tokensToCssVars(tokens) as CSSProperties;
   const href = googleFontsHref(site);
+  const layout = getThemeLayout(site?.theme);
 
   useEffect(() => {
     const id = `sm-fonts-${btoa(href).replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
@@ -35,6 +37,7 @@ export function SiteThemeProvider({ site, children, className }: SiteThemeProvid
   return (
     <div
       className={className}
+      data-sm-layout={layout}
       style={{
         ...cssVars,
         background: "var(--sm-bg)",

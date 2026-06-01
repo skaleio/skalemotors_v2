@@ -549,7 +549,14 @@ export interface Database {
           price: number
           cost: number | null
           margin: number | null
-          status: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
+          status:
+            | 'disponible'
+            | 'reservado'
+            | 'vendido'
+            | 'vendido_por_dueno'
+            | 'retirado'
+            | 'en_reparacion'
+            | 'fuera_de_servicio'
           branch_id: string | null
           tenant_id: string | null
           location: string | null
@@ -590,7 +597,14 @@ export interface Database {
           price: number
           cost?: number | null
           margin?: number | null
-          status?: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
+          status?:
+            | 'disponible'
+            | 'reservado'
+            | 'vendido'
+            | 'vendido_por_dueno'
+            | 'retirado'
+            | 'en_reparacion'
+            | 'fuera_de_servicio'
           branch_id?: string | null
           tenant_id?: string | null
           location?: string | null
@@ -630,7 +644,14 @@ export interface Database {
           price?: number
           cost?: number | null
           margin?: number | null
-          status?: 'disponible' | 'reservado' | 'vendido' | 'en_reparacion' | 'fuera_de_servicio'
+          status?:
+            | 'disponible'
+            | 'reservado'
+            | 'vendido'
+            | 'vendido_por_dueno'
+            | 'retirado'
+            | 'en_reparacion'
+            | 'fuera_de_servicio'
           branch_id?: string | null
           tenant_id?: string | null
           location?: string | null

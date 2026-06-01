@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -9,6 +9,7 @@ import {
   Plus,
   Save,
   Trash2,
+  Undo2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +29,8 @@ import {
 import { useUpdateTenantSite } from "@/hooks/useTenantSite";
 import { useSiteVehicles } from "@/hooks/useSiteVehicles";
 import { useUploadSiteImage } from "@/hooks/useUploadSiteImage";
+import { useFieldUndoBaseline } from "@/hooks/useFieldUndoBaseline";
+import { useUndoStack } from "@/hooks/useUndoStack";
 import type { TenantSite } from "@/lib/services/tenantSite";
 import {
   SECTION_LABELS,
@@ -66,6 +69,24 @@ interface VisualEditorProps {
   className?: string;
 }
 
+type EditorSnapshot = {
+  sections: SectionBlock[];
+  siteName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  theme: ThemeId;
+  font: FontId | "";
+  logoUrl: string;
+  faviconUrl: string;
+};
+
+function cloneSnapshot(s: EditorSnapshot): EditorSnapshot {
+  return {
+    ...s,
+    sections: JSON.parse(JSON.stringify(s.sections)) as SectionBlock[],
+  };
+}
+
 export function VisualEditor({ site, className }: VisualEditorProps) {
   const updateSite = useUpdateTenantSite();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useSiteVehicles();
@@ -84,6 +105,49 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   const [faviconUrl, setFaviconUrl] = useState(site.favicon_url ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const { push: pushUndo, pop: popUndo, clear: clearUndo, canUndo } = useUndoStack<EditorSnapshot>();
+
+  const getSnapshot = useCallback(
+    (): EditorSnapshot => ({
+      sections,
+      siteName,
+      primaryColor,
+      secondaryColor,
+      theme,
+      font,
+      logoUrl,
+      faviconUrl,
+    }),
+    [sections, siteName, primaryColor, secondaryColor, theme, font, logoUrl, faviconUrl],
+  );
+
+  const applySnapshot = useCallback((snap: EditorSnapshot) => {
+    setSections(cloneSnapshot(snap).sections);
+    setSiteName(snap.siteName);
+    setPrimaryColor(snap.primaryColor);
+    setSecondaryColor(snap.secondaryColor);
+    setTheme(snap.theme);
+    setFont(snap.font);
+    setLogoUrl(snap.logoUrl);
+    setFaviconUrl(snap.faviconUrl);
+    setDirty(true);
+  }, []);
+
+  const withHistory = useCallback(
+    (apply: () => void) => {
+      pushUndo(cloneSnapshot(getSnapshot()));
+      apply();
+      setDirty(true);
+    },
+    [getSnapshot, pushUndo],
+  );
+
+  const handleUndo = useCallback(() => {
+    const prev = popUndo();
+    if (prev) applySnapshot(prev);
+  }, [popUndo, applySnapshot]);
+
+  const fieldUndo = useFieldUndoBaseline(getSnapshot, pushUndo);
 
   useEffect(() => {
     setSections(coerceSections(site.sections));
@@ -95,7 +159,21 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
     setLogoUrl(site.logo_url ?? "");
     setFaviconUrl(site.favicon_url ?? "");
     setDirty(false);
-  }, [site]);
+    clearUndo();
+  }, [site, clearUndo]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleUndo]);
 
   const themeSite: ThemeableSite = {
     theme,
@@ -112,8 +190,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   const markDirty = () => setDirty(true);
 
   const mutateSections = (updater: (prev: SectionBlock[]) => SectionBlock[]) => {
-    setSections((prev) => updater(prev));
-    markDirty();
+    withHistory(() => setSections((prev) => updater(prev)));
   };
 
   const addSection = (type: SectionType) => {
@@ -127,6 +204,16 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   };
 
   const updateSectionMeta = (
+    id: string,
+    patch: Partial<Pick<SectionBlock, "showInNav" | "navLabel">>,
+  ) => {
+    setSections((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    );
+    markDirty();
+  };
+
+  const updateSectionMetaWithHistory = (
     id: string,
     patch: Partial<Pick<SectionBlock, "showInNav" | "navLabel">>,
   ) => {
@@ -158,11 +245,33 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   };
 
   const updateProps = (id: string, patch: Partial<SectionProps>) => {
-    mutateSections((prev) =>
+    setSections((prev) =>
       prev.map((s) =>
         s.id === id ? { ...s, props: { ...s.props, ...patch } } : s,
       ),
     );
+    markDirty();
+  };
+
+  const sectionEditBaseline = useRef<EditorSnapshot | null>(null);
+  const sectionEditPanelRef = useRef<HTMLDivElement>(null);
+
+  const onSectionPanelFocusCapture = () => {
+    if (!sectionEditBaseline.current) {
+      sectionEditBaseline.current = cloneSnapshot(getSnapshot());
+    }
+  };
+
+  const onSectionPanelBlurCapture = (e: FocusEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (sectionEditPanelRef.current?.contains(next)) return;
+    const baseline = sectionEditBaseline.current;
+    sectionEditBaseline.current = null;
+    if (!baseline) return;
+    const current = getSnapshot();
+    if (JSON.stringify(baseline) !== JSON.stringify(current)) {
+      pushUndo(baseline);
+    }
   };
 
   const handleSave = () => {
@@ -181,6 +290,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
         onSuccess: () => {
           toast.success("Cambios guardados");
           setDirty(false);
+          clearUndo();
         },
         onError: (e) =>
           toast.error("No se pudo guardar", {
@@ -224,14 +334,26 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
             />
           </div>
         </div>
-        <Button onClick={handleSave} disabled={updateSite.isPending || !dirty}>
-          {updateSite.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          {dirty ? "Guardar cambios" : "Guardado"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleUndo}
+            disabled={!canUndo}
+            title="Deshacer (Ctrl+Z)"
+          >
+            <Undo2 className="mr-2 h-4 w-4" />
+            Deshacer
+          </Button>
+          <Button onClick={handleSave} disabled={updateSite.isPending || !dirty}>
+            {updateSite.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            {dirty ? "Guardar cambios" : "Guardado"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[340px_1fr] lg:items-stretch lg:overflow-hidden">
@@ -242,8 +364,12 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
             <p className="text-sm font-semibold">Diseño</p>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Tema</Label>
-              <div className="grid grid-cols-3 gap-2">
+              <Label className="text-xs">Plantilla</Label>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Cada plantilla cambia la estructura de la página (encabezado, portada y listado de
+                autos), no solo los colores.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
                 {THEME_OPTIONS.map((t) => {
                   const preset = THEME_PRESETS[t.id];
                   const active = theme === t.id;
@@ -252,28 +378,47 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
                       key={t.id}
                       type="button"
                       onClick={() => {
-                        setTheme(t.id);
-                        markDirty();
+                        withHistory(() => {
+                          setTheme(t.id);
+                          setFont("");
+                        });
                       }}
                       title={t.description}
-                      className={`rounded-md border p-2 text-left transition-all ${
+                      className={`rounded-lg border p-2.5 text-left transition-all ${
                         active
                           ? "border-violet-500 ring-1 ring-violet-500"
                           : "hover:border-muted-foreground/40"
                       }`}
                     >
-                      <span className="mb-1.5 flex gap-1">
-                        <span
-                          className="h-4 w-4 rounded-full border"
-                          style={{ backgroundColor: preset.colorBg }}
+                      <div
+                        className="mb-2 h-10 overflow-hidden rounded border"
+                        style={{
+                          borderColor: preset.colorBorder,
+                          background: preset.colorBg,
+                        }}
+                      >
+                        <div
+                          className="h-2.5 w-full"
+                          style={{ backgroundColor: preset.colorSurface }}
                         />
-                        <span
-                          className="h-4 w-4 rounded-full"
-                          style={{ backgroundColor: preset.colorPrimary }}
-                        />
-                      </span>
-                      <span className="block text-[11px] font-medium leading-tight">
-                        {t.label}
+                        <div className="flex gap-0.5 p-1">
+                          <div
+                            className="h-4 flex-1 rounded-sm"
+                            style={{ backgroundColor: preset.colorPrimary, opacity: 0.9 }}
+                          />
+                          <div
+                            className="h-4 w-3 rounded-sm"
+                            style={{ backgroundColor: preset.colorMuted, opacity: 0.35 }}
+                          />
+                        </div>
+                      </div>
+                      <span className="block text-xs font-semibold leading-tight">{t.label}</span>
+                      <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
+                        {t.layout === "luxury"
+                          ? "Oscura · full"
+                          : t.layout === "classic"
+                            ? "Editorial · 2 cols"
+                            : "Clara · 2 cols"}
                       </span>
                     </button>
                   );
@@ -286,8 +431,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
               <Select
                 value={font || `__default__${theme}`}
                 onValueChange={(v) => {
-                  setFont(v.startsWith("__default__") ? "" : (v as FontId));
-                  markDirty();
+                  withHistory(() => setFont(v.startsWith("__default__") ? "" : (v as FontId)));
                 }}
               >
                 <SelectTrigger>
@@ -314,13 +458,14 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
                     type="color"
                     value={primaryColor}
                     onChange={(e) => {
-                      setPrimaryColor(e.target.value);
-                      markDirty();
+                      withHistory(() => setPrimaryColor(e.target.value));
                     }}
                     className="h-9 w-12 p-1"
                   />
                   <Input
                     value={primaryColor}
+                    onFocus={fieldUndo.onFocus}
+                    onBlur={fieldUndo.onBlur}
                     onChange={(e) => {
                       setPrimaryColor(e.target.value);
                       markDirty();
@@ -336,13 +481,14 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
                     type="color"
                     value={secondaryColor || THEME_PRESETS[theme].colorSecondary}
                     onChange={(e) => {
-                      setSecondaryColor(e.target.value);
-                      markDirty();
+                      withHistory(() => setSecondaryColor(e.target.value));
                     }}
                     className="h-9 w-12 p-1"
                   />
                   <Input
                     value={secondaryColor}
+                    onFocus={fieldUndo.onFocus}
+                    onBlur={fieldUndo.onBlur}
                     onChange={(e) => {
                       setSecondaryColor(e.target.value);
                       markDirty();
@@ -357,11 +503,19 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Logo</Label>
-                <ImageField value={logoUrl} onChange={(url) => { setLogoUrl(url); markDirty(); }} compact />
+                <ImageField
+                  value={logoUrl}
+                  onChange={(url) => withHistory(() => setLogoUrl(url))}
+                  compact
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Favicon</Label>
-                <ImageField value={faviconUrl} onChange={(url) => { setFaviconUrl(url); markDirty(); }} compact />
+                <ImageField
+                  value={faviconUrl}
+                  onChange={(url) => withHistory(() => setFaviconUrl(url))}
+                  compact
+                />
               </div>
             </div>
           </div>
@@ -376,6 +530,8 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
               <Input
                 id="site_name"
                 value={siteName}
+                onFocus={fieldUndo.onFocus}
+                onBlur={fieldUndo.onBlur}
                 onChange={(e) => {
                   setSiteName(e.target.value);
                   markDirty();
@@ -527,13 +683,19 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
 
           {/* Ajustes de la sección seleccionada */}
           {selected ? (
-            <div className="space-y-3 rounded-lg border bg-card p-4">
+            <div
+              ref={sectionEditPanelRef}
+              className="space-y-3 rounded-lg border bg-card p-4"
+              onFocusCapture={onSectionPanelFocusCapture}
+              onBlurCapture={onSectionPanelBlurCapture}
+            >
               <p className="text-sm font-semibold">
                 Editar: {SECTION_LABELS[selected.type]}
               </p>
               <SectionNavSettings
                 section={selected}
                 onChange={(patch) => updateSectionMeta(selected.id, patch)}
+                onToggleNav={(v) => updateSectionMetaWithHistory(selected.id, { showInNav: v })}
               />
               {selected.type === "hero" ? (
                 <HeroSettings
@@ -737,9 +899,11 @@ function ImageField({
 function SectionNavSettings({
   section,
   onChange,
+  onToggleNav,
 }: {
   section: SectionBlock;
   onChange: (patch: Partial<Pick<SectionBlock, "showInNav" | "navLabel">>) => void;
+  onToggleNav: (visible: boolean) => void;
 }) {
   return (
     <div className="space-y-3 rounded-md border border-dashed p-3">
@@ -751,7 +915,7 @@ function SectionNavSettings({
         <Switch
           id={`nav-visible-${section.id}`}
           checked={section.showInNav !== false}
-          onCheckedChange={(v) => onChange({ showInNav: v })}
+          onCheckedChange={onToggleNav}
         />
       </div>
       <div className="space-y-1.5">

@@ -11,7 +11,7 @@ import {
   type VehiculosProps,
   type VendeTuAutoProps,
 } from "@/lib/website/sections";
-import { isLuxuryTheme } from "@/lib/website/theme";
+import { getThemeLayout } from "@/lib/website/theme";
 import { HeroBlock } from "./blocks/HeroBlock";
 import { VehiclesBlock, type PreviewVehicle } from "./blocks/VehiclesBlock";
 import { ContactBlock, type SiteContactInfo } from "./blocks/ContactBlock";
@@ -42,7 +42,8 @@ export function renderSectionNodes(
   ctx: SectionRenderContext,
   opts?: { insertFeaturesAfterHero?: boolean; featuresInsertedRef?: { current: boolean } },
 ): ReactNode[] {
-  const luxury = isLuxuryTheme(ctx.theme);
+  const layout = getThemeLayout(ctx.theme);
+  const luxury = layout === "luxury";
   const anchor = getSectionAnchor(section);
   const nodes: ReactNode[] = [];
 

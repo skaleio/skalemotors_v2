@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantSite, useCreateTenantSite } from "@/hooks/useTenantSite";
 import { isPhotographerRole } from "@/lib/appRoles";
+import { DomainsManager } from "@/components/website/DomainsManager";
 import { VisualEditor } from "@/components/website/VisualEditor";
 import { WebsiteVehiclePrices } from "@/components/website/WebsiteVehiclePrices";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function WebsiteBuilder() {
   const { user } = useAuth();
@@ -88,7 +90,18 @@ export default function WebsiteBuilder() {
           </CardContent>
         </Card>
       ) : (
-        <VisualEditor site={site} className="min-h-0 flex-1" />
+        <Tabs defaultValue="editor" className="flex min-h-0 flex-1 flex-col gap-3">
+          <TabsList className="w-full shrink-0 sm:w-auto">
+            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="domains">Dominios</TabsTrigger>
+          </TabsList>
+          <TabsContent value="editor" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+            <VisualEditor site={site} className="min-h-0 flex-1" />
+          </TabsContent>
+          <TabsContent value="domains" className="mt-0 data-[state=inactive]:hidden">
+            <DomainsManager />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

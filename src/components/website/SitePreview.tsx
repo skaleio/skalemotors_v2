@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { SectionBlock } from "@/lib/website/sections";
 import { buildNavItems } from "@/lib/website/nav";
-import { isLuxuryTheme, type ThemeableSite } from "@/lib/website/theme";
+import { getThemeLayout, type ThemeableSite } from "@/lib/website/theme";
 import { renderSectionNodes } from "./SectionContent";
 import type { PreviewVehicle } from "./blocks/VehiclesBlock";
 import { SiteChrome } from "./SiteChrome";
@@ -39,7 +39,7 @@ export function SitePreview({
   preview = false,
 }: SitePreviewProps) {
   const visible = sections.filter((s) => s.visible);
-  const luxury = isLuxuryTheme(themeSite.theme);
+  const luxury = getThemeLayout(themeSite.theme) === "luxury";
   const navItems = buildNavItems(sections);
 
   const wrapSection = (id: string, node: ReactNode) => (

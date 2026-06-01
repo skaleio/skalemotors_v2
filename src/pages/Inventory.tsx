@@ -57,6 +57,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
 import { VehicleImage } from "@/components/VehicleImage";
 import { VehicleConsignacionPanel } from "@/components/inventory/VehicleConsignacionPanel";
+import {
+  VehicleStatusPicker,
+  type VehicleStatus,
+  VEHICLE_STATUS_LABELS as statusLabels,
+} from "@/components/inventory/VehicleStatusPicker";
 import { useQuery } from "@tanstack/react-query";
 import {
   canViewInventoryPrice,
@@ -105,22 +110,6 @@ function truncateSnippet(text: string | null | undefined, max: number) {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
-const statusColors = {
-  disponible: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
-  reservado: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-  vendido: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
-  en_reparacion: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
-  fuera_de_servicio: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
-};
-
-const statusLabels = {
-  disponible: "Disponible",
-  reservado: "Reservado",
-  vendido: "Vendido",
-  en_reparacion: "En reparación",
-  fuera_de_servicio: "Fuera de servicio",
-};
-
 type ConsignmentType = "fisica" | "digital";
 
 const consignmentTypeLabels: Record<ConsignmentType, string> = {
@@ -142,8 +131,6 @@ const STOCK_ONLINE_COLUMN_LABELS = {
   consignatario: "CONSIGNATARIO",
   publicado: "PUBLICADO",
 } as const;
-
-type VehicleStatus = "disponible" | "reservado" | "vendido" | "en_reparacion" | "fuera_de_servicio";
 
 function normalizeForMatch(s: string) {
   return s.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -594,7 +581,7 @@ export default function Inventory() {
     mode: "list",
   });
 
-  const [quickStatusKey, setQuickStatusKey] = useState<string | null>(null);
+  const [statusUpdatingVehicleId, setStatusUpdatingVehicleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -882,25 +869,24 @@ export default function Inventory() {
     totalItems: vehiclesTotalItems,
   } = usePagination(filteredVehicles, 25);
 
-  const vehicleStatusOrder = useMemo(
-    () =>
-      ["disponible", "reservado", "en_reparacion", "fuera_de_servicio", "vendido"] as const,
-    []
-  );
+  const handleVehicleStatusChange = async (vehicle: Vehicle, next: VehicleStatus) => {
+    const current = (vehicle.status || "disponible") as VehicleStatus;
+    if (current === next) return;
 
-  const handleQuickCycleVehicleStatus = async (vehicle: Vehicle) => {
-    const current = (vehicle.status || "disponible") as (typeof vehicleStatusOrder)[number];
-    const idx = vehicleStatusOrder.indexOf(current);
-    const next = vehicleStatusOrder[(idx + 1) % vehicleStatusOrder.length];
-    const key = `${vehicle.id}:${next}`;
-    setQuickStatusKey(key);
+    setStatusUpdatingVehicleId(vehicle.id);
     try {
       await vehicleService.update(vehicle.id, { status: next });
       toast({
         title: "Estado actualizado",
-        description: `${vehicle.make} ${vehicle.model}: ${statusLabels[next] || next}`,
+        description: `${vehicle.make} ${vehicle.model}: ${statusLabels[next]}`,
       });
       refetch();
+      if (selectedVehicle?.id === vehicle.id) {
+        setSelectedVehicle({ ...selectedVehicle, status: next });
+      }
+      if (selectedVehicleFull?.id === vehicle.id) {
+        setSelectedVehicleFull({ ...selectedVehicleFull, status: next });
+      }
     } catch (e) {
       toast({
         title: "No se pudo cambiar el estado",
@@ -908,7 +894,7 @@ export default function Inventory() {
         variant: "destructive",
       });
     } finally {
-      setQuickStatusKey(null);
+      setStatusUpdatingVehicleId(null);
     }
   };
 
@@ -1863,40 +1849,13 @@ export default function Inventory() {
                       </div>
                     </TableCell>
                   )}
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={statusColors[vehicle.status]}
-                      role={isPhotographer ? undefined : "button"}
-                      tabIndex={isPhotographer ? undefined : 0}
-                      title={isPhotographer ? undefined : "Click para cambiar estado"}
-                      onClick={
-                        isPhotographer
-                          ? undefined
-                          : (e) => {
-                              e.stopPropagation();
-                              handleQuickCycleVehicleStatus(vehicle);
-                            }
-                      }
-                      onKeyDown={
-                        isPhotographer
-                          ? undefined
-                          : (e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleQuickCycleVehicleStatus(vehicle);
-                              }
-                            }
-                      }
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        {statusLabels[vehicle.status]}
-                        {quickStatusKey?.startsWith(`${vehicle.id}:`) ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : null}
-                      </span>
-                    </Badge>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <VehicleStatusPicker
+                      status={vehicle.status}
+                      disabled={isPhotographer}
+                      isUpdating={statusUpdatingVehicleId === vehicle.id}
+                      onStatusChange={(next) => handleVehicleStatusChange(vehicle, next)}
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
@@ -2303,6 +2262,19 @@ export default function Inventory() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl border p-3">
+                    <div className="text-xs text-muted-foreground mb-1.5">Estado</div>
+                    <VehicleStatusPicker
+                      status={(selectedVehicleFull || selectedVehicle).status}
+                      disabled={isPhotographer}
+                      isUpdating={
+                        statusUpdatingVehicleId === (selectedVehicleFull || selectedVehicle).id
+                      }
+                      onStatusChange={(next) =>
+                        handleVehicleStatusChange(selectedVehicleFull || selectedVehicle, next)
+                      }
+                    />
+                  </div>
                   <div className="rounded-xl border p-3">
                     <div className="text-xs text-muted-foreground">Consignación</div>
                     <div className="font-semibold">{selectedVehicleComputed.consignmentLabel}</div>

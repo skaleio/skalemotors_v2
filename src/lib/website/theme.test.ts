@@ -4,6 +4,7 @@ import {
   FONT_PAIRS,
   THEME_PRESETS,
   buildTokens,
+  getThemeLayout,
   googleFontsHref,
   isLuxuryTheme,
   readableFg,
@@ -86,11 +87,22 @@ describe("tokensToCssVars", () => {
   });
 });
 
+describe("getThemeLayout", () => {
+  it("asigna un perfil de página distinto por plantilla", () => {
+    expect(getThemeLayout("moderna")).toBe("modern");
+    expect(getThemeLayout("tradicional")).toBe("classic");
+    expect(getThemeLayout("premium")).toBe("luxury");
+    expect(getThemeLayout("miami")).toBe("luxury");
+    expect(getThemeLayout(null)).toBe("modern");
+  });
+});
+
 describe("isLuxuryTheme", () => {
   it("miami y premium activan layout luxury", () => {
     expect(isLuxuryTheme("miami")).toBe(true);
     expect(isLuxuryTheme("premium")).toBe(true);
     expect(isLuxuryTheme("moderna")).toBe(false);
+    expect(isLuxuryTheme("tradicional")).toBe(false);
   });
 });
 

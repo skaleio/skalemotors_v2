@@ -1,5 +1,5 @@
 import { createBrowserAuthStorage } from "@/lib/safeStorage";
-import { clearTenantContext } from "@/lib/tenant";
+import { clearTenantContext, clearTenantContextStorageOnly } from "@/lib/tenant";
 import { supabaseUrl } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -76,12 +76,24 @@ export async function purgeExpiredPersistedSession(
   return purgeUnrecoverablePersistedSession(client);
 }
 
+export type FastLocalSignOutOptions = {
+  /** Conserva skale.user-profile.* (re-login rápido del mismo usuario en dev). */
+  preserveProfileCaches?: boolean;
+};
+
 /** Cierra sesión solo en este navegador (sin round-trip de revocación). */
-export async function fastLocalSignOut(client: Pick<SupabaseClient, "auth">): Promise<void> {
+export async function fastLocalSignOut(
+  client: Pick<SupabaseClient, "auth">,
+  options?: FastLocalSignOutOptions,
+): Promise<void> {
   try {
     await client.auth.signOut({ scope: "local" });
   } catch {
     // storage no disponible o ya limpio
   }
-  clearTenantContext();
+  if (options?.preserveProfileCaches) {
+    clearTenantContextStorageOnly();
+  } else {
+    clearTenantContext();
+  }
 }
