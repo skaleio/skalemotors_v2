@@ -1,0 +1,58 @@
+[
+  {
+    "name": "zernio-connect-url",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "442640f5-280c-42fb-99d0-a6d489d7e295",
+    "version": 1
+  },
+  {
+    "name": "zernio-accounts-sync",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "02332f4c-0fac-418b-9c1b-cc6704f085d4",
+    "version": 1
+  },
+  {
+    "name": "zernio-accounts-list",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "1e7ac35d-b8f8-4fd2-876a-0171c6258da9",
+    "version": 1
+  },
+  {
+    "name": "zernio-accounts-disconnect",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "7a06fad2-3296-4c3a-86ac-400a89572368",
+    "version": 1
+  },
+  {
+    "name": "zernio-posts-create",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "4791cedd-405e-483e-b34a-a1a1f6fad014",
+    "version": 1
+  },
+  {
+    "name": "zernio-posts-list",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "c519df37-5932-427b-a9bd-fb80cf76e6f8",
+    "version": 1
+  },
+  {
+    "name": "zernio-media-presign",
+    "ok": true,
+    "status": 201,
+    "functionStatus": "ACTIVE",
+    "id": "e5a12a18-e854-47ca-9e29-e71ae858b818",
+    "version": 1
+  }
+]

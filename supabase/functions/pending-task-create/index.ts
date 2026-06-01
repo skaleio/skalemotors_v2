@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -54,15 +55,6 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
   }
 
-  const expectedKey = Deno.env.get("PENDING_TASK_API_KEY");
-  if (!expectedKey) {
-    return jsonResponse(500, { ok: false, error: "Server misconfiguration: API key not set" });
-  }
-  const provided = getApiKey(req);
-  if (!provided || !provided.includes(expectedKey)) {
-    return jsonResponse(401, { ok: false, error: "Invalid API key" });
-  }
-
   let body: Payload;
   try {
     body = await req.json();
@@ -74,6 +66,23 @@ export default async function handler(req: Request): Promise<Response> {
   const title = body.title?.trim();
   if (!branchId || !title) {
     return jsonResponse(400, { ok: false, error: "branch_id and title are required" });
+  }
+
+  const supabaseUrlEarly = getEnvAny(["SUPABASE_URL", "PROJECT_URL"]);
+  const serviceRoleKeyEarly = getEnvAny(["SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY"]);
+  if (!supabaseUrlEarly || !serviceRoleKeyEarly) {
+    return jsonResponse(500, { ok: false, error: "Missing Supabase env vars" });
+  }
+
+  const keyAuth = await resolveLeadAutomationAuth(
+    req,
+    branchId,
+    supabaseUrlEarly,
+    serviceRoleKeyEarly,
+    ["PENDING_TASK_API_KEY"],
+  );
+  if (!keyAuth.ok) {
+    return jsonResponse(keyAuth.status, { ok: false, error: keyAuth.error });
   }
 
   const priority = body.priority && PRIORITIES.includes(body.priority as typeof PRIORITIES[number])
@@ -121,7 +130,8 @@ export default async function handler(req: Request): Promise<Response> {
     .single();
 
   if (error) {
-    return jsonResponse(400, { ok: false, error: error.message });
+    console.error("[pending-task-create] insert:", error);
+    return jsonResponse(500, { ok: false, error: "Internal error creating task" });
   }
 
   return jsonResponse(200, { ok: true, data });

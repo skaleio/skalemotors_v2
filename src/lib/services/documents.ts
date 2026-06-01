@@ -1,9 +1,27 @@
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/lib/types/database';
 
-export type Document = Database['public']['Tables']['documents']['Row'];
-export type DocumentInsert = Database['public']['Tables']['documents']['Insert'];
-export type DocumentUpdate = Database['public']['Tables']['documents']['Update'];
+export type Document = Database['public']['Tables']['documents']['Row'] & {
+  template_id?: string | null;
+  layout_settings?: Record<string, unknown> | null;
+  min_sale_price?: number | null;
+  vehicle_motor?: string | null;
+  vehicle_chasis?: string | null;
+};
+export type DocumentInsert = Database['public']['Tables']['documents']['Insert'] & {
+  template_id?: string | null;
+  layout_settings?: Record<string, unknown> | null;
+  min_sale_price?: number | null;
+  vehicle_motor?: string | null;
+  vehicle_chasis?: string | null;
+};
+export type DocumentUpdate = Database['public']['Tables']['documents']['Update'] & {
+  template_id?: string | null;
+  layout_settings?: Record<string, unknown> | null;
+  min_sale_price?: number | null;
+  vehicle_motor?: string | null;
+  vehicle_chasis?: string | null;
+};
 export type DocumentType = 'contrato_venta' | 'contrato_consignacion';
 export type DocumentStatus = 'borrador' | 'generado' | 'firmado' | 'anulado';
 
@@ -59,6 +77,24 @@ export const documentService = {
     const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
+  },
+
+  async getByVehicleAndType(
+    vehicleId: string,
+    type: DocumentType
+  ): Promise<Document | null> {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('vehicle_id', vehicleId)
+      .eq('type', type)
+      .neq('status', 'anulado')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
   },
 
   async getById(id: string): Promise<Document | null> {

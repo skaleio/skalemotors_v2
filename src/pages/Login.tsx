@@ -69,6 +69,12 @@ export default function Login() {
     if (err instanceof Error && err.message === 'NO_PROFILE') {
       return 'Tu cuenta no tiene acceso configurado. Contacta al administrador.'
     }
+    if (err instanceof Error && err.message === 'SIGNIN_IN_PROGRESS') {
+      return 'Ya hay un inicio de sesión en curso. Espera un momento.'
+    }
+    if (err instanceof Error && err.message.includes('demorando demasiado')) {
+      return err.message
+    }
     if (attempts >= 5) return 'Demasiados intentos fallidos. Espera antes de intentar nuevamente.'
     return 'Credenciales incorrectas. Verifica tu correo y contraseña.'
   }
@@ -77,7 +83,12 @@ export default function Login() {
   useEffect(() => {
     if (user && !authLoading && !localLoading && !loginAttempted) {
       const from = (location.state as { from?: RouterLocation } | null)?.from
-      const defaultPath = user.role === "vendedor" ? "/app/crm" : "/app"
+      const defaultPath =
+        user.role === "vendedor"
+          ? "/app/crm"
+          : user.role === "fotografo"
+            ? "/app/consignaciones"
+            : "/app"
       const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
       navigate(to, { replace: true })
     }
@@ -105,7 +116,12 @@ export default function Login() {
       } else {
         setFailedAttempts(0)
         const from = (location.state as { from?: RouterLocation } | null)?.from
-        const defaultPath = role === "vendedor" ? "/app/crm" : "/app"
+        const defaultPath =
+          role === "vendedor"
+            ? "/app/crm"
+            : role === "fotografo"
+              ? "/app/consignaciones"
+              : "/app"
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
         if (MFA_GATE_ENABLED) {
           try {

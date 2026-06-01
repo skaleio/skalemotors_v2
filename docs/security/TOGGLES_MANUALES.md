@@ -17,19 +17,26 @@ Estos cambios no se pueden hacer por SQL/MCP — necesitás abrir el Supabase Da
 
 ---
 
-## 2. MFA TOTP (UI ya soportada por Supabase)
+## 2. MFA TOTP (UI en app — activar en producción)
 
-**Estado**: ya está habilitado a nivel de proveedor en `supabase/config.toml:288`:
-```toml
-[auth.mfa.totp]
-enroll_enabled = true
-verify_enabled = true
+**Estado**: TOTP habilitado en `supabase/config.toml` (`[auth.mfa.totp]`). UI: `MfaEnrollSection`, `/login/mfa`, `/app/mfa-required`, guard `useMfaGate` en `ProtectedRoute`.
+
+**Activar en Vercel (producción)** — una de estas opciones:
+
+```
+VITE_FLAG_INVESTOR_READY_SECURITY=true
 ```
 
-Lo que falta es la **UI en la app** para enrollar/verificar. Ver `src/lib/services/mfa.ts` (creado en esta fase) y `src/components/settings/MfaEnrollSection.tsx`.
+o de forma explícita:
 
-Para obligar MFA por rol (admin, gerente, jefe_jefe), después del enroll básico:
-- Agregar un guard en `AuthContext.tsx` que chequee `aal` (authentication assurance level) en la sesión y redirija a `/login/mfa` si rol crítico y `aal !== "aal2"`.
+```
+VITE_MFA_GATE_ENABLED=true
+VITE_MFA_ENROLLMENT_MANDATORY=true
+```
+
+Roles que deben enrollar TOTP: `admin`, `gerente`, `jefe_jefe` (`src/lib/mfaPolicy.ts`).
+
+Tras el deploy, cada usuario privilegiado debe pasar por Settings → MFA o `/app/mfa-required` antes de usar el panel.
 
 ---
 

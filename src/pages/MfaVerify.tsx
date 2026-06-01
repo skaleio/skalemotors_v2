@@ -28,7 +28,11 @@ export default function MfaVerify() {
 
   const from =
     (location.state as { from?: string } | null)?.from ??
-    (user?.role === "vendedor" ? "/app/crm" : "/app");
+    (user?.role === "vendedor"
+      ? "/app/crm"
+      : user?.role === "fotografo"
+        ? "/app/consignaciones"
+        : "/app");
 
   async function submit() {
     if (!factor) {

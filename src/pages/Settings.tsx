@@ -286,6 +286,7 @@ export default function Settings() {
       admin: 'Administrador',
       gerente: 'Gerente',
       vendedor: 'Vendedor',
+      fotografo: 'Fotógrafo',
       financiero: 'Financiero',
       servicio: 'Servicio',
       inventario: 'Inventario',

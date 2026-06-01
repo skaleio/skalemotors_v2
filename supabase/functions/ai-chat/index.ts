@@ -183,13 +183,13 @@ export default async function handler(req: Request): Promise<Response> {
   // Resolver tenant_id del usuario (siempre, para usage logging).
   const { data: userProfile } = await supabase
     .from("users")
-    .select("tenant_id, legacy_protected")
+    .select("tenant_id, legacy_protected, email")
     .eq("id", user.id)
     .single();
 
-  // Validar que el branchId solicitado pertenece al tenant del usuario.
-  // hessen@test.io (legacy_protected=true) puede acceder a cualquier branch.
-  if (branchId && userProfile && !userProfile.legacy_protected) {
+  const { allowsCrossTenantLegacyBypass } = await import("../_shared/legacyAccess.ts");
+
+  if (branchId && userProfile && !allowsCrossTenantLegacyBypass(userProfile)) {
     const { data: branch } = await supabase
       .from("branches")
       .select("id")

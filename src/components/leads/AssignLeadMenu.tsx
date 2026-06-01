@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
+import { useBranchSellersOptionsFromUser } from "@/lib/delegatableSellersScope";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import { leadService } from "@/lib/services/leads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,11 +40,8 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
 
   const canDelegate = !!user?.role && ROLES_CAN_DELEGATE.has(user.role);
 
-  const { sellers, loading } = useBranchSellers({
-    tenantId: user?.tenant_id ?? null,
-    scope: "tenant",
-    enabled: open && canDelegate,
-  });
+  const sellerQuery = useBranchSellersOptionsFromUser(user, { enabled: open && canDelegate });
+  const { sellers, loading } = useBranchSellers(sellerQuery);
 
   const assignMutation = useMutation({
     mutationFn: async (vendorId: string | null) => {

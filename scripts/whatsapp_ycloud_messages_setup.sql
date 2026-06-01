@@ -7,9 +7,8 @@
 -- 2) Extender public.messages para soportar WhatsApp por teléfono (contact_phone)
 -- 3) Agregar índices y políticas RLS mínimas para lectura segura
 --
--- IMPORTANTE:
--- - Ejecuta este script en el SQL Editor de Supabase.
--- - Luego registra tu inbox (whatsapp_inboxes) con el provider_phone_number_id de Meta.
+-- DEPRECADO: usar migraciones en supabase/migrations/ y conexión desde Integraciones.
+-- Este script manual quedó obsoleto con whatsapp-connect + whatsapp_inbox_credentials.
 
 -- =====================================================
 -- 1) Inboxes de WhatsApp

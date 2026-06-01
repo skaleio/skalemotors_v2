@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   FileText,
@@ -17,6 +18,7 @@ import {
   User,
   DollarSign,
   ChevronLeft,
+  Pencil,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -61,6 +63,33 @@ import { Separator } from "@/components/ui/separator";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { documentService, Document, DocumentType, DocumentStatus } from "@/lib/services/documents";
+import { vehicleService } from "@/lib/services/vehicles";
+import { consignacionesService } from "@/lib/services/consignaciones";
+import { leadService } from "@/lib/services/leads";
+import { supabase } from "@/lib/supabase";
+import { InventoryVehiclePicker } from "@/components/documents/InventoryVehiclePicker";
+import { DocumentContractBody } from "@/components/documents/DocumentContractBody";
+import {
+  emptyVentaForm,
+  emptyConsignacionForm,
+  mapVehicleToVentaForm,
+  mapVehicleToConsignacionForm,
+  mapConsignacionToForm,
+  mapLeadToBuyer,
+  documentToVentaForm,
+  documentToConsignacionForm,
+  ventaFormToPreview,
+  consignacionFormToPreview,
+  ventaFormToInsert,
+  consignacionFormToInsert,
+  ventaFormToUpdate,
+  consignacionFormToUpdate,
+  type VentaFormState,
+  type ConsignacionFormState,
+} from "@/lib/documents/mappers";
+import type { Database } from "@/lib/types/database";
+
+type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,53 +131,14 @@ function formatDate(dateStr: string): string {
   });
 }
 
-// ─── initial form states ────────────────────────────────────────────────────────
-
-const initialVentaForm = {
-  vehicle_make: "",
-  vehicle_model: "",
-  vehicle_year: "",
-  vehicle_vin: "",
-  vehicle_patente: "",
-  vehicle_km: "",
-  vehicle_color: "",
-  buyer_name: "",
-  buyer_rut: "",
-  buyer_phone: "",
-  buyer_email: "",
-  buyer_address: "",
-  sale_price: "",
-  payment_method: "efectivo",
-  notes: "",
-};
-
-const initialConsignacionForm = {
-  vehicle_make: "",
-  vehicle_model: "",
-  vehicle_year: "",
-  vehicle_vin: "",
-  vehicle_patente: "",
-  vehicle_km: "",
-  vehicle_color: "",
-  owner_name: "",
-  owner_rut: "",
-  owner_phone: "",
-  owner_email: "",
-  owner_address: "",
-  sale_price: "",
-  commission_percentage: "5",
-  notes: "",
-};
-
 // ─── Preview component ──────────────────────────────────────────────────────────
 
 interface PreviewProps {
   doc: Document;
-  onClose: () => void;
+  issuerName?: string;
 }
 
-function DocumentPreview({ doc, onClose }: PreviewProps) {
-  const isVenta = doc.type === "contrato_venta";
+function DocumentPreview({ doc, issuerName }: PreviewProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -191,12 +181,6 @@ function DocumentPreview({ doc, onClose }: PreviewProps) {
     win.close();
   };
 
-  const today = new Date().toLocaleDateString("es-CL", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-
   return (
     <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
@@ -217,129 +201,7 @@ function DocumentPreview({ doc, onClose }: PreviewProps) {
         ref={printRef}
         className="bg-white text-black p-8 border border-gray-200 rounded-lg text-sm"
       >
-        {/* Header */}
-        <div className="header text-center mb-6">
-          <h1 className="text-xl font-bold mb-1">
-            {isVenta ? "CONTRATO DE COMPRAVENTA DE VEHÍCULO" : "CONTRATO DE CONSIGNACIÓN DE VEHÍCULO"}
-          </h1>
-          <p className="text-gray-500 text-xs">{doc.document_number}</p>
-          <p className="text-gray-400 text-xs">Santiago, {today}</p>
-        </div>
-
-        {/* Vehicle */}
-        <h2 className="font-bold text-sm border-b border-gray-300 pb-1 mb-3 mt-4">
-          DATOS DEL VEHÍCULO
-        </h2>
-        <table className="w-full text-xs border-collapse mb-4">
-          <tbody>
-            {[
-              ["Marca", doc.vehicle_make],
-              ["Modelo", doc.vehicle_model],
-              ["Año", doc.vehicle_year],
-              ["VIN / Nº Motor", doc.vehicle_vin],
-              ["Patente", doc.vehicle_patente],
-              ["Kilometraje", doc.vehicle_km ? `${doc.vehicle_km.toLocaleString("es-CL")} km` : ""],
-              ["Color", doc.vehicle_color],
-            ].map(([k, v]) => (
-              <tr key={String(k)}>
-                <td className="border border-gray-200 p-2 bg-gray-50 font-semibold w-1/3">{k}</td>
-                <td className="border border-gray-200 p-2">{v || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Buyer / Owner */}
-        <h2 className="font-bold text-sm border-b border-gray-300 pb-1 mb-3 mt-4">
-          {isVenta ? "DATOS DEL COMPRADOR" : "DATOS DEL PROPIETARIO / CONSIGNANTE"}
-        </h2>
-        <table className="w-full text-xs border-collapse mb-4">
-          <tbody>
-            {(isVenta
-              ? [
-                  ["Nombre completo", doc.buyer_name],
-                  ["RUT", doc.buyer_rut],
-                  ["Teléfono", doc.buyer_phone],
-                  ["Correo electrónico", doc.buyer_email],
-                  ["Dirección", doc.buyer_address],
-                ]
-              : [
-                  ["Nombre completo", doc.owner_name],
-                  ["RUT", doc.owner_rut],
-                  ["Teléfono", doc.owner_phone],
-                  ["Correo electrónico", doc.owner_email],
-                  ["Dirección", doc.owner_address],
-                ]
-            ).map(([k, v]) => (
-              <tr key={String(k)}>
-                <td className="border border-gray-200 p-2 bg-gray-50 font-semibold w-1/3">{k}</td>
-                <td className="border border-gray-200 p-2">{v || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Financial */}
-        <h2 className="font-bold text-sm border-b border-gray-300 pb-1 mb-3 mt-4">
-          CONDICIONES ECONÓMICAS
-        </h2>
-        <table className="w-full text-xs border-collapse mb-4">
-          <tbody>
-            {(isVenta
-              ? [
-                  ["Precio de venta", formatCLP(doc.sale_price)],
-                  ["Forma de pago", doc.payment_method ?? "—"],
-                ]
-              : [
-                  ["Precio de venta acordado", formatCLP(doc.sale_price)],
-                  ["Comisión (%)", doc.commission_percentage ? `${doc.commission_percentage}%` : "—"],
-                  ["Monto comisión", formatCLP(doc.commission_amount)],
-                ]
-            ).map(([k, v]) => (
-              <tr key={String(k)}>
-                <td className="border border-gray-200 p-2 bg-gray-50 font-semibold w-1/3">{k}</td>
-                <td className="border border-gray-200 p-2 font-semibold">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Notes */}
-        {doc.notes && (
-          <>
-            <h2 className="font-bold text-sm border-b border-gray-300 pb-1 mb-3 mt-4">
-              OBSERVACIONES
-            </h2>
-            <p className="text-xs text-gray-700 mb-4 leading-relaxed">{doc.notes}</p>
-          </>
-        )}
-
-        {/* Legal clause */}
-        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600 leading-relaxed">
-          {isVenta
-            ? "El vendedor declara ser el legítimo dueño del vehículo descrito y que éste se encuentra libre de toda deuda, gravamen o prohibición. El comprador declara haber revisado el vehículo y aceptarlo en las condiciones descritas."
-            : "El consignante declara ser el legítimo propietario del vehículo y autoriza a SkaléMotors para su exhibición, publicidad y venta bajo las condiciones pactadas en este instrumento."}
-        </div>
-
-        {/* Signatures */}
-        <div className="flex justify-between mt-12">
-          <div className="text-center w-2/5">
-            <div className="border-t border-gray-800 pt-2 mt-12 text-xs">
-              <p className="font-semibold">{isVenta ? "Firma Vendedor" : "Firma Consignante"}</p>
-              <p className="text-gray-500">Nombre / RUT</p>
-            </div>
-          </div>
-          <div className="text-center w-2/5">
-            <div className="border-t border-gray-800 pt-2 mt-12 text-xs">
-              <p className="font-semibold">{isVenta ? "Firma Comprador" : "Firma SkaléMotors"}</p>
-              <p className="text-gray-500">Nombre / RUT</p>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-center text-gray-400 text-xs mt-8 border-t border-gray-100 pt-4">
-          SkaléMotors — {doc.document_number} — Generado el {formatDate(doc.created_at)}
-        </p>
+        <DocumentContractBody doc={doc} issuerName={issuerName} />
       </div>
     </DialogContent>
   );
@@ -368,11 +230,75 @@ export default function Documents() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<DocumentStatus | "all">("all");
 
-  const [ventaForm, setVentaForm] = useState(initialVentaForm);
-  const [consignacionForm, setConsignacionForm] = useState(initialConsignacionForm);
+  const [ventaForm, setVentaForm] = useState<VentaFormState>(emptyVentaForm);
+  const [consignacionForm, setConsignacionForm] = useState<ConsignacionFormState>(emptyConsignacionForm);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
 
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const prefillKeyRef = useRef<string | null>(null);
+
+  const { data: issuerName } = useQuery({
+    queryKey: ["document-issuer", user?.branch_id],
+    queryFn: async () => {
+      if (!user?.branch_id) return null;
+      const { data, error } = await supabase
+        .from("branches")
+        .select("name")
+        .eq("id", user.branch_id)
+        .single();
+      if (error) throw error;
+      return data?.name ?? null;
+    },
+    enabled: !!user?.branch_id,
+    staleTime: 5 * 60_000,
+  });
+
+  const livePreviewDoc = useMemo(() => {
+    if (activeTab === "contrato_venta") {
+      return ventaFormToPreview(ventaForm, {
+        document_number: editingDocId
+          ? documents.find((d) => d.id === editingDocId)?.document_number ?? "BORRADOR"
+          : "BORRADOR",
+      });
+    }
+    return consignacionFormToPreview(consignacionForm, {
+      document_number: editingDocId
+        ? documents.find((d) => d.id === editingDocId)?.document_number ?? "BORRADOR"
+        : "BORRADOR",
+    });
+  }, [activeTab, ventaForm, consignacionForm, editingDocId, documents]);
+
+  const resetForms = () => {
+    setVentaForm(emptyVentaForm());
+    setConsignacionForm(emptyConsignacionForm());
+    setEditingDocId(null);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    resetForms();
+    prefillKeyRef.current = null;
+    if (searchParams.toString()) {
+      navigate(location.pathname, { replace: true });
+    }
+  };
+
+  const openEdit = (doc: Document) => {
+    if (doc.type === "contrato_venta") {
+      setVentaForm(documentToVentaForm(doc));
+      if (!location.pathname.endsWith("/venta")) {
+        navigate("/app/documents/venta");
+      }
+    } else {
+      setConsignacionForm(documentToConsignacionForm(doc));
+      if (!location.pathname.endsWith("/consignacion")) {
+        navigate("/app/documents/consignacion");
+      }
+    }
+    setEditingDocId(doc.id);
+    setShowForm(true);
+  };
 
   const loadDocuments = async () => {
     try {
@@ -392,96 +318,173 @@ export default function Documents() {
     loadDocuments();
   }, [user?.branch_id]);
 
+  useEffect(() => {
+    const paramKey = searchParams.toString();
+    if (!paramKey || prefillKeyRef.current === paramKey) return;
+
+    let cancelled = false;
+
+    const prefill = async () => {
+      const editId = searchParams.get("edit");
+      const vehicleId = searchParams.get("vehicleId");
+      const consignacionId = searchParams.get("consignacionId");
+      const leadId = searchParams.get("leadId");
+
+      if (editId) {
+        const existing = documents.find((d) => d.id === editId) ?? (await documentService.getById(editId));
+        if (!cancelled && existing) {
+          openEdit(existing);
+        }
+        return;
+      }
+
+      if (vehicleId) {
+        try {
+          const v = await vehicleService.getById(vehicleId);
+          if (cancelled) return;
+          if (activeTab === "contrato_venta") {
+            setVentaForm((p) => ({ ...p, ...mapVehicleToVentaForm(v) }));
+          } else {
+            setConsignacionForm((p) => ({ ...p, ...mapVehicleToConsignacionForm(v) }));
+          }
+          setShowForm(true);
+        } catch {
+          toast.error("No se pudo cargar el vehículo del inventario");
+        }
+        return;
+      }
+
+      if (consignacionId && activeTab === "contrato_consignacion") {
+        try {
+          const list = await consignacionesService.getAll({ branchId: user?.branch_id });
+          const c = list.find((x) => x.id === consignacionId);
+          if (!cancelled && c) {
+            setConsignacionForm((p) => ({ ...p, ...mapConsignacionToForm(c) }));
+            setShowForm(true);
+          }
+        } catch {
+          toast.error("No se pudo cargar la consignación");
+        }
+        return;
+      }
+
+      if (leadId && activeTab === "contrato_venta") {
+        try {
+          const lead = await leadService.getById(leadId);
+          if (!cancelled && lead) {
+            setVentaForm((p) => ({ ...p, ...mapLeadToBuyer(lead) }));
+            setShowForm(true);
+          }
+        } catch {
+          toast.error("No se pudo cargar el lead");
+        }
+      }
+
+      prefillKeyRef.current = paramKey;
+    };
+
+    void prefill();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, activeTab, user?.branch_id, documents.length]);
+
   const handleTabChange = (val: string) => {
     const path = val === "contrato_consignacion"
       ? "/app/documents/consignacion"
       : "/app/documents/venta";
     navigate(path);
-    setShowForm(false);
+    closeForm();
   };
 
-  const handleSaveVenta = async () => {
+  const saveCtx = () => ({
+    branch_id: user?.branch_id ?? null,
+    tenant_id: user?.tenant_id ?? null,
+    created_by: user?.id ?? null,
+  });
+
+  const handleSaveVenta = async (asDraft: boolean) => {
     if (!ventaForm.vehicle_make || !ventaForm.buyer_name || !ventaForm.sale_price) {
       toast.error("Completa los campos obligatorios: marca, nombre comprador y precio");
       return;
     }
+    const status: DocumentStatus = asDraft ? "borrador" : "generado";
     try {
       setSaving(true);
-      const doc = await documentService.create({
-        type: "contrato_venta",
-        branch_id: user?.branch_id ?? null,
-        created_by: user?.id ?? null,
-        vehicle_make: ventaForm.vehicle_make || null,
-        vehicle_model: ventaForm.vehicle_model || null,
-        vehicle_year: ventaForm.vehicle_year ? parseInt(ventaForm.vehicle_year) : null,
-        vehicle_vin: ventaForm.vehicle_vin || null,
-        vehicle_patente: ventaForm.vehicle_patente?.toUpperCase() || null,
-        vehicle_km: ventaForm.vehicle_km ? parseInt(ventaForm.vehicle_km) : null,
-        vehicle_color: ventaForm.vehicle_color || null,
-        buyer_name: ventaForm.buyer_name || null,
-        buyer_rut: ventaForm.buyer_rut || null,
-        buyer_phone: ventaForm.buyer_phone || null,
-        buyer_email: ventaForm.buyer_email || null,
-        buyer_address: ventaForm.buyer_address || null,
-        sale_price: ventaForm.sale_price ? parseFloat(ventaForm.sale_price) : null,
-        payment_method: ventaForm.payment_method || null,
-        notes: ventaForm.notes || null,
-        status: "generado",
-      });
-      toast.success(`Contrato ${doc.document_number} generado`);
-      setDocuments((prev) => [doc, ...prev]);
-      setVentaForm(initialVentaForm);
-      setShowForm(false);
-      setPreviewDoc(doc);
+      let doc: Document;
+      if (editingDocId) {
+        doc = await documentService.update(editingDocId, {
+          ...ventaFormToUpdate(ventaForm),
+          status,
+        });
+        setDocuments((prev) => prev.map((d) => (d.id === doc.id ? doc : d)));
+        toast.success(asDraft ? "Borrador actualizado" : `Contrato ${doc.document_number} actualizado`);
+      } else {
+        doc = await documentService.create(
+          ventaFormToInsert(ventaForm, { ...saveCtx(), status })
+        );
+        setDocuments((prev) => [doc, ...prev]);
+        toast.success(
+          asDraft ? "Borrador guardado" : `Contrato ${doc.document_number} generado`
+        );
+      }
+      closeForm();
+      if (!asDraft) setPreviewDoc(doc);
     } catch {
-      toast.error("Error al generar el contrato");
+      toast.error("Error al guardar el contrato");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveConsignacion = async () => {
+  const handleSaveConsignacion = async (asDraft: boolean) => {
     if (!consignacionForm.vehicle_make || !consignacionForm.owner_name || !consignacionForm.sale_price) {
       toast.error("Completa los campos obligatorios: marca, nombre propietario y precio");
       return;
     }
+    const status: DocumentStatus = asDraft ? "borrador" : "generado";
     try {
       setSaving(true);
-      const price = parseFloat(consignacionForm.sale_price) || 0;
-      const pct = parseFloat(consignacionForm.commission_percentage) || 0;
-      const amount = Math.round((price * pct) / 100);
-      const doc = await documentService.create({
-        type: "contrato_consignacion",
-        branch_id: user?.branch_id ?? null,
-        created_by: user?.id ?? null,
-        vehicle_make: consignacionForm.vehicle_make || null,
-        vehicle_model: consignacionForm.vehicle_model || null,
-        vehicle_year: consignacionForm.vehicle_year ? parseInt(consignacionForm.vehicle_year) : null,
-        vehicle_vin: consignacionForm.vehicle_vin || null,
-        vehicle_patente: consignacionForm.vehicle_patente?.toUpperCase() || null,
-        vehicle_km: consignacionForm.vehicle_km ? parseInt(consignacionForm.vehicle_km) : null,
-        vehicle_color: consignacionForm.vehicle_color || null,
-        owner_name: consignacionForm.owner_name || null,
-        owner_rut: consignacionForm.owner_rut || null,
-        owner_phone: consignacionForm.owner_phone || null,
-        owner_email: consignacionForm.owner_email || null,
-        owner_address: consignacionForm.owner_address || null,
-        sale_price: price || null,
-        commission_percentage: pct || null,
-        commission_amount: amount || null,
-        notes: consignacionForm.notes || null,
-        status: "generado",
-      });
-      toast.success(`Contrato ${doc.document_number} generado`);
-      setDocuments((prev) => [doc, ...prev]);
-      setConsignacionForm(initialConsignacionForm);
-      setShowForm(false);
-      setPreviewDoc(doc);
+      let doc: Document;
+      if (editingDocId) {
+        doc = await documentService.update(editingDocId, {
+          ...consignacionFormToUpdate(consignacionForm),
+          status,
+        });
+        setDocuments((prev) => prev.map((d) => (d.id === doc.id ? doc : d)));
+        toast.success(asDraft ? "Borrador actualizado" : `Contrato ${doc.document_number} actualizado`);
+      } else {
+        doc = await documentService.create(
+          consignacionFormToInsert(consignacionForm, { ...saveCtx(), status })
+        );
+        setDocuments((prev) => [doc, ...prev]);
+        toast.success(
+          asDraft ? "Borrador guardado" : `Contrato ${doc.document_number} generado`
+        );
+      }
+      closeForm();
+      if (!asDraft) setPreviewDoc(doc);
     } catch {
-      toast.error("Error al generar el contrato");
+      toast.error("Error al guardar el contrato");
     } finally {
       setSaving(false);
     }
+  };
+
+  const onVentaVehicleSelect = (vehicle: Vehicle | null) => {
+    if (!vehicle) {
+      setVentaForm((p) => ({ ...p, vehicle_id: "" }));
+      return;
+    }
+    setVentaForm((p) => ({ ...p, ...mapVehicleToVentaForm(vehicle) }));
+  };
+
+  const onConsignacionVehicleSelect = (vehicle: Vehicle | null) => {
+    if (!vehicle) {
+      setConsignacionForm((p) => ({ ...p, vehicle_id: "" }));
+      return;
+    }
+    setConsignacionForm((p) => ({ ...p, ...mapVehicleToConsignacionForm(vehicle) }));
   };
 
   const handleDelete = async () => {
@@ -573,7 +576,10 @@ export default function Documents() {
 
           {!showForm && (
             <Button
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                resetForms();
+                setShowForm(true);
+              }}
               className="gap-2 bg-pink-600 hover:bg-pink-700 text-white shadow-sm"
             >
               <Plus className="h-4 w-4" />
@@ -606,14 +612,16 @@ export default function Documents() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <FileSignature className="h-4 w-4 text-pink-500" />
-                  {activeTab === "contrato_venta"
-                    ? "Nuevo Contrato de Venta"
-                    : "Nuevo Contrato de Consignación"}
+                  {editingDocId
+                    ? "Editar contrato"
+                    : activeTab === "contrato_venta"
+                      ? "Nuevo Contrato de Venta"
+                      : "Nuevo Contrato de Consignación"}
                 </CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   className="gap-1 text-slate-500 hover:text-slate-700"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -621,7 +629,9 @@ export default function Documents() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent>
+            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6 min-w-0">
 
               {/* ─── VENTA FORM ─── */}
               <TabsContent value="contrato_venta" className="mt-0 space-y-6">
@@ -631,7 +641,14 @@ export default function Documents() {
                     <Car className="h-4 w-4 text-pink-500" />
                     <span className="font-semibold text-sm text-slate-700 dark:text-zinc-300">Datos del Vehículo</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <FieldGroup label="Desde inventario">
+                    <InventoryVehiclePicker
+                      branchId={user?.branch_id}
+                      value={ventaForm.vehicle_id}
+                      onSelect={onVentaVehicleSelect}
+                    />
+                  </FieldGroup>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <FieldGroup label="Marca" required>
                       <Input
                         placeholder="Toyota"
@@ -782,17 +799,24 @@ export default function Documents() {
                   />
                 </FieldGroup>
 
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button variant="outline" onClick={() => setShowForm(false)}>
+                <div className="flex justify-end gap-3 pt-2 flex-wrap">
+                  <Button variant="outline" onClick={closeForm}>
                     Cancelar
                   </Button>
                   <Button
-                    onClick={handleSaveVenta}
+                    variant="secondary"
+                    onClick={() => handleSaveVenta(true)}
+                    disabled={saving}
+                  >
+                    {saving ? "Guardando..." : "Guardar borrador"}
+                  </Button>
+                  <Button
+                    onClick={() => handleSaveVenta(false)}
                     disabled={saving}
                     className="bg-pink-600 hover:bg-pink-700 text-white gap-2"
                   >
                     <FileText className="h-4 w-4" />
-                    {saving ? "Generando..." : "Generar Contrato"}
+                    {saving ? "Generando..." : editingDocId ? "Actualizar contrato" : "Generar contrato"}
                   </Button>
                 </div>
               </TabsContent>
@@ -805,7 +829,14 @@ export default function Documents() {
                     <Car className="h-4 w-4 text-pink-500" />
                     <span className="font-semibold text-sm text-slate-700 dark:text-zinc-300">Datos del Vehículo</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <FieldGroup label="Desde inventario">
+                    <InventoryVehiclePicker
+                      branchId={user?.branch_id}
+                      value={consignacionForm.vehicle_id}
+                      onSelect={onConsignacionVehicleSelect}
+                    />
+                  </FieldGroup>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <FieldGroup label="Marca" required>
                       <Input
                         placeholder="Toyota"
@@ -965,21 +996,40 @@ export default function Documents() {
                   />
                 </FieldGroup>
 
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button variant="outline" onClick={() => setShowForm(false)}>
+                <div className="flex justify-end gap-3 pt-2 flex-wrap">
+                  <Button variant="outline" onClick={closeForm}>
                     Cancelar
                   </Button>
                   <Button
-                    onClick={handleSaveConsignacion}
+                    variant="secondary"
+                    onClick={() => handleSaveConsignacion(true)}
+                    disabled={saving}
+                  >
+                    {saving ? "Guardando..." : "Guardar borrador"}
+                  </Button>
+                  <Button
+                    onClick={() => handleSaveConsignacion(false)}
                     disabled={saving}
                     className="bg-pink-600 hover:bg-pink-700 text-white gap-2"
                   >
                     <ScrollText className="h-4 w-4" />
-                    {saving ? "Generando..." : "Generar Contrato"}
+                    {saving ? "Generando..." : editingDocId ? "Actualizar contrato" : "Generar contrato"}
                   </Button>
                 </div>
               </TabsContent>
 
+            </div>
+
+            <div className="lg:sticky lg:top-4 h-fit">
+              <p className="text-xs font-medium text-slate-500 dark:text-zinc-400 mb-2 flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5" />
+                Vista previa en vivo
+              </p>
+              <div className="bg-white text-black p-6 border border-gray-200 rounded-lg max-h-[70vh] overflow-y-auto shadow-inner">
+                <DocumentContractBody doc={livePreviewDoc} issuerName={issuerName ?? undefined} compact />
+              </div>
+            </div>
+            </div>
             </CardContent>
           </Card>
         )}
@@ -1018,6 +1068,7 @@ export default function Documents() {
               docs={filteredDocs}
               loading={loading}
               onPreview={setPreviewDoc}
+              onEdit={openEdit}
               onDelete={setDeleteId}
               onStatusChange={handleStatusChange}
               type="contrato_venta"
@@ -1028,6 +1079,7 @@ export default function Documents() {
               docs={filteredDocs}
               loading={loading}
               onPreview={setPreviewDoc}
+              onEdit={openEdit}
               onDelete={setDeleteId}
               onStatusChange={handleStatusChange}
               type="contrato_consignacion"
@@ -1039,7 +1091,7 @@ export default function Documents() {
       {/* Preview dialog */}
       {previewDoc && (
         <Dialog open onOpenChange={() => setPreviewDoc(null)}>
-          <DocumentPreview doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+          <DocumentPreview doc={previewDoc} issuerName={issuerName ?? undefined} />
         </Dialog>
       )}
 
@@ -1074,11 +1126,12 @@ interface TableProps {
   loading: boolean;
   type: DocumentType;
   onPreview: (d: Document) => void;
+  onEdit: (d: Document) => void;
   onDelete: (id: string) => void;
   onStatusChange: (id: string, s: DocumentStatus) => void;
 }
 
-function DocumentsTable({ docs, loading, type, onPreview, onDelete, onStatusChange }: TableProps) {
+function DocumentsTable({ docs, loading, type, onPreview, onEdit, onDelete, onStatusChange }: TableProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-slate-400">
@@ -1180,6 +1233,15 @@ function DocumentsTable({ docs, loading, type, onPreview, onDelete, onStatusChan
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40"
+                    onClick={() => onEdit(doc)}
+                    title="Editar"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

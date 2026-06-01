@@ -64,6 +64,8 @@ const roleToPermissions: Record<string, AppPermission[]> = {
     "tramites:write",
     "calendar:self",
   ],
+  /** Inventario (fotos) + tareas de stock; sin CRM ni finanzas. */
+  fotografo: ["inventory:read", "inventory:write"],
   servicio: ["tramites:read", "tramites:write", "calendar:team"],
 };
 

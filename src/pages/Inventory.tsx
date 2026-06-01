@@ -1,4 +1,4 @@
-import { Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { Camera, Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -12,6 +12,7 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -55,10 +56,17 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
 import { VehicleImage } from "@/components/VehicleImage";
+import { VehicleConsignacionPanel } from "@/components/inventory/VehicleConsignacionPanel";
 import { useQuery } from "@tanstack/react-query";
+import {
+  canViewInventoryPrice,
+  hidesInventoryCosts,
+  isPhotographerRole,
+} from "@/lib/appRoles";
 import { formatCLP } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { vehicleService } from "@/lib/services/vehicles";
+import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import {
@@ -160,17 +168,181 @@ function deriveTransmissionFromExcelText(text: string): "manual" | "automático"
 
 function transmissionToDisplayLabel(t: string | null | undefined): string {
   if (!t) return "";
-  if (t === "manual") return "MECANICO";
-  if (t === "cvt") return "CVT";
-  if (t === "automático") return "AUTOMATICO";
+  if (t === "manual") return "Manual";
+  if (t === "cvt" || t === "automático") return "Automática";
   return String(t);
 }
 
 function fuelTypeToDisplayLabel(f: string | null | undefined): string {
   if (!f) return "";
-  if (f === "diesel") return "DIESEL";
-  if (f === "gasolina") return "BENCINA";
+  if (f === "diesel") return "Diesel";
+  if (f === "gasolina") return "Gasolina";
   return String(f);
+}
+
+/** Valores del dropdown de carrocería (formulario stock). */
+const INVENTORY_CARROCERIA_OPTIONS = [
+  "Hatchback",
+  "Sedán",
+  "SUV",
+  "Camioneta",
+  "Pick-up",
+  "Furgón",
+  "Jeep",
+  "Deportivo",
+  "Station wagon",
+  "Van",
+  "Coupé",
+] as const;
+
+const INVENTORY_TRANSMISION_OPTIONS = [
+  { value: "Manual", transmission: "manual" as const },
+  { value: "Automática", transmission: "automático" as const },
+] as const;
+
+const INVENTORY_COMBUSTIBLE_OPTIONS = [
+  { value: "Gasolina", fuel_type: "gasolina" as const },
+  { value: "Diesel", fuel_type: "diesel" as const },
+] as const;
+
+function normalizeInventoryCarroceria(raw: string): string {
+  const u = normalizeForMatch(raw);
+  if (!u) return "";
+  if (u.includes("SUV")) return "SUV";
+  if (u.includes("SEDAN")) return "Sedán";
+  if (u.includes("HATCH")) return "Hatchback";
+  if (u.includes("CAMIONETA") || u.includes("PICK UP") || u.includes("PICKUP")) {
+    return u.includes("PICK") ? "Pick-up" : "Camioneta";
+  }
+  if (u.includes("FURGON") || u.includes("FURGÓN")) return "Furgón";
+  if (u.includes("JEEP")) return "Jeep";
+  if (u.includes("DEPORT")) return "Deportivo";
+  if (u.includes("STATION") || u.includes("WAGON") || u.includes("FAMILIAR")) return "Station wagon";
+  if (u.includes("VAN") || u.includes("MINIVAN")) return "Van";
+  if (u.includes("COUPE") || u.includes("COUP")) return "Coupé";
+  return raw.trim();
+}
+
+function normalizeInventoryTransmisionDisplay(
+  raw: string,
+  transmission?: string | null,
+): string {
+  const u = normalizeForMatch(raw);
+  if (u.includes("MECAN") || u === "MANUAL") return "Manual";
+  if (u.includes("AUTOM") || u.includes("CVT")) return "Automática";
+  if (raw === "Manual" || raw === "Automática") return raw;
+  if (transmission === "manual") return "Manual";
+  if (transmission === "automático" || transmission === "cvt") return "Automática";
+  return raw.trim();
+}
+
+function normalizeInventoryCombustibleDisplay(raw: string, fuelType?: string | null): string {
+  const u = normalizeForMatch(raw);
+  if (u.includes("DIESEL")) return "Diesel";
+  if (u.includes("BENCIN") || u.includes("GASOLIN")) return "Gasolina";
+  if (raw === "Gasolina" || raw === "Diesel") return raw;
+  if (fuelType === "diesel") return "Diesel";
+  if (fuelType === "gasolina") return "Gasolina";
+  return raw.trim();
+}
+
+function legacySelectItem(value: string, options: readonly string[]) {
+  if (!value || options.includes(value)) return null;
+  return (
+    <SelectItem key={`legacy-${value}`} value={value}>
+      {value} (anterior)
+    </SelectItem>
+  );
+}
+
+type VehicleFormPublicationFooterProps = {
+  publicado: boolean;
+  onPublicadoChange: (checked: boolean) => void;
+  publishSwitchId: string;
+  onCancel: () => void;
+  onSubmit: () => void;
+  isSaving: boolean;
+  submitLabel: string;
+  status?: VehicleStatus;
+  onStatusChange?: (status: VehicleStatus) => void;
+  showStatus?: boolean;
+};
+
+function VehicleFormPublicationFooter({
+  publicado,
+  onPublicadoChange,
+  publishSwitchId,
+  onCancel,
+  onSubmit,
+  isSaving,
+  submitLabel,
+  status,
+  onStatusChange,
+  showStatus,
+}: VehicleFormPublicationFooterProps) {
+  return (
+    <div className="mt-6 space-y-4 rounded-xl border border-primary/20 bg-muted/40 p-4 md:p-5">
+      <div>
+        <p className="text-sm font-semibold">Publicación y guardado</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Indica si el vehículo queda marcado como publicado en stock y confirma los cambios del formulario.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 sm:col-span-2">
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor={publishSwitchId} className="cursor-pointer text-sm font-medium">
+              {STOCK_ONLINE_COLUMN_LABELS.publicado}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {publicado
+                ? "Aparecerá como publicado en tu inventario / planilla."
+                : "Quedará sin marcar como publicado hasta que lo actives."}
+            </p>
+          </div>
+          <Switch
+            id={publishSwitchId}
+            checked={publicado}
+            onCheckedChange={onPublicadoChange}
+            className="shrink-0"
+          />
+        </div>
+
+        {showStatus && status && onStatusChange ? (
+          <div className="sm:col-span-2 sm:max-w-xs">
+            <Label htmlFor={`${publishSwitchId}-status`}>Estado del vehículo</Label>
+            <Select value={status} onValueChange={onStatusChange}>
+              <SelectTrigger id={`${publishSwitchId}-status`}>
+                <SelectValue placeholder="Estado del vehículo" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(statusLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          onClick={onSubmit}
+          disabled={isSaving}
+          className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+        >
+          {isSaving ? "Guardando..." : submitLabel}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function createEmptyNewVehicle() {
@@ -240,6 +412,24 @@ const parseNumberInput = (value: string): number => {
     return 0;
   }
 };
+
+/** Pie mínimo = 30% del precio de venta (no del costo). */
+const MIN_DOWN_PAYMENT_RATE = 0.3;
+
+function minDownPaymentFromSalePrice(salePrice: number): number {
+  const price = Math.max(0, Math.round(salePrice));
+  return Math.round(price * MIN_DOWN_PAYMENT_RATE);
+}
+
+type NewVehicleFormState = ReturnType<typeof createEmptyNewVehicle>;
+
+function patchVehicleSalePrice(prev: NewVehicleFormState, salePrice: number): NewVehicleFormState {
+  return {
+    ...prev,
+    price: salePrice,
+    minDownPayment: minDownPaymentFromSalePrice(salePrice),
+  };
+}
 
 const formatNumberDisplay = (value: number): string => {
   try {
@@ -332,48 +522,6 @@ function LocalFilePreview({
   );
 }
 
-const optimizeVehicleImage = async (file: File) => {
-  try {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
-      image.src = objectUrl;
-    });
-
-    const maxSize = 1600;
-    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-    const targetWidth = Math.max(1, Math.round(image.width * scale));
-    const targetHeight = Math.max(1, Math.round(image.height * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      URL.revokeObjectURL(objectUrl);
-      return file;
-    }
-
-    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
-    URL.revokeObjectURL(objectUrl);
-
-    const blob: Blob = await new Promise((resolve) => {
-      canvas.toBlob(
-        (result) => resolve(result || file),
-        "image/webp",
-        0.82,
-      );
-    });
-
-    return new File([blob], file.name.replace(/\.\w+$/, ".webp"), { type: "image/webp" });
-  } catch (error) {
-    console.warn("⚠️ No se pudo optimizar la imagen, usando original:", error);
-    return file;
-  }
-};
-
 const uploadVehicleImage = async (
   file: File,
   fileName: string,
@@ -387,7 +535,7 @@ const uploadVehicleImage = async (
     throw new Error(`Formato no permitido: ${file.type || "desconocido"}`);
   }
 
-  const optimizedFile = await optimizeVehicleImage(file);
+  const optimizedFile = await optimizeVehicleImageForUpload(file);
   const response = await fetch(`${supabaseUrl}/storage/v1/object/vehicles/${fileName}`, {
     method: "PUT",
     headers: {
@@ -433,7 +581,12 @@ const updateVehicleImages = async (
 
 export default function Inventory() {
   const { user, session } = useAuth();
-  const isVendedor = user?.role === "vendedor";
+  const hidesCosts = hidesInventoryCosts(user?.role);
+  const showPrice = canViewInventoryPrice(user?.role);
+  const isPhotographer = isPhotographerRole(user?.role);
+  const showInventoryActions = !hidesCosts || isPhotographer;
+  const inventoryTableColSpan =
+    5 + (showPrice ? 1 : 0) + (!hidesCosts ? 1 : 0) + (showInventoryActions ? 1 : 0);
   // Sin filtrar por sucursal al cargar: mostrar todos los vehículos (los datos pueden tener branch_id distinto o NULL)
   const { vehicles, loading, isFetching, error: vehiclesError, refetch } = useVehicles({
     branchId: undefined,
@@ -678,6 +831,34 @@ export default function Inventory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVehicle?.id]);
 
+  const closeVehicleDetailModal = () => {
+    const params = new URLSearchParams(location.search);
+    if (params.has("vehicle")) {
+      params.delete("vehicle");
+      navigate(
+        {
+          pathname: location.pathname,
+          search: params.toString() ? `?${params.toString()}` : "",
+        },
+        { replace: true },
+      );
+    }
+    setSelectedVehicle(null);
+    setSelectedVehicleFull(null);
+    setSelectedVehicleLoading(false);
+  };
+
+  const openVehicleEditor = (vehicle: Vehicle) => {
+    setIsSaving(true);
+    vehicleService
+      .getById(vehicle.id)
+      .then((full) => {
+        setVehicleToEdit(full as any);
+        closeVehicleDetailModal();
+      })
+      .finally(() => setIsSaving(false));
+  };
+
   useEffect(() => {
     const handleOpenNewVehicleForm = () => setShowAddDialog(true);
     window.addEventListener("openNewVehicleForm", handleOpenNewVehicleForm);
@@ -736,7 +917,7 @@ export default function Inventory() {
     if (!base) return null;
     const margin = Number(base.margin ?? 0);
     const price = Number(base.price ?? 0);
-    const minDownPayment = Math.round(price * 0.2);
+    const minDownPayment = minDownPaymentFromSalePrice(price);
     const engine = base.engine_size || "—";
 
     return {
@@ -796,17 +977,21 @@ export default function Inventory() {
         consignment_type: getVehicleConsignmentType(vehicleToEdit),
         patente: vehicleToEdit.patente || "",
         consignatario_staff_id: vehicleToEdit.consignatario_staff_id || "",
-        carroceria: vehicleToEdit.carroceria ?? "",
-        transmision_display:
+        carroceria: normalizeInventoryCarroceria(vehicleToEdit.carroceria ?? ""),
+        transmision_display: normalizeInventoryTransmisionDisplay(
           (vehicleToEdit.transmision_display || "").trim() ||
-          transmissionToDisplayLabel(vehicleToEdit.transmission),
-        combustible_display:
+            transmissionToDisplayLabel(vehicleToEdit.transmission),
+          vehicleToEdit.transmission,
+        ),
+        combustible_display: normalizeInventoryCombustibleDisplay(
           (vehicleToEdit.combustible_display || "").trim() ||
-          fuelTypeToDisplayLabel(vehicleToEdit.fuel_type),
+            fuelTypeToDisplayLabel(vehicleToEdit.fuel_type),
+          vehicleToEdit.fuel_type,
+        ),
         publicado: vehicleToEdit.publicado ?? false,
         price: Number(vehicleToEdit.price || 0),
         cost: Number(vehicleToEdit.cost || 0),
-        minDownPayment: Number(features.min_down_payment || 0),
+        minDownPayment: minDownPaymentFromSalePrice(Number(vehicleToEdit.price || 0)),
         engine_size: vehicleToEdit.engine_size || "",
         fuel_type: vehicleToEdit.fuel_type || "gasolina",
         transmission: vehicleToEdit.transmission || "automático",
@@ -847,7 +1032,8 @@ export default function Inventory() {
     try {
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
-      const minDownPayment = newVehicle.minDownPayment || 0;
+      const salePrice = Number(newVehicle.price || 0);
+      const minDownPayment = minDownPaymentFromSalePrice(salePrice);
       const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
       const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
@@ -994,9 +1180,66 @@ export default function Inventory() {
 
     setIsSaving(true);
     try {
+      if (isPhotographer) {
+        const patch: { images?: unknown; price?: number; margin?: number } = {};
+        const nextPrice = Number(newVehicle.price || 0);
+        const prevPrice = Number(vehicleToEdit.price || 0);
+        if (nextPrice !== prevPrice) {
+          patch.price = nextPrice;
+          const cost = Number(vehicleToEdit.cost || 0);
+          patch.margin = nextPrice - cost;
+        }
+
+        if (newVehicle.images.length > 0) {
+          const imageUrls: string[] = [];
+          const existingImages = (vehicleToEdit.images as unknown as string[] | null) || [];
+          for (const file of newVehicle.images) {
+            try {
+              const fileExt = file.name.split(".").pop();
+              const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+              const optimizedFile = await optimizeVehicleImageForUpload(file);
+              const { error: uploadError } = await supabase.storage
+                .from("vehicles")
+                .upload(fileName, optimizedFile, {
+                  cacheControl: "3600",
+                  upsert: false,
+                  contentType: optimizedFile.type,
+                });
+              if (uploadError) {
+                console.error("Error subiendo imagen:", uploadError);
+                continue;
+              }
+              const {
+                data: { publicUrl },
+              } = supabase.storage.from("vehicles").getPublicUrl(fileName);
+              imageUrls.push(publicUrl);
+            } catch (error) {
+              console.error("Error procesando imagen:", error);
+            }
+          }
+          if (imageUrls.length > 0) {
+            patch.images = [...existingImages, ...imageUrls] as any;
+          }
+        }
+
+        if (Object.keys(patch).length > 0) {
+          await vehicleService.update(vehicleToEdit.id, patch);
+        }
+
+        toast({
+          title: "Cambios guardados",
+          description: "Fotos y precio del vehículo actualizados (se reflejan en la vitrina).",
+        });
+        setVehicleToEdit(null);
+        setNewVehicle(createEmptyNewVehicle());
+        await refetch();
+        return;
+      }
+
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
-      const minDownPayment = newVehicle.minDownPayment || 0;
+      const salePrice = Number(newVehicle.price || 0);
+      const minDownPayment = minDownPaymentFromSalePrice(salePrice);
       const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
       const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
@@ -1049,7 +1292,7 @@ export default function Inventory() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${vehicleToEdit.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-            const optimizedFile = await optimizeVehicleImage(file);
+            const optimizedFile = await optimizeVehicleImageForUpload(file);
             const { error: uploadError } = await supabase.storage
               .from('vehicles')
               .upload(fileName, optimizedFile, {
@@ -1348,7 +1591,7 @@ export default function Inventory() {
             Gestiona consignaciones físicas y digitales en un solo lugar
           </p>
         </div>
-        {!isVendedor && (
+        {!hidesCosts && (
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
@@ -1421,7 +1664,7 @@ export default function Inventory() {
         </Select>
       </div>
 
-      <div className={`grid gap-4 ${isVendedor ? "md:grid-cols-2" : "md:grid-cols-4"}`}>
+      <div className={`grid gap-4 ${hidesCosts ? "md:grid-cols-2" : "md:grid-cols-4"}`}>
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Total Vehículos</CardTitle>
@@ -1434,7 +1677,7 @@ export default function Inventory() {
           </CardContent>
         </Card>
 
-        {!isVendedor && (
+        {!hidesCosts && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Valor Total</CardTitle>
@@ -1448,7 +1691,7 @@ export default function Inventory() {
           </Card>
         )}
 
-        {!isVendedor && (
+        {!hidesCosts && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Margen Total</CardTitle>
@@ -1496,25 +1739,29 @@ export default function Inventory() {
               <TableRow>
                 <TableHead>Vehículo</TableHead>
                 <TableHead>Detalles</TableHead>
-                {!isVendedor && <TableHead>Precio</TableHead>}
-                {!isVendedor && <TableHead>Margen</TableHead>}
+                {showPrice && <TableHead>Precio</TableHead>}
+                {!hidesCosts && <TableHead>Margen</TableHead>}
                 <TableHead>Estado</TableHead>
                 <TableHead>Consignación</TableHead>
                 <TableHead className="w-[140px]">Portales</TableHead>
-                {!isVendedor && <TableHead className="w-[100px]">Acciones</TableHead>}
+                {showInventoryActions && (
+                  <TableHead className="w-[100px]">
+                    {isPhotographer ? "Fotos" : "Acciones"}
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && !vehiclesError && (
                 <TableRow>
-                  <TableCell colSpan={isVendedor ? 5 : 8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={inventoryTableColSpan} className="text-center py-8 text-muted-foreground">
                     Cargando vehículos...
                   </TableCell>
                 </TableRow>
               )}
               {vehiclesError && (
                 <TableRow>
-                  <TableCell colSpan={isVendedor ? 5 : 8} className="text-center py-8">
+                  <TableCell colSpan={inventoryTableColSpan} className="text-center py-8">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <p>No se pudo cargar el inventario. {vehiclesError.message || "Error de conexión."}</p>
                       <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -1548,19 +1795,21 @@ export default function Inventory() {
                         </div>
                         <div className="text-sm text-muted-foreground">{vehicle.engine_size || ""}</div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 h-8 w-8"
-                        title="Ver leads que buscan este modelo"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLeadsMatchVehicle(vehicle);
-                        }}
-                      >
-                        <Users className="h-4 w-4" />
-                      </Button>
+                      {!isPhotographer && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 h-8 w-8"
+                          title="Ver leads que buscan este modelo"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLeadsMatchVehicle(vehicle);
+                          }}
+                        >
+                          <Users className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1592,15 +1841,19 @@ export default function Inventory() {
                       )}
                     </div>
                   </TableCell>
-                  {!isVendedor && (
+                  {showPrice && (
                     <TableCell>
                       <div className="space-y-1">
                         <div className="font-medium">{formatCLP(Number(vehicle.price || 0))}</div>
-                        <div className="text-sm text-muted-foreground">Costo: {formatCLP(Number(vehicle.cost || 0))}</div>
+                        {!hidesCosts && (
+                          <div className="text-sm text-muted-foreground">
+                            Costo: {formatCLP(Number(vehicle.cost || 0))}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                   )}
-                  {!isVendedor && (
+                  {!hidesCosts && (
                     <TableCell>
                       <div className={`font-medium ${(Number(vehicle.margin || 0)) > 0 ? 'text-success' : 'text-danger'}`}>
                         {formatCLP(Number(vehicle.margin || 0))}
@@ -1614,20 +1867,28 @@ export default function Inventory() {
                     <Badge
                       variant="outline"
                       className={statusColors[vehicle.status]}
-                      role="button"
-                      tabIndex={0}
-                      title="Click para cambiar estado"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleQuickCycleVehicleStatus(vehicle);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleQuickCycleVehicleStatus(vehicle);
-                        }
-                      }}
+                      role={isPhotographer ? undefined : "button"}
+                      tabIndex={isPhotographer ? undefined : 0}
+                      title={isPhotographer ? undefined : "Click para cambiar estado"}
+                      onClick={
+                        isPhotographer
+                          ? undefined
+                          : (e) => {
+                              e.stopPropagation();
+                              handleQuickCycleVehicleStatus(vehicle);
+                            }
+                      }
+                      onKeyDown={
+                        isPhotographer
+                          ? undefined
+                          : (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleQuickCycleVehicleStatus(vehicle);
+                              }
+                            }
+                      }
                     >
                       <span className="inline-flex items-center gap-2">
                         {statusLabels[vehicle.status]}
@@ -1656,7 +1917,27 @@ export default function Inventory() {
                       ))}
                     </div>
                   </TableCell>
-                  {!isVendedor && (
+                  {isPhotographer && (
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="Subir o editar fotos"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsSaving(true);
+                          vehicleService
+                            .getById(vehicle.id)
+                            .then((full) => setVehicleToEdit(full as any))
+                            .finally(() => setIsSaving(false));
+                        }}
+                      >
+                        <Camera className="h-4 w-4 mr-1" />
+                        Fotos
+                      </Button>
+                    </TableCell>
+                  )}
+                  {!hidesCosts && (
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button
@@ -1676,7 +1957,6 @@ export default function Inventory() {
                         title="Editar"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Para editar necesitamos los JSON completos
                           setIsSaving(true);
                           vehicleService.getById(vehicle.id)
                             .then((full) => setVehicleToEdit(full as any))
@@ -1945,19 +2225,7 @@ export default function Inventory() {
       <Dialog
         open={!!selectedVehicle}
         onOpenChange={(open) => {
-          if (!open) {
-            const params = new URLSearchParams(location.search);
-            if (params.has("vehicle")) {
-              params.delete("vehicle");
-              navigate(
-                { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" },
-                { replace: true }
-              );
-            }
-            setSelectedVehicle(null);
-            setSelectedVehicleFull(null);
-            setSelectedVehicleLoading(false);
-          }
+          if (!open) closeVehicleDetailModal();
         }}
       >
         <DialogContent className="max-w-4xl">
@@ -1967,20 +2235,6 @@ export default function Inventory() {
               Información completa del vehículo seleccionado
             </DialogDescription>
           </DialogHeader>
-
-          {selectedVehicle && (
-            <div className="flex flex-wrap gap-2 -mt-2 mb-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setLeadsMatchVehicle(selectedVehicleFull || selectedVehicle)}
-              >
-                <Users className="h-4 w-4 mr-2" />
-                Leads que buscan este modelo
-              </Button>
-            </div>
-          )}
 
           {selectedVehicle && selectedVehicleComputed && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2061,15 +2315,34 @@ export default function Inventory() {
                     <div className="text-xs text-muted-foreground">Teléfono dueño</div>
                     <div className="font-semibold">{selectedVehicleComputed.ownerPhone}</div>
                   </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Valor por vender</div>
-                    <div className="font-semibold">{formatCLP(Number(selectedVehicle.price || 0))}</div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Pie mínimo</div>
-                    <div className="font-semibold">{formatCLP(selectedVehicleComputed.minDownPayment)}</div>
-                  </div>
+                  {showPrice && (
+                    <div className="rounded-xl border p-3">
+                      <div className="text-xs text-muted-foreground">Valor por vender</div>
+                      <div className="font-semibold">{formatCLP(Number(selectedVehicle.price || 0))}</div>
+                    </div>
+                  )}
+                  {!hidesCosts && (
+                    <div className="rounded-xl border p-3">
+                      <div className="text-xs text-muted-foreground">Pie mínimo</div>
+                      <div className="font-semibold">{formatCLP(selectedVehicleComputed.minDownPayment)}</div>
+                    </div>
+                  )}
                 </div>
+
+                <VehicleConsignacionPanel
+                  vehicleId={(selectedVehicleFull || selectedVehicle).id}
+                  patente={(selectedVehicleFull || selectedVehicle).patente}
+                  branchId={user?.branch_id ?? undefined}
+                  inventoryConsignment={{
+                    owner_name: (selectedVehicleFull || selectedVehicle).owner_name,
+                    owner_phone: (selectedVehicleFull || selectedVehicle).owner_phone,
+                    price: Number((selectedVehicleFull || selectedVehicle).price ?? 0),
+                    consignment_type: getVehicleConsignmentType(
+                      selectedVehicleFull || selectedVehicle
+                    ),
+                    min_down_payment: selectedVehicleComputed?.minDownPayment ?? null,
+                  }}
+                />
 
                 <div className="rounded-xl border p-4">
                   <div className="font-semibold mb-3">Características</div>
@@ -2143,6 +2416,40 @@ export default function Inventory() {
               </div>
             </div>
           )}
+
+          {selectedVehicle && (
+            <DialogFooter className="flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              {!isPhotographer && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setLeadsMatchVehicle(selectedVehicleFull || selectedVehicle)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Leads que buscan este modelo
+                </Button>
+              )}
+              <Button
+                type="button"
+                disabled={isSaving}
+                className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+                onClick={() => openVehicleEditor(selectedVehicleFull || selectedVehicle)}
+              >
+                {isPhotographer ? (
+                  <>
+                    <Camera className="h-4 w-4 mr-2" />
+                    Editar fotos
+                  </>
+                ) : (
+                  <>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar vehículo
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -2152,7 +2459,7 @@ export default function Inventory() {
           if (!open) setLeadsMatchVehicle(null);
         }}
       >
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Leads interesados</DialogTitle>
             <DialogDescription className="sr-only">
@@ -2365,12 +2672,22 @@ export default function Inventory() {
               </div>
               <div>
                 <Label htmlFor="carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
-                <Input
-                  id="carroceria"
-                  value={newVehicle.carroceria}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, carroceria: e.target.value })}
-                  placeholder="Ej: SUV, Sedán"
-                />
+                <Select
+                  value={newVehicle.carroceria || undefined}
+                  onValueChange={(value) => setNewVehicle({ ...newVehicle, carroceria: value })}
+                >
+                  <SelectTrigger id="carroceria">
+                    <SelectValue placeholder="Seleccionar carrocería" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_CARROCERIA_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(newVehicle.carroceria, INVENTORY_CARROCERIA_OPTIONS)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="mileage">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
@@ -2406,33 +2723,62 @@ export default function Inventory() {
               </div>
               <div>
                 <Label htmlFor="transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
-                <Input
-                  id="transmision_display"
-                  value={newVehicle.transmision_display}
-                  onChange={(e) =>
+                <Select
+                  value={newVehicle.transmision_display || undefined}
+                  onValueChange={(value) => {
+                    const match = INVENTORY_TRANSMISION_OPTIONS.find((o) => o.value === value);
                     setNewVehicle({
                       ...newVehicle,
-                      transmision_display: e.target.value,
-                      transmission: deriveTransmissionFromExcelText(e.target.value),
-                    })
-                  }
-                  placeholder="Ej: AUTOMATICO, MECANICO"
-                />
+                      transmision_display: value,
+                      transmission:
+                        match?.transmission ?? deriveTransmissionFromExcelText(value),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="transmision_display">
+                    <SelectValue placeholder="Seleccionar transmisión" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_TRANSMISION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.value}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(
+                      newVehicle.transmision_display,
+                      INVENTORY_TRANSMISION_OPTIONS.map((o) => o.value),
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="combustible_display">{STOCK_ONLINE_COLUMN_LABELS.combustible}</Label>
-                <Input
-                  id="combustible_display"
-                  value={newVehicle.combustible_display}
-                  onChange={(e) =>
+                <Select
+                  value={newVehicle.combustible_display || undefined}
+                  onValueChange={(value) => {
+                    const match = INVENTORY_COMBUSTIBLE_OPTIONS.find((o) => o.value === value);
                     setNewVehicle({
                       ...newVehicle,
-                      combustible_display: e.target.value,
-                      fuel_type: deriveFuelTypeFromExcelText(e.target.value),
-                    })
-                  }
-                  placeholder="Ej: BENCINA, DIESEL"
-                />
+                      combustible_display: value,
+                      fuel_type: match?.fuel_type ?? deriveFuelTypeFromExcelText(value),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="combustible_display">
+                    <SelectValue placeholder="Seleccionar combustible" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_COMBUSTIBLE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.value}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(
+                      newVehicle.combustible_display,
+                      INVENTORY_COMBUSTIBLE_OPTIONS.map((o) => o.value),
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="patente">{STOCK_ONLINE_COLUMN_LABELS.patente}</Label>
@@ -2452,7 +2798,7 @@ export default function Inventory() {
                   onChange={(e) => {
                     try {
                       const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                      setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                     } catch (error) {
                       console.error("Error procesando precio:", error);
                     }
@@ -2461,7 +2807,7 @@ export default function Inventory() {
                     e.preventDefault();
                     const pastedText = e.clipboardData.getData("text");
                     const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                   }}
                   placeholder="Ej: 15.990.000"
                 />
@@ -2490,16 +2836,6 @@ export default function Inventory() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
-                <Label htmlFor="publicado_add" className="text-sm font-normal cursor-pointer">
-                  {STOCK_ONLINE_COLUMN_LABELS.publicado}
-                </Label>
-                <Switch
-                  id="publicado_add"
-                  checked={newVehicle.publicado}
-                  onCheckedChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
-                />
               </div>
               <div>
                 <Label htmlFor="color">Color</Label>
@@ -2570,27 +2906,18 @@ export default function Inventory() {
                 />
               </div>
               <div>
-                <Label htmlFor="minDownPayment">Pie mínimo</Label>
+                <Label htmlFor="minDownPayment">Pie mínimo (30% del precio)</Label>
                 <Input
                   id="minDownPayment"
                   type="text"
+                  readOnly
                   value={formatNumberDisplay(newVehicle.minDownPayment)}
-                  onChange={(e) => {
-                    try {
-                      const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                    } catch (error) {
-                      console.error("Error procesando pie mínimo:", error);
-                    }
-                  }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const pastedText = e.clipboardData.getData("text");
-                    const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  }}
-                  placeholder="Ej: 3.000.000"
+                  className="bg-muted/60 cursor-default"
+                  placeholder="Se calcula al ingresar el precio"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Calculado automáticamente: 30% del precio de venta.
+                </p>
               </div>
               <div>
                 <Label htmlFor="drivetrain">Tracción</Label>
@@ -2619,26 +2946,19 @@ export default function Inventory() {
                 />
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
+            <VehicleFormPublicationFooter
+              publicado={newVehicle.publicado}
+              onPublicadoChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
+              publishSwitchId="publicado_add"
+              onCancel={() => {
                 setShowAddDialog(false);
                 setNewVehicle(createEmptyNewVehicle());
               }}
-              disabled={isSaving}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleCreateVehicle}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
-            >
-              {isSaving ? "Guardando..." : "Guardar Vehículo"}
-            </Button>
+              onSubmit={() => void handleCreateVehicle()}
+              isSaving={isSaving}
+              submitLabel="Guardar vehículo"
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -2655,9 +2975,11 @@ export default function Inventory() {
       >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Vehículo</DialogTitle>
+            <DialogTitle>{isPhotographer ? "Fotos del vehículo" : "Editar Vehículo"}</DialogTitle>
             <DialogDescription>
-              Modifica los datos del vehículo {vehicleToEdit?.make} {vehicleToEdit?.model}
+              {isPhotographer
+                ? `Sube o agrega fotos para ${vehicleToEdit?.make} ${vehicleToEdit?.model}`
+                : `Modifica los datos del vehículo ${vehicleToEdit?.make} ${vehicleToEdit?.model}`}
             </DialogDescription>
           </DialogHeader>
 
@@ -2721,6 +3043,29 @@ export default function Inventory() {
               </div>
             </div>
 
+            {isPhotographer && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-md">
+                <div>
+                  <Label htmlFor="edit-price-fotografo">{STOCK_ONLINE_COLUMN_LABELS.precio} (CLP)</Label>
+                  <Input
+                    id="edit-price-fotografo"
+                    type="text"
+                    value={formatNumberDisplay(newVehicle.price)}
+                    onChange={(e) => {
+                      try {
+                        const formatted = formatNumberInput(e.target.value);
+                        setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
+                      } catch (error) {
+                        console.error("Error procesando precio:", error);
+                      }
+                    }}
+                    placeholder="Ej: 15.990.000"
+                  />
+                </div>
+              </div>
+            )}
+
+            {!isPhotographer && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label htmlFor="edit-make">Marca</Label>
@@ -2762,12 +3107,22 @@ export default function Inventory() {
               </div>
               <div>
                 <Label htmlFor="edit-carroceria">{STOCK_ONLINE_COLUMN_LABELS.carroceria}</Label>
-                <Input
-                  id="edit-carroceria"
-                  value={newVehicle.carroceria}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, carroceria: e.target.value })}
-                  placeholder="Ej: SUV, Sedán"
-                />
+                <Select
+                  value={newVehicle.carroceria || undefined}
+                  onValueChange={(value) => setNewVehicle({ ...newVehicle, carroceria: value })}
+                >
+                  <SelectTrigger id="edit-carroceria">
+                    <SelectValue placeholder="Seleccionar carrocería" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_CARROCERIA_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(newVehicle.carroceria, INVENTORY_CARROCERIA_OPTIONS)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="edit-mileage">{STOCK_ONLINE_COLUMN_LABELS.kilometraje}</Label>
@@ -2803,33 +3158,62 @@ export default function Inventory() {
               </div>
               <div>
                 <Label htmlFor="edit-transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
-                <Input
-                  id="edit-transmision_display"
-                  value={newVehicle.transmision_display}
-                  onChange={(e) =>
+                <Select
+                  value={newVehicle.transmision_display || undefined}
+                  onValueChange={(value) => {
+                    const match = INVENTORY_TRANSMISION_OPTIONS.find((o) => o.value === value);
                     setNewVehicle({
                       ...newVehicle,
-                      transmision_display: e.target.value,
-                      transmission: deriveTransmissionFromExcelText(e.target.value),
-                    })
-                  }
-                  placeholder="Ej: AUTOMATICO, MECANICO"
-                />
+                      transmision_display: value,
+                      transmission:
+                        match?.transmission ?? deriveTransmissionFromExcelText(value),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="edit-transmision_display">
+                    <SelectValue placeholder="Seleccionar transmisión" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_TRANSMISION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.value}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(
+                      newVehicle.transmision_display,
+                      INVENTORY_TRANSMISION_OPTIONS.map((o) => o.value),
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="edit-combustible_display">{STOCK_ONLINE_COLUMN_LABELS.combustible}</Label>
-                <Input
-                  id="edit-combustible_display"
-                  value={newVehicle.combustible_display}
-                  onChange={(e) =>
+                <Select
+                  value={newVehicle.combustible_display || undefined}
+                  onValueChange={(value) => {
+                    const match = INVENTORY_COMBUSTIBLE_OPTIONS.find((o) => o.value === value);
                     setNewVehicle({
                       ...newVehicle,
-                      combustible_display: e.target.value,
-                      fuel_type: deriveFuelTypeFromExcelText(e.target.value),
-                    })
-                  }
-                  placeholder="Ej: BENCINA, DIESEL"
-                />
+                      combustible_display: value,
+                      fuel_type: match?.fuel_type ?? deriveFuelTypeFromExcelText(value),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="edit-combustible_display">
+                    <SelectValue placeholder="Seleccionar combustible" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_COMBUSTIBLE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.value}
+                      </SelectItem>
+                    ))}
+                    {legacySelectItem(
+                      newVehicle.combustible_display,
+                      INVENTORY_COMBUSTIBLE_OPTIONS.map((o) => o.value),
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="edit-patente">{STOCK_ONLINE_COLUMN_LABELS.patente}</Label>
@@ -2849,7 +3233,7 @@ export default function Inventory() {
                   onChange={(e) => {
                     try {
                       const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                      setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                     } catch (error) {
                       console.error("Error procesando precio:", error);
                     }
@@ -2858,7 +3242,7 @@ export default function Inventory() {
                     e.preventDefault();
                     const pastedText = e.clipboardData.getData("text");
                     const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                   }}
                   placeholder="Ej: 15.990.000"
                 />
@@ -2888,16 +3272,6 @@ export default function Inventory() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
-                <Label htmlFor="publicado_edit" className="text-sm font-normal cursor-pointer">
-                  {STOCK_ONLINE_COLUMN_LABELS.publicado}
-                </Label>
-                <Switch
-                  id="publicado_edit"
-                  checked={newVehicle.publicado}
-                  onCheckedChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
-                />
-              </div>
               <div>
                 <Label htmlFor="edit-color">Color</Label>
                 <Input
@@ -2906,26 +3280,6 @@ export default function Inventory() {
                   onChange={(e) => setNewVehicle({ ...newVehicle, color: e.target.value })}
                   placeholder="Ej: Blanco"
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-status">Estado</Label>
-                <Select
-                  value={newVehicle.status}
-                  onValueChange={(value: VehicleStatus) =>
-                    setNewVehicle({ ...newVehicle, status: value })
-                  }
-                >
-                  <SelectTrigger id="edit-status">
-                    <SelectValue placeholder="Estado del vehículo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(statusLabels).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <div>
                 <Label htmlFor="edit-owner_name">Nombre del dueño</Label>
@@ -2987,27 +3341,18 @@ export default function Inventory() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-minDownPayment">Pie mínimo</Label>
+                <Label htmlFor="edit-minDownPayment">Pie mínimo (30% del precio)</Label>
                 <Input
                   id="edit-minDownPayment"
                   type="text"
+                  readOnly
                   value={formatNumberDisplay(newVehicle.minDownPayment)}
-                  onChange={(e) => {
-                    try {
-                      const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                    } catch (error) {
-                      console.error("Error procesando pie mínimo:", error);
-                    }
-                  }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const pastedText = e.clipboardData.getData("text");
-                    const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  }}
-                  placeholder="Ej: 3.000.000"
+                  className="bg-muted/60 cursor-default"
+                  placeholder="Se calcula al ingresar el precio"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Calculado automáticamente: 30% del precio de venta.
+                </p>
               </div>
               <div>
                 <Label htmlFor="edit-drivetrain">Tracción</Label>
@@ -3036,27 +3381,50 @@ export default function Inventory() {
                 />
               </div>
             </div>
+            )}
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
+          {!isPhotographer && (
+            <VehicleFormPublicationFooter
+              publicado={newVehicle.publicado}
+              onPublicadoChange={(checked) => setNewVehicle({ ...newVehicle, publicado: checked })}
+              publishSwitchId="publicado_edit"
+              showStatus
+              status={newVehicle.status}
+              onStatusChange={(value) => setNewVehicle({ ...newVehicle, status: value })}
+              onCancel={() => {
                 setVehicleToEdit(null);
                 setNewVehicle(createEmptyNewVehicle());
               }}
-              disabled={isSaving}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleUpdateVehicle}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
-            >
-              {isSaving ? "Guardando..." : "Guardar Cambios"}
-            </Button>
-          </div>
+              onSubmit={() => void handleUpdateVehicle()}
+              isSaving={isSaving}
+              submitLabel="Guardar cambios"
+            />
+          )}
+
+          {isPhotographer && (
+            <div className="mt-6 flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setVehicleToEdit(null);
+                  setNewVehicle(createEmptyNewVehicle());
+                }}
+                disabled={isSaving}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleUpdateVehicle()}
+                disabled={isSaving}
+                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+              >
+                {isSaving ? "Guardando..." : "Guardar fotos y precio"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

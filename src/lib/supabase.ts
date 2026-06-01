@@ -43,7 +43,7 @@ export interface User {
   email: string
   full_name: string
   phone?: string
-  role: 'admin' | 'gerente' | 'vendedor' | 'financiero' | 'servicio' | 'inventario' | 'jefe_jefe' | 'jefe_sucursal'
+  role: 'admin' | 'gerente' | 'vendedor' | 'fotografo' | 'financiero' | 'servicio' | 'inventario' | 'jefe_jefe' | 'jefe_sucursal'
   tenant_id?: string
   legacy_protected?: boolean
   branch_id?: string

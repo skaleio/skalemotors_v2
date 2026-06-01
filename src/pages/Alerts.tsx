@@ -41,7 +41,7 @@ type EventMeta = {
   icon: LucideIcon;
   iconClass: string;
   description: string;
-  roles: readonly ("admin" | "vendedor" | "gerente" | "jefe_jefe" | "jefe_sucursal" | "inventario" | "financiero" | "servicio")[];
+  roles: readonly ("admin" | "vendedor" | "fotografo" | "gerente" | "jefe_jefe" | "jefe_sucursal" | "inventario" | "financiero" | "servicio")[];
 };
 
 const EVENT_TYPES: readonly EventMeta[] = [
@@ -88,7 +88,7 @@ const EVENT_TYPES: readonly EventMeta[] = [
     icon: Car,
     iconClass: "text-indigo-500",
     description: "Alta de consignación en el sistema",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario"],
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
   },
   {
     key: "consignacion_stale",
@@ -97,7 +97,7 @@ const EVENT_TYPES: readonly EventMeta[] = [
     icon: Clock,
     iconClass: "text-amber-500",
     description: "Consignaciones en revisión > 7 días sin publicarse",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario"],
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
   },
   {
     key: "vehicle_unpublished",
@@ -106,7 +106,7 @@ const EVENT_TYPES: readonly EventMeta[] = [
     icon: Car,
     iconClass: "text-amber-600",
     description: "Vehículos disponibles > 5 días sin publicarse",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario"],
+    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
   },
 ] as const;
 

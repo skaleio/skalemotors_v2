@@ -170,6 +170,14 @@ async function handler(req: Request): Promise<Response> {
     return jsonResponse(400, { ok: false, error: msg });
   }
 
+  const { error: linkCreatorErr } = await admin
+    .from("users")
+    .update({ created_by_user_id: userData.user.id })
+    .eq("id", created.user.id);
+  if (linkCreatorErr) {
+    console.error("[vendor-user-create] created_by_user_id:", linkCreatorErr.code, linkCreatorErr.message);
+  }
+
   return jsonResponse(200, {
     ok: true,
     user_id: created.user.id,

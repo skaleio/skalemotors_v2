@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   BarChart3,
+  Camera,
   CreditCard as BillingIcon,
   Calculator,
   Calendar,
@@ -14,10 +15,12 @@ import {
   ClipboardList,
   DollarSign,
   FileText,
+  Globe,
   Keyboard,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageCircle,
   MoreVertical,
   PieChart,
   Pin,
@@ -26,6 +29,7 @@ import {
   Plus,
   Receipt,
   ScrollText,
+  Share2,
   Settings,
   Target,
   TrendingUp,
@@ -61,6 +65,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { isPhotographerRole, isVendorRole } from "@/lib/appRoles";
 import { cn } from "@/lib/utils";
 
 const menuCategories = [
@@ -77,10 +82,12 @@ const menuCategories = [
     icon: Target,
     items: [
       { title: "CRM", url: "/app/crm", icon: Target },
+      { title: "WhatsApp", url: "/app/whatsapp", icon: MessageCircle },
       { title: "Leads", url: "/app/leads", icon: Users },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
-      { title: "Tareas", url: "/app/tasks", icon: ListChecks },
+      { title: "Informe diario", url: "/app/tasks", icon: ListChecks },
       { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
+      { title: "Redes sociales", url: "/app/redes-sociales", icon: Share2 },
     ]
   },
   {
@@ -88,6 +95,7 @@ const menuCategories = [
     icon: Car,
     items: [
       { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
+      { title: "Álbumes", url: "/app/albums", icon: Camera },
       { title: "Tasación", url: "/app/tasacion", icon: Calculator },
     ]
   },
@@ -95,6 +103,7 @@ const menuCategories = [
     title: "Documentos",
     icon: FileText,
     items: [
+      { title: "Documentos", url: "/app/documents", icon: FileText },
       { title: "Contratos de Venta", url: "/app/documents/venta", icon: FileText },
       { title: "Contratos de Consignación", url: "/app/documents/consignacion", icon: ScrollText },
     ]
@@ -119,6 +128,7 @@ const settingsCategory = {
   icon: Settings,
   items: [
     { title: "Configuración", url: "/app/settings", icon: Settings },
+    { title: "Mi Web", url: "/app/website", icon: Globe },
     { title: "Integraciones", url: "/app/integrations", icon: Plug },
     { title: "Usuarios", url: "/app/users", icon: UserCog },
   ]
@@ -146,7 +156,9 @@ export function AppSidebar() {
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
 
-  const isVendorOnly = user?.role === "vendedor";
+  const isVendorOnly = isVendorRole(user?.role);
+  const isPhotographerOnly = isPhotographerRole(user?.role);
+  const isFieldRoleOnly = isVendorOnly || isPhotographerOnly;
 
   /* Pin / hover-overlay: en desktop el sidebar puede estar 'pinned' (fijo
      expandido como hoy) o 'unpinned' (colapsado por default; al pasar el
@@ -205,6 +217,20 @@ export function AppSidebar() {
   const isOverlay = !isMobile && !pinned && hovering;
 
   const categoriesToShow = useMemo(() => {
+    if (isPhotographerOnly) {
+      return [
+        {
+          title: "Mi trabajo",
+          icon: Car,
+          items: [
+            { title: "Inventario", url: "/app/consignaciones", icon: Car },
+            { title: "Álbumes", url: "/app/albums", icon: Camera },
+            { title: "Precios web", url: "/app/website", icon: Globe },
+            { title: "Tareas pendientes", url: "/app/mis-tareas", icon: ListChecks },
+          ],
+        },
+      ];
+    }
     if (isVendorOnly) {
       return menuCategories
         .map((c) => {
@@ -221,7 +247,7 @@ export function AppSidebar() {
         .filter((c): c is (typeof menuCategories)[number] => c !== null);
     }
     return menuCategories;
-  }, [isVendorOnly]);
+  }, [isVendorOnly, isPhotographerOnly]);
 
   const findCategoryForPath = (path: string): string | null => {
     const basePath = path.split('?')[0];
@@ -241,7 +267,7 @@ export function AppSidebar() {
       }
     }
 
-    if (isVendorOnly) return null;
+    if (isFieldRoleOnly) return null;
 
     if (settingsCategory.items.some(item => {
       const itemBasePath = item.url.split('?')[0];
@@ -452,7 +478,7 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-              {!isVendorOnly && (
+              {!isFieldRoleOnly && (
                 <>
                   <div className="h-px bg-sidebar-border mx-2 my-2" aria-hidden="true" />
                   <SidebarMenuItem>
@@ -512,7 +538,7 @@ export function AppSidebar() {
                 </Collapsible>
               ))}
 
-              {!isVendorOnly ? (
+              {!isFieldRoleOnly ? (
                 <Collapsible
                   open={expandedCategories["Sistema"]}
                   onOpenChange={() => toggleCategory("Sistema")}

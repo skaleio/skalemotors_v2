@@ -34,5 +34,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Una sola copia de React; duplicados provocan "Should have a queue" en hooks.
+    dedupe: ["react", "react-dom"],
   },
 }));

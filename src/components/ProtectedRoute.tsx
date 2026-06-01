@@ -2,6 +2,11 @@ import DashboardLoader from "@/components/DashboardLoader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMfaGate } from "@/hooks/useMfaGate";
 import { useToast } from "@/hooks/use-toast";
+import {
+  isPathBlockedForPhotographer,
+  isPhotographerRole,
+  postAuthHomeForRole,
+} from "@/lib/appRoles";
 import { type AppPermission, hasPermission, isFinancePermission } from "@/lib/rbac";
 import { ReactNode, useEffect } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
@@ -10,10 +15,6 @@ interface ProtectedRouteProps {
   children: ReactNode;
   requiredRole?: string[];
   requiredPermission?: AppPermission;
-}
-
-function postAuthHomeForRole(role: string | undefined): string {
-  return role === "vendedor" ? "/app/crm" : "/app";
 }
 
 function AccessDeniedRedirect({ variant }: { variant: "finance" | "generic" }) {
@@ -84,7 +85,11 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
   }
 
   if (!needsOnboarding && location.pathname === "/onboarding") {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={postAuthHomeForRole(user.role)} replace />;
+  }
+
+  if (isPhotographerRole(user.role) && isPathBlockedForPhotographer(location.pathname)) {
+    return <Navigate to="/app/consignaciones" replace />;
   }
 
   if (requiredRole && !requiredRole.includes(user.role)) {

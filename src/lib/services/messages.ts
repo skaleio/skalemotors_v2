@@ -128,6 +128,10 @@ export async function sendWhatsappText(params: {
     },
   });
   if (error) throw error;
+  const payload = data as { ok?: boolean; error?: string; code?: string } | null;
+  if (payload && payload.ok === false) {
+    throw new Error(payload.error ?? "Error al enviar WhatsApp");
+  }
   return data;
 }
 

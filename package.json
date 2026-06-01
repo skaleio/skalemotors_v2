@@ -14,7 +14,10 @@
     "create:user": "node scripts/create_user.mjs",
     "provision:tenant": "node scripts/provision_tenant.mjs",
     "lead-ingest:key": "node scripts/generate_lead_ingest_key.mjs",
-    "check:rls": "node scripts/check-rls.mjs"
+    "security:preflight": "node scripts/security-preflight.mjs",
+    "check:rls": "node scripts/check-rls.mjs",
+    "dev:vitrina": "npm run dev --prefix apps/vitrina",
+    "build:vitrina": "npm run build --prefix apps/vitrina"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

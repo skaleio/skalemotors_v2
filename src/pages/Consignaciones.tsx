@@ -33,7 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Calendar, ChevronDown, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, ChevronDown, FileText, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, memo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -852,6 +852,7 @@ export default function Consignaciones() {
         fecha: formState.fecha && formState.fecha.trim() ? formState.fecha.trim() : null,
         consignacion_price: parseCurrencyInput(formState.consignacion_price),
         sale_price: parseCurrencyInput(formState.sale_price),
+        tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id ?? null,
         created_by: user.id,
       } satisfies Database["public"]["Tables"]["consignaciones"]["Insert"];
@@ -1837,6 +1838,25 @@ export default function Consignaciones() {
                                 compact
                               />
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (item.vehicle_id) {
+                                  navigate(
+                                    `/app/documents/vehiculo/${item.vehicle_id}?tipo=consignacion`
+                                  );
+                                } else {
+                                  navigate(
+                                    `/app/documents/consignacion?consignacionId=${item.id}`
+                                  );
+                                }
+                              }}
+                              title="Generar contrato de consignación"
+                              className="h-8 w-8"
+                            >
+                              <FileText className="h-4 w-4 text-pink-600" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

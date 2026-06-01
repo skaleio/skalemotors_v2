@@ -26,6 +26,8 @@ const SalespersonRanking = lazy(() => import("./pages/SalespersonRanking"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Appointments = lazy(() => import("./pages/Appointments"));
 const PendingTasks = lazy(() => import("./pages/PendingTasks"));
+const PhotographerTasks = lazy(() => import("./pages/PhotographerTasks"));
+const Albums = lazy(() => import("./pages/Albums"));
 const Finance = lazy(() => import("./pages/Finance"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
@@ -34,9 +36,15 @@ const SalaryDistribution = lazy(() => import("./pages/SalaryDistribution"));
 const Billing = lazy(() => import("./pages/Billing"));
 const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
 const Documents = lazy(() => import("./pages/Documents"));
+const DocumentsHub = lazy(() => import("./pages/DocumentsHub"));
+const DocumentEditor = lazy(() => import("./pages/DocumentEditor"));
 const Settings = lazy(() => import("./pages/Settings"));
 const MonitorPage = lazy(() => import("./pages/MonitorPage"));
 const Integrations = lazy(() => import("./pages/Integrations"));
+const RedesSociales = lazy(() => import("./pages/RedesSociales"));
+const RedesSocialesCallback = lazy(() => import("./pages/RedesSocialesCallback"));
+const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
+const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
 const Users = lazy(() => import("./pages/Users"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Alerts = lazy(() => import("./pages/Alerts"));
@@ -145,6 +153,20 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/app/mis-tareas" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PhotographerTasks />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/albums" element={
+                <ProtectedRoute requiredRole={["admin", "fotografo"]}>
+                  <Layout>
+                    <Albums />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app/ranking" element={
                 <ProtectedRoute requiredRole={['admin', 'gerente', 'financiero', 'jefe_jefe', 'jefe_sucursal']}>
                   <Layout>
@@ -243,6 +265,20 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/app/documents" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DocumentsHub />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/documents/vehiculo/:vehicleId" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DocumentEditor />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app/documents/venta" element={
                 <ProtectedRoute>
                   <Layout>
@@ -282,6 +318,34 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Integrations />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/redes-sociales" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <RedesSociales />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/redes-sociales/callback" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <RedesSocialesCallback />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/website" element={
+                <ProtectedRoute requiredRole={['admin', 'gerente', 'jefe_jefe', 'jefe_sucursal']}>
+                  <Layout>
+                    <WebsiteBuilder />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/whatsapp" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <WhatsAppInbox />
                   </Layout>
                 </ProtectedRoute>
               } />

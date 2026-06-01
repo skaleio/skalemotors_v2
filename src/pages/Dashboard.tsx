@@ -55,6 +55,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (user?.role === "vendedor") {
       navigate("/app/crm", { replace: true });
+    } else if (user?.role === "fotografo") {
+      navigate("/app/consignaciones", { replace: true });
     }
   }, [user?.role, navigate]);
 

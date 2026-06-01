@@ -121,4 +121,46 @@ export const consignacionesService = {
     const { error } = await supabase.from("consignaciones").delete().eq("id", id);
     if (error) throw error;
   },
+
+  /** Consignación vigente para armar un contrato desde inventario/documentos. */
+  async resolveForVehicle(params: {
+    vehicleId: string;
+    patente?: string | null;
+    branchId?: string;
+  }): Promise<ConsignacionWithRelations | null> {
+    const select = `
+        *,
+        lead:leads(id, full_name, phone, email, rut, tags),
+        vehicle:vehicles(id, make, model, year, vin, color, primary_image_url, patente, mileage)
+      `;
+
+    const { data: byVehicle, error: e1 } = await supabase
+      .from("consignaciones")
+      .select(select)
+      .eq("vehicle_id", params.vehicleId)
+      .in("status", ["nuevo", "en_revision", "en_venta", "negociando"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (e1) throw e1;
+    if (byVehicle) return byVehicle as ConsignacionWithRelations;
+
+    const plate = params.patente?.trim().toUpperCase();
+    if (!plate) return null;
+
+    let q = supabase
+      .from("consignaciones")
+      .select(select)
+      .eq("patente", plate)
+      .in("status", ["nuevo", "en_revision", "en_venta", "negociando"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (params.branchId) q = q.eq("branch_id", params.branchId);
+
+    const { data: byPlate, error: e2 } = await q.maybeSingle();
+    if (e2) throw e2;
+    return (byPlate as ConsignacionWithRelations) ?? null;
+  },
 };

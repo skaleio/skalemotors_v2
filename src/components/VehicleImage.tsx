@@ -69,7 +69,9 @@ export const VehicleImage = memo(function VehicleImage({
   onError,
   ...rest
 }: VehicleImageProps) {
-  const cfg = PRESETS[preset];
+  const resolvedPreset: VehicleImagePreset =
+    preset && preset in PRESETS ? preset : "thumb-sm";
+  const cfg = PRESETS[resolvedPreset];
   const { initialSrc, rawUrl } = useMemo(() => {
     const normalized = normalizeUrl(src);
     if (!normalized) return { initialSrc: fallback, rawUrl: null as string | null };

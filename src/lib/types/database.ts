@@ -167,6 +167,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -191,6 +192,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -215,6 +217,7 @@ export interface Database {
             | 'admin'
             | 'gerente'
             | 'vendedor'
+            | 'fotografo'
             | 'financiero'
             | 'servicio'
             | 'inventario'
@@ -327,6 +330,178 @@ export interface Database {
           updated_at?: string
         }
       }
+      tenant_sites: {
+        Row: {
+          id: string
+          tenant_id: string
+          is_published: boolean
+          theme: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name: string | null
+          logo_url: string | null
+          favicon_url: string | null
+          font: string | null
+          primary_color: string
+          secondary_color: string | null
+          hero_title: string | null
+          hero_subtitle: string | null
+          hero_image_url: string | null
+          about_text: string | null
+          whatsapp_phone: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          address: string | null
+          social: Json
+          sections: Json
+          videos: Json
+          seo_title: string | null
+          seo_description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          is_published?: boolean
+          theme?: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name?: string | null
+          logo_url?: string | null
+          favicon_url?: string | null
+          font?: string | null
+          primary_color?: string
+          secondary_color?: string | null
+          hero_title?: string | null
+          hero_subtitle?: string | null
+          hero_image_url?: string | null
+          about_text?: string | null
+          whatsapp_phone?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address?: string | null
+          social?: Json
+          sections?: Json
+          videos?: Json
+          seo_title?: string | null
+          seo_description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          is_published?: boolean
+          theme?: 'moderna' | 'tradicional' | 'premium' | 'miami'
+          site_name?: string | null
+          logo_url?: string | null
+          favicon_url?: string | null
+          font?: string | null
+          primary_color?: string
+          secondary_color?: string | null
+          hero_title?: string | null
+          hero_subtitle?: string | null
+          hero_image_url?: string | null
+          about_text?: string | null
+          whatsapp_phone?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          address?: string | null
+          social?: Json
+          sections?: Json
+          videos?: Json
+          seo_title?: string | null
+          seo_description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      vehicle_photo_assets: {
+        Row: {
+          id: string
+          tenant_id: string
+          vehicle_id: string
+          album: string
+          url: string
+          sort_order: number
+          is_cover: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          vehicle_id: string
+          album: string
+          url: string
+          sort_order?: number
+          is_cover?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          vehicle_id?: string
+          album?: string
+          url?: string
+          sort_order?: number
+          is_cover?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_photo_assets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_photo_assets_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tenant_domains: {
+        Row: {
+          id: string
+          tenant_id: string
+          domain: string
+          kind: 'subdomain' | 'custom'
+          is_primary: boolean
+          verification_status: 'pending' | 'verified' | 'error'
+          vercel_domain_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          domain: string
+          kind: 'subdomain' | 'custom'
+          is_primary?: boolean
+          verification_status?: 'pending' | 'verified' | 'error'
+          vercel_domain_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          domain?: string
+          kind?: 'subdomain' | 'custom'
+          is_primary?: boolean
+          verification_status?: 'pending' | 'verified' | 'error'
+          vercel_domain_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
         Row: {
           id: string
           tenant_id: string
@@ -392,6 +567,7 @@ export interface Database {
           transmision_display: string | null
           combustible_display: string | null
           publicado: boolean
+          publicado_web: boolean
           primary_image_url: string | null
           created_at: string
           updated_at: string
@@ -432,6 +608,7 @@ export interface Database {
           transmision_display?: string | null
           combustible_display?: string | null
           publicado?: boolean
+          publicado_web?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -471,6 +648,7 @@ export interface Database {
           transmision_display?: string | null
           combustible_display?: string | null
           publicado?: boolean
+          publicado_web?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1055,6 +1233,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      daily_sales_reports: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          user_id: string
+          report_date: string
+          payload: Json
+          submitted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          user_id: string
+          report_date: string
+          payload?: Json
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          user_id?: string
+          report_date?: string
+          payload?: Json
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       notifications: {
         Row: {
           id: string
@@ -1349,6 +1562,47 @@ export interface Database {
           raw_payload?: Json | null
         }
       }
+      tenant_ycloud_config: {
+        Row: {
+          tenant_id: string
+          api_key: string
+          webhook_secret: string | null
+          ycloud_webhook_endpoint_id: string | null
+          status: 'active' | 'disconnected' | 'error'
+          last_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          tenant_id: string
+          api_key: string
+          webhook_secret?: string | null
+          ycloud_webhook_endpoint_id?: string | null
+          status?: 'active' | 'disconnected' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          tenant_id?: string
+          api_key?: string
+          webhook_secret?: string | null
+          ycloud_webhook_endpoint_id?: string | null
+          status?: 'active' | 'disconnected' | 'error'
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      tenant_ycloud_config_public: {
+        Row: {
+          tenant_id: string
+          status: string
+          webhook_configured: boolean
+          api_key_configured: boolean
+          updated_at: string
+        }
+      }
       whatsapp_inboxes: {
         Row: {
           id: string
@@ -1356,6 +1610,12 @@ export interface Database {
           provider_phone_number_id: string
           display_number: string | null
           branch_id: string
+          tenant_id: string | null
+          waba_id: string | null
+          status: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error: string | null
+          connected_by: string | null
+          connected_at: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -1366,6 +1626,12 @@ export interface Database {
           provider_phone_number_id: string
           display_number?: string | null
           branch_id: string
+          tenant_id?: string | null
+          waba_id?: string | null
+          status?: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error?: string | null
+          connected_by?: string | null
+          connected_at?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -1376,9 +1642,56 @@ export interface Database {
           provider_phone_number_id?: string
           display_number?: string | null
           branch_id?: string
+          tenant_id?: string | null
+          waba_id?: string | null
+          status?: 'disconnected' | 'pending' | 'active' | 'error'
+          last_error?: string | null
+          connected_by?: string | null
+          connected_at?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      whatsapp_inbox_credentials: {
+        Row: {
+          inbox_id: string
+          access_token: string
+          token_expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          inbox_id: string
+          access_token: string
+          token_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          inbox_id?: string
+          access_token?: string
+          token_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      whatsapp_inboxes_public: {
+        Row: {
+          id: string
+          tenant_id: string | null
+          branch_id: string
+          provider: string
+          provider_phone_number_id: string
+          display_number: string | null
+          waba_id: string | null
+          status: string
+          last_error: string | null
+          connected_by: string | null
+          connected_at: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
         }
       }
       sales: {
@@ -1841,6 +2154,14 @@ export interface Database {
           p_key_id: string
         }
         Returns: Json
+      }
+      sync_daily_sales_report_tasks: {
+        Args: {
+          p_report_date?: string
+        }
+        Returns: {
+          pending_tasks_created: number
+        }[]
       }
     }
   }
