@@ -1044,8 +1044,6 @@ export default function CRM() {
         ) {
           merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
         }
-      } else if (!isVendedor && assignedId && assignedId !== user.id) {
-        merged.push({ key: closeDealSellerKeyUser(assignedId), label: "Vendedor asignado al lead" });
       }
 
       if (user.tenant_id) {
