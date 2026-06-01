@@ -88,7 +88,6 @@ const menuCategories = [
       { title: "Leads", url: "/app/leads", icon: Users },
       { title: "Citas", url: "/app/appointments", icon: Calendar },
       { title: "Informe diario", url: "/app/tasks", icon: ListChecks },
-      { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
       { title: "Redes sociales", url: "/app/redes-sociales", icon: Share2 },
     ]
   },
@@ -115,6 +114,7 @@ const menuCategories = [
     icon: DollarSign,
     items: [
       { title: "Gastos / Ingresos", url: "/app/finance", icon: Receipt },
+      { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
       { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
       { title: "Ventas", url: "/app/sales", icon: TrendingUp },
       { title: "Distribución de Salarios", url: "/app/salary-distribution", icon: PieChart },
