@@ -13,6 +13,7 @@
 // tanto para verify_lead_ingest_key RPC como para el UPDATE final a leads.
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { isProductionEnv } from "../_shared/env.ts";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -116,6 +117,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   if (!perBranchOk) {
+    if (isProductionEnv()) {
+      return jsonResponse(401, { ok: false, error: "Invalid API key" });
+    }
     const legacyKey = Deno.env.get("LEAD_STATE_API_KEY");
     const legacyOk = legacyKey && provided.includes(legacyKey);
     if (!legacyOk) {

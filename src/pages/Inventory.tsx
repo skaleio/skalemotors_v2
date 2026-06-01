@@ -12,6 +12,7 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -55,6 +56,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
 import { VehicleImage } from "@/components/VehicleImage";
+import { VehicleConsignacionPanel } from "@/components/inventory/VehicleConsignacionPanel";
 import { useQuery } from "@tanstack/react-query";
 import {
   canViewInventoryPrice,
@@ -410,6 +412,24 @@ const parseNumberInput = (value: string): number => {
     return 0;
   }
 };
+
+/** Pie mínimo = 30% del precio de venta (no del costo). */
+const MIN_DOWN_PAYMENT_RATE = 0.3;
+
+function minDownPaymentFromSalePrice(salePrice: number): number {
+  const price = Math.max(0, Math.round(salePrice));
+  return Math.round(price * MIN_DOWN_PAYMENT_RATE);
+}
+
+type NewVehicleFormState = ReturnType<typeof createEmptyNewVehicle>;
+
+function patchVehicleSalePrice(prev: NewVehicleFormState, salePrice: number): NewVehicleFormState {
+  return {
+    ...prev,
+    price: salePrice,
+    minDownPayment: minDownPaymentFromSalePrice(salePrice),
+  };
+}
 
 const formatNumberDisplay = (value: number): string => {
   try {
@@ -811,6 +831,34 @@ export default function Inventory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVehicle?.id]);
 
+  const closeVehicleDetailModal = () => {
+    const params = new URLSearchParams(location.search);
+    if (params.has("vehicle")) {
+      params.delete("vehicle");
+      navigate(
+        {
+          pathname: location.pathname,
+          search: params.toString() ? `?${params.toString()}` : "",
+        },
+        { replace: true },
+      );
+    }
+    setSelectedVehicle(null);
+    setSelectedVehicleFull(null);
+    setSelectedVehicleLoading(false);
+  };
+
+  const openVehicleEditor = (vehicle: Vehicle) => {
+    setIsSaving(true);
+    vehicleService
+      .getById(vehicle.id)
+      .then((full) => {
+        setVehicleToEdit(full as any);
+        closeVehicleDetailModal();
+      })
+      .finally(() => setIsSaving(false));
+  };
+
   useEffect(() => {
     const handleOpenNewVehicleForm = () => setShowAddDialog(true);
     window.addEventListener("openNewVehicleForm", handleOpenNewVehicleForm);
@@ -869,7 +917,7 @@ export default function Inventory() {
     if (!base) return null;
     const margin = Number(base.margin ?? 0);
     const price = Number(base.price ?? 0);
-    const minDownPayment = Math.round(price * 0.2);
+    const minDownPayment = minDownPaymentFromSalePrice(price);
     const engine = base.engine_size || "—";
 
     return {
@@ -943,7 +991,7 @@ export default function Inventory() {
         publicado: vehicleToEdit.publicado ?? false,
         price: Number(vehicleToEdit.price || 0),
         cost: Number(vehicleToEdit.cost || 0),
-        minDownPayment: Number(features.min_down_payment || 0),
+        minDownPayment: minDownPaymentFromSalePrice(Number(vehicleToEdit.price || 0)),
         engine_size: vehicleToEdit.engine_size || "",
         fuel_type: vehicleToEdit.fuel_type || "gasolina",
         transmission: vehicleToEdit.transmission || "automático",
@@ -984,7 +1032,8 @@ export default function Inventory() {
     try {
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
-      const minDownPayment = newVehicle.minDownPayment || 0;
+      const salePrice = Number(newVehicle.price || 0);
+      const minDownPayment = minDownPaymentFromSalePrice(salePrice);
       const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
       const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
@@ -1189,7 +1238,8 @@ export default function Inventory() {
 
       // Calcular margen
       const margin = newVehicle.price - newVehicle.cost;
-      const minDownPayment = newVehicle.minDownPayment || 0;
+      const salePrice = Number(newVehicle.price || 0);
+      const minDownPayment = minDownPaymentFromSalePrice(salePrice);
       const fuelDerived = deriveFuelTypeFromExcelText(newVehicle.combustible_display);
       const transDerived = deriveTransmissionFromExcelText(newVehicle.transmision_display);
 
@@ -2175,19 +2225,7 @@ export default function Inventory() {
       <Dialog
         open={!!selectedVehicle}
         onOpenChange={(open) => {
-          if (!open) {
-            const params = new URLSearchParams(location.search);
-            if (params.has("vehicle")) {
-              params.delete("vehicle");
-              navigate(
-                { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" },
-                { replace: true }
-              );
-            }
-            setSelectedVehicle(null);
-            setSelectedVehicleFull(null);
-            setSelectedVehicleLoading(false);
-          }
+          if (!open) closeVehicleDetailModal();
         }}
       >
         <DialogContent className="max-w-4xl">
@@ -2197,39 +2235,6 @@ export default function Inventory() {
               Información completa del vehículo seleccionado
             </DialogDescription>
           </DialogHeader>
-
-          {selectedVehicle && (
-            <div className="flex flex-wrap gap-2 -mt-2 mb-2">
-              {isPhotographer ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const v = selectedVehicleFull || selectedVehicle;
-                    setIsSaving(true);
-                    vehicleService
-                      .getById(v.id)
-                      .then((full) => setVehicleToEdit(full as any))
-                      .finally(() => setIsSaving(false));
-                  }}
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  Editar fotos
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLeadsMatchVehicle(selectedVehicleFull || selectedVehicle)}
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Leads que buscan este modelo
-                </Button>
-              )}
-            </div>
-          )}
 
           {selectedVehicle && selectedVehicleComputed && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2324,6 +2329,21 @@ export default function Inventory() {
                   )}
                 </div>
 
+                <VehicleConsignacionPanel
+                  vehicleId={(selectedVehicleFull || selectedVehicle).id}
+                  patente={(selectedVehicleFull || selectedVehicle).patente}
+                  branchId={user?.branch_id ?? undefined}
+                  inventoryConsignment={{
+                    owner_name: (selectedVehicleFull || selectedVehicle).owner_name,
+                    owner_phone: (selectedVehicleFull || selectedVehicle).owner_phone,
+                    price: Number((selectedVehicleFull || selectedVehicle).price ?? 0),
+                    consignment_type: getVehicleConsignmentType(
+                      selectedVehicleFull || selectedVehicle
+                    ),
+                    min_down_payment: selectedVehicleComputed?.minDownPayment ?? null,
+                  }}
+                />
+
                 <div className="rounded-xl border p-4">
                   <div className="font-semibold mb-3">Características</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -2395,6 +2415,40 @@ export default function Inventory() {
                 </div>
               </div>
             </div>
+          )}
+
+          {selectedVehicle && (
+            <DialogFooter className="flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              {!isPhotographer && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setLeadsMatchVehicle(selectedVehicleFull || selectedVehicle)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Leads que buscan este modelo
+                </Button>
+              )}
+              <Button
+                type="button"
+                disabled={isSaving}
+                className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+                onClick={() => openVehicleEditor(selectedVehicleFull || selectedVehicle)}
+              >
+                {isPhotographer ? (
+                  <>
+                    <Camera className="h-4 w-4 mr-2" />
+                    Editar fotos
+                  </>
+                ) : (
+                  <>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar vehículo
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
@@ -2744,7 +2798,7 @@ export default function Inventory() {
                   onChange={(e) => {
                     try {
                       const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                      setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                     } catch (error) {
                       console.error("Error procesando precio:", error);
                     }
@@ -2753,7 +2807,7 @@ export default function Inventory() {
                     e.preventDefault();
                     const pastedText = e.clipboardData.getData("text");
                     const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                   }}
                   placeholder="Ej: 15.990.000"
                 />
@@ -2852,27 +2906,18 @@ export default function Inventory() {
                 />
               </div>
               <div>
-                <Label htmlFor="minDownPayment">Pie mínimo</Label>
+                <Label htmlFor="minDownPayment">Pie mínimo (30% del precio)</Label>
                 <Input
                   id="minDownPayment"
                   type="text"
+                  readOnly
                   value={formatNumberDisplay(newVehicle.minDownPayment)}
-                  onChange={(e) => {
-                    try {
-                      const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                    } catch (error) {
-                      console.error("Error procesando pie mínimo:", error);
-                    }
-                  }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const pastedText = e.clipboardData.getData("text");
-                    const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  }}
-                  placeholder="Ej: 3.000.000"
+                  className="bg-muted/60 cursor-default"
+                  placeholder="Se calcula al ingresar el precio"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Calculado automáticamente: 30% del precio de venta.
+                </p>
               </div>
               <div>
                 <Label htmlFor="drivetrain">Tracción</Label>
@@ -3009,7 +3054,7 @@ export default function Inventory() {
                     onChange={(e) => {
                       try {
                         const formatted = formatNumberInput(e.target.value);
-                        setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                        setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                       } catch (error) {
                         console.error("Error procesando precio:", error);
                       }
@@ -3188,7 +3233,7 @@ export default function Inventory() {
                   onChange={(e) => {
                     try {
                       const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                      setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                     } catch (error) {
                       console.error("Error procesando precio:", error);
                     }
@@ -3197,7 +3242,7 @@ export default function Inventory() {
                     e.preventDefault();
                     const pastedText = e.clipboardData.getData("text");
                     const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, price: parseNumberInput(formatted) });
+                    setNewVehicle(patchVehicleSalePrice(newVehicle, parseNumberInput(formatted)));
                   }}
                   placeholder="Ej: 15.990.000"
                 />
@@ -3296,27 +3341,18 @@ export default function Inventory() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-minDownPayment">Pie mínimo</Label>
+                <Label htmlFor="edit-minDownPayment">Pie mínimo (30% del precio)</Label>
                 <Input
                   id="edit-minDownPayment"
                   type="text"
+                  readOnly
                   value={formatNumberDisplay(newVehicle.minDownPayment)}
-                  onChange={(e) => {
-                    try {
-                      const formatted = formatNumberInput(e.target.value);
-                      setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                    } catch (error) {
-                      console.error("Error procesando pie mínimo:", error);
-                    }
-                  }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const pastedText = e.clipboardData.getData("text");
-                    const formatted = formatNumberInput(pastedText);
-                    setNewVehicle({ ...newVehicle, minDownPayment: parseNumberInput(formatted) });
-                  }}
-                  placeholder="Ej: 3.000.000"
+                  className="bg-muted/60 cursor-default"
+                  placeholder="Se calcula al ingresar el precio"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Calculado automáticamente: 30% del precio de venta.
+                </p>
               </div>
               <div>
                 <Label htmlFor="edit-drivetrain">Tracción</Label>

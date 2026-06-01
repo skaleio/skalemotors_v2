@@ -131,10 +131,31 @@ function parseListings(html: string, baseUrl: string): ChileAutosListing[] {
   return results;
 }
 
+function isProductionEnv(): boolean {
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").toLowerCase();
+  if (vercelEnv) return vercelEnv === "production";
+  return (process.env.NODE_ENV ?? "").toLowerCase() === "production";
+}
+
+function validateScrapeAuth(req: VercelRequest): boolean {
+  const expected = process.env.CHILEAUTOS_SCRAPE_API_KEY?.trim();
+  if (!expected) {
+    return !isProductionEnv();
+  }
+  const provided =
+    (req.headers["x-api-key"] as string | undefined)?.trim() ||
+    (typeof req.query?.api_key === "string" ? req.query.api_key.trim() : "");
+  return provided === expected;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Método no permitido" });
+  }
+
+  if (!validateScrapeAuth(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   // H14: rate-limit por IP.

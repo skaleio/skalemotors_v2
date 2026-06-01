@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 import { requireAuth, assertBranchInTenant } from "../_shared/authGuard.ts";
 import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
+import { readJsonBodyWithLimit } from "../_shared/payloadLimits.ts";
 
 /** Cliente Supabase en Edge; tipo explícito para que el IDE no infiera unknown. */
 type EdgeSupabaseClient = { from(table: string): SupabaseQueryChain };
@@ -307,13 +308,11 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
   }
 
-  let body: { type?: string; payload?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    console.error(`${LOG_PREFIX} Invalid JSON body`);
-    return jsonResponse(400, { ok: false, error: "Invalid JSON body" });
+  const parsed = await readJsonBodyWithLimit(req);
+  if (!parsed.ok) {
+    return jsonResponse(400, { ok: false, error: parsed.error });
   }
+  const body = parsed.body as { type?: string; payload?: unknown };
 
   const { type, payload } = body;
   if (!type || payload === undefined || typeof type !== "string") {

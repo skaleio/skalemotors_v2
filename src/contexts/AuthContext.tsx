@@ -94,13 +94,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const SIGNIN_TIMEOUT_MS = 15 * 1000;
 
   const getProfileCacheKey = (userId: string) => `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
+  const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  type ProfileCacheEnvelope = { profile: User; cachedAt: number };
 
   const readCachedProfile = (userId: string): User | null => {
     if (typeof window === "undefined") return null;
     try {
       const raw = window.localStorage.getItem(getProfileCacheKey(userId));
       if (!raw) return null;
-      return JSON.parse(raw) as User;
+      const parsed = JSON.parse(raw) as ProfileCacheEnvelope | User;
+      if (parsed && typeof parsed === "object" && "cachedAt" in parsed && "profile" in parsed) {
+        const env = parsed as ProfileCacheEnvelope;
+        if (Date.now() - env.cachedAt > PROFILE_CACHE_TTL_MS) return null;
+        return env.profile;
+      }
+      return parsed as User;
     } catch {
       return null;
     }
@@ -109,7 +118,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const writeCachedProfile = (profile: User) => {
     if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem(getProfileCacheKey(profile.id), JSON.stringify(profile));
+      const envelope: ProfileCacheEnvelope = { profile, cachedAt: Date.now() };
+      window.localStorage.setItem(getProfileCacheKey(profile.id), JSON.stringify(envelope));
     } catch {
       // ignorar si localStorage no está disponible
     }

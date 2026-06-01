@@ -216,6 +216,45 @@ function isProductionEnv(): boolean {
   return (process.env.NODE_ENV ?? "").toLowerCase() === "production";
 }
 
+async function loadIdempotentResponse(
+  supabase: SupabaseClient,
+  branchId: string,
+  idempotencyKey: string,
+): Promise<{ status_code: number; response_body: unknown } | null> {
+  const { data, error } = await supabase
+    .from("lead_ingest_idempotency")
+    .select("status_code, response_body")
+    .eq("branch_id", branchId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) {
+    console.error("[n8n-lead-ingest] idempotency load:", error);
+    return null;
+  }
+  return data ?? null;
+}
+
+async function storeIdempotentResponse(
+  supabase: SupabaseClient,
+  branchId: string,
+  idempotencyKey: string,
+  statusCode: number,
+  responseBody: unknown,
+): Promise<void> {
+  const { error } = await supabase.from("lead_ingest_idempotency").upsert(
+    {
+      branch_id: branchId,
+      idempotency_key: idempotencyKey,
+      status_code: statusCode,
+      response_body: responseBody,
+    },
+    { onConflict: "branch_id,idempotency_key" },
+  );
+  if (error) {
+    console.error("[n8n-lead-ingest] idempotency store:", error);
+  }
+}
+
 async function resolveIngestKey(
   supabase: SupabaseClient,
   providedKey: string,
@@ -333,6 +372,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const branchId = auth.resolution.branchId;
+
+  const idempotencyKey = (req.headers["idempotency-key"] as string | undefined)?.trim();
+  if (idempotencyKey) {
+    const cached = await loadIdempotentResponse(supabase, branchId, idempotencyKey);
+    if (cached) {
+      return res.status(cached.status_code).json(cached.response_body);
+    }
+  }
+
+  const finish = async (statusCode: number, payload: unknown) => {
+    if (idempotencyKey && statusCode >= 200 && statusCode < 300) {
+      await storeIdempotentResponse(supabase, branchId, idempotencyKey, statusCode, payload);
+    }
+    return res.status(statusCode).json(payload);
+  };
 
   // Fallback: si el cliente mandó raw_message / mensaje_mike / notes con formato
   // "Label: valor" por línea, extraemos los campos faltantes para llenar columnas
@@ -488,7 +542,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq("id", auth.resolution.keyRowId);
       }
 
-      return res.status(200).json({ ok: true, created: false, data: updated });
+      return finish(200, { ok: true, created: false, data: updated });
     }
   }
 
@@ -550,5 +604,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq("id", auth.resolution.keyRowId);
   }
 
-  return res.status(200).json({ ok: true, created: true, data: created });
+  return finish(200, { ok: true, created: true, data: created });
 }

@@ -36,9 +36,13 @@ const SalaryDistribution = lazy(() => import("./pages/SalaryDistribution"));
 const Billing = lazy(() => import("./pages/Billing"));
 const VehicleAppraisal = lazy(() => import("./pages/VehicleAppraisal"));
 const Documents = lazy(() => import("./pages/Documents"));
+const DocumentsHub = lazy(() => import("./pages/DocumentsHub"));
+const DocumentEditor = lazy(() => import("./pages/DocumentEditor"));
 const Settings = lazy(() => import("./pages/Settings"));
 const MonitorPage = lazy(() => import("./pages/MonitorPage"));
 const Integrations = lazy(() => import("./pages/Integrations"));
+const RedesSociales = lazy(() => import("./pages/RedesSociales"));
+const RedesSocialesCallback = lazy(() => import("./pages/RedesSocialesCallback"));
 const WebsiteBuilder = lazy(() => import("./pages/WebsiteBuilder"));
 const WhatsAppInbox = lazy(() => import("./pages/WhatsAppInbox"));
 const Users = lazy(() => import("./pages/Users"));
@@ -261,6 +265,20 @@ const App = () => (
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/app/documents" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DocumentsHub />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/documents/vehiculo/:vehicleId" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <DocumentEditor />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               <Route path="/app/documents/venta" element={
                 <ProtectedRoute>
                   <Layout>
@@ -300,6 +318,20 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Integrations />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/redes-sociales" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <RedesSociales />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/redes-sociales/callback" element={
+                <ProtectedRoute>
+                  <Layout>
+                    <RedesSocialesCallback />
                   </Layout>
                 </ProtectedRoute>
               } />

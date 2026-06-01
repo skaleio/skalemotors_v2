@@ -29,6 +29,7 @@ import {
   Plus,
   Receipt,
   ScrollText,
+  Share2,
   Settings,
   Target,
   TrendingUp,
@@ -86,6 +87,7 @@ const menuCategories = [
       { title: "Citas", url: "/app/appointments", icon: Calendar },
       { title: "Informe diario", url: "/app/tasks", icon: ListChecks },
       { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
+      { title: "Redes sociales", url: "/app/redes-sociales", icon: Share2 },
     ]
   },
   {
@@ -101,6 +103,7 @@ const menuCategories = [
     title: "Documentos",
     icon: FileText,
     items: [
+      { title: "Documentos", url: "/app/documents", icon: FileText },
       { title: "Contratos de Venta", url: "/app/documents/venta", icon: FileText },
       { title: "Contratos de Consignación", url: "/app/documents/consignacion", icon: ScrollText },
     ]

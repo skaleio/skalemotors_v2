@@ -3,6 +3,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { logAiUsage } from "../_shared/aiUsageLogger.ts";
 import { requireAuth, assertBranchInTenant } from "../_shared/authGuard.ts";
 import { assertTenantAiBudget, aiBudgetExceededResponse } from "../_shared/aiQuotaGuard.ts";
+import { assertMaxTextField, readJsonBodyWithLimit } from "../_shared/payloadLimits.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
@@ -164,14 +165,21 @@ export default async function handler(req: Request): Promise<Response> {
   }
   const { ctx } = auth;
 
-  let body: RequestBody;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse(400, { ok: false, error: "Invalid JSON body" });
+  const parsed = await readJsonBodyWithLimit(req);
+  if (!parsed.ok) {
+    return jsonResponse(400, { ok: false, error: parsed.error });
   }
+  const body = parsed.body as RequestBody;
 
   const { tool, data = {} } = body;
+  try {
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === "string") assertMaxTextField(v, k);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Payload too large";
+    return jsonResponse(400, { ok: false, error: msg });
+  }
   const validTools: Tool[] = [
     "vehicle_description",
     "sales_script",

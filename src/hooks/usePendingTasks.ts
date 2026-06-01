@@ -1,3 +1,4 @@
+import { dedupePendingTasks } from '@/lib/pendingTaskDedupe'
 import { canSyncStaleAlerts, pendingTasksService, syncPendingTasksIfDue } from '@/lib/services/pendingTasks'
 import { supabase } from '@/lib/supabase'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -64,7 +65,7 @@ async function fetchPendingTasks(opts: UsePendingTasksOptions): Promise<PendingT
 
   const { data, error } = await q
   if (error) throw error
-  const list = data ?? []
+  const list = dedupePendingTasks(data ?? [])
   const order: Record<string, number> = { urgent: 0, today: 1, later: 2 }
   return [...list].sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2))
 }

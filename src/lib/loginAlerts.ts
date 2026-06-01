@@ -1,4 +1,5 @@
 import type { PendingTask } from "@/hooks/usePendingTasks";
+import { dedupePendingTasks } from "@/lib/pendingTaskDedupe";
 
 const SESSION_KEY_PREFIX = "skale:login-alerts-shown:";
 
@@ -76,9 +77,10 @@ export function filterTasksForLoginRole(
   tasks: PendingTask[],
   role: string | null | undefined,
 ): PendingTask[] {
+  const deduped = dedupePendingTasks(tasks);
   const allowed = role ? ENTITY_BY_ROLE[role] : undefined;
-  if (!allowed) return tasks;
-  return tasks.filter((t) => allowed.includes(t.entity_type));
+  if (!allowed) return deduped;
+  return deduped.filter((t) => allowed.includes(t.entity_type));
 }
 
 function taskCategory(task: PendingTask): LoginAlertCategory {

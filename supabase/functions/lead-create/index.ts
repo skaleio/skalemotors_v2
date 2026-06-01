@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -92,15 +93,6 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(405, { ok: false, error: "Method not allowed" });
   }
 
-  const expectedKey = Deno.env.get("LEAD_INGEST_API_KEY");
-  if (!expectedKey) {
-    return jsonResponse(500, { ok: false, error: "Server misconfiguration: API key not set" });
-  }
-  const provided = getApiKey(req);
-  if (!provided || !provided.includes(expectedKey)) {
-    return jsonResponse(401, { ok: false, error: "Invalid API key" });
-  }
-
   let body: Payload;
   try {
     body = await req.json();
@@ -150,6 +142,25 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(500, { ok: false, error: "Missing Supabase env vars" });
   }
 
+  const keyAuth = await resolveLeadAutomationAuth(
+    req,
+    branchId,
+    supabaseUrl,
+    serviceRoleKey,
+    ["LEAD_INGEST_API_KEY"],
+  );
+  if (!keyAuth.ok) {
+    return jsonResponse(keyAuth.status, { ok: false, error: keyAuth.error });
+  }
+
+  const updateExisting = body.update_existing === true;
+  if (updateExisting && !req.headers.get("idempotency-key")?.trim()) {
+    return jsonResponse(400, {
+      ok: false,
+      error: "Idempotency-Key header is required when update_existing=true",
+    });
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
@@ -161,15 +172,14 @@ export default async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (branchError) {
-    return jsonResponse(400, { ok: false, error: branchError.message });
+    console.error("[lead-create] branch lookup:", branchError);
+    return jsonResponse(500, { ok: false, error: "Internal error resolving branch" });
   }
   if (!branch) {
     return jsonResponse(400, { ok: false, error: "Invalid branch_id" });
   }
 
   const tenantId = branch.tenant_id ?? null;
-
-  const updateExisting = body.update_existing === true;
 
   if (updateExisting) {
     const { data: existing, error: findError } = await supabase
@@ -182,7 +192,8 @@ export default async function handler(req: Request): Promise<Response> {
       .maybeSingle();
 
     if (findError) {
-      return jsonResponse(400, { ok: false, error: findError.message });
+      console.error("[lead-create] find lead:", findError);
+      return jsonResponse(500, { ok: false, error: "Internal error finding lead" });
     }
 
     if (existing?.id) {
@@ -216,7 +227,8 @@ export default async function handler(req: Request): Promise<Response> {
         .maybeSingle();
 
       if (updError) {
-        return jsonResponse(400, { ok: false, error: updError.message });
+        console.error("[lead-create] update lead:", updError);
+        return jsonResponse(500, { ok: false, error: "Internal error updating lead" });
       }
 
       return jsonResponse(200, { ok: true, created: false, data: updated });

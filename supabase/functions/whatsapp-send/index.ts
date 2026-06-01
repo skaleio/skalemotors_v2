@@ -86,13 +86,14 @@ async function handler(req: Request): Promise<Response> {
     if (!inbox) {
       return jsonResponse(404, { ok: false, error: "Inbox no encontrado" });
     }
-    if (branchId && inbox.branch_id !== branchId && !auth.ctx.legacyProtected) {
+    // H3: siempre validar tenant del inbox (salvo legacy allowlist en authGuard).
+    if (!auth.ctx.legacyProtected && tenantId && inbox.tenant_id && inbox.tenant_id !== tenantId) {
+      return jsonResponse(403, { ok: false, error: "Inbox does not belong to your tenant" });
+    }
+    if (branchId && inbox.branch_id && inbox.branch_id !== branchId) {
       const role = auth.ctx.role ?? "";
-      if (role !== "admin" && role !== "gerente") {
+      if (role !== "admin" && role !== "gerente" && role !== "jefe_jefe" && role !== "jefe_sucursal") {
         return jsonResponse(403, { ok: false, error: "Inbox does not belong to your branch" });
-      }
-      if (tenantId && inbox.tenant_id && inbox.tenant_id !== tenantId) {
-        return jsonResponse(403, { ok: false, error: "Inbox does not belong to your tenant" });
       }
     }
   } else if (branchId) {
