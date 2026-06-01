@@ -1,6 +1,6 @@
-import { corsHeaders } from "../_shared/cors.ts";
 import { requireZernioAuth } from "../_shared/zernioAuth.ts";
 import { zernioFetch } from "../_shared/zernioClient.ts";
+import { zernioJson, zernioOptions } from "../_shared/zernioHttp.ts";
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -11,21 +11,14 @@ const ALLOWED_TYPES = new Set([
   "video/mp4",
 ]);
 
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
 type PresignBody = {
   filename?: string;
   content_type?: string;
 };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return zernioOptions(req);
+  if (req.method !== "POST") return zernioJson(req, 405, { ok: false, error: "Method not allowed" });
 
   const auth = await requireZernioAuth(req);
   if (auth instanceof Response) return auth;
@@ -34,13 +27,13 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "JSON inválido" });
+    return zernioJson(req, 400, { ok: false, error: "JSON inválido" });
   }
 
   const filename = (body.filename ?? "upload.jpg").trim();
   const contentType = (body.content_type ?? "image/jpeg").trim().toLowerCase();
   if (!ALLOWED_TYPES.has(contentType)) {
-    return jsonResponse(400, { ok: false, error: "Tipo de archivo no permitido" });
+    return zernioJson(req, 400, { ok: false, error: "Tipo de archivo no permitido" });
   }
 
   try {
@@ -55,11 +48,11 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     if (!presign.uploadUrl || !presign.publicUrl) {
-      return jsonResponse(502, { ok: false, error: "Respuesta presign incompleta" });
+      return zernioJson(req, 502, { ok: false, error: "Respuesta presign incompleta" });
     }
 
-    return jsonResponse(200, { ok: true, ...presign });
+    return zernioJson(req, 200, { ok: true, ...presign });
   } catch (e) {
-    return jsonResponse(500, { ok: false, error: (e as Error).message });
+    return zernioJson(req, 500, { ok: false, error: (e as Error).message });
   }
 }

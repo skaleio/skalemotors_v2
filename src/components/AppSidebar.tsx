@@ -1,6 +1,8 @@
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { prefetchZernioAccounts } from "@/hooks/useZernioAccounts";
 import { leadService } from "@/lib/services/leads";
+import { showOrgTab } from "@/lib/zernio/rbac";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -359,10 +361,18 @@ export function AppSidebar() {
     });
   }, [queryClient, user?.branch_id]);
 
+  const prefetchRedesSociales = useCallback(() => {
+    const scopes = showOrgTab(user?.role) ? (["org", "personal"] as const) : (["personal"] as const);
+    prefetchZernioAccounts(queryClient, [...scopes]);
+  }, [queryClient, user?.role]);
+
   const renderItem = (item: { title: string; url: string; icon: typeof LayoutDashboard }) => {
     const active = isActive(item.url);
     const cls = cn(itemBaseCls, active ? itemActiveCls : itemInactiveCls);
     const isLeadsItem = item.url === "/app/leads";
+    const isRedesItem = item.url === "/app/redes-sociales";
+    const prefetchNav =
+      isLeadsItem ? prefetchLeads : isRedesItem ? prefetchRedesSociales : undefined;
 
     const content = (
       <>
@@ -383,9 +393,9 @@ export function AppSidebar() {
       <NavLink
         to={item.url}
         end={item.url === "/"}
-        onMouseEnter={isLeadsItem ? prefetchLeads : undefined}
-        onFocus={isLeadsItem ? prefetchLeads : undefined}
-        onTouchStart={isLeadsItem ? prefetchLeads : undefined}
+        onMouseEnter={prefetchNav}
+        onFocus={prefetchNav}
+        onTouchStart={prefetchNav}
         className={cls}
       >
         {content}

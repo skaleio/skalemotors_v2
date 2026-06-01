@@ -1,19 +1,12 @@
-import { corsHeaders } from "../_shared/cors.ts";
 import { requireZernioAuth } from "../_shared/zernioAuth.ts";
+import { zernioJson, zernioOptions } from "../_shared/zernioHttp.ts";
 import { canAccessScope, type ZernioScope } from "../_shared/zernioRbac.ts";
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 type ListBody = { scope?: ZernioScope; limit?: number };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return zernioOptions(req);
+  if (req.method !== "POST") return zernioJson(req, 405, { ok: false, error: "Method not allowed" });
 
   const auth = await requireZernioAuth(req);
   if (auth instanceof Response) return auth;
@@ -22,14 +15,14 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "JSON inválido" });
+    return zernioJson(req, 400, { ok: false, error: "JSON inválido" });
   }
 
   const scope = body.scope === "org" ? "org" : body.scope === "personal" ? "personal" : null;
   const limit = Math.min(Math.max(body.limit ?? 20, 1), 50);
-  if (!scope) return jsonResponse(400, { ok: false, error: "scope debe ser org o personal" });
+  if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
   if (!canAccessScope(scope, auth.role)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para este ámbito" });
+    return zernioJson(req, 403, { ok: false, error: "Sin permiso para este ámbito" });
   }
 
   let query = auth.admin
@@ -47,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const { data, error } = await query;
-  if (error) return jsonResponse(500, { ok: false, error: error.message });
+  if (error) return zernioJson(req, 500, { ok: false, error: error.message });
 
-  return jsonResponse(200, { ok: true, posts: data ?? [] });
+  return zernioJson(req, 200, { ok: true, posts: data ?? [] });
 }

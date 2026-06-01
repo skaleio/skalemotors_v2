@@ -1,13 +1,6 @@
-import { corsHeaders } from "../_shared/cors.ts";
 import { requireZernioAuth } from "../_shared/zernioAuth.ts";
+import { zernioJson, zernioOptions } from "../_shared/zernioHttp.ts";
 import { canAccessScope, canMutateOrgAccounts, type ZernioScope } from "../_shared/zernioRbac.ts";
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 type DisconnectBody = {
   scope?: ZernioScope;
@@ -15,8 +8,8 @@ type DisconnectBody = {
 };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return zernioOptions(req);
+  if (req.method !== "POST") return zernioJson(req, 405, { ok: false, error: "Method not allowed" });
 
   const auth = await requireZernioAuth(req);
   if (auth instanceof Response) return auth;
@@ -25,19 +18,19 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "JSON inválido" });
+    return zernioJson(req, 400, { ok: false, error: "JSON inválido" });
   }
 
   const scope = body.scope === "org" ? "org" : body.scope === "personal" ? "personal" : null;
   const zernioAccountId = (body.zernio_account_id ?? "").trim();
-  if (!scope) return jsonResponse(400, { ok: false, error: "scope debe ser org o personal" });
-  if (!zernioAccountId) return jsonResponse(400, { ok: false, error: "zernio_account_id es requerido" });
+  if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
+  if (!zernioAccountId) return zernioJson(req, 400, { ok: false, error: "zernio_account_id es requerido" });
 
   if (scope === "org" && !canMutateOrgAccounts(auth.role)) {
-    return jsonResponse(403, { ok: false, error: "No puedes desconectar cuentas de la automotora" });
+    return zernioJson(req, 403, { ok: false, error: "No puedes desconectar cuentas de la automotora" });
   }
   if (!canAccessScope(scope, auth.role)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para este ámbito" });
+    return zernioJson(req, 403, { ok: false, error: "Sin permiso para este ámbito" });
   }
 
   let query = auth.admin
@@ -52,8 +45,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const { data, error } = await query.select("id");
-  if (error) return jsonResponse(500, { ok: false, error: error.message });
-  if (!data?.length) return jsonResponse(404, { ok: false, error: "Cuenta no encontrada" });
+  if (error) return zernioJson(req, 500, { ok: false, error: error.message });
+  if (!data?.length) return zernioJson(req, 404, { ok: false, error: "Cuenta no encontrada" });
 
-  return jsonResponse(200, { ok: true });
+  return zernioJson(req, 200, { ok: true });
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { zernioAccountsQueryKey } from "@/hooks/useZernioAccounts";
 import { syncZernioAccounts } from "@/lib/services/zernioApi";
 import type { ZernioScope } from "@/lib/zernio/rbac";
 import { toast } from "sonner";
@@ -8,6 +10,7 @@ import { toast } from "sonner";
 export default function RedesSocialesCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [message, setMessage] = useState("Sincronizando cuentas conectadas…");
 
   useEffect(() => {
@@ -22,6 +25,7 @@ export default function RedesSocialesCallback() {
     (async () => {
       try {
         const { synced } = await syncZernioAccounts(scope);
+        await queryClient.invalidateQueries({ queryKey: zernioAccountsQueryKey(scope) });
         if (cancelled) return;
         const connected = searchParams.get("connected");
         if (connected) {
@@ -44,7 +48,7 @@ export default function RedesSocialesCallback() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, searchParams]);
+  }, [navigate, queryClient, searchParams]);
 
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-8">

@@ -1,15 +1,8 @@
-import { corsHeaders } from "../_shared/cors.ts";
 import { requireZernioAuth } from "../_shared/zernioAuth.ts";
 import { zernioFetch } from "../_shared/zernioClient.ts";
+import { zernioJson, zernioOptions } from "../_shared/zernioHttp.ts";
 import { resolveZernioProfileId } from "../_shared/zernioProfiles.ts";
 import { canAccessScope, type ZernioScope } from "../_shared/zernioRbac.ts";
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 type SyncBody = { scope?: ZernioScope };
 
@@ -22,8 +15,8 @@ type ZernioAccount = {
 };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return zernioOptions(req);
+  if (req.method !== "POST") return zernioJson(req, 405, { ok: false, error: "Method not allowed" });
 
   const auth = await requireZernioAuth(req);
   if (auth instanceof Response) return auth;
@@ -32,13 +25,13 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "JSON inválido" });
+    return zernioJson(req, 400, { ok: false, error: "JSON inválido" });
   }
 
   const scope = body.scope === "org" ? "org" : body.scope === "personal" ? "personal" : null;
-  if (!scope) return jsonResponse(400, { ok: false, error: "scope debe ser org o personal" });
+  if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
   if (!canAccessScope(scope, auth.role)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para este ámbito" });
+    return zernioJson(req, 403, { ok: false, error: "Sin permiso para este ámbito" });
   }
 
   try {
@@ -80,16 +73,16 @@ export default async function handler(req: Request): Promise<Response> {
       const { error } = await auth.admin.from("zernio_accounts").upsert(rows, {
         onConflict: "tenant_id,scope,zernio_account_id",
       });
-      if (error) return jsonResponse(500, { ok: false, error: error.message });
+      if (error) return zernioJson(req, 500, { ok: false, error: error.message });
     }
 
-    return jsonResponse(200, {
+    return zernioJson(req, 200, {
       ok: true,
       synced: rows.length,
       profileId,
       scope,
     });
   } catch (e) {
-    return jsonResponse(500, { ok: false, error: (e as Error).message });
+    return zernioJson(req, 500, { ok: false, error: (e as Error).message });
   }
 }

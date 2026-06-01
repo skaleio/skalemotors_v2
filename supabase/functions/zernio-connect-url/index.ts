@@ -1,15 +1,8 @@
-import { corsHeaders } from "../_shared/cors.ts";
 import { requireZernioAuth } from "../_shared/zernioAuth.ts";
 import { zernioFetch } from "../_shared/zernioClient.ts";
+import { zernioJson, zernioOptions } from "../_shared/zernioHttp.ts";
 import { resolveZernioProfileId } from "../_shared/zernioProfiles.ts";
 import { canAccessScope, canConnectOrg, type ZernioScope } from "../_shared/zernioRbac.ts";
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 type ConnectBody = {
   scope?: ZernioScope;
@@ -18,8 +11,8 @@ type ConnectBody = {
 };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return zernioOptions(req);
+  if (req.method !== "POST") return zernioJson(req, 405, { ok: false, error: "Method not allowed" });
 
   const auth = await requireZernioAuth(req);
   if (auth instanceof Response) return auth;
@@ -28,19 +21,19 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "JSON inválido" });
+    return zernioJson(req, 400, { ok: false, error: "JSON inválido" });
   }
 
   const scope = body.scope === "org" ? "org" : body.scope === "personal" ? "personal" : null;
   const platform = (body.platform ?? "").trim().toLowerCase();
-  if (!scope) return jsonResponse(400, { ok: false, error: "scope debe ser org o personal" });
-  if (!platform) return jsonResponse(400, { ok: false, error: "platform es requerido" });
+  if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
+  if (!platform) return zernioJson(req, 400, { ok: false, error: "platform es requerido" });
 
   if (scope === "org" && !canConnectOrg(auth.role)) {
-    return jsonResponse(403, { ok: false, error: "No tienes permiso para conectar cuentas de la automotora" });
+    return zernioJson(req, 403, { ok: false, error: "No tienes permiso para conectar cuentas de la automotora" });
   }
   if (!canAccessScope(scope, auth.role)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para este ámbito" });
+    return zernioJson(req, 403, { ok: false, error: "Sin permiso para este ámbito" });
   }
 
   try {
@@ -67,25 +60,35 @@ export default async function handler(req: Request): Promise<Response> {
 
     const redirectUrl = (body.redirect_url ?? "").trim();
     if (!redirectUrl) {
-      return jsonResponse(400, { ok: false, error: "redirect_url es requerido" });
+      return zernioJson(req, 400, { ok: false, error: "redirect_url es requerido" });
     }
     try {
       new URL(redirectUrl);
     } catch {
-      return jsonResponse(400, { ok: false, error: "redirect_url inválido" });
+      return zernioJson(req, 400, { ok: false, error: "redirect_url inválido" });
     }
 
-    const connect = await zernioFetch<{ authUrl?: string; auth_url?: string }>(
-      `/connect/${encodeURIComponent(platform)}?profileId=${encodeURIComponent(profileId)}&redirect_url=${encodeURIComponent(redirectUrl)}`,
-    );
+    const connectPath =
+      `/connect/${encodeURIComponent(platform)}?profileId=${encodeURIComponent(profileId)}&redirect_url=${encodeURIComponent(redirectUrl)}`;
 
-    const authUrl = connect.authUrl ?? connect.auth_url;
+    const connect = await zernioFetch<Record<string, unknown>>(connectPath);
+
+    let authUrl: string | null = null;
+    if (typeof connect.authUrl === "string") authUrl = connect.authUrl;
+    else if (typeof connect.auth_url === "string") authUrl = connect.auth_url;
+    else if (typeof connect.url === "string") authUrl = connect.url;
+    else if (connect.data && typeof connect.data === "object") {
+      const nested = connect.data as Record<string, unknown>;
+      if (typeof nested.authUrl === "string") authUrl = nested.authUrl;
+      else if (typeof nested.auth_url === "string") authUrl = nested.auth_url;
+    }
+
     if (!authUrl) {
-      return jsonResponse(502, { ok: false, error: "Zernio no devolvió URL de conexión" });
+      return zernioJson(req, 502, { ok: false, error: "Zernio no devolvió URL de conexión" });
     }
 
-    return jsonResponse(200, { ok: true, authUrl, scope, platform });
+    return zernioJson(req, 200, { ok: true, authUrl, scope, platform });
   } catch (e) {
-    return jsonResponse(500, { ok: false, error: (e as Error).message });
+    return zernioJson(req, 500, { ok: false, error: (e as Error).message });
   }
 }

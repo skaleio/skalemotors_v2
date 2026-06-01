@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders } from "./cors.ts";
 
 export type ZernioAuthContext = {
   userId: string;
@@ -13,23 +14,25 @@ function getEnv(name: string): string | null {
   return Deno.env.get(name) ?? null;
 }
 
+function authErrorResponse(req: Request, status: number, error: string): Response {
+  const cors = getCorsHeaders(req);
+  return new Response(JSON.stringify({ ok: false, error }), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
 export async function requireZernioAuth(req: Request): Promise<ZernioAuthContext | Response> {
   const authHeader = req.headers.get("authorization") || "";
   if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return new Response(JSON.stringify({ ok: false, error: "Missing auth" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return authErrorResponse(req, 401, "Missing auth");
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
   const anonKey = getEnv("SUPABASE_ANON_KEY");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? getEnv("SERVICE_ROLE_KEY");
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return new Response(JSON.stringify({ ok: false, error: "Missing Supabase env vars" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return authErrorResponse(req, 500, "Missing Supabase env vars");
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -37,10 +40,7 @@ export async function requireZernioAuth(req: Request): Promise<ZernioAuthContext
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) {
-    return new Response(JSON.stringify({ ok: false, error: "Invalid auth" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return authErrorResponse(req, 401, "Invalid auth");
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
@@ -51,10 +51,7 @@ export async function requireZernioAuth(req: Request): Promise<ZernioAuthContext
     .maybeSingle();
 
   if (profileErr || !profile?.tenant_id) {
-    return new Response(JSON.stringify({ ok: false, error: "Perfil de usuario no encontrado" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json" },
-    });
+    return authErrorResponse(req, 403, "Perfil de usuario no encontrado");
   }
 
   return {

@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fnRoot = path.join(__dirname, "..", "supabase", "functions");
 
 const NEED = {
-  "zernio-connect-url": ["cors.ts", "zernioAuth.ts", "zernioClient.ts", "zernioProfiles.ts", "zernioRbac.ts"],
+  "zernio-connect-url": ["cors.ts", "zernioHttp.ts", "zernioAuth.ts", "zernioClient.ts", "zernioProfiles.ts", "zernioRbac.ts"],
   "zernio-accounts-sync": ["cors.ts", "zernioAuth.ts", "zernioClient.ts", "zernioProfiles.ts", "zernioRbac.ts"],
   "zernio-accounts-list": ["cors.ts", "zernioAuth.ts", "zernioRbac.ts"],
   "zernio-accounts-disconnect": ["cors.ts", "zernioAuth.ts", "zernioRbac.ts"],
