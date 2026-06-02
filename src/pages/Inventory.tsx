@@ -59,6 +59,7 @@ import { VehicleImage } from "@/components/VehicleImage";
 import { VehicleConsignacionPanel } from "@/components/inventory/VehicleConsignacionPanel";
 import {
   VehicleStatusPicker,
+  VehicleStatusLabel,
   type VehicleStatus,
   VEHICLE_STATUS_LABELS as statusLabels,
 } from "@/components/inventory/VehicleStatusPicker";
@@ -304,9 +305,9 @@ function VehicleFormPublicationFooter({
                 <SelectValue placeholder="Estado del vehículo" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(statusLabels).map(([key, label]) => (
+                {Object.entries(statusLabels).map(([key]) => (
                   <SelectItem key={key} value={key}>
-                    {label}
+                    <VehicleStatusLabel statusKey={key} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1619,8 +1620,10 @@ export default function Inventory() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los estados</SelectItem>
-            {Object.entries(statusLabels).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
+            {Object.entries(statusLabels).map(([key]) => (
+              <SelectItem key={key} value={key}>
+                <VehicleStatusLabel statusKey={key} />
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

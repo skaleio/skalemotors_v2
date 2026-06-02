@@ -31,19 +31,73 @@ export const VEHICLE_STATUS_ORDER: VehicleStatus[] = [
   "retirado",
 ];
 
-const statusColors: Record<VehicleStatus, string> = {
-  disponible: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
-  reservado: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
-  vendido: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
-  vendido_por_dueno: "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
-  retirado: "bg-slate-100 text-slate-800 dark:bg-slate-900/20 dark:text-slate-400",
-  en_reparacion: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
-  fuera_de_servicio: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+/** Un color distinto por estado (badge + punto del menú). */
+export const VEHICLE_STATUS_STYLES: Record<
+  VehicleStatus,
+  { badge: string; dot: string }
+> = {
+  disponible: {
+    badge:
+      "border-emerald-300/70 bg-emerald-100 text-emerald-900 dark:border-emerald-700/60 dark:bg-emerald-950/50 dark:text-emerald-300",
+    dot: "bg-emerald-600",
+  },
+  reservado: {
+    badge:
+      "border-amber-300/70 bg-amber-100 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300",
+    dot: "bg-amber-500",
+  },
+  en_reparacion: {
+    badge:
+      "border-sky-300/70 bg-sky-100 text-sky-900 dark:border-sky-700/60 dark:bg-sky-950/50 dark:text-sky-300",
+    dot: "bg-sky-600",
+  },
+  fuera_de_servicio: {
+    badge:
+      "border-rose-300/70 bg-rose-100 text-rose-900 dark:border-rose-700/60 dark:bg-rose-950/50 dark:text-rose-300",
+    dot: "bg-rose-600",
+  },
+  vendido: {
+    badge:
+      "border-zinc-400/70 bg-zinc-200 text-zinc-900 dark:border-zinc-600/60 dark:bg-zinc-800/80 dark:text-zinc-200",
+    dot: "bg-zinc-600",
+  },
+  vendido_por_dueno: {
+    badge:
+      "border-orange-300/70 bg-orange-100 text-orange-950 dark:border-orange-700/60 dark:bg-orange-950/50 dark:text-orange-300",
+    dot: "bg-orange-600",
+  },
+  retirado: {
+    badge:
+      "border-violet-300/70 bg-violet-100 text-violet-950 dark:border-violet-700/60 dark:bg-violet-950/50 dark:text-violet-300",
+    dot: "bg-violet-600",
+  },
 };
 
 function resolveStatus(status: string | null | undefined): VehicleStatus {
   if (status && status in VEHICLE_STATUS_LABELS) return status as VehicleStatus;
   return "disponible";
+}
+
+/** Etiqueta con punto de color (filtros, formularios). */
+export function VehicleStatusLabel({
+  statusKey,
+  className,
+}: {
+  statusKey: string;
+  className?: string;
+}) {
+  const key = resolveStatus(statusKey);
+  return (
+    <span className={cn("inline-flex items-center gap-2", className)}>
+      <span
+        className={cn(
+          "h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-black/10 dark:ring-white/15",
+          VEHICLE_STATUS_STYLES[key].dot
+        )}
+      />
+      <span>{VEHICLE_STATUS_LABELS[key]}</span>
+    </span>
+  );
 }
 
 interface VehicleStatusPickerProps {
@@ -64,7 +118,7 @@ export function VehicleStatusPicker({
 
   if (disabled) {
     return (
-      <Badge variant="outline" className={statusColors[current]}>
+      <Badge variant="outline" className={VEHICLE_STATUS_STYLES[current].badge}>
         {label}
       </Badge>
     );
@@ -85,7 +139,7 @@ export function VehicleStatusPicker({
             variant="outline"
             className={cn(
               "cursor-pointer gap-1 pr-1.5 hover:opacity-90 transition-opacity",
-              statusColors[current]
+              VEHICLE_STATUS_STYLES[current].badge
             )}
           >
             <span>{label}</span>
@@ -113,15 +167,10 @@ export function VehicleStatusPicker({
             }}
           >
             <span
-              className={cn("h-2 w-2 rounded-full shrink-0", {
-                "bg-green-600": key === "disponible",
-                "bg-yellow-600": key === "reservado",
-                "bg-blue-600": key === "en_reparacion",
-                "bg-red-600": key === "fuera_de_servicio",
-                "bg-gray-500": key === "vendido",
-                "bg-orange-600": key === "vendido_por_dueno",
-                "bg-slate-500": key === "retirado",
-              })}
+              className={cn(
+                "h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-black/10 dark:ring-white/15",
+                VEHICLE_STATUS_STYLES[key].dot
+              )}
             />
             <span className="flex-1">{VEHICLE_STATUS_LABELS[key]}</span>
             {key === current ? <Check className="h-4 w-4 text-muted-foreground" /> : null}

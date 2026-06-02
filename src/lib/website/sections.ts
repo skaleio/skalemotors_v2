@@ -66,6 +66,19 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   vende_tu_auto: "Vende tu auto",
 };
 
+/** Si una sección nueva aparece en el menú del header por defecto. */
+export const DEFAULT_SHOW_IN_NAV: Record<SectionType, boolean> = {
+  hero: true,
+  vehiculos: true,
+  contacto: true,
+  consignaciones: false,
+  vende_tu_auto: false,
+};
+
+export function isSectionInNav(section: SectionBlock): boolean {
+  return section.showInNav ?? DEFAULT_SHOW_IN_NAV[section.type];
+}
+
 const SECTION_TYPES: SectionType[] = [
   "hero",
   "vehiculos",
@@ -82,8 +95,160 @@ const ANCHOR_BY_TYPE: Record<SectionType, string> = {
   vende_tu_auto: "vende-tu-auto",
 };
 
-export function getSectionAnchor(section: SectionBlock): string {
-  return ANCHOR_BY_TYPE[section.type] ?? section.id;
+/** Límites por tipo (debe coincidir con sectionCatalog.maxCount). */
+const MAX_SECTION_COUNT: Partial<Record<SectionType, number>> = {
+  hero: 1,
+};
+
+/**
+ * Ancla HTML para scroll y menú. Si hay varias secciones del mismo tipo,
+ * cada una recibe un id único para evitar enlaces rotos.
+ */
+export function getSectionAnchor(
+  section: SectionBlock,
+  allSections?: SectionBlock[],
+): string {
+  if (section.type === "hero") return "inicio";
+  const base = ANCHOR_BY_TYPE[section.type] ?? section.id;
+  if (!allSections?.length) return base;
+  const sameType = allSections.filter((s) => s.type === section.type);
+  if (sameType.length <= 1) return base;
+  const suffix = section.id.replace(/^s_/, "");
+  return `${base}-${suffix}`;
+}
+
+/** Etiqueta en listas del editor cuando hay secciones repetidas. */
+export function sectionListLabel(
+  section: SectionBlock,
+  allSections: SectionBlock[],
+): string {
+  const custom = section.navLabel?.trim();
+  const base = custom || SECTION_LABELS[section.type];
+  const sameType = allSections.filter((s) => s.type === section.type);
+  if (sameType.length <= 1) return base;
+  const index = sameType.findIndex((s) => s.id === section.id) + 1;
+  return `${SECTION_LABELS[section.type]} ${index}${custom ? ` · ${custom}` : ""}`;
+}
+
+export type SectionIssueSeverity = "error" | "warning";
+
+export interface SectionIssue {
+  code: string;
+  severity: SectionIssueSeverity;
+  message: string;
+}
+
+export interface AddSectionAvailability {
+  allowed: boolean;
+  reason?: string;
+  currentCount: number;
+  maxCount?: number;
+}
+
+export function getAddSectionAvailability(
+  type: SectionType,
+  sections: SectionBlock[],
+): AddSectionAvailability {
+  const currentCount = sections.filter((s) => s.type === type).length;
+  const maxCount = MAX_SECTION_COUNT[type];
+
+  if (maxCount != null && currentCount >= maxCount) {
+    return {
+      allowed: false,
+      currentCount,
+      maxCount,
+      reason:
+        type === "hero"
+          ? "Solo puede haber una portada. Editá la existente o eliminála primero."
+          : `Máximo ${maxCount} sección(es) de este tipo.`,
+    };
+  }
+
+  return { allowed: true, currentCount, maxCount };
+}
+
+export function validateSiteSections(sections: SectionBlock[]): SectionIssue[] {
+  const issues: SectionIssue[] = [];
+
+  if (sections.length === 0) {
+    issues.push({
+      code: "empty",
+      severity: "error",
+      message: "El sitio no tiene secciones. Agregá al menos una portada o usá «Restaurar estructura básica».",
+    });
+    return issues;
+  }
+
+  const visible = sections.filter((s) => s.visible);
+  if (visible.length === 0) {
+    issues.push({
+      code: "all_hidden",
+      severity: "warning",
+      message: "Todas las secciones están ocultas. Los visitantes verán una página vacía.",
+    });
+  }
+
+  if (!sections.some((s) => s.type === "hero")) {
+    issues.push({
+      code: "no_hero",
+      severity: "warning",
+      message: "No hay portada. Recomendamos agregar una para presentar tu automotora.",
+    });
+  } else if (!sections.some((s) => s.type === "hero" && s.visible)) {
+    issues.push({
+      code: "hero_hidden",
+      severity: "warning",
+      message: "La portada está oculta. Activá la visibilidad o agregá otra portada.",
+    });
+  }
+
+  if (!sections.some((s) => s.type === "vehiculos")) {
+    issues.push({
+      code: "no_stock",
+      severity: "warning",
+      message: "No hay sección de vehículos. La mayoría de sitios muestran el stock en la página principal.",
+    });
+  }
+
+  return issues;
+}
+
+export function hasBlockingSectionIssues(issues: SectionIssue[]): boolean {
+  return issues.some((i) => i.severity === "error");
+}
+
+/** Listo para persistir: nunca guarda array vacío. */
+export function prepareSectionsForSave(sections: SectionBlock[]): SectionBlock[] {
+  if (sections.length === 0) return defaultSections();
+  return sections.map((s) => ({
+    ...s,
+    props: normalizeProps(s.type, s.props),
+  }));
+}
+
+export function duplicateSection(section: SectionBlock): SectionBlock | null {
+  const copy = createSection(section.type);
+  return {
+    ...copy,
+    visible: section.visible,
+    navLabel: section.navLabel,
+    showInNav: section.showInNav,
+    props: normalizeProps(section.type, section.props),
+  };
+}
+
+export function insertSectionAt(
+  sections: SectionBlock[],
+  block: SectionBlock,
+  position: { mode: "end" } | { mode: "start" } | { mode: "after"; id: string },
+): SectionBlock[] {
+  if (position.mode === "start") return [block, ...sections];
+  if (position.mode === "end") return [...sections, block];
+  const idx = sections.findIndex((s) => s.id === position.id);
+  if (idx < 0) return [...sections, block];
+  const next = [...sections];
+  next.splice(idx + 1, 0, block);
+  return next;
 }
 
 function uid(): string {
@@ -153,6 +318,7 @@ export function createSection(type: SectionType): SectionBlock {
     id: uid(),
     type,
     visible: true,
+    showInNav: DEFAULT_SHOW_IN_NAV[type],
     props: defaultPropsFor(type),
   };
 }
@@ -247,8 +413,7 @@ export function coerceSections(raw: unknown): SectionBlock[] {
   return valid.length ? valid : defaultSections();
 }
 
-/** Solo una portada por sitio. */
+/** Solo una portada por sitio (y otros límites en MAX_SECTION_COUNT). */
 export function canAddSection(type: SectionType, sections: SectionBlock[]): boolean {
-  if (type === "hero") return !sections.some((s) => s.type === "hero");
-  return true;
+  return getAddSectionAvailability(type, sections).allowed;
 }

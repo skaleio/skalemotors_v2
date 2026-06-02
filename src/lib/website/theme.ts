@@ -25,12 +25,17 @@ export interface DesignTokens {
   spaceSection: string;
 }
 
+import { parseThemeCustom, type ThemeCustomOverrides } from "./themeCustom";
+
+export type { ThemeCustomOverrides } from "./themeCustom";
+
 /** Datos mínimos del sitio que el motor necesita. Subconjunto de tenant_sites. */
 export interface ThemeableSite {
   theme?: string | null;
   primary_color?: string | null;
   secondary_color?: string | null;
   font?: string | null;
+  theme_custom?: unknown;
 }
 
 interface FontPair {
@@ -153,35 +158,47 @@ const THEME_LAYOUT: Record<ThemeId, ThemeLayout> = {
   miami: "luxury",
 };
 
-export const THEME_OPTIONS: {
+export interface ThemePickerMeta {
   id: ThemeId;
+  /** Nombre visible en el editor (marca del look, no el id técnico). */
   label: string;
+  tagline: string;
   description: string;
   layout: ThemeLayout;
-}[] = [
+}
+
+export const THEME_OPTIONS: ThemePickerMeta[] = [
   {
     id: "miami",
-    label: "Miami",
+    label: "Pulse",
     layout: "luxury",
-    description: "Vitrina oscura cinematográfica, barra de beneficios y cards premium",
+    tagline: "Hero a pantalla completa, ritmo urbano",
+    description:
+      "Portada inmersiva sobre fondo oscuro, barra de beneficios y fichas de vehículos con acento neón.",
   },
   {
     id: "moderna",
-    label: "Moderna",
+    label: "Nova",
     layout: "modern",
-    description: "Sitio claro tipo startup: hero en dos columnas y grilla de 3 autos",
+    tagline: "Luz, aire y stock protagonista",
+    description:
+      "Sitio claro con portada en dos columnas, navegación minimal y grilla de tres vehículos.",
   },
   {
     id: "tradicional",
-    label: "Tradicional",
+    label: "Legado",
     layout: "classic",
-    description: "Estilo editorial con serif: encabezado clásico y fichas grandes en 2 columnas",
+    tagline: "Confianza editorial, tipografía serif",
+    description:
+      "Encabezado clásico centrado, portada sobria y fichas grandes en dos columnas.",
   },
   {
     id: "premium",
-    label: "Premium",
+    label: "Signature",
     layout: "luxury",
-    description: "Lujo oscuro con dorado: mismo layout Miami con paleta elegante",
+    tagline: "Lujo nocturno, acento dorado",
+    description:
+      "Misma estructura impactante que Pulse, con paleta oscura y detalles dorados.",
   },
 ];
 
@@ -249,14 +266,40 @@ function isNonEmpty(value: string | null | undefined): value is string {
  * Construye los tokens finales: preset del tema + overrides de marca.
  * Función pura, nunca lanza. Tema desconocido → 'moderna'.
  */
+function applyCustomOverrides(
+  tokens: DesignTokens,
+  custom: ThemeCustomOverrides,
+): void {
+  const hexKeys: (keyof ThemeCustomOverrides)[] = [
+    "colorBg",
+    "colorSurface",
+    "colorFg",
+    "colorMuted",
+    "colorPrimaryFg",
+    "colorBorder",
+  ];
+  for (const key of hexKeys) {
+    const val = custom[key];
+    if (typeof val === "string" && hexToRgb(val)) {
+      (tokens as Record<string, string>)[key] = val;
+    }
+  }
+  if (custom.radius) tokens.radius = custom.radius;
+}
+
 export function buildTokens(site: ThemeableSite | null | undefined): DesignTokens {
   const themeId: ThemeId = isThemeId(site?.theme) ? site!.theme : "moderna";
   const base = THEME_PRESETS[themeId];
   const tokens: DesignTokens = { ...base };
+  const custom = parseThemeCustom(site?.theme_custom);
+
+  applyCustomOverrides(tokens, custom);
 
   if (isNonEmpty(site?.primary_color) && hexToRgb(site!.primary_color!)) {
     tokens.colorPrimary = site!.primary_color!;
-    tokens.colorPrimaryFg = readableFg(site!.primary_color!);
+    if (!custom.colorPrimaryFg) {
+      tokens.colorPrimaryFg = readableFg(site!.primary_color!);
+    }
   }
 
   if (isNonEmpty(site?.secondary_color) && hexToRgb(site!.secondary_color!)) {
@@ -270,6 +313,15 @@ export function buildTokens(site: ThemeableSite | null | undefined): DesignToken
   tokens.fontBody = FONT_PAIRS[fontId].body;
 
   return tokens;
+}
+
+/** Colores de marca por defecto del estilo (sin overrides). */
+export function defaultBrandColors(themeId: ThemeId): {
+  primary: string;
+  secondary: string;
+} {
+  const p = THEME_PRESETS[themeId];
+  return { primary: p.colorPrimary, secondary: p.colorSecondary };
 }
 
 /** Familias Google Fonts necesarias para el sitio (para montar el <link>). */

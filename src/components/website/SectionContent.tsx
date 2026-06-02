@@ -44,7 +44,7 @@ export function renderSectionNodes(
 ): ReactNode[] {
   const layout = getThemeLayout(ctx.theme);
   const luxury = layout === "luxury";
-  const anchor = getSectionAnchor(section);
+  const anchor = getSectionAnchor(section, ctx.sections);
   const nodes: ReactNode[] = [];
 
   switch (section.type) {

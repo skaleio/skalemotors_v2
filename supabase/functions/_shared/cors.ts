@@ -22,19 +22,40 @@ function getAllowedOrigins(): string[] | null {
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+const corsBase = {
+  Vary: "Origin",
+  "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+  "Access-Control-Allow-Methods": ALLOWED_METHODS,
+  "Access-Control-Max-Age": "600",
+} as const;
+
+/** true si no hay lista de orígenes o el Origin del request está permitido */
+export function isOriginAllowed(req: Request): boolean {
+  const allowed = getAllowedOrigins();
+  if (!allowed || allowed.length === 0) return true;
+  const origin = req.headers.get("origin");
+  return Boolean(origin && allowed.includes(origin));
+}
+
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin");
   const allowed = getAllowedOrigins();
-  let allowOrigin = "*";
-  if (allowed && allowed.length > 0) {
-    allowOrigin = origin && allowed.includes(origin) ? origin : allowed[0];
+
+  if (!allowed || allowed.length === 0) {
+    return {
+      ...corsBase,
+      "Access-Control-Allow-Origin": origin ?? "*",
+    };
   }
+
+  if (!origin || !allowed.includes(origin)) {
+    // No devolver el primer origen de la lista: el browser bloquea el POST y parece timeout.
+    return { ...corsBase };
+  }
+
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Headers": ALLOWED_HEADERS,
-    "Access-Control-Allow-Methods": ALLOWED_METHODS,
-    "Access-Control-Max-Age": MAX_AGE,
+    ...corsBase,
+    "Access-Control-Allow-Origin": origin,
   };
 }
 

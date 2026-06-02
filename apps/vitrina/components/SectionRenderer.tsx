@@ -50,6 +50,8 @@ export function SectionRenderer({ site, vehicles, host }: SectionRendererProps) 
 
     font: site.font,
 
+    theme_custom: site.theme_custom,
+
   };
 
 

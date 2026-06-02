@@ -342,6 +342,7 @@ export interface Database {
           font: string | null
           primary_color: string
           secondary_color: string | null
+          theme_custom: Json
           hero_title: string | null
           hero_subtitle: string | null
           hero_image_url: string | null
@@ -369,6 +370,7 @@ export interface Database {
           font?: string | null
           primary_color?: string
           secondary_color?: string | null
+          theme_custom?: Json
           hero_title?: string | null
           hero_subtitle?: string | null
           hero_image_url?: string | null
@@ -396,6 +398,7 @@ export interface Database {
           font?: string | null
           primary_color?: string
           secondary_color?: string | null
+          theme_custom?: Json
           hero_title?: string | null
           hero_subtitle?: string | null
           hero_image_url?: string | null
@@ -576,6 +579,7 @@ export interface Database {
           publicado: boolean
           publicado_web: boolean
           primary_image_url: string | null
+          status_changed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -623,6 +627,7 @@ export interface Database {
           combustible_display?: string | null
           publicado?: boolean
           publicado_web?: boolean
+          status_changed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -670,8 +675,44 @@ export interface Database {
           combustible_display?: string | null
           publicado?: boolean
           publicado_web?: boolean
+          status_changed_at?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      vehicle_status_events: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          vehicle_id: string
+          from_status: string | null
+          to_status: string
+          changed_by: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          vehicle_id: string
+          from_status?: string | null
+          to_status: string
+          changed_by?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          vehicle_id?: string
+          from_status?: string | null
+          to_status?: string
+          changed_by?: string | null
+          metadata?: Json
+          created_at?: string
         }
       }
       consignaciones: {

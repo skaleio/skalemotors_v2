@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
-  Eye,
-  EyeOff,
   Image as ImageIcon,
   Loader2,
   Plus,
   Save,
-  Trash2,
   Undo2,
   Upload,
 } from "lucide-react";
@@ -34,30 +29,35 @@ import { useUndoStack } from "@/hooks/useUndoStack";
 import type { TenantSite } from "@/lib/services/tenantSite";
 import {
   SECTION_LABELS,
-  canAddSection,
   coerceSections,
-  createSection,
+  hasBlockingSectionIssues,
+  prepareSectionsForSave,
+  validateSiteSections,
   type ConsignacionesProps,
   type ContactoProps,
   type HeroProps,
   type SectionBlock,
   type SectionProps,
-  type SectionType,
   type VehiculosProps,
   type VendeTuAutoProps,
 } from "@/lib/website/sections";
-import { buildNavItems } from "@/lib/website/nav";
+import { SiteStructurePanel } from "./SiteStructurePanel";
 import {
   FONT_PAIRS,
-  THEME_OPTIONS,
-  THEME_PRESETS,
   isFontId,
   isThemeId,
   type FontId,
   type ThemeId,
   type ThemeableSite,
 } from "@/lib/website/theme";
+import {
+  parseThemeCustom,
+  serializeThemeCustom,
+  type ThemeCustomOverrides,
+} from "@/lib/website/themeCustom";
+import { DesignTokensEditor, resetDesignToThemePreset } from "./DesignTokensEditor";
 import { SitePreview } from "./SitePreview";
+import { TemplatePicker } from "./TemplatePicker";
 
 const FONT_OPTIONS = Object.entries(FONT_PAIRS).map(([id, pair]) => ({
   id: id as FontId,
@@ -74,6 +74,7 @@ type EditorSnapshot = {
   siteName: string;
   primaryColor: string;
   secondaryColor: string;
+  themeCustom: ThemeCustomOverrides;
   theme: ThemeId;
   font: FontId | "";
   logoUrl: string;
@@ -103,6 +104,9 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   const [font, setFont] = useState<FontId | "">(isFontId(site.font) ? site.font : "");
   const [logoUrl, setLogoUrl] = useState(site.logo_url ?? "");
   const [faviconUrl, setFaviconUrl] = useState(site.favicon_url ?? "");
+  const [themeCustom, setThemeCustom] = useState<ThemeCustomOverrides>(() =>
+    parseThemeCustom(site.theme_custom),
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const { push: pushUndo, pop: popUndo, clear: clearUndo, canUndo } = useUndoStack<EditorSnapshot>();
@@ -113,12 +117,23 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
       siteName,
       primaryColor,
       secondaryColor,
+      themeCustom,
       theme,
       font,
       logoUrl,
       faviconUrl,
     }),
-    [sections, siteName, primaryColor, secondaryColor, theme, font, logoUrl, faviconUrl],
+    [
+      sections,
+      siteName,
+      primaryColor,
+      secondaryColor,
+      themeCustom,
+      theme,
+      font,
+      logoUrl,
+      faviconUrl,
+    ],
   );
 
   const applySnapshot = useCallback((snap: EditorSnapshot) => {
@@ -126,6 +141,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
     setSiteName(snap.siteName);
     setPrimaryColor(snap.primaryColor);
     setSecondaryColor(snap.secondaryColor);
+    setThemeCustom({ ...snap.themeCustom });
     setTheme(snap.theme);
     setFont(snap.font);
     setLogoUrl(snap.logoUrl);
@@ -158,6 +174,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
     setFont(isFontId(site.font) ? site.font : "");
     setLogoUrl(site.logo_url ?? "");
     setFaviconUrl(site.favicon_url ?? "");
+    setThemeCustom(parseThemeCustom(site.theme_custom));
     setDirty(false);
     clearUndo();
   }, [site, clearUndo]);
@@ -180,6 +197,7 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
     primary_color: primaryColor,
     secondary_color: secondaryColor || null,
     font: font || null,
+    theme_custom: serializeThemeCustom(themeCustom),
   };
 
   const selected = useMemo(
@@ -191,16 +209,6 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
 
   const mutateSections = (updater: (prev: SectionBlock[]) => SectionBlock[]) => {
     withHistory(() => setSections((prev) => updater(prev)));
-  };
-
-  const addSection = (type: SectionType) => {
-    if (!canAddSection(type, sections)) {
-      toast.message("Ya existe una portada en el sitio");
-      return;
-    }
-    const block = createSection(type);
-    mutateSections((prev) => [...prev, block]);
-    setSelectedId(block.id);
   };
 
   const updateSectionMeta = (
@@ -220,28 +228,6 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
     mutateSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     );
-  };
-
-  const removeSection = (id: string) => {
-    mutateSections((prev) => prev.filter((s) => s.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  };
-
-  const toggleVisible = (id: string) => {
-    mutateSections((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)),
-    );
-  };
-
-  const move = (id: string, dir: -1 | 1) => {
-    mutateSections((prev) => {
-      const idx = prev.findIndex((s) => s.id === id);
-      const target = idx + dir;
-      if (idx < 0 || target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[target]] = [next[target], next[idx]];
-      return next;
-    });
   };
 
   const updateProps = (id: string, patch: Partial<SectionProps>) => {
@@ -275,6 +261,24 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
   };
 
   const handleSave = () => {
+    const issues = validateSiteSections(sections);
+    if (hasBlockingSectionIssues(issues)) {
+      toast.error("No se puede guardar", {
+        description: issues.find((i) => i.severity === "error")?.message,
+      });
+      return;
+    }
+    const prepared = prepareSectionsForSave(sections);
+    const postPrepareIssues = validateSiteSections(prepared);
+    if (issues.some((i) => i.severity === "warning") || postPrepareIssues.some((i) => i.severity === "warning")) {
+      toast.message("Guardando con advertencias", {
+        description: [...issues, ...postPrepareIssues]
+          .filter((i) => i.severity === "warning")
+          .map((i) => i.message)
+          .join(" "),
+      });
+    }
+
     updateSite.mutate(
       {
         site_name: siteName,
@@ -284,10 +288,12 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
         font: font || null,
         logo_url: logoUrl || null,
         favicon_url: faviconUrl || null,
-        sections: sections as unknown as TenantSite["sections"],
+        theme_custom: serializeThemeCustom(themeCustom) as TenantSite["theme_custom"],
+        sections: prepared as unknown as TenantSite["sections"],
       },
       {
         onSuccess: () => {
+          setSections(prepared);
           toast.success("Cambios guardados");
           setDirty(false);
           clearUndo();
@@ -363,67 +369,22 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
           <div className="space-y-3 rounded-lg border bg-card p-4">
             <p className="text-sm font-semibold">Diseño</p>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Plantilla</Label>
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                Cada plantilla cambia la estructura de la página (encabezado, portada y listado de
-                autos), no solo los colores.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {THEME_OPTIONS.map((t) => {
-                  const preset = THEME_PRESETS[t.id];
-                  const active = theme === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        withHistory(() => {
-                          setTheme(t.id);
-                          setFont("");
-                        });
-                      }}
-                      title={t.description}
-                      className={`rounded-lg border p-2.5 text-left transition-all ${
-                        active
-                          ? "border-violet-500 ring-1 ring-violet-500"
-                          : "hover:border-muted-foreground/40"
-                      }`}
-                    >
-                      <div
-                        className="mb-2 h-10 overflow-hidden rounded border"
-                        style={{
-                          borderColor: preset.colorBorder,
-                          background: preset.colorBg,
-                        }}
-                      >
-                        <div
-                          className="h-2.5 w-full"
-                          style={{ backgroundColor: preset.colorSurface }}
-                        />
-                        <div className="flex gap-0.5 p-1">
-                          <div
-                            className="h-4 flex-1 rounded-sm"
-                            style={{ backgroundColor: preset.colorPrimary, opacity: 0.9 }}
-                          />
-                          <div
-                            className="h-4 w-3 rounded-sm"
-                            style={{ backgroundColor: preset.colorMuted, opacity: 0.35 }}
-                          />
-                        </div>
-                      </div>
-                      <span className="block text-xs font-semibold leading-tight">{t.label}</span>
-                      <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
-                        {t.layout === "luxury"
-                          ? "Oscura · full"
-                          : t.layout === "classic"
-                            ? "Editorial · 2 cols"
-                            : "Clara · 2 cols"}
-                      </span>
-                    </button>
-                  );
-                })}
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs font-medium">Estilo del sitio</Label>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Elegí la estructura y el ambiente visual. Los colores de tu marca se aplican encima.
+                </p>
               </div>
+              <TemplatePicker
+                value={theme}
+                onChange={(id) => {
+                  withHistory(() => {
+                    setTheme(id);
+                    setFont("");
+                  });
+                }}
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -450,55 +411,29 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Color primario</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => {
-                      withHistory(() => setPrimaryColor(e.target.value));
-                    }}
-                    className="h-9 w-12 p-1"
-                  />
-                  <Input
-                    value={primaryColor}
-                    onFocus={fieldUndo.onFocus}
-                    onBlur={fieldUndo.onBlur}
-                    onChange={(e) => {
-                      setPrimaryColor(e.target.value);
-                      markDirty();
-                    }}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Secundario</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="color"
-                    value={secondaryColor || THEME_PRESETS[theme].colorSecondary}
-                    onChange={(e) => {
-                      withHistory(() => setSecondaryColor(e.target.value));
-                    }}
-                    className="h-9 w-12 p-1"
-                  />
-                  <Input
-                    value={secondaryColor}
-                    onFocus={fieldUndo.onFocus}
-                    onBlur={fieldUndo.onBlur}
-                    onChange={(e) => {
-                      setSecondaryColor(e.target.value);
-                      markDirty();
-                    }}
-                    placeholder="auto"
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </div>
+            <DesignTokensEditor
+              theme={theme}
+              primaryColor={primaryColor}
+              secondaryColor={secondaryColor}
+              themeCustom={themeCustom}
+              onPrimaryColorChange={(hex) => {
+                withHistory(() => setPrimaryColor(hex));
+              }}
+              onSecondaryColorChange={(hex) => {
+                withHistory(() => setSecondaryColor(hex));
+              }}
+              onThemeCustomChange={(next) => {
+                withHistory(() => setThemeCustom(next));
+              }}
+              onResetAll={() => {
+                const reset = resetDesignToThemePreset(theme);
+                withHistory(() => {
+                  setPrimaryColor(reset.primaryColor);
+                  setSecondaryColor(reset.secondaryColor);
+                  setThemeCustom(reset.themeCustom);
+                });
+              }}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -541,144 +476,19 @@ export function VisualEditor({ site, className }: VisualEditorProps) {
             </div>
           </div>
 
-          {/* Menú del header (vista previa) */}
-          <div className="space-y-2 rounded-lg border bg-card p-4">
-            <p className="text-sm font-semibold">Menú del header</p>
-            <p className="text-xs text-muted-foreground">
-              Se genera desde las secciones marcadas con &quot;Mostrar en menú&quot;. El orden sigue
-              el de la lista de secciones.
-            </p>
-            <ul className="space-y-1 text-xs">
-              {buildNavItems(sections).map((item) => (
-                <li
-                  key={item.id}
-                  className="flex justify-between rounded-md border bg-muted/30 px-2 py-1.5"
-                >
-                  <span className="font-medium">{item.label}</span>
-                  <span className="text-muted-foreground">{item.href}</span>
-                </li>
-              ))}
-              {buildNavItems(sections).length === 0 ? (
-                <li className="text-muted-foreground">Sin enlaces visibles</li>
-              ) : null}
-            </ul>
-          </div>
-
-          {/* Agregar secciones */}
-          <div className="space-y-2 rounded-lg border bg-card p-4">
-            <p className="text-sm font-semibold">Agregar sección</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canAddSection("hero", sections)}
-                onClick={() => addSection("hero")}
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Portada
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => addSection("vehiculos")}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Vehículos
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => addSection("contacto")}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Contacto
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => addSection("consignaciones")}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Consignaciones
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => addSection("vende_tu_auto")}>
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Vende tu auto
-              </Button>
-            </div>
-          </div>
-
-          {/* Lista de secciones */}
-          <div className="space-y-2 rounded-lg border bg-card p-4">
-            <p className="text-sm font-semibold">Secciones</p>
-            {sections.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Agregá una sección para empezar.
-              </p>
-            ) : (
-              <ul className="space-y-1.5">
-                {sections.map((s, i) => (
-                  <li
-                    key={s.id}
-                    onClick={() => setSelectedId(s.id)}
-                    className={`flex items-center justify-between rounded-md border px-2.5 py-2 text-sm transition-colors ${
-                      selectedId === s.id
-                        ? "border-violet-500 bg-violet-50"
-                        : "hover:bg-muted/50"
-                    } ${s.visible ? "" : "opacity-50"}`}
-                  >
-                    <span className="font-medium">
-                      {SECTION_LABELS[s.type]}
-                      {s.showInNav !== false ? (
-                        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
-                          · menú
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="flex items-center gap-0.5">
-                      <button
-                        type="button"
-                        className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                        disabled={i === 0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          move(s.id, -1);
-                        }}
-                        title="Subir"
-                      >
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                        disabled={i === sections.length - 1}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          move(s.id, 1);
-                        }}
-                        title="Bajar"
-                      >
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-1 hover:bg-muted"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleVisible(s.id);
-                        }}
-                        title={s.visible ? "Ocultar" : "Mostrar"}
-                      >
-                        {s.visible ? (
-                          <Eye className="h-3.5 w-3.5" />
-                        ) : (
-                          <EyeOff className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-1 text-destructive hover:bg-destructive/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSection(s.id);
-                        }}
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="rounded-lg border bg-card p-4">
+            <p className="mb-3 text-sm font-semibold">Estructura de la página</p>
+            <SiteStructurePanel
+              sections={sections}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onSectionsChangeWithHistory={mutateSections}
+              onUpdateSectionNav={(id, patch) => {
+                mutateSections((prev) =>
+                  prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+                );
+              }}
+            />
           </div>
 
           {/* Ajustes de la sección seleccionada */}

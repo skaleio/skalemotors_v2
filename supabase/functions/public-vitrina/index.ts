@@ -99,7 +99,7 @@ export default async function handler(req: Request): Promise<Response> {
   const { data: site } = await admin
     .from("tenant_sites")
     .select(
-      "is_published, theme, site_name, logo_url, favicon_url, font, primary_color, secondary_color, " +
+      "is_published, theme, site_name, logo_url, favicon_url, font, primary_color, secondary_color, theme_custom, " +
         "hero_title, hero_subtitle, hero_image_url, about_text, whatsapp_phone, " +
         "contact_email, contact_phone, address, social, sections, videos, " +
         "seo_title, seo_description",

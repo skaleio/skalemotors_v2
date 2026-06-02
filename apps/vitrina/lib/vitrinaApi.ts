@@ -7,6 +7,7 @@ export interface PublicSite {
   font: string | null;
   primary_color: string;
   secondary_color: string | null;
+  theme_custom?: Record<string, string> | null;
   hero_title: string | null;
   hero_subtitle: string | null;
   hero_image_url: string | null;

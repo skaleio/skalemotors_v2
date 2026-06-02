@@ -62,6 +62,24 @@ describe("buildTokens", () => {
     expect(tokens.colorSecondary).toBe("#123456");
   });
 
+  it("aplica theme_custom sobre el preset", () => {
+    const tokens = buildTokens({
+      theme: "moderna",
+      theme_custom: { colorBg: "#111111", colorFg: "#eeeeee" },
+    });
+    expect(tokens.colorBg).toBe("#111111");
+    expect(tokens.colorFg).toBe("#eeeeee");
+  });
+
+  it("respeta colorPrimaryFg manual en theme_custom", () => {
+    const tokens = buildTokens({
+      theme: "moderna",
+      primary_color: "#7c3aed",
+      theme_custom: { colorPrimaryFg: "#ff00ff" },
+    });
+    expect(tokens.colorPrimaryFg).toBe("#ff00ff");
+  });
+
   it("usa el par de fuentes del tema por defecto", () => {
     const tokens = buildTokens({ theme: "tradicional" });
     expect(tokens.fontHeading).toBe(FONT_PAIRS["playfair-lora"].heading);

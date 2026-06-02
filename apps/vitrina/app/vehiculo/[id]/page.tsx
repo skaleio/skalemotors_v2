@@ -74,6 +74,7 @@ export default async function VehiculoPage({ params }: PageProps) {
         primary_color: site.primary_color,
         secondary_color: site.secondary_color,
         font: site.font,
+        theme_custom: site.theme_custom,
       }}
     >
       <main>

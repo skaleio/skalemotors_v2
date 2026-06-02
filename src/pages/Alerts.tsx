@@ -27,6 +27,7 @@ type Filter = "all" | "unread" | EventKey;
 
 type EventKey =
   | "lead_sold"
+  | "vehicle_sold"
   | "lead_contactado"
   | "lead_assigned"
   | "lead_stale"
@@ -53,6 +54,15 @@ const EVENT_TYPES: readonly EventMeta[] = [
     iconClass: "text-green-500",
     description: "Cuando un lead pasa a vendido",
     roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal"],
+  },
+  {
+    key: "vehicle_sold",
+    label: "Vehículos vendidos",
+    short: "Veh. vendidos",
+    icon: Car,
+    iconClass: "text-emerald-600",
+    description: "Vendedor marca inventario como vendido o vendido por dueño",
+    roles: ["admin"],
   },
   {
     key: "lead_contactado",

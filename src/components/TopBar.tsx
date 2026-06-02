@@ -202,6 +202,8 @@ export function TopBar() {
     switch (type) {
       case 'lead_sold':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'vehicle_sold':
+        return <CheckCircle className="h-5 w-5 text-emerald-600" />;
       case 'consignacion_created':
         return <Car className="h-5 w-5 text-indigo-500" />;
       case 'consignacion_stale':
