@@ -1,22 +1,28 @@
-// landing-booking — Lead + cita desde landing Meta (Miami Motors / automotora fija).
-// Auth: misma ingesta que lead-create (verify_lead_ingest_key por sucursal o legacy env).
+/**
+ * Lead + cita en calendario (NotHessen / sucursal landing). Service role — bypass RLS.
+ */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { DateTime } from "https://esm.sh/luxon@3.5.0?target=deno";
-import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
+import { chileLocalToUtcIso } from "./chileDateTime";
 
-const LANDING_BRANCH_ID = "c673d388-6ae0-43b6-99b9-1d62db3692d9";
-const LANDING_USER_ID = "1bad02e7-7888-4cbc-9d79-e4d583401ed0";
+export const LANDING_BRANCH_ID = "c673d388-6ae0-43b6-99b9-1d62db3692d9";
+export const LANDING_USER_ID = "1bad02e7-7888-4cbc-9d79-e4d583401ed0";
 const APPOINTMENT_DURATION_MIN = 60;
 
-function getEnvAny(names: string[]): string | null {
-  for (const name of names) {
-    const v = Deno.env.get(name);
-    if (v) return v;
-  }
-  return null;
-}
+export type LandingBookingPayload = {
+  branch_id?: string;
+  full_name?: string;
+  fullName?: string;
+  phone?: string;
+  email?: string | null;
+  notes?: string | null;
+  date?: string;
+  time?: string;
+  scheduled_at?: string;
+  source?: string;
+  company?: string;
+  website?: string;
+};
 
 function normalizePhoneChile(value: string): string {
   const raw = value.trim();
@@ -42,75 +48,93 @@ function toTitleCase(s: string): string {
     .join(" ");
 }
 
-/** Hora de la landing = reloj Chile (America/Santiago), no UTC del servidor. */
 function parseScheduledAt(date: string, time: string, scheduledAtIso?: string): string | null {
   if (scheduledAtIso) {
     const d = new Date(scheduledAtIso);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(date);
-  const timeOk = /^\d{2}:\d{2}$/.test(time);
-  if (!dateOk || !timeOk) return null;
-  const dt = DateTime.fromISO(`${date}T${time}`, { zone: "America/Santiago" });
-  if (!dt.isValid) return null;
-  return dt.toUTC().toISO();
+  return chileLocalToUtcIso(date, time);
 }
 
-type Payload = {
-  full_name?: string;
-  fullName?: string;
-  phone?: string;
-  email?: string | null;
-  notes?: string | null;
-  date?: string;
-  time?: string;
-  scheduled_at?: string;
-  source?: string;
-  company?: string;
-  website?: string;
-};
+export type LandingBookingResult =
+  | {
+      ok: true;
+      status: number;
+      body:
+        | { ok: true }
+        | {
+            ok: true;
+            lead: { id: string; created: boolean };
+            appointment: { id: string; scheduled_at: string; user_id: string };
+          };
+    }
+  | { ok: false; status: number; body: { ok: false; error: string; lead_id?: string } };
 
-export default async function handler(req: Request): Promise<Response> {
-  const cors = getCorsHeaders(req);
-  const json = (status: number, body: unknown) =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+/** Cita en calendario tras ingesta n8n si la landing envió date+time al endpoint equivocado. */
+export async function maybeCreateAppointmentAfterIngest(
+  supabase: SupabaseClient,
+  opts: {
+    branchId: string;
+    leadId: string;
+    fullName: string;
+    date?: string;
+    time?: string;
+    notes?: string | null;
+    source?: string;
+    tenantId: string;
+  },
+): Promise<{ id: string; scheduled_at: string } | null> {
+  if (opts.branchId !== LANDING_BRANCH_ID) return null;
+  const date = opts.date?.trim() || "";
+  const time = opts.time?.trim() || "";
+  const scheduledAt = chileLocalToUtcIso(date, time);
+  if (!scheduledAt) return null;
 
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return json(405, { ok: false, error: "Method not allowed" });
+  const endAt = new Date(new Date(scheduledAt).getTime() + APPOINTMENT_DURATION_MIN * 60_000).toISOString();
+  const landingSource = opts.source?.trim() || "meta-ads";
+  const interestNotes = opts.notes?.trim() || "";
+  const appointmentTitle = `Visita landing · ${opts.fullName}`;
+  const appointmentDescription = interestNotes || `Solicitud desde landing (${landingSource})`;
+  const leadNotes = interestNotes
+    ? `Landing ${landingSource}: ${interestNotes}`
+    : `Lead desde landing (${landingSource})`;
 
-  if (!isOriginAllowed(req)) {
-    return json(403, { ok: false, error: "Origin not allowed" });
+  const { data: appointment, error } = await supabase
+    .from("appointments")
+    .insert({
+      lead_id: opts.leadId,
+      user_id: LANDING_USER_ID,
+      branch_id: LANDING_BRANCH_ID,
+      tenant_id: opts.tenantId,
+      type: "reunion",
+      status: "programada",
+      scheduled_at: scheduledAt,
+      end_at: endAt,
+      duration_minutes: APPOINTMENT_DURATION_MIN,
+      title: appointmentTitle,
+      description: appointmentDescription,
+      notes: leadNotes,
+    })
+    .select("id, scheduled_at")
+    .single();
+
+  if (error || !appointment) {
+    console.error("[landing-booking] ingest-side appointment:", error);
+    return null;
   }
 
-  const supabaseUrl = getEnvAny(["SUPABASE_URL", "PROJECT_URL"]);
-  const serviceRoleKey = getEnvAny(["SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY"]);
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json(500, { ok: false, error: "Missing Supabase env vars" });
-  }
+  return {
+    id: appointment.id as string,
+    scheduled_at: appointment.scheduled_at as string,
+  };
+}
 
-  const keyAuth = await resolveLeadAutomationAuth(
-    req,
-    LANDING_BRANCH_ID,
-    supabaseUrl,
-    serviceRoleKey,
-    ["LEAD_INGEST_API_KEY", "BOOKING_INGEST_API_KEY"],
-  );
-  if (!keyAuth.ok) {
-    return json(keyAuth.status, { ok: false, error: keyAuth.error });
-  }
-
-  let body: Payload;
-  try {
-    body = await req.json();
-  } catch {
-    return json(400, { ok: false, error: "Invalid JSON body" });
-  }
-
+export async function processLandingBooking(
+  supabase: SupabaseClient,
+  body: LandingBookingPayload,
+): Promise<LandingBookingResult> {
   if ((body.company && String(body.company).trim()) || (body.website && String(body.website).trim())) {
-    return json(200, { ok: true });
+    return { ok: true, status: 200, body: { ok: true } };
   }
 
   const fullNameRaw = (body.full_name ?? body.fullName ?? "").trim();
@@ -118,14 +142,18 @@ export default async function handler(req: Request): Promise<Response> {
 
   const normalizedPhone = normalizePhoneChile(body.phone?.trim() || "");
   if (!normalizedPhone) {
-    return json(400, { ok: false, error: "phone is required (valid Chile format)" });
+    return { ok: false, status: 400, body: { ok: false, error: "phone is required (valid Chile format)" } };
   }
 
   const date = body.date?.trim() || "";
   const time = body.time?.trim() || "";
   const scheduledAt = parseScheduledAt(date, time, body.scheduled_at?.trim());
   if (!scheduledAt) {
-    return json(400, { ok: false, error: "date and time are required (YYYY-MM-DD, HH:mm)" });
+    return {
+      ok: false,
+      status: 400,
+      body: { ok: false, error: "date and time are required (YYYY-MM-DD, HH:mm)" },
+    };
   }
 
   const endAt = new Date(new Date(scheduledAt).getTime() + APPOINTMENT_DURATION_MIN * 60_000).toISOString();
@@ -135,10 +163,6 @@ export default async function handler(req: Request): Promise<Response> {
     ? `Landing ${landingSource}: ${interestNotes}`
     : `Lead desde landing (${landingSource})`;
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
-
   const { data: branch, error: branchError } = await supabase
     .from("branches")
     .select("id, tenant_id")
@@ -147,7 +171,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (branchError || !branch) {
     console.error("[landing-booking] branch:", branchError);
-    return json(500, { ok: false, error: "Invalid branch configuration" });
+    return { ok: false, status: 500, body: { ok: false, error: "Invalid branch configuration" } };
   }
 
   const tenantId = branch.tenant_id as string;
@@ -161,7 +185,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (userError || !assignee) {
     console.error("[landing-booking] user:", userError);
-    return json(500, { ok: false, error: "Invalid calendar user configuration" });
+    return { ok: false, status: 500, body: { ok: false, error: "Invalid calendar user configuration" } };
   }
 
   let leadId: string;
@@ -178,7 +202,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (findLeadError) {
     console.error("[landing-booking] find lead:", findLeadError);
-    return json(500, { ok: false, error: "Internal error finding lead" });
+    return { ok: false, status: 500, body: { ok: false, error: "Internal error finding lead" } };
   }
 
   if (existingLead?.id) {
@@ -200,7 +224,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (updError) {
       console.error("[landing-booking] update lead:", updError);
-      return json(500, { ok: false, error: "Internal error updating lead" });
+      return { ok: false, status: 500, body: { ok: false, error: "Internal error updating lead" } };
     }
   } else {
     const { data: createdLead, error: insertLeadError } = await supabase
@@ -222,7 +246,11 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (insertLeadError || !createdLead) {
       console.error("[landing-booking] insert lead:", insertLeadError);
-      return json(500, { ok: false, error: insertLeadError?.message ?? "Could not create lead" });
+      return {
+        ok: false,
+        status: 500,
+        body: { ok: false, error: insertLeadError?.message ?? "Could not create lead" },
+      };
     }
     leadId = createdLead.id as string;
     leadCreated = true;
@@ -247,27 +275,40 @@ export default async function handler(req: Request): Promise<Response> {
       description: appointmentDescription,
       notes: leadNotes,
     })
-    .select("id, scheduled_at, lead_id, user_id")
+    .select("id, scheduled_at, user_id")
     .single();
 
   if (apptError || !appointment) {
     console.error("[landing-booking] insert appointment:", apptError);
-    return json(500, {
+    return {
       ok: false,
-      error: apptError?.message ?? "Could not create appointment",
-      lead_id: leadId,
-    });
+      status: 500,
+      body: {
+        ok: false,
+        error: apptError?.message ?? "Could not create appointment",
+        lead_id: leadId,
+      },
+    };
   }
 
-  return json(200, {
+  return {
     ok: true,
-    lead: { id: leadId, created: leadCreated },
-    appointment: {
-      id: appointment.id,
-      scheduled_at: appointment.scheduled_at,
-      user_id: appointment.user_id,
+    status: 200,
+    body: {
+      ok: true,
+      lead: { id: leadId, created: leadCreated },
+      appointment: {
+        id: appointment.id as string,
+        scheduled_at: appointment.scheduled_at as string,
+        user_id: appointment.user_id as string,
+      },
     },
-  });
+  };
 }
 
-Deno.serve((req) => handler(req));
+export function createLandingBookingSupabase(): SupabaseClient | null {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) return null;
+  return createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+}

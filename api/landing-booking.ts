@@ -1,7 +1,14 @@
 /**
- * Proxy Vercel → Supabase `landing-booking` (lead + cita en calendario).
- * Misma auth que n8n-lead-ingest: x-api-key con clave mintada por sucursal.
+ * Lead + cita desde landing (Vercel, service role).
+ * POST /api/landing-booking — x-api-key (clave mintada sucursal NotHessen).
  */
+import {
+  createLandingBookingSupabase,
+  processLandingBooking,
+  type LandingBookingPayload,
+} from "./_lib/landingBookingHandler";
+import { resolveLandingIngestKey } from "./_lib/resolveLandingIngestKey";
+
 interface VercelRequest {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
@@ -12,7 +19,6 @@ interface VercelResponse {
   setHeader(name: string, value: string): VercelResponse;
   status(code: number): VercelResponse;
   json(body: unknown): void;
-  send(body: string): void;
 }
 
 function getAllowedOrigin(req: VercelRequest): string {
@@ -23,6 +29,20 @@ function getAllowedOrigin(req: VercelRequest): string {
   return origin && allowed.includes(origin) ? origin : allowed[0];
 }
 
+function parseBody(req: VercelRequest): LandingBookingPayload | null {
+  const raw = req.body;
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as LandingBookingPayload;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object") return raw as LandingBookingPayload;
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
   res.setHeader("Vary", "Origin");
@@ -31,6 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     "Access-Control-Allow-Headers",
     "Content-Type, x-api-key, Authorization",
   );
+  res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") {
     return res.status(204).json({});
@@ -49,46 +70,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: "Missing API key" });
   }
 
-  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(
-    /\/$/,
-    "",
-  );
-  const anonKey =
-    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
-
-  if (!supabaseUrl || !anonKey) {
+  const supabase = createLandingBookingSupabase();
+  if (!supabase) {
     return res.status(500).json({ ok: false, error: "Missing Supabase env vars" });
   }
 
-  const body =
-    typeof req.body === "string"
-      ? req.body
-      : req.body !== undefined
-        ? JSON.stringify(req.body)
-        : "{}";
-
-  const target = `${supabaseUrl}/functions/v1/landing-booking`;
-
-  try {
-    const upstream = await fetch(target, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": providedKey,
-        apikey: anonKey,
-      },
-      body,
-      cache: "no-store",
-    });
-
-    const text = await upstream.text();
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader("Cache-Control", "no-store");
-    return res.status(upstream.status).send(text);
-  } catch (e) {
-    return res.status(502).json({
-      ok: false,
-      error: e instanceof Error ? e.message : "Error al contactar Supabase",
-    });
+  const body = parseBody(req);
+  if (body === null) {
+    return res.status(400).json({ ok: false, error: "Invalid JSON body" });
   }
+
+  const auth = await resolveLandingIngestKey(supabase, providedKey, body.branch_id);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ ok: false, error: auth.error });
+  }
+
+  const result = await processLandingBooking(supabase, body);
+  return res.status(result.status).json(result.body);
 }

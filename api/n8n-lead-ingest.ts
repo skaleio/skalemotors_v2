@@ -6,6 +6,8 @@
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { maybeCreateAppointmentAfterIngest } from "./_lib/landingBookingHandler";
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -50,6 +52,10 @@ type Payload = {
   update_existing?: boolean;
   /** UUID de usuario vendedor (public.users) para asignar el lead al crear/actualizar. */
   assigned_to?: string | null;
+
+  /** Si la landing llama por error a n8n-lead-ingest: crea cita en calendario (sucursal landing). */
+  date?: string;
+  time?: string;
 
   // --- Campos extraídos por agentes IA (ej. n8n WHATSAPP HESSEN) ---
   uso_principal?: string | null;
@@ -542,7 +548,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq("id", auth.resolution.keyRowId);
       }
 
-      return finish(200, { ok: true, created: false, data: updated });
+      let appointment: { id: string; scheduled_at: string } | null = null;
+      if (tenantId && body.date?.trim() && body.time?.trim()) {
+        appointment = await maybeCreateAppointmentAfterIngest(supabase, {
+          branchId,
+          leadId: existing.id as string,
+          fullName,
+          date: body.date,
+          time: body.time,
+          notes: notesText,
+          source,
+          tenantId,
+        });
+      }
+
+      return finish(200, { ok: true, created: false, data: updated, appointment });
     }
   }
 
@@ -604,5 +624,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq("id", auth.resolution.keyRowId);
   }
 
-  return finish(200, { ok: true, created: true, data: created });
+  let appointment: { id: string; scheduled_at: string } | null = null;
+  if (tenantId && body.date?.trim() && body.time?.trim()) {
+    appointment = await maybeCreateAppointmentAfterIngest(supabase, {
+      branchId,
+      leadId: created.id as string,
+      fullName,
+      date: body.date,
+      time: body.time,
+      notes: notesText,
+      source,
+      tenantId,
+    });
+  }
+
+  return finish(200, { ok: true, created: true, data: created, appointment });
 }

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppointments } from "@/hooks/useAppointments";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +34,20 @@ import "@/styles/calendar.css";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, endOfDay, format, getDay, isSameDay, isToday, isWithinInterval, parse, startOfDay, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarCheck, CalendarClock, CalendarDays, CheckCircle2, Clock, Loader2, Plus, Trash2, User } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  User,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as BigCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -108,6 +122,14 @@ const eventTypeLabels = {
   other: "Otro",
 };
 
+const eventStatusLabels: Record<Event["status"], string> = {
+  programada: "Programada",
+  completada: "Completada",
+  cancelada: "Cancelada",
+};
+
+type AppointmentDialogMode = "create" | "view" | "edit" | "day-pick";
+
 // Mapeo tipo DB (español) -> tipo Event (inglés)
 const DB_TYPE_TO_EVENT: Record<string, Event["type"]> = {
   test_drive: "test_drive",
@@ -167,6 +189,7 @@ function setTimeOnDate(date: Date, timeStr: string): Date {
 export default function Appointments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
 
   const role = user?.role;
   const tenantId = user?.tenant_id ?? undefined;
@@ -185,7 +208,7 @@ export default function Appointments() {
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
-  const { appointments, loading } = useAppointments({
+  const { appointments, loading, refetch } = useAppointments({
     userId: canSeeSelf ? user?.id : undefined,
     tenantId: canSeeTenant ? tenantId : undefined,
     branchId: canSeeTeam ? user?.branch_id ?? undefined : undefined,
@@ -218,10 +241,14 @@ export default function Appointments() {
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<AppointmentDialogMode>("create");
   /** true = abierto desde clic en slot del calendario (no pedir fecha). false = desde "Nueva Cita" o editar (sí pedir fecha) */
   const [openedFromSlot, setOpenedFromSlot] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [dayPickerDate, setDayPickerDate] = useState<Date | null>(null);
+  const [dayPickerEvents, setDayPickerEvents] = useState<Event[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [formData, setFormData] = useState<Partial<Event>>({
     title: "",
     start: new Date(),
@@ -279,9 +306,64 @@ export default function Appointments() {
       .filter((e): e is Event => e != null);
   }, [appointments]);
 
-  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+  const populateFormFromEvent = (event: Event) => {
+    setFormData({
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      type: event.type,
+      status: event.status,
+      leadId: event.leadId || "",
+      vehicleId: event.vehicleId || "",
+      description: event.description || "",
+    });
+  };
+
+  const closeAppointmentDialog = () => {
+    setIsDialogOpen(false);
+    setDialogMode("create");
     setSelectedEvent(null);
-    setOpenedFromSlot(true); // fecha ya elegida en el calendario, no mostrar campos de fecha
+    setDayPickerDate(null);
+    setDayPickerEvents([]);
+  };
+
+  const openEventView = (event: Event) => {
+    setSelectedEvent(event);
+    populateFormFromEvent(event);
+    setDialogMode("view");
+    setIsDialogOpen(true);
+  };
+
+  const openEventEdit = (event: Event) => {
+    setSelectedEvent(event);
+    setOpenedFromSlot(false);
+    populateFormFromEvent(event);
+    setDialogMode("edit");
+    setIsDialogOpen(true);
+  };
+
+  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    const day = startOfDay(start);
+    const onDay = events
+      .filter((e) => isSameDay(e.start, day) && e.status !== "cancelada")
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    if (onDay.length === 1) {
+      openEventView(onDay[0]);
+      return;
+    }
+    if (onDay.length > 1) {
+      setDayPickerDate(day);
+      setDayPickerEvents(onDay);
+      setSelectedEvent(null);
+      setDialogMode("day-pick");
+      setIsDialogOpen(true);
+      return;
+    }
+
+    setSelectedEvent(null);
+    setDialogMode("create");
+    setOpenedFromSlot(true);
     setFormData({
       title: "",
       start,
@@ -296,19 +378,7 @@ export default function Appointments() {
   };
 
   const handleSelectEvent = (event: Event) => {
-    setSelectedEvent(event);
-    setOpenedFromSlot(false); // editar: sí mostrar campos de fecha por si cambian
-    setFormData({
-      title: event.title,
-      start: event.start,
-      end: event.end,
-      type: event.type,
-      status: event.status,
-      leadId: event.leadId || "",
-      vehicleId: event.vehicleId || "",
-      description: event.description || "",
-    });
-    setIsDialogOpen(true);
+    openEventView(event);
   };
 
   const handleSaveEvent = async () => {
@@ -379,8 +449,8 @@ export default function Appointments() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      setIsDialogOpen(false);
-      setSelectedEvent(null);
+      setDate(startDate);
+      closeAppointmentDialog();
       setFormData({
         title: "",
         start: new Date(),
@@ -389,6 +459,7 @@ export default function Appointments() {
         status: "programada",
         leadId: "",
         vehicleId: "",
+        description: "",
       });
     } catch (error) {
       console.error("Error al guardar evento:", error);
@@ -399,6 +470,40 @@ export default function Appointments() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!selectedEvent || selectedEvent.status === "cancelada") return;
+
+    const ok = await askConfirm({
+      title: "¿Cancelar esta cita?",
+      description:
+        "La visita quedará marcada como cancelada. Seguirá visible en el calendario y contará en las métricas de cancelación.",
+      confirmLabel: "Sí, cancelar cita",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setIsCancelling(true);
+    try {
+      await appointmentService.update(selectedEvent.id, { status: "cancelada" });
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast({
+        variant: "success",
+        title: "Cita cancelada",
+        description: "La visita quedó registrada como cancelada.",
+      });
+      closeAppointmentDialog();
+    } catch (error) {
+      console.error("Error al cancelar cita:", error);
+      toast({
+        title: "No se pudo cancelar",
+        description: error instanceof Error ? error.message : "Intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -417,8 +522,7 @@ export default function Appointments() {
           ),
           description: "La cita se ha eliminado correctamente.",
         });
-        setIsDialogOpen(false);
-        setSelectedEvent(null);
+        closeAppointmentDialog();
       } catch (error) {
         console.error("Error al eliminar evento:", error);
         toast({
@@ -437,7 +541,7 @@ export default function Appointments() {
       .slice(0, 5);
   }, [events]);
 
-  /** KPI stats — hoy, esta semana, pendientes futuras, completadas últimos 30 días. */
+  /** KPI stats — operación diaria + funnel últimos 30 días (incl. canceladas). */
   const appointmentStats = useMemo(() => {
     const now = new Date();
     const weekStart = startOfWeek(now, { locale: es });
@@ -448,20 +552,32 @@ export default function Appointments() {
     let thisWeek = 0;
     let pending = 0;
     let completed = 0;
+    let cancelled30d = 0;
+    let total30d = 0;
 
     for (const e of events) {
+      const inLast30 = e.start >= thirtyDaysAgo;
+      if (inLast30) total30d++;
+      if (inLast30 && e.status === "cancelada") cancelled30d++;
+
       if (e.status === "cancelada") continue;
       if (isToday(e.start)) today++;
       if (isWithinInterval(e.start, { start: weekStart, end: weekEnd })) thisWeek++;
       if (e.status === "programada" && e.start >= now) pending++;
-      if (e.status === "completada" && e.start >= thirtyDaysAgo) completed++;
+      if (e.status === "completada" && inLast30) completed++;
     }
 
-    return { today, thisWeek, pending, completed };
+    const cancellationRate =
+      total30d > 0 ? Math.round((cancelled30d / total30d) * 1000) / 10 : 0;
+
+    return { today, thisWeek, pending, completed, cancelled30d, total30d, cancellationRate };
   }, [events]);
 
   const eventStyleGetter = (event: Event) => ({
-    className: eventTypeClass[event.type],
+    className:
+      event.status === "cancelada"
+        ? `${eventTypeClass[event.type]} event-cancelled`
+        : eventTypeClass[event.type],
   });
 
   return (
@@ -475,8 +591,19 @@ export default function Appointments() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            onClick={() => void refetch()}
+            title="Actualizar citas (landing y otros canales)"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
           <Button onClick={() => {
             setSelectedEvent(null);
+            setDialogMode("create");
             setOpenedFromSlot(false);
             setFormData({
               title: "",
@@ -497,7 +624,7 @@ export default function Appointments() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KPICard
           label="Hoy"
           icon={CalendarClock}
@@ -530,6 +657,30 @@ export default function Appointments() {
           value={appointmentStats.completed}
           subtitle="Últimos 30 días"
         />
+        <KPICard
+          label="Canceladas"
+          icon={XCircle}
+          loading={loading}
+          loadingWidth="sm"
+          value={appointmentStats.cancelled30d}
+          subtitle={
+            appointmentStats.cancelled30d === 1
+              ? "1 cita cancelada (30 días)"
+              : `${appointmentStats.cancelled30d} citas canceladas (30 días)`
+          }
+        />
+        <KPICard
+          label="% cancelación"
+          icon={XCircle}
+          loading={loading}
+          loadingWidth="sm"
+          value={`${appointmentStats.cancellationRate}%`}
+          subtitle={
+            appointmentStats.total30d > 0
+              ? `${appointmentStats.cancelled30d} de ${appointmentStats.total30d} citas (30 días)`
+              : "Sin citas en el período"
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -543,7 +694,7 @@ export default function Appointments() {
                   Calendario
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Click en un slot para crear · click en un evento para editar
+                  Clic en cita o día con visitas: ver detalle · día vacío: nueva cita
                 </CardDescription>
               </div>
               {/* Leyenda de tipos */}
@@ -625,7 +776,7 @@ export default function Appointments() {
                     <button
                       key={event.id}
                       type="button"
-                      onClick={() => handleSelectEvent(event)}
+                      onClick={() => openEventView(event)}
                       className="w-full text-left p-3 rounded-md border border-border hover:bg-accent/30 transition-colors group"
                     >
                       <div className="flex items-start gap-3">
@@ -665,19 +816,136 @@ export default function Appointments() {
       </div>
 
       {/* Event Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeAppointmentDialog();
+          else setIsDialogOpen(true);
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {selectedEvent ? "Editar Evento" : "Nuevo Evento"}
+              {dialogMode === "day-pick"
+                ? "Visitas del día"
+                : dialogMode === "view"
+                  ? "Detalle de la cita"
+                  : dialogMode === "edit"
+                    ? "Editar cita"
+                    : "Nueva cita"}
             </DialogTitle>
             <DialogDescription>
-              {selectedEvent
-                ? "Modifica los detalles del evento"
-                : "Completa la información del nuevo evento"}
+              {dialogMode === "day-pick" && dayPickerDate
+                ? format(dayPickerDate, "EEEE d 'de' MMMM yyyy", { locale: es })
+                : dialogMode === "view"
+                  ? "Información de la visita agendada"
+                  : dialogMode === "edit"
+                    ? "Modifica los detalles y guarda los cambios"
+                    : "Completa la información del nuevo evento"}
             </DialogDescription>
           </DialogHeader>
 
+          {dialogMode === "day-pick" ? (
+            <div className="space-y-2 py-2">
+              <p className="text-sm text-muted-foreground">
+                Este día tiene varias visitas. Elige una para ver el detalle.
+              </p>
+              <div className="max-h-[min(50vh,360px)] space-y-2 overflow-y-auto pr-1">
+                {dayPickerEvents.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => openEventView(event)}
+                    className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent/40"
+                  >
+                    <span className="skale-num shrink-0 text-sm font-semibold tabular-nums">
+                      {format(event.start, "HH:mm")}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`event-dot ${eventTypeClass[event.type]}`} />
+                        <span className="text-xs text-muted-foreground">{eventTypeLabels[event.type]}</span>
+                        <Badge variant="secondary" className="text-[10px] h-5">
+                          {eventStatusLabels[event.status]}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium truncate">{event.title}</p>
+                      {event.clientName ? (
+                        <p className="text-xs text-muted-foreground truncate">{event.clientName}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : dialogMode === "view" && selectedEvent ? (
+            <div className="space-y-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="gap-1.5">
+                  <span className={`event-dot ${eventTypeClass[selectedEvent.type]}`} />
+                  {eventTypeLabels[selectedEvent.type]}
+                </Badge>
+                <Badge
+                  variant={
+                    selectedEvent.status === "completada"
+                      ? "default"
+                      : selectedEvent.status === "cancelada"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {eventStatusLabels[selectedEvent.status]}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-lg font-semibold leading-snug">{selectedEvent.title}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="text-base">
+                    {format(selectedEvent.start, "EEEE d 'de' MMMM yyyy", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Horario</p>
+                  <p className="text-base skale-num tabular-nums">
+                    {format(selectedEvent.start, "HH:mm")} – {format(selectedEvent.end, "HH:mm")}
+                  </p>
+                </div>
+              </div>
+              {(selectedEvent.clientName || selectedEvent.clientPhone) && (
+                <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Cliente / lead
+                  </p>
+                  {selectedEvent.clientName ? (
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <p className="text-base font-medium">{selectedEvent.clientName}</p>
+                    </div>
+                  ) : null}
+                  {selectedEvent.clientPhone ? (
+                    <p className="text-sm text-muted-foreground pl-6">{selectedEvent.clientPhone}</p>
+                  ) : null}
+                </div>
+              )}
+              {selectedEvent.vehicleInfo ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Vehículo</p>
+                  <p className="text-base">{selectedEvent.vehicleInfo}</p>
+                </div>
+              ) : null}
+              {selectedEvent.description?.trim() ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Motivo / notas</p>
+                  <p className="text-base whitespace-pre-wrap rounded-md border bg-muted/20 p-3">
+                    {selectedEvent.description.trim()}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="title">Título *</Label>
@@ -880,39 +1148,83 @@ export default function Appointments() {
               />
             </div>
           </div>
+          )}
 
-          <DialogFooter className="flex items-center justify-between">
-            <div>
-              {selectedEvent && (
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteEvent}
-                  className="flex items-center gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
+          <DialogFooter className="flex items-center justify-between gap-2">
+            {dialogMode === "day-pick" ? (
+              <Button variant="outline" className="ml-auto" onClick={closeAppointmentDialog}>
+                Cerrar
               </Button>
-              <Button onClick={handleSaveEvent} disabled={isSaving || loading}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Guardando...
-                  </>
+            ) : dialogMode === "view" && selectedEvent ? (
+              <div className="flex w-full flex-wrap items-center justify-between gap-2">
+                {selectedEvent.status !== "cancelada" ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="gap-2"
+                    disabled={isCancelling || loading}
+                    onClick={() => void handleCancelAppointment()}
+                  >
+                    {isCancelling ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    Cancelar cita
+                  </Button>
                 ) : (
-                  selectedEvent ? "Guardar Cambios" : "Crear Evento"
+                  <span className="text-xs text-muted-foreground">Esta cita ya está cancelada</span>
                 )}
-              </Button>
-            </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="outline" onClick={closeAppointmentDialog}>
+                    Cerrar
+                  </Button>
+                  {selectedEvent.status !== "cancelada" ? (
+                    <Button className="gap-2" onClick={() => openEventEdit(selectedEvent)}>
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  {dialogMode === "edit" && selectedEvent ? (
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteEvent}
+                      className="flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Eliminar
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={closeAppointmentDialog}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSaveEvent} disabled={isSaving || loading}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : dialogMode === "edit" ? (
+                      "Guardar cambios"
+                    ) : (
+                      "Crear cita"
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {ConfirmDialog}
     </div>
   );
 }

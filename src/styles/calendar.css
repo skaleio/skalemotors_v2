@@ -442,6 +442,24 @@
 .event-meeting    { --evt: var(--chart-2); }  /* verde */
 .event-delivery   { --evt: var(--chart-4); }  /* violeta */
 .event-service    { --evt: var(--chart-3); }  /* ámbar */
+
+/* Citas canceladas — atenuadas en el grid */
+.rbc-event.event-cancelled {
+  --evt: var(--destructive);
+  opacity: 0.72;
+  text-decoration: line-through;
+  background-color: hsl(var(--destructive) / 0.12) !important;
+}
+
+.rbc-event.event-cancelled:hover {
+  opacity: 0.85;
+  background-color: hsl(var(--destructive) / 0.18) !important;
+}
+
+.rbc-event.event-cancelled .rbc-event-label,
+.rbc-event.event-cancelled .rbc-event-content {
+  color: hsl(var(--destructive));
+}
 .event-other      { --evt: var(--muted-foreground); }
 
 /* ====================================================================

@@ -34,7 +34,9 @@ export function isOriginAllowed(req: Request): boolean {
   const allowed = getAllowedOrigins();
   if (!allowed || allowed.length === 0) return true;
   const origin = req.headers.get("origin");
-  return Boolean(origin && allowed.includes(origin));
+  // Sin Origin: llamadas servidor (p. ej. proxy Vercel /api/landing-booking → Edge).
+  if (!origin) return true;
+  return allowed.includes(origin);
 }
 
 export function getCorsHeaders(req: Request): Record<string, string> {
