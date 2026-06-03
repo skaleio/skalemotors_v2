@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { useAppointments } from "@/hooks/useAppointments";
+import { supabase } from "@/lib/supabase";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
@@ -189,7 +190,31 @@ export default function Appointments() {
     tenantId: canSeeTenant ? tenantId : undefined,
     branchId: canSeeTeam ? user?.branch_id ?? undefined : undefined,
     enabled: !!user,
+    live: true,
   });
+
+  // Citas creadas desde landing-booking u otros canales externos
+  useEffect(() => {
+    if (!tenantId) return;
+    const channel = supabase
+      .channel(`appointments-live-${tenantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [tenantId, queryClient]);
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState(new Date());
   const [isDialogOpen, setIsDialogOpen] = useState(false);

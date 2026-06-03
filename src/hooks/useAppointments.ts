@@ -13,6 +13,8 @@ interface UseAppointmentsOptions {
   dateFrom?: string;
   dateTo?: string;
   enabled?: boolean;
+  /** Refresca al montar y al volver a la pestaña (p. ej. citas desde landing). */
+  live?: boolean;
 }
 
 export function useAppointments(options: UseAppointmentsOptions = {}) {
@@ -25,6 +27,7 @@ export function useAppointments(options: UseAppointmentsOptions = {}) {
     dateFrom,
     dateTo,
     enabled = true,
+    live = false,
   } = options;
 
   const queryKey = ["appointments", userId, tenantId, branchId, leadId, status, dateFrom, dateTo];
@@ -42,10 +45,11 @@ export function useAppointments(options: UseAppointmentsOptions = {}) {
         dateTo,
       }),
     enabled,
-    staleTime: 5 * 60 * 1000,
+    staleTime: live ? 30 * 1000 : 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: live,
+    refetchOnMount: live,
+    refetchInterval: live ? 60 * 1000 : false,
     retry: 2,
   });
 

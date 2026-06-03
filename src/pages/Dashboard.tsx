@@ -103,6 +103,7 @@ export default function Dashboard() {
     dateTo: appointmentsWindow.dateTo,
     status: 'programada',
     enabled: !!user?.branch_id,
+    live: true,
   });
 
   // Modales de KPI: Ventas del mes, Total ingresos y Balance (gastos)

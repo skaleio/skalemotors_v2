@@ -195,7 +195,10 @@ export function LeadIngestApiKeysSection({
         </CardTitle>
         <CardDescription className="text-sm leading-relaxed max-w-2xl">
           Genera el secreto para la cabecera <code className="text-xs rounded bg-muted px-1 py-0.5">x-api-key</code>.
-          Solo se muestra completo una vez. Pégalo en n8n y listo.
+          Solo se muestra completo una vez. Para la página de agendamiento usa{" "}
+          <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/landing-booking</code>{" "}
+          (crea lead + cita en Citas). Para n8n solo lead:{" "}
+          <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
