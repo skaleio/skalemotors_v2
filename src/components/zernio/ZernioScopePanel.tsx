@@ -186,7 +186,7 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
       setConnectingPlatform((current) => {
         if (current === platform) {
           toast.error(
-            `No pudimos abrir ${platformLabel}. En Network busca POST a zernio-connect-url (no solo 304). Si falla CORS, agrega ${window.location.origin} a ALLOWED_ORIGINS en Supabase.`,
+            `No pudimos abrir ${platformLabel}. Comprueba tu conexión y vuelve a intentar.`,
           );
           return null;
         }

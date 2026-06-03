@@ -66,14 +66,20 @@ export const leadService = {
     status?: string
     source?: string
     search?: string
+    limit?: number
   }) {
-    let query = supabase
-      .from('leads')
-      .select(`
+    const isSearch = Boolean(filters?.search?.trim())
+    const select = isSearch
+      ? 'id, full_name, email, phone, status'
+      : `
         *,
         assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color),
         branch:branches(id, name)
-      `)
+      `
+
+    let query = supabase
+      .from('leads')
+      .select(select)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
@@ -94,9 +100,14 @@ export const leadService = {
     }
 
     if (filters?.search) {
+      const s = filters.search.trim()
       query = query.or(
-        `full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,rut.ilike.%${filters.search}%`
+        `full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,rut.ilike.%${s}%`
       )
+    }
+
+    if (filters?.limit != null && filters.limit > 0) {
+      query = query.limit(filters.limit)
     }
 
     const { data, error } = await query

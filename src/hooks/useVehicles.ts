@@ -12,7 +12,8 @@ interface UseVehiclesOptions {
   enabled?: boolean
   staleTime?: number // Tiempo en ms antes de considerar los datos obsoletos
   gcTime?: number // Tiempo en ms antes de eliminar datos del cache
-  mode?: 'full' | 'list'
+  mode?: 'full' | 'list' | 'search'
+  limit?: number
 }
 
 export function useVehicles(options: UseVehiclesOptions = {}) {
@@ -25,9 +26,10 @@ export function useVehicles(options: UseVehiclesOptions = {}) {
     staleTime = 5 * 60 * 1000, // 5 minutos por defecto
     gcTime = 10 * 60 * 1000, // 10 minutos por defecto
     mode = 'full',
+    limit,
   } = options
 
-  const queryKey = ['vehicles', mode, branchId, status, category, search]
+  const queryKey = ['vehicles', mode, branchId, status, category, search, limit]
 
   const { data: vehicles = [], isLoading: loading, isFetching, error, refetch } = useQuery({
     queryKey,
@@ -37,6 +39,7 @@ export function useVehicles(options: UseVehiclesOptions = {}) {
       category,
       search,
       mode,
+      limit,
     }),
     enabled, // Cargar siempre que enabled sea true; sin branchId se traen todos los vehículos
     staleTime, // Los datos se consideran frescos (evita refetches innecesarios)

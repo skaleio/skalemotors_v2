@@ -1,10 +1,14 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const supabaseTarget = (env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
+
+  return {
   build: {
     rollupOptions: {
       output: {
@@ -28,6 +32,16 @@ export default defineConfig(({ mode }) => ({
     historyApiFallback: true,
     // Por defecto CORS solo permite localhost/127.0.0.1; al abrir por IP (ej. 192.168.1.27) el navegador bloquea sin esto
     cors: true,
+    proxy: supabaseTarget
+      ? {
+          "/api/edge": {
+            target: supabaseTarget,
+            changeOrigin: true,
+            secure: true,
+            rewrite: (p) => p.replace(/^\/api\/edge/, "/functions/v1"),
+          },
+        }
+      : undefined,
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
@@ -37,4 +51,5 @@ export default defineConfig(({ mode }) => ({
     // Una sola copia de React; duplicados provocan "Should have a queue" en hooks.
     dedupe: ["react", "react-dom"],
   },
-}));
+};
+});

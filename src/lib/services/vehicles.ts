@@ -12,18 +12,24 @@ export const vehicleService = {
     status?: string
     category?: string
     search?: string
-    mode?: 'full' | 'list'
+    mode?: 'full' | 'list' | 'search'
+    limit?: number
   }) {
     const run = () => {
       const mode = filters?.mode ?? 'full'
       // Para listas grandes evitamos traer JSON pesados (features/documents/description).
       const selectList =
         'id, vin, make, model, year, color, mileage, fuel_type, transmission, engine_size, doors, seats, category, condition, price, cost, margin, status, branch_id, tenant_id, location, images, primary_image_url, arrival_date, owner_name, owner_phone, consignment_type, patente, consignatario_staff_id, carroceria, transmision_display, combustible_display, publicado, created_at, updated_at, branches(name, city, region)'
+      const selectSearch =
+        'id, vin, make, model, year, color, price, status, patente'
       const selectFull = '*, branches(name, city, region)'
+
+      const select =
+        mode === 'search' ? selectSearch : mode === 'list' ? selectList : selectFull
 
       let query = supabase
         .from('vehicles')
-        .select(mode === 'list' ? selectList : selectFull)
+        .select(select)
         .order('created_at', { ascending: false })
 
       if (filters?.branchId) {
@@ -39,10 +45,15 @@ export const vehicleService = {
       }
 
       if (filters?.search) {
-        const s = filters.search
+        const s = filters.search.trim()
+        const yearClause = /^\d{4}$/.test(s) ? `,year.eq.${s}` : ''
         query = query.or(
-          `make.ilike.%${s}%,model.ilike.%${s}%,vin.ilike.%${s}%,patente.ilike.%${s}%`
+          `make.ilike.%${s}%,model.ilike.%${s}%,vin.ilike.%${s}%,patente.ilike.%${s}%${yearClause}`
         )
+      }
+
+      if (filters?.limit != null && filters.limit > 0) {
+        query = query.limit(filters.limit)
       }
 
       return query.then(({ data, error }) => {

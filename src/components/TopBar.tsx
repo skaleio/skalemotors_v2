@@ -1,7 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useLeads } from "@/hooks/useLeads";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { useGlobalSearch, type GlobalSearchResult } from "@/hooks/useGlobalSearch";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import {
   useDismissNotification,
@@ -10,7 +9,6 @@ import {
   useNotifications,
   type Notification,
 } from "@/hooks/useNotifications";
-import { useVehicles } from "@/hooks/useVehicles";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
@@ -36,15 +34,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
-interface SearchResult {
-  id: string;
-  type: 'vehicle' | 'lead' | 'client';
-  title: string;
-  description: string;
-  url: string;
-  highlightId?: string;
-}
-
 export function TopBar() {
   usePreloadUserAvatar();
   const navigate = useNavigate();
@@ -52,128 +41,39 @@ export function TopBar() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
-  const { vehicles } = useVehicles({ branchId: user?.branch_id ?? undefined, enabled: !!user });
-  const { leads } = useLeads({
-    branchId: user?.branch_id ?? undefined,
-    assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
-    enabled: !!user,
-  });
 
   // Verificar si estamos en Dashboard Principal
   const isDashboardPrincipal = location.pathname === '/';
 
-  // Estados para búsqueda
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Función de búsqueda
-  const performSearch = (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setIsSearchOpen(false);
-      return;
-    }
+  const {
+    results: searchResults,
+    isSearching,
+    minQueryLength,
+    queryTooShort,
+  } = useGlobalSearch({
+    query: searchQuery,
+    enabled: isSearchExpanded && !!user,
+    branchId: user?.branch_id ?? undefined,
+    role: user?.role,
+    userId: user?.id,
+  });
 
-    setIsSearching(true);
-    const lowerCaseQuery = query.toLowerCase();
-    const results: SearchResult[] = [];
-
-    // Buscar en vehículos
-    vehicles.forEach(vehicle => {
-      if (
-        vehicle.make.toLowerCase().includes(lowerCaseQuery) ||
-        vehicle.model.toLowerCase().includes(lowerCaseQuery) ||
-        vehicle.year.toString().includes(lowerCaseQuery) ||
-        (vehicle.color || "").toLowerCase().includes(lowerCaseQuery) ||
-        (vehicle.vin || "").toLowerCase().includes(lowerCaseQuery)
-      ) {
-        results.push({
-          id: `vehicle-${vehicle.id}`,
-          type: 'vehicle',
-          title: `${vehicle.make} ${vehicle.model} (${vehicle.year})`,
-          description: `VIN: ${vehicle.vin} | Color: ${vehicle.color} | $${Number(vehicle.price || 0).toLocaleString()}`,
-          url: '/app/consignaciones',
-          highlightId: vehicle.id,
-        });
-      }
-    });
-
-    // Buscar en leads
-    leads.forEach(lead => {
-      if (
-        lead.full_name.toLowerCase().includes(lowerCaseQuery) ||
-        (lead.email || "").toLowerCase().includes(lowerCaseQuery) ||
-        (lead.phone || "").includes(lowerCaseQuery)
-      ) {
-        results.push({
-          id: `lead-${lead.id}`,
-          type: 'lead',
-          title: `Lead: ${lead.full_name}`,
-          description: `Tel: ${lead.phone} | Email: ${lead.email || "—"} | Estado: ${lead.status}`,
-          url: `/app/leads?openLead=${lead.id}`,
-          highlightId: lead.id,
-        });
-      }
-    });
-
-    // Simular delay de búsqueda
-    setTimeout(() => {
-      setSearchResults(results);
-      setIsSearching(false);
-      setIsSearchOpen(results.length > 0);
-    }, 300);
-  };
-
-  // Debounce search
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      performSearch(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(handler);
-  }, [searchQuery]);
-
-  // Abrir dropdown cuando hay query y el buscador está expandido
-  useEffect(() => {
-    if (!isSearchExpanded) return;
-    if (!searchQuery.trim()) {
-      setIsSearchOpen(false);
-      return;
-    }
-    // `performSearch` maneja isSearchOpen cuando hay resultados
-  }, [isSearchExpanded, searchQuery]);
-
-  // Cerrar búsqueda al hacer click fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setIsSearchOpen(false);
-        setIsSearchExpanded(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Navegar a resultado de búsqueda
-  const navigateToSearchResult = (result: SearchResult) => {
+  const navigateToSearchResult = (result: GlobalSearchResult) => {
     navigateWithLoading(result.url);
     setSearchQuery('');
-    setSearchResults([]);
-    setIsSearchOpen(false);
+    setIsSearchExpanded(false);
   };
 
   const { notifications, unreadCount } = useNotifications({
     userId: user?.id,
     role: user?.role,
     limit: 20,
-    syncStaleAlerts: true,
+    syncStaleAlerts: notificationsOpen,
   });
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
@@ -307,8 +207,6 @@ export function TopBar() {
             setIsSearchExpanded(open);
             if (!open) {
               setSearchQuery('');
-              setSearchResults([]);
-              setIsSearchOpen(false);
             } else {
               setTimeout(() => searchInputRef.current?.focus(), 0);
             }
@@ -330,10 +228,7 @@ export function TopBar() {
               ) : searchQuery ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSearchResults([]);
-                  }}
+                  onClick={() => setSearchQuery('')}
                   className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent/40 transition-colors"
                   aria-label="Limpiar búsqueda"
                 >
@@ -350,6 +245,10 @@ export function TopBar() {
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                     Por marca, modelo, año o patente en el inventario. Por nombre, teléfono o email en leads.
                   </p>
+                </div>
+              ) : queryTooShort ? (
+                <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+                  Escribí al menos {minQueryLength} caracteres para buscar.
                 </div>
               ) : searchResults.length === 0 && !isSearching ? (
                 <div className="px-6 py-10 text-center text-sm text-muted-foreground">
@@ -426,7 +325,7 @@ export function TopBar() {
         )}
 
         {/* Notifications */}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={setNotificationsOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative h-9 w-9">
               <Bell className={`h-4 w-4 transition-transform ${bellBounce ? 'animate-bounce text-primary' : ''}`} />
