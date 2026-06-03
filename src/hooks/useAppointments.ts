@@ -32,7 +32,7 @@ export function useAppointments(options: UseAppointmentsOptions = {}) {
 
   const queryKey = ["appointments", userId, tenantId, branchId, leadId, status, dateFrom, dateTo];
 
-  const { data = [], isLoading: loading, error, refetch } = useQuery({
+  const { data = [], isLoading: loading, isFetching, error, refetch } = useQuery({
     queryKey,
     queryFn: () =>
       appointmentService.getAll({
@@ -56,6 +56,7 @@ export function useAppointments(options: UseAppointmentsOptions = {}) {
   return {
     appointments: data as Appointment[],
     loading,
+    isFetching,
     error: error as Error | null,
     refetch,
   };

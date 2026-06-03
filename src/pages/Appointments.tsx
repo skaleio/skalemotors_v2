@@ -48,7 +48,7 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as BigCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
@@ -208,7 +208,7 @@ export default function Appointments() {
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
-  const { appointments, loading, refetch } = useAppointments({
+  const { appointments, loading, isFetching, refetch } = useAppointments({
     userId: canSeeSelf ? user?.id : undefined,
     tenantId: canSeeTenant ? tenantId : undefined,
     branchId: canSeeTeam ? user?.branch_id ?? undefined : undefined,
@@ -580,6 +580,27 @@ export default function Appointments() {
         : eventTypeClass[event.type],
   });
 
+  const isRefreshing = loading || isFetching;
+
+  const handleRefreshAppointments = useCallback(async () => {
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      const result = await refetch();
+      const count = Array.isArray(result.data) ? result.data.length : appointments.length;
+      toast({
+        title: "Calendario actualizado",
+        description: `${count} cita${count === 1 ? "" : "s"} cargadas.`,
+      });
+    } catch (error) {
+      console.error("[Appointments] refresh", error);
+      toast({
+        title: "No se pudo actualizar",
+        description: error instanceof Error ? error.message : "Intenta de nuevo.",
+        variant: "destructive",
+      });
+    }
+  }, [queryClient, refetch, appointments.length]);
+
   return (
     <div className="space-y-6">
       {/* Hero */}
@@ -594,12 +615,12 @@ export default function Appointments() {
           <Button
             type="button"
             variant="outline"
-            disabled={loading}
-            onClick={() => void refetch()}
+            disabled={isRefreshing}
+            onClick={() => void handleRefreshAppointments()}
             title="Actualizar citas (landing y otros canales)"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Actualizar
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Actualizando…" : "Actualizar"}
           </Button>
           <Button onClick={() => {
             setSelectedEvent(null);
