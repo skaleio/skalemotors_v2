@@ -2,6 +2,7 @@
 // Auth: misma ingesta que lead-create (verify_lead_ingest_key por sucursal o legacy env).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DateTime } from "https://esm.sh/luxon@3.5.0?target=deno";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
 
@@ -41,6 +42,7 @@ function toTitleCase(s: string): string {
     .join(" ");
 }
 
+/** Hora de la landing = reloj Chile (America/Santiago), no UTC del servidor. */
 function parseScheduledAt(date: string, time: string, scheduledAtIso?: string): string | null {
   if (scheduledAtIso) {
     const d = new Date(scheduledAtIso);
@@ -49,9 +51,9 @@ function parseScheduledAt(date: string, time: string, scheduledAtIso?: string): 
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(date);
   const timeOk = /^\d{2}:\d{2}$/.test(time);
   if (!dateOk || !timeOk) return null;
-  const d = new Date(`${date}T${time}:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+  const dt = DateTime.fromISO(`${date}T${time}`, { zone: "America/Santiago" });
+  if (!dt.isValid) return null;
+  return dt.toUTC().toISO();
 }
 
 type Payload = {
@@ -189,10 +191,10 @@ export default async function handler(req: Request): Promise<Response> {
         source: "redes_sociales",
         status: "nuevo",
         priority: "media",
-        assigned_to: LANDING_USER_ID,
         notes: leadNotes,
         tags: ["meta-ads", "landing"],
         tenant_id: tenantId,
+        assigned_to: LANDING_USER_ID,
         updated_at: new Date().toISOString(),
       })
       .eq("id", leadId);
