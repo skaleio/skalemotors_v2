@@ -6,12 +6,6 @@
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import {
-  processAppointmentIngest,
-  type AppointmentIngestPayload,
-} from "./_lib/appointmentIngestHandler";
-import { maybeCreateAppointmentAfterIngest } from "./_lib/landingBookingHandler";
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -341,6 +335,19 @@ function getAllowedOrigin(req: VercelRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await handleLeadIngest(req, res);
+  } catch (err) {
+    console.error("[n8n-lead-ingest] unhandled:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Internal server error",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
   // H10: CORS configurable via LEAD_INGEST_ALLOWED_ORIGINS (comma-separated).
   // Si no está seteado, sigue siendo "*" para no romper integraciones existentes.
   res.setHeader("Access-Control-Allow-Origin", getAllowedOrigin(req));
@@ -408,10 +415,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(cached.status_code).json(cached.response_body);
       }
     }
+    const { processAppointmentIngest } = await import("./_lib/appointmentIngestHandler");
     const result = await processAppointmentIngest(
       supabase,
       branchId,
-      body as AppointmentIngestPayload,
+      body as import("./_lib/appointmentIngestHandler").AppointmentIngestPayload,
     );
     if (cacheKey && result.ok && result.status >= 200 && result.status < 300) {
       await storeIdempotentResponse(supabase, branchId, cacheKey, result.status, result.body);
@@ -590,6 +598,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let appointment: { id: string; scheduled_at: string } | null = null;
       if (tenantId && body.date?.trim() && body.time?.trim()) {
+        const { maybeCreateAppointmentAfterIngest } = await import("./_lib/landingBookingHandler");
         appointment = await maybeCreateAppointmentAfterIngest(supabase, {
           branchId,
           leadId: existing.id as string,
@@ -666,6 +675,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let appointment: { id: string; scheduled_at: string } | null = null;
   if (tenantId && body.date?.trim() && body.time?.trim()) {
+    const { maybeCreateAppointmentAfterIngest } = await import("./_lib/landingBookingHandler");
     appointment = await maybeCreateAppointmentAfterIngest(supabase, {
       branchId,
       leadId: created.id as string,
