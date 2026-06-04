@@ -6,6 +6,10 @@
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  processAppointmentIngest,
+  type AppointmentIngestPayload,
+} from "./_lib/appointmentIngestHandler";
 import { maybeCreateAppointmentAfterIngest } from "./_lib/landingBookingHandler";
 
 const UUID_RE =
@@ -53,9 +57,19 @@ type Payload = {
   /** UUID de usuario vendedor (public.users) para asignar el lead al crear/actualizar. */
   assigned_to?: string | null;
 
-  /** Si la landing llama por error a n8n-lead-ingest: crea cita en calendario (sucursal landing). */
+  /** Cita en calendario (agendamiento web → n8n). Si vienen con assigned_to, se usa appointment-ingest. */
   date?: string;
   time?: string;
+  scheduled_at?: string;
+  title?: string;
+  type?: string;
+  description?: string | null;
+  create_lead?: boolean;
+  user_id?: string | null;
+  vehicle_id?: string | null;
+  company?: string;
+  website?: string;
+  fullName?: string;
 
   // --- Campos extraídos por agentes IA (ej. n8n WHATSAPP HESSEN) ---
   uso_principal?: string | null;
@@ -378,6 +392,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const branchId = auth.resolution.branchId;
+
+  const isCalendarIngest =
+    (!!body.date?.trim() && !!body.time?.trim()) ||
+    !!body.scheduled_at?.trim();
+  const calendarAssignee =
+    optionalAssignedToUuid(body.assigned_to) ?? optionalAssignedToUuid(body.user_id);
+
+  if (isCalendarIngest && calendarAssignee) {
+    const idempotencyKeyEarly = (req.headers["idempotency-key"] as string | undefined)?.trim();
+    const cacheKey = idempotencyKeyEarly ? `appt:${idempotencyKeyEarly}` : "";
+    if (cacheKey) {
+      const cached = await loadIdempotentResponse(supabase, branchId, cacheKey);
+      if (cached) {
+        return res.status(cached.status_code).json(cached.response_body);
+      }
+    }
+    const result = await processAppointmentIngest(
+      supabase,
+      branchId,
+      body as AppointmentIngestPayload,
+    );
+    if (cacheKey && result.ok && result.status >= 200 && result.status < 300) {
+      await storeIdempotentResponse(supabase, branchId, cacheKey, result.status, result.body);
+    }
+    return res.status(result.status).json(result.body);
+  }
 
   const idempotencyKey = (req.headers["idempotency-key"] as string | undefined)?.trim();
   if (idempotencyKey) {

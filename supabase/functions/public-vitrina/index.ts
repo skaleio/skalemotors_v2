@@ -19,7 +19,9 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const PUBLIC_VEHICLE_COLUMNS =
   "id, make, model, year, color, mileage, fuel_type, transmission, transmision_display, " +
   "combustible_display, engine_size, doors, seats, category, condition, price, description, " +
-  "features, images, primary_image_url, carroceria, branch_id, created_at";
+  "features, images, primary_image_url, carroceria, branch_id, status, created_at";
+
+const PUBLIC_WEB_STATUSES = ["disponible", "reservado"] as const;
 
 function getEnvAny(names: string[]): string | null {
   for (const name of names) {
@@ -120,7 +122,7 @@ export default async function handler(req: Request): Promise<Response> {
       .eq("tenant_id", tenantId)
       .eq("id", vehicleId)
       .eq("publicado_web", true)
-      .eq("status", "disponible")
+      .in("status", [...PUBLIC_WEB_STATUSES])
       .maybeSingle();
     if (!vehicle) return json(404, { error: "Vehicle not found" });
     return json(200, { vehicle });
@@ -139,7 +141,7 @@ export default async function handler(req: Request): Promise<Response> {
     .select(PUBLIC_VEHICLE_COLUMNS)
     .eq("tenant_id", tenantId)
     .eq("publicado_web", true)
-    .eq("status", "disponible")
+    .in("status", [...PUBLIC_WEB_STATUSES])
     .order("created_at", { ascending: false });
 
   if (path === "vehicles") {

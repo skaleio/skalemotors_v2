@@ -39,6 +39,7 @@ export interface PublicVehicle {
   primary_image_url: string | null;
   carroceria: string | null;
   branch_id: string | null;
+  status?: string | null;
   created_at: string;
 }
 

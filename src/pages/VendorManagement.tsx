@@ -2,7 +2,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Plus, Search, Trash2, User, Users } from "lucide-react";
+import { SellerInactivityPanel } from "@/components/SellerInactivityPanel";
+import { SellerPerformanceBar } from "@/components/SellerPerformanceBar";
+import { SellerSalesGoalBar } from "@/components/SellerSalesGoalBar";
+import { useSalesRanking } from "@/hooks/useSalesRanking";
+import { useSellerEngagement } from "@/hooks/useSellerEngagement";
+import { resolveEngagementForSeller } from "@/lib/sellerEngagement";
+import { useTenantSalesGoal } from "@/hooks/useTenantSalesGoal";
+import { resolveMonthlySalesGoal } from "@/lib/sellerPerformance";
+import { DollarSign, Plus, Search, Target, Trash2, User, Users } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,7 +32,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useMemo, useState } from "react";
+import { canSyncStaleAlerts } from "@/lib/services/pendingTasks";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
@@ -46,6 +55,7 @@ type Seller = {
   role: string;
   branch: string;
   status: "Activo" | "Inactivo";
+  monthlySalesGoal: number | null;
 };
 
 type StaffRow = Database["public"]["Tables"]["branch_sales_staff"]["Row"] & {
@@ -63,6 +73,8 @@ function formatCurrency(value: number) {
 const STAFF_ROLES_MANAGE = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
 
 const USERS_PAGE_ROLES = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
+
+const TENANT_GOAL_EDIT_ROLES = new Set(["admin", "jefe_jefe"]);
 
 const DEFAULT_SELLER_ROLE = "Vendedor";
 
@@ -82,6 +94,41 @@ export default function VendorManagement() {
   const queryClient = useQueryClient();
   const canManageStaff = user?.role ? STAFF_ROLES_MANAGE.has(user.role) : false;
   const canOpenUsersPage = user?.role ? USERS_PAGE_ROLES.has(user.role) : false;
+  const canEditTenantGoal = user?.role ? TENANT_GOAL_EDIT_ROLES.has(user.role) : false;
+
+  const { goal: tenantSalesGoal, updateGoal: updateTenantGoal, isUpdating: updatingTenantGoal } =
+    useTenantSalesGoal();
+  const { data: monthRanking } = useSalesRanking("month", user?.branch_id ?? null, {
+    enabled: !!user?.tenant_id,
+  });
+  const { data: engagementRows = [], isLoading: loadingEngagement } = useSellerEngagement({
+    branchId: user?.branch_id ?? null,
+    enabled: !!user?.tenant_id && canManageStaff,
+  });
+  const inactivitySyncStarted = useRef(false);
+
+  useEffect(() => {
+    if (!canManageStaff || !user?.role || !canSyncStaleAlerts(user.role)) return;
+    if (inactivitySyncStarted.current) return;
+    inactivitySyncStarted.current = true;
+    void supabase.rpc("sync_seller_inactivity_notifications" as never).then(({ error }) => {
+      const rpcNotFound =
+        error?.code === "PGRST202" || error?.message?.includes("Could not find the function");
+      if (error && !rpcNotFound) console.warn("sync_seller_inactivity_notifications:", error.message);
+    });
+  }, [canManageStaff, user?.role]);
+
+
+  const salesCountByStaffId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of monthRanking?.rows ?? []) {
+      if (row.seller_key.startsWith("staff:")) {
+        map.set(row.seller_key.slice("staff:".length), row.sales_count);
+      }
+    }
+    return map;
+  }, [monthRanking?.rows]);
+  const [tenantGoalDraft, setTenantGoalDraft] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
@@ -90,6 +137,7 @@ export default function VendorManagement() {
 
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<string>(DEFAULT_SELLER_ROLE);
+  const [editStaffGoal, setEditStaffGoal] = useState("");
 
   const { data: staffList = [], isLoading: loadingStaff } = useQuery({
     queryKey: ["branch_sales_staff", user?.tenant_id, user?.branch_id],
@@ -111,12 +159,13 @@ export default function VendorManagement() {
   });
 
   const sellers: Seller[] = useMemo(() => {
-    return staffList.map((row) => ({
+      return staffList.map((row) => ({
       id: row.id,
       name: row.full_name,
       role: row.role_label || "Vendedor",
       branch: row.branch?.name || (row.branch_id ? "Sucursal" : "Todas las sucursales"),
       status: row.is_active ? "Activo" : "Inactivo",
+      monthlySalesGoal: row.monthly_sales_goal,
     }));
   }, [staffList]);
 
@@ -216,7 +265,82 @@ export default function VendorManagement() {
 
   const handleOpenDetail = (seller: Seller) => {
     setSelectedSeller(seller);
+    setEditStaffGoal(
+      seller.monthlySalesGoal != null && seller.monthlySalesGoal > 0
+        ? String(seller.monthlySalesGoal)
+        : "",
+    );
     setDetailOpen(true);
+  };
+
+  const updateStaffGoalMutation = useMutation({
+    mutationFn: async ({ id, goal }: { id: string; goal: number | null }) => {
+      const { error } = await supabase
+        .from("branch_sales_staff")
+        .update({
+          monthly_sales_goal: goal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["branch_sales_staff"] });
+    },
+  });
+
+  const handleSaveStaffGoal = () => {
+    if (!selectedSeller || !canManageStaff) return;
+    const trimmed = editStaffGoal.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    if (trimmed !== "" && (!Number.isFinite(parsed) || parsed! < 1)) {
+      toast({
+        title: "Meta inválida",
+        description: "Usa un número mayor a 0 o deja vacío para usar la meta general.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateStaffGoalMutation.mutate(
+      { id: selectedSeller.id, goal: parsed },
+      {
+        onSuccess: () => {
+          toast({ title: "Meta actualizada" });
+          setSelectedSeller((prev) =>
+            prev ? { ...prev, monthlySalesGoal: parsed } : prev,
+          );
+        },
+        onError: (err) => {
+          toast({
+            title: "No se pudo guardar la meta",
+            description: err instanceof Error ? err.message : "Intenta de nuevo.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const handleSaveTenantGoal = () => {
+    const n = Number(tenantGoalDraft.replace(/\D/g, ""));
+    if (!Number.isFinite(n) || n < 1) {
+      toast({
+        title: "Meta inválida",
+        description: "Indica un número de ventas mayor a 0.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateTenantGoal(n, {
+      onSuccess: () => toast({ title: "Meta general actualizada" }),
+      onError: (err) => {
+        toast({
+          title: "No se pudo guardar",
+          description: err instanceof Error ? err.message : "Intenta de nuevo.",
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   // Totales por staff del mes en curso (una sola query, agrupado en cliente).
@@ -345,6 +469,10 @@ export default function VendorManagement() {
     );
   };
 
+  useEffect(() => {
+    setTenantGoalDraft(String(tenantSalesGoal));
+  }, [tenantSalesGoal]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -374,6 +502,53 @@ export default function VendorManagement() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Target className="h-4 w-4 text-primary" />
+            Meta mensual de ventas
+          </CardTitle>
+          <CardDescription>
+            La barra de actividad mide notas, movimientos de leads y uso de la app (últimos 7 días).
+            La meta de ventas es aparte: ventas cerradas en el mes ({tenantSalesGoal} por defecto).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {canEditTenantGoal ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="space-y-2 flex-1 max-w-xs">
+                <Label htmlFor="tenant-sales-goal">Meta general (ventas / mes)</Label>
+                <Input
+                  id="tenant-sales-goal"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={tenantGoalDraft || String(tenantSalesGoal)}
+                  onChange={(e) => setTenantGoalDraft(e.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveTenantGoal}
+                disabled={updatingTenantGoal}
+              >
+                {updatingTenantGoal ? "Guardando…" : "Guardar meta general"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Meta general del equipo: <span className="font-semibold text-foreground">{tenantSalesGoal}</span>{" "}
+              ventas por mes.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {canManageStaff ? (
+        <SellerInactivityPanel rows={engagementRows} isLoading={loadingEngagement} />
+      ) : null}
 
       {/* Resumen global */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -444,9 +619,15 @@ export default function VendorManagement() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredSellers.map((seller) => {
           const totals = staffMonthTotals.get(seller.id);
-          const salesCount = totals?.salesCount ?? 0;
+          const salesCount = salesCountByStaffId.get(seller.id) ?? totals?.salesCount ?? 0;
           const totalAmount = totals?.totalAmount ?? 0;
           const totalCommission = totals?.totalCommission ?? 0;
+          const sellerGoal = resolveMonthlySalesGoal(seller.monthlySalesGoal, tenantSalesGoal);
+          const engagement = resolveEngagementForSeller(
+            engagementRows,
+            seller.id,
+            seller.name,
+          );
           return (
             <Card
               key={seller.id}
@@ -486,6 +667,8 @@ export default function VendorManagement() {
                   <span className="text-muted-foreground">Sucursal</span>
                   <span className="font-medium">{seller.branch}</span>
                 </div>
+                <SellerPerformanceBar engagement={engagement} compact />
+                <SellerSalesGoalBar salesCount={salesCount} goal={sellerGoal} compact />
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">Ventas mes</p>
@@ -548,6 +731,49 @@ export default function VendorManagement() {
               </DialogHeader>
 
               <div className="space-y-6">
+                {(() => {
+                  const detailSales = salesSummary.salesThisMonth;
+                  const detailGoal = resolveMonthlySalesGoal(
+                    selectedSeller.monthlySalesGoal,
+                    tenantSalesGoal,
+                  );
+                  const detailEngagement = resolveEngagementForSeller(
+                    engagementRows,
+                    selectedSeller.id,
+                    selectedSeller.name,
+                  );
+                  return (
+                    <div className="space-y-3">
+                      <SellerPerformanceBar engagement={detailEngagement} />
+                      <SellerSalesGoalBar salesCount={detailSales} goal={detailGoal} />
+                    </div>
+                  );
+                })()}
+
+                {canManageStaff ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end rounded-lg border p-4">
+                    <div className="space-y-2 flex-1 max-w-xs">
+                      <Label htmlFor="staff-sales-goal">Meta individual (opcional)</Label>
+                      <Input
+                        id="staff-sales-goal"
+                        type="number"
+                        min={1}
+                        placeholder={`Vacío = meta general (${tenantSalesGoal})`}
+                        value={editStaffGoal}
+                        onChange={(e) => setEditStaffGoal(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleSaveStaffGoal}
+                      disabled={updateStaffGoalMutation.isPending}
+                    >
+                      {updateStaffGoalMutation.isPending ? "Guardando…" : "Guardar meta"}
+                    </Button>
+                  </div>
+                ) : null}
+
                 <div className="grid gap-4 md:grid-cols-4">
                   <Card>
                     <CardHeader className="pb-2">

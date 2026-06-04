@@ -191,14 +191,26 @@ export function LeadIngestApiKeysSection({
       <CardHeader className="pb-4">
         <CardTitle className="text-lg flex items-center gap-2">
           <Key className="h-5 w-5 text-amber-600" />
-          API n8n — ingesta de leads
+          API n8n — ingesta (leads y citas)
         </CardTitle>
-        <CardDescription className="text-sm leading-relaxed max-w-2xl">
-          Genera el secreto para la cabecera <code className="text-xs rounded bg-muted px-1 py-0.5">x-api-key</code>.
-          Solo se muestra completo una vez. Para la página de agendamiento usa{" "}
-          <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/landing-booking</code>{" "}
-          (crea lead + cita en Citas). Para n8n solo lead:{" "}
-          <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code>.
+        <CardDescription className="text-sm leading-relaxed max-w-2xl space-y-2">
+          <p>
+            Genera el secreto para <code className="text-xs rounded bg-muted px-1 py-0.5">x-api-key</code> (solo se
+            muestra una vez). La misma clave sirve para todos los endpoints de ingesta de tu sucursal.
+          </p>
+          <ul className="list-disc pl-5 text-muted-foreground space-y-1">
+            <li>
+              <strong>CRM / leads:</strong>{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code>
+            </li>
+            <li>
+              <strong>Calendario / citas</strong> (webhook → n8n):{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/appointment-ingest</code>{" "}
+              o el mismo body en{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code> si aún no
+              está desplegado appointment-ingest.
+            </li>
+          </ul>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

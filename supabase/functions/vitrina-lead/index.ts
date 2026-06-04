@@ -122,6 +122,7 @@ export default async function handler(req: Request): Promise<Response> {
       .eq("tenant_id", tenantId)
       .eq("id", vehicleId)
       .eq("publicado_web", true)
+      .in("status", ["disponible", "reservado"])
       .maybeSingle();
     if (vehicle?.id) {
       preferredVehicleId = vehicle.id as string;

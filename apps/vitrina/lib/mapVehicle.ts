@@ -11,5 +11,6 @@ export function toPreviewVehicle(v: PublicVehicle): PreviewVehicle {
     mileage: v.mileage,
     primary_image_url: v.primary_image_url,
     images: v.images,
+    status: v.status ?? null,
   };
 }

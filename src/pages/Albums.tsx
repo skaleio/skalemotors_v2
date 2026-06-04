@@ -1,19 +1,44 @@
-import { useMemo, useState } from "react";
-import { Camera, Loader2, Search, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Camera, Globe, Loader2, Search } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { AlbumPhotoThumbnailGrid } from "@/components/albums/AlbumPhotoThumbnailGrid";
+import { AlbumSectionUploadZone } from "@/components/albums/AlbumSectionUploadZone";
 import { VehicleImage } from "@/components/VehicleImage";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { isPhotographerRole } from "@/lib/appRoles";
 import { vehicleService } from "@/lib/services/vehicles";
 import { vehiclePhotosService } from "@/lib/services/vehiclePhotos";
+import {
+  VehicleWebPublishError,
+  vehicleWebPublishService,
+} from "@/lib/services/vehicleWebPublish";
+import {
+  filterAlbumVehicles,
+  MIN_ALBUM_PHOTOS_FOR_WEB_PUBLISH,
+  VEHICLE_STATUS_LABELS,
+  vehicleHasMinimumAlbumPhotos,
+  type AlbumQueueTab,
+  type AlbumVehicleRow,
+} from "@/lib/website/albumQueues";
+import {
+  ALBUM_NAME_EXTERIOR,
+  ALBUM_NAME_INTERIOR,
+  type AlbumPhotoViewTab,
+  countAssetsByPhotoViewTab,
+  filterGroupedAlbumsByPhotoViewTab,
+  groupAssetsByAlbum,
+} from "@/lib/website/albumDisplay";
+import { albumPublishProgressLabel } from "@/lib/website/albumPublishRules";
+import type { VehiclePhotoAsset } from "@/lib/services/vehiclePhotos";
 import { formatCLP } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -28,17 +53,6 @@ function firstVehicleImageUrl(images: unknown): string {
   return typeof first === "string" ? first : PLACEHOLDER_VEHICLE_IMAGE;
 }
 
-type AlbumVehicleRow = {
-  id: string;
-  make: string | null;
-  model: string | null;
-  year: number | null;
-  patente: string | null;
-  price: number | null;
-  images: unknown;
-  publicado_web: boolean;
-};
-
 export default function Albums() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -46,15 +60,20 @@ export default function Albums() {
   const canManage = user?.role === "admin" || isPhotographer;
 
   const [q, setQ] = useState("");
+  const [queueTab, setQueueTab] = useState<AlbumQueueTab>("sin_fotos");
   const [selected, setSelected] = useState<AlbumVehicleRow | null>(null);
-  const [albumName, setAlbumName] = useState("Exterior");
-  const [uploading, setUploading] = useState(false);
+  const [photoViewTab, setPhotoViewTab] = useState<AlbumPhotoViewTab>("carroceria");
+  const [uploadingAlbum, setUploadingAlbum] = useState<string | null>(null);
 
   const vehiclesQuery = useQuery<AlbumVehicleRow[]>({
     queryKey: ["albums-vehicles"],
     queryFn: async () => {
       const data = await vehicleService.getAll({ mode: "list" });
-      return (data ?? []).map((v) => ({
+      const rows = data ?? [];
+      const publishableByVehicle = await vehiclePhotosService.countPublishableByVehicleIds(
+        rows.map((v) => v.id),
+      );
+      return rows.map((v) => ({
         id: v.id,
         make: v.make ?? null,
         model: v.model ?? null,
@@ -62,65 +81,131 @@ export default function Albums() {
         patente: (v as any).patente ?? null,
         price: v.price ?? null,
         images: v.images,
+        publishable_photo_count: publishableByVehicle[v.id] ?? 0,
         publicado_web: (v as any).publicado_web ?? false,
+        status: (v as any).status ?? "disponible",
       }));
     },
     staleTime: 60_000,
   });
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return vehiclesQuery.data ?? [];
-    return (vehiclesQuery.data ?? []).filter((v) => {
-      const blob = `${v.make ?? ""} ${v.model ?? ""} ${v.year ?? ""} ${v.patente ?? ""}`.toLowerCase();
-      return blob.includes(needle);
-    });
-  }, [q, vehiclesQuery.data]);
+  const filtered = useMemo(
+    () => filterAlbumVehicles(vehiclesQuery.data ?? [], queueTab, q),
+    [q, queueTab, vehiclesQuery.data],
+  );
 
-  const albumsQuery = useQuery({
-    queryKey: ["vehicle-albums", selected?.id],
-    queryFn: () => vehiclePhotosService.listAlbumsSummary(selected!.id),
-    enabled: !!selected?.id,
-  });
+  const queueCounts = useMemo(() => {
+    const rows = vehiclesQuery.data ?? [];
+    return {
+      sin_fotos: filterAlbumVehicles(rows, "sin_fotos", "").length,
+      listos: filterAlbumVehicles(rows, "listos", "").length,
+      en_web: filterAlbumVehicles(rows, "en_web", "").length,
+      todos: rows.length,
+    };
+  }, [vehiclesQuery.data]);
 
   const assetsQuery = useQuery({
-    queryKey: ["vehicle-album-assets", selected?.id, albumsQuery.data?.map((a) => a.album).join("|")],
+    queryKey: ["vehicle-album-assets", selected?.id],
     queryFn: () => vehiclePhotosService.listByVehicle(selected!.id),
     enabled: !!selected?.id,
   });
 
-  const setPublicadoWeb = useMutation({
-    mutationFn: async (next: boolean) => {
+  const assetsByAlbum = useMemo(
+    () => groupAssetsByAlbum(assetsQuery.data ?? []),
+    [assetsQuery.data],
+  );
+
+  const photoViewCounts = useMemo(
+    () => ({
+      carroceria: countAssetsByPhotoViewTab(assetsQuery.data ?? [], "carroceria"),
+      interior: countAssetsByPhotoViewTab(assetsQuery.data ?? [], "interior"),
+      todas: (assetsQuery.data ?? []).length,
+    }),
+    [assetsQuery.data],
+  );
+
+  const visibleAssetsByAlbum = useMemo(
+    () => filterGroupedAlbumsByPhotoViewTab(assetsByAlbum, photoViewTab),
+    [assetsByAlbum, photoViewTab],
+  );
+
+  const visibleAssetsFlat = useMemo(() => {
+    const out: VehiclePhotoAsset[] = [];
+    for (const list of visibleAssetsByAlbum.values()) out.push(...list);
+    return out;
+  }, [visibleAssetsByAlbum]);
+
+  const publishProgressPct = selected
+    ? Math.min(100, (selected.publishable_photo_count / MIN_ALBUM_PHOTOS_FOR_WEB_PUBLISH) * 100)
+    : 0;
+
+  useEffect(() => {
+    setPhotoViewTab("carroceria");
+  }, [selected?.id]);
+
+  const refreshSelectedVehicleRow = async (vehicleId: string) => {
+    const refreshed = await vehicleService.getById(vehicleId);
+    const publishable = await vehiclePhotosService.countPublishable(vehicleId);
+    setSelected((s) =>
+      s?.id === vehicleId
+        ? {
+            ...s,
+            images: refreshed.images,
+            price: refreshed.price ?? s.price,
+            publishable_photo_count: publishable,
+          }
+        : s,
+    );
+    await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
+  };
+
+  const publishWeb = useMutation({
+    mutationFn: async () => {
       if (!selected) return;
-      if (next) {
-        const images = selected.images as string[] | null | undefined;
-        const hasPhoto = Array.isArray(images) && images.length > 0;
-        const hasPrice = Number(selected.price || 0) > 0;
-        if (!hasPhoto) throw new Error("Para publicar, el vehículo debe tener al menos 1 foto.");
-        if (!hasPrice) throw new Error("Para publicar, el vehículo debe tener un precio mayor a $0.");
-      }
-      await vehicleService.update(selected.id, { publicado_web: next } as any);
+      await vehicleWebPublishService.publish(selected.id);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
+      setSelected((s) => (s ? { ...s, publicado_web: true } : s));
+      toast.success("Publicado en la web. Visible en tu vitrina al tener el sitio activo.");
     },
+    onError: (e) =>
+      toast.error("No se pudo publicar", {
+        description: e instanceof VehicleWebPublishError || e instanceof Error ? e.message : undefined,
+      }),
   });
 
-  const handleUploadFiles = async (files: FileList | null) => {
+  const unpublishWeb = useMutation({
+    mutationFn: async () => {
+      if (!selected) return;
+      await vehicleWebPublishService.unpublish(selected.id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
+      setSelected((s) => (s ? { ...s, publicado_web: false } : s));
+      toast.success("Quitado de la web");
+    },
+    onError: (e) =>
+      toast.error("No se pudo quitar de la web", {
+        description: e instanceof Error ? e.message : undefined,
+      }),
+  });
+
+  const handleUploadFiles = async (album: string, files: FileList | null) => {
     if (!selected || !files?.length) return;
     if (!canManage) return;
-    const album = albumName.trim();
-    if (!album) {
-      toast.error("Nombre de álbum requerido");
+    const albumTrimmed = album.trim();
+    if (!albumTrimmed) {
+      toast.error("Álbum inválido");
       return;
     }
 
-    setUploading(true);
+    setUploadingAlbum(albumTrimmed);
     try {
       const urls: string[] = [];
       for (const file of Array.from(files)) {
         const fileExt = file.name.split(".").pop();
-        const safeAlbum = album.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "album";
+        const safeAlbum = albumTrimmed.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "album";
         const fileName = `${selected.id}/${safeAlbum}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
         const optimizedFile = await optimizeVehicleImageForUpload(file);
         const { error: uploadError } = await supabase.storage.from("vehicles").upload(fileName, optimizedFile, {
@@ -134,15 +219,46 @@ export default function Albums() {
         urls.push(data.publicUrl);
       }
 
-      await vehiclePhotosService.addAssets({ vehicleId: selected.id, album, urls });
-      toast.success("Fotos subidas");
-      await queryClient.invalidateQueries({ queryKey: ["vehicle-albums", selected.id] });
+      await vehiclePhotosService.addAssets({ vehicleId: selected.id, album: albumTrimmed, urls });
+      toast.success(`${urls.length} foto(s) subidas a ${albumTrimmed}`);
       await queryClient.invalidateQueries({ queryKey: ["vehicle-album-assets", selected.id] });
       await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
+      await refreshSelectedVehicleRow(selected.id);
+      setPhotoViewTab(albumTrimmed === ALBUM_NAME_INTERIOR ? "interior" : "carroceria");
     } catch (e) {
       toast.error("No se pudieron subir las fotos", { description: e instanceof Error ? e.message : undefined });
     } finally {
-      setUploading(false);
+      setUploadingAlbum(null);
+    }
+  };
+
+  const uploading = uploadingAlbum !== null;
+
+  const handleSetCover = async (url: string) => {
+    if (!selected) return;
+    try {
+      await vehiclePhotosService.setCover({ vehicleId: selected.id, url });
+      toast.success("Portada actualizada");
+      await queryClient.invalidateQueries({ queryKey: ["vehicle-album-assets", selected.id] });
+      await refreshSelectedVehicleRow(selected.id);
+    } catch (e) {
+      toast.error("No se pudo marcar portada", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!selected) return;
+    try {
+      await vehiclePhotosService.deleteAsset({ id: assetId, vehicleId: selected.id });
+      toast.success("Foto eliminada");
+      await queryClient.invalidateQueries({ queryKey: ["vehicle-album-assets", selected.id] });
+      await refreshSelectedVehicleRow(selected.id);
+    } catch (e) {
+      toast.error("No se pudo eliminar la foto", {
+        description: e instanceof Error ? e.message : undefined,
+      });
     }
   };
 
@@ -165,9 +281,15 @@ export default function Albums() {
             Álbumes
           </h1>
           <p className="text-muted-foreground mt-1">
-            Organiza fotos por vehículo (carpetas) y controla qué unidades se publican en la web.
+            Sube fotos por vehículo y publícalos en tu vitrina con un clic. Al vender o retirar un auto, se baja de la web automáticamente.
           </p>
         </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/app/website">
+            <Globe className="mr-2 h-4 w-4" />
+            Editar sitio web
+          </Link>
+        </Button>
       </div>
 
       <Card>
@@ -176,6 +298,14 @@ export default function Albums() {
           <CardDescription>Filtra por marca, modelo, año o patente.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <Tabs value={queueTab} onValueChange={(v) => setQueueTab(v as AlbumQueueTab)}>
+            <TabsList className="flex h-auto w-full flex-wrap gap-1">
+              <TabsTrigger value="sin_fotos">Faltan fotos ({queueCounts.sin_fotos})</TabsTrigger>
+              <TabsTrigger value="listos">Listos ({queueCounts.listos})</TabsTrigger>
+              <TabsTrigger value="en_web">En la web ({queueCounts.en_web})</TabsTrigger>
+              <TabsTrigger value="todos">Todos ({queueCounts.todos})</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -221,6 +351,23 @@ export default function Albums() {
                     <p className="text-xs text-muted-foreground truncate">
                       Patente: {v.patente ?? "—"} · {formatCLP(Number(v.price || 0))}
                     </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {VEHICLE_STATUS_LABELS[v.status] ?? v.status}
+                      </Badge>
+                      {v.publicado_web ? (
+                        <Badge className="text-[10px] px-1.5 py-0">En la web</Badge>
+                      ) : null}
+                      {!vehicleHasMinimumAlbumPhotos(v.publishable_photo_count) ? (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {albumPublishProgressLabel(v.publishable_photo_count)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-emerald-700">
+                          Listo para web
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -230,7 +377,10 @@ export default function Albums() {
       </Card>
 
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-5xl max-h-[90vh] overflow-y-auto"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
               {selected?.make} {selected?.model} {selected?.year} — Álbumes
@@ -241,175 +391,142 @@ export default function Albums() {
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold">Publicación web</p>
+                  <p className="text-sm font-semibold">Publicación en la vitrina</p>
                   <p className="text-xs text-muted-foreground">
-                    Control manual: solo admin y fotógrafo pueden publicar/quitar.
+                    Al publicar, el vehículo aparece en tu sitio (subdominio o dominio conectado en Mi Web).
+                    Estados vendido, retirado o en reparación se quitan solos de la web.
                   </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Badge variant="outline">{VEHICLE_STATUS_LABELS[selected.status]}</Badge>
+                    {selected.publicado_web ? (
+                      <Badge>Publicado en la web</Badge>
+                    ) : (
+                      <Badge variant="secondary">No publicado</Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">
-                    {selected.publicado_web ? "Publicado" : "No publicado"}
-                  </span>
-                  <Switch
-                    checked={!!selected.publicado_web}
-                    disabled={setPublicadoWeb.isPending}
-                    onCheckedChange={(next) => {
-                      setPublicadoWeb.mutate(next, {
-                        onSuccess: () => {
-                          setSelected((s) => (s ? { ...s, publicado_web: next } : s));
-                          toast.success(next ? "Publicado en la web" : "Quitado de la web");
-                        },
-                        onError: (e) =>
-                          toast.error("No se pudo actualizar publicación", {
-                            description: e instanceof Error ? e.message : undefined,
-                          }),
-                      });
-                    }}
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  {selected.publicado_web ? (
+                    <Button
+                      variant="outline"
+                      disabled={unpublishWeb.isPending}
+                      onClick={() => unpublishWeb.mutate()}
+                    >
+                      {unpublishWeb.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Quitar de la web
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled={
+                        publishWeb.isPending ||
+                        !vehicleHasMinimumAlbumPhotos(selected.publishable_photo_count)
+                      }
+                      onClick={() => publishWeb.mutate()}
+                    >
+                      {publishWeb.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Globe className="mr-2 h-4 w-4" />
+                      )}
+                      Publicar en la web
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Subir fotos a un álbum</CardTitle>
-                  <CardDescription>
-                    Crea álbumes por nombre (Exterior/Interior/Detalles) y sube las imágenes a la carpeta correspondiente.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Álbum</Label>
-                      <Input value={albumName} onChange={(e) => setAlbumName(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Archivos</Label>
-                      <Input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        disabled={uploading}
-                        onChange={(e) => {
-                          void handleUploadFiles(e.target.files);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    {uploading ? "Subiendo…" : "Las fotos quedan guardadas y sincronizadas a la vitrina (si publicas el vehículo)."}
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="grid gap-4 md:grid-cols-2">
+                <AlbumSectionUploadZone
+                  title="Exterior"
+                  description="Carrocería, llantas y vistas externas del vehículo."
+                  photoCount={photoViewCounts.carroceria}
+                  disabled={!canManage}
+                  uploading={uploadingAlbum === ALBUM_NAME_EXTERIOR}
+                  onFiles={(files) => handleUploadFiles(ALBUM_NAME_EXTERIOR, files)}
+                />
+                <AlbumSectionUploadZone
+                  title="Interior"
+                  description="Tablero, asientos, equipamiento y detalles internos."
+                  photoCount={photoViewCounts.interior}
+                  disabled={!canManage}
+                  uploading={uploadingAlbum === ALBUM_NAME_INTERIOR}
+                  onFiles={(files) => handleUploadFiles(ALBUM_NAME_INTERIOR, files)}
+                />
+              </div>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Álbumes existentes</CardTitle>
-                  <CardDescription>Portada + cantidad de fotos.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {albumsQuery.isLoading ? (
-                    <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Cargando álbumes…
-                    </div>
-                  ) : albumsQuery.error ? (
-                    <p className="text-sm text-destructive">No se pudieron cargar los álbumes.</p>
-                  ) : (albumsQuery.data ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aún no hay fotos/álbumes para este vehículo.</p>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {(albumsQuery.data ?? []).map((a) => (
-                        <div key={a.album} className="rounded-lg border p-3 flex gap-3">
-                          <div className="h-12 w-12 overflow-hidden rounded-md bg-muted shrink-0">
-                            <VehicleImage
-                              src={a.coverUrl ?? PLACEHOLDER_VEHICLE_IMAGE}
-                              alt=""
-                              preset="thumb-xs"
-                              className="h-full w-full object-cover"
-                              displayWidth={48}
-                              displayHeight={48}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{a.album}</p>
-                            <p className="text-xs text-muted-foreground">{a.count} foto(s)</p>
-                          </div>
+                <CardHeader className="space-y-3 pb-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <CardTitle className="text-base">Galería</CardTitle>
+                    {selected ? (
+                      <div className="flex w-full max-w-xs items-center gap-2 sm:w-auto">
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              vehicleHasMinimumAlbumPhotos(selected.publishable_photo_count)
+                                ? "bg-emerald-500"
+                                : "bg-primary",
+                            )}
+                            style={{ width: `${publishProgressPct}%` }}
+                          />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Fotos (todas)</CardTitle>
-                  <CardDescription>
-                    Puedes borrar fotos individuales o marcar una como portada (aparece primera en la web).
-                  </CardDescription>
+                        <span className="text-xs tabular-nums text-muted-foreground shrink-0">
+                          {albumPublishProgressLabel(selected.publishable_photo_count)}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <Tabs value={photoViewTab} onValueChange={(v) => setPhotoViewTab(v as AlbumPhotoViewTab)}>
+                    <TabsList className="flex h-auto w-full flex-wrap gap-1">
+                      <TabsTrigger value="carroceria" className="text-xs sm:text-sm">
+                        Exterior ({photoViewCounts.carroceria})
+                      </TabsTrigger>
+                      <TabsTrigger value="interior" className="text-xs sm:text-sm">
+                        Interior ({photoViewCounts.interior})
+                      </TabsTrigger>
+                      <TabsTrigger value="todas" className="text-xs sm:text-sm">
+                        Todas ({photoViewCounts.todas})
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <p className="text-[11px] text-muted-foreground">
+                    Pasa el cursor sobre una miniatura para portada o eliminar. La portada de consignación no
+                    suma al mínimo de {MIN_ALBUM_PHOTOS_FOR_WEB_PUBLISH}.
+                  </p>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   {assetsQuery.isLoading ? (
                     <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" /> Cargando fotos…
                     </div>
                   ) : assetsQuery.error ? (
-                    <p className="text-sm text-destructive">No se pudieron cargar las fotos.</p>
+                    <p className="text-sm text-destructive">
+                      No se pudieron cargar las fotos.
+                      {assetsQuery.error instanceof Error ? ` ${assetsQuery.error.message}` : ""}
+                    </p>
+                  ) : assetsByAlbum.size === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      Sin fotos. Usa las zonas Exterior e Interior de arriba.
+                    </p>
+                  ) : visibleAssetsFlat.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {photoViewTab === "interior"
+                        ? "Sin fotos de interior en esta vista."
+                        : photoViewTab === "carroceria"
+                          ? "Sin fotos de exterior en esta vista."
+                          : "Sin fotos en esta vista."}
+                    </p>
                   ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      {(assetsQuery.data ?? []).map((asset) => (
-                        <div key={asset.id} className="rounded-lg border overflow-hidden">
-                          <div className="aspect-square bg-muted">
-                            <img src={asset.url} alt="" className="h-full w-full object-cover" />
-                          </div>
-                          <div className="p-2 flex items-center justify-between gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={asset.is_cover ? "default" : "outline"}
-                              disabled={uploading}
-                              onClick={async () => {
-                                try {
-                                  await vehiclePhotosService.setCover({ vehicleId: selected.id, url: asset.url });
-                                  toast.success("Portada actualizada");
-                                  await queryClient.invalidateQueries({ queryKey: ["vehicle-album-assets", selected.id] });
-                                  await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
-                                } catch (e) {
-                                  toast.error("No se pudo marcar portada", { description: e instanceof Error ? e.message : undefined });
-                                }
-                              }}
-                            >
-                              {asset.is_cover ? "Portada" : "Hacer portada"}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              disabled={uploading}
-                              onClick={async () => {
-                                try {
-                                  await vehiclePhotosService.deleteAsset({ id: asset.id, vehicleId: selected.id });
-                                  toast.success("Foto eliminada");
-                                  await queryClient.invalidateQueries({ queryKey: ["vehicle-album-assets", selected.id] });
-                                  await queryClient.invalidateQueries({ queryKey: ["vehicle-albums", selected.id] });
-                                  await queryClient.invalidateQueries({ queryKey: ["albums-vehicles"] });
-                                } catch (e) {
-                                  toast.error("No se pudo eliminar la foto", { description: e instanceof Error ? e.message : undefined });
-                                }
-                              }}
-                              aria-label="Eliminar foto"
-                              title="Eliminar foto"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="px-2 pb-2 text-xs text-muted-foreground">
-                            Álbum: {asset.album}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="max-h-[min(22rem,45vh)] overflow-y-auto rounded-md border bg-muted/20 p-2 pr-1">
+                      <AlbumPhotoThumbnailGrid
+                        assets={visibleAssetsFlat}
+                        showAlbumLabel={photoViewTab === "todas"}
+                        disabled={uploading || !canManage}
+                        onSetCover={handleSetCover}
+                        onDelete={handleDeleteAsset}
+                      />
                     </div>
                   )}
                 </CardContent>

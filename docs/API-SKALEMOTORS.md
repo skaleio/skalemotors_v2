@@ -10,7 +10,7 @@ Documentación de los endpoints servidos por la **aplicación desplegada en Verc
 
 | Dónde integras | Host | Ejemplo de ruta |
 |----------------|------|-----------------|
-| **Esta documentación (Vercel)** | `skalemotors-v2.vercel.app` | `POST …/api/n8n-lead-ingest` |
+| **Esta documentación (Vercel)** | `skalemotors-v2.vercel.app` | `POST …/api/n8n-lead-ingest`, `POST …/api/appointment-ingest` |
 | **Otro camino (no es Vercel)** | `<TU_PROJECT_REF>.supabase.co` | `POST …/functions/v1/lead-create` |
 
 - **`/api/n8n-lead-ingest`** vive en **Vercel**. Autenticación: variable de entorno **`N8N_LEAD_INGEST_API_KEY`** (clave global) o **claves emitidas en la app** (`mint_lead_ingest_key` → tabla `lead_ingest_keys`).
@@ -172,6 +172,90 @@ Cada ítem del listado incluye campos como `id`, `title`, `make`, `model`, `pric
 
 ---
 
+## 2. Ingesta de citas (calendario — agendamiento web vía n8n)
+
+Flujo recomendado: **landing envía webhook** → **n8n** (agente estructura JSON) → **POST a Skale Motors** → la cita aparece en **Citas**.
+
+### 2.1 Endpoint
+
+| | |
+|---|---|
+| **URL** | `https://skalemotors-v2.vercel.app/api/appointment-ingest` |
+| **Método** | `POST` |
+| **Content-Type** | `application/json` |
+
+### 2.2 Autenticación
+
+Igual que leads: **`x-api-key`** o **`Authorization: Bearer`**, con la **misma clave mintada** en Ajustes → API ingesta (por sucursal).
+
+Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta.
+
+### 2.3 Cuerpo (campos)
+
+| Campo | Tipo | Notas |
+|-------|------|--------|
+| `assigned_to` | string (UUID) | **Requerido.** Usuario en `public.users` dueño del calendario (ej. vendedor NotHessen). |
+| `date` + `time` | string | **Requerido** si no envías `scheduled_at`. Fecha `YYYY-MM-DD` y hora `HH:mm` en **Chile** (`America/Santiago`). |
+| `scheduled_at` | string | Alternativa: ISO UTC (ej. `2026-06-04T14:00:00.000Z`). |
+| `full_name` | string | Requerido si `create_lead` es true y no hay `lead_id`. |
+| `phone` | string | Requerido si se crea lead (`create_lead` true, sin `lead_id`). Formato Chile `+56 …`. |
+| `email`, `notes`, `description` | string | Opcionales. |
+| `title` | string | Opcional; default `Visita agendada · {nombre}`. |
+| `type` | string | `test_drive`, `reunion`, `entrega`, `servicio`, `otro` (o alias en inglés `meeting`, etc.). Default: `reunion`. |
+| `status` | string | `programada`, `completada`, `cancelada`. Default: `programada`. |
+| `lead_id` | string | Si ya existe el lead, no hace falta `phone`/`full_name`. |
+| `create_lead` | boolean | Default **true**: crea o actualiza lead por teléfono en la sucursal de la clave. |
+| `vehicle_id` | string | Opcional. |
+| `source` | string | Etiqueta de origen (ej. `landing-meta`). |
+| `branch_id` | string | Solo con clave global de dev; con clave mintada debe coincidir si se envía. |
+
+### 2.4 Respuesta exitosa
+
+**HTTP 200**
+
+```json
+{
+  "ok": true,
+  "lead": { "id": "uuid", "created": true },
+  "appointment": {
+    "id": "uuid",
+    "scheduled_at": "2026-06-04T14:00:00.000Z",
+    "user_id": "uuid-vendedor",
+    "title": "Visita agendada · Juan Pérez"
+  }
+}
+```
+
+### 2.5 Ejemplo n8n (HTTP Request después del agente)
+
+```json
+{
+  "full_name": "Juan Pérez",
+  "phone": "+56 912345678",
+  "email": "juan@example.com",
+  "date": "2026-06-04",
+  "time": "10:00",
+  "type": "reunion",
+  "title": "Visita agendada · Juan Pérez",
+  "notes": "Interesado en SUV",
+  "source": "landing-meta",
+  "assigned_to": "1bad02e7-7888-4cbc-9d79-e4d583401ed0",
+  "create_lead": true
+}
+```
+
+```bash
+curl -sS -X POST "https://skalemotors-v2.vercel.app/api/appointment-ingest" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: TU_CLAVE_MINTADA" \
+  -H "Idempotency-Key: booking-2026-06-04-juan" \
+  -d '{"full_name":"Juan Pérez","phone":"+56 912345678","date":"2026-06-04","time":"10:00","assigned_to":"1bad02e7-7888-4cbc-9d79-e4d583401ed0","type":"reunion","source":"landing"}'
+```
+
+Script local: `node scripts/test-appointment-ingest.mjs` (variables `APPOINTMENT_INGEST_API_KEY`, `APPOINTMENT_INGEST_ASSIGNED_TO`).
+
+---
+
 ## 3. Claves por sucursal (para usar con este endpoint)
 
 Las claves **mintadas en la app** no se gestionan por Vercel: se crean con RPCs en Supabase desde un usuario autenticado en el CRM, por ejemplo:
@@ -182,13 +266,14 @@ Las claves **mintadas en la app** no se gestionan por Vercel: se crean con RPCs 
 | `list_lead_ingest_keys` | Lista metadatos de claves activas por `p_branch_id`. |
 | `revoke_lead_ingest_key` | Revoca por `p_key_id`. |
 
-Ese **valor en claro** es el que debes poner en n8n como `x-api-key` / Bearer al llamar a **`https://skalemotors-v2.vercel.app/api/n8n-lead-ingest`** (no hace falta `*.supabase.co` para la petición de ingesta).
+Ese **valor en claro** es el que debes poner en n8n como `x-api-key` / Bearer al llamar a **`/api/n8n-lead-ingest`** o **`/api/appointment-ingest`** (no hace falta `*.supabase.co` para la ingesta).
 
 ---
 
 ## 4. Checklist (solo integración Vercel + n8n)
 
-- [ ] URL de ingesta: `https://skalemotors-v2.vercel.app/api/n8n-lead-ingest` (no `lead-create` en Supabase salvo que migres el flujo a ese contrato).
+- [ ] Leads: `https://skalemotors-v2.vercel.app/api/n8n-lead-ingest`
+- [ ] Citas (agendamiento): `https://skalemotors-v2.vercel.app/api/appointment-ingest` con `assigned_to` del vendedor del calendario.
 - [ ] En Vercel: `N8N_LEAD_INGEST_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` configurados.
 - [ ] Elegir modo: clave global (siempre enviar `branch_id`) o clave mintada por sucursal.
 - [ ] Validar `phone` y enums según la tabla del §1.3.

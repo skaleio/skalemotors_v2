@@ -43,8 +43,12 @@ import { useConsignaciones } from "@/hooks/useConsignaciones";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { consignacionesService } from "@/lib/services/consignaciones";
+import { vehiclePhotosService } from "@/lib/services/vehiclePhotos";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
+import { supabase } from "@/lib/supabase";
+import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
+import { CONSIGNMENT_REFERENCE_ALBUM } from "@/lib/website/albumPublishRules";
 import type { Database } from "@/lib/types/database";
 import { VehicleImage } from "@/components/VehicleImage";
 import { AdminConsignacionesPanel } from "@/components/AdminConsignacionesPanel";
@@ -613,6 +617,7 @@ export default function Consignaciones() {
     sale_price: "",
     publicado: false,
   });
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
 
   const applyAppraisalPrefill = () => {
     const params = new URLSearchParams(location.search);
@@ -806,6 +811,26 @@ export default function Consignaciones() {
       sale_price: "",
       publicado: false,
     });
+    setCoverImageFile(null);
+  };
+
+  const uploadConsignmentReferenceCover = async (vehicleId: string, file: File) => {
+    const fileExt = file.name.split(".").pop();
+    const safeAlbum = CONSIGNMENT_REFERENCE_ALBUM.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
+    const fileName = `${vehicleId}/${safeAlbum}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const optimizedFile = await optimizeVehicleImageForUpload(file);
+    const { error: uploadError } = await supabase.storage.from("vehicles").upload(fileName, optimizedFile, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: optimizedFile.type,
+    });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from("vehicles").getPublicUrl(fileName);
+    await vehiclePhotosService.addConsignmentReferenceCover({
+      vehicleId,
+      url: data.publicUrl,
+      makeCover: true,
+    });
   };
 
   const handleCreate = async () => {
@@ -872,6 +897,26 @@ export default function Consignaciones() {
       } satisfies Database["public"]["Tables"]["consignaciones"]["Insert"];
 
       const created = await consignacionesService.create(payload);
+
+      if (coverImageFile && payload.vehicle_id) {
+        try {
+          await uploadConsignmentReferenceCover(payload.vehicle_id, coverImageFile);
+        } catch (coverErr) {
+          console.error("Error subiendo portada de consignación:", coverErr);
+          toast({
+            variant: "destructive",
+            title: "Consignación guardada",
+            description:
+              "La portada no se pudo vincular al vehículo. Súbela desde Álbumes o vuelve a intentar.",
+          });
+        }
+      } else if (coverImageFile && !payload.vehicle_id) {
+        toast({
+          title: "Consignación guardada",
+          description:
+            "Para guardar la portada, vincula un vehículo de inventario (opcional avanzado) y vuelve a subir la foto en Álbumes.",
+        });
+      }
 
       // Mostrar de inmediato en la lista para evitar bloqueos
       setConsignaciones((prev) => [created, ...prev]);
@@ -2038,6 +2083,19 @@ export default function Consignaciones() {
                 checked={formState.publicado}
                 onCheckedChange={(v) => setFormState({ ...formState, publicado: v })}
               />
+            </div>
+            <div className="md:col-span-2 space-y-1.5">
+              <Label htmlFor="consignacion_cover">Foto de portada (consignación)</Label>
+              <Input
+                id="consignacion_cover"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCoverImageFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Referencia para el listado. No cuenta para las 15 fotos de álbum ni para publicar en la web. Si
+                eliges archivo, vincula el vehículo en inventario (sección opcional abajo).
+              </p>
             </div>
           </div>
 

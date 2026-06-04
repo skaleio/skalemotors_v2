@@ -26,6 +26,7 @@ const SYNC_RPCS = [
   { name: "sync_unpublished_vehicles_to_pending_tasks", args: { dias_sin_publicar: 5 } },
   { name: "sync_leads_contacted_no_attempts_to_pending_tasks", args: { horas_sin_intento: 24 } },
   { name: "sync_leads_searching_car_to_pending_tasks", args: { dias_buscando: 5 } },
+  { name: "sync_seller_inactivity_notifications", args: {} },
 ] as const;
 
 /** Evita que el sync de alertas recree tareas justo después de marcarlas como hechas. */

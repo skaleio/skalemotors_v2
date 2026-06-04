@@ -33,7 +33,8 @@ type EventKey =
   | "lead_stale"
   | "consignacion_created"
   | "consignacion_stale"
-  | "vehicle_unpublished";
+  | "vehicle_unpublished"
+  | "seller_inactive";
 
 type EventMeta = {
   key: EventKey;
@@ -117,6 +118,15 @@ const EVENT_TYPES: readonly EventMeta[] = [
     iconClass: "text-amber-600",
     description: "Vehículos disponibles > 5 días sin publicarse",
     roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
+  },
+  {
+    key: "seller_inactive",
+    label: "Vendedor sin actividad",
+    short: "Vendedores",
+    icon: UserPlus,
+    iconClass: "text-rose-500",
+    description: "Vendedor sin uso de la plataforma ni movimiento de leads (> 24 h)",
+    roles: ["admin", "jefe_sucursal"],
   },
 ] as const;
 
@@ -205,13 +215,19 @@ export default function Alerts() {
     }
     if (n.entity_type === "vehicle") {
       navigateWithLoading("/app/inventory");
+      return;
+    }
+    if (n.entity_type === "seller") {
+      navigateWithLoading("/app/vendors");
     }
   };
 
   const emptyHint = (() => {
     if (user?.role === "vendedor") return "Aquí verás los leads que te asignen y recordatorios relevantes para tu día.";
     if (user?.role === "admin")
-      return "Aquí aparecerán avisos de tu equipo: leads contactados, negocios cerrados, consignaciones nuevas y avisos de tareas pendientes.";
+      return "Aquí aparecerán avisos de tu equipo: leads contactados, vendedores sin actividad, negocios cerrados y consignaciones.";
+    if (user?.role === "jefe_sucursal")
+      return "Aquí verás vendedores sin actividad en tu sucursal, leads estancados y avisos del equipo.";
     return "Aquí aparecerán los avisos importantes de tu sucursal y equipo.";
   })();
 

@@ -110,12 +110,22 @@ export default async function VehiculoPage({ params }: PageProps) {
               )}
             </div>
             <div>
-              <h1
-                className="text-2xl font-bold md:text-3xl"
-                style={{ fontFamily: "var(--sm-font-heading)", color: "var(--sm-fg)" }}
-              >
-                {label || "Vehículo"}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1
+                  className="text-2xl font-bold md:text-3xl"
+                  style={{ fontFamily: "var(--sm-font-heading)", color: "var(--sm-fg)" }}
+                >
+                  {label || "Vehículo"}
+                </h1>
+                {v.status === "reservado" ? (
+                  <span
+                    className="rounded-full px-3 py-1 text-xs font-semibold"
+                    style={{ backgroundColor: "var(--sm-primary)", color: "var(--sm-bg)" }}
+                  >
+                    Reservado
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-3 text-2xl font-bold" style={{ color: "var(--sm-primary)" }}>
                 {formatClp(v.price)}
               </p>

@@ -24,6 +24,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppointments } from "@/hooks/useAppointments";
+import { useBranchSellers } from "@/hooks/useBranchSellers";
+import {
+  resolveDelegatableSellersScope,
+  useBranchSellersOptionsFromUser,
+} from "@/lib/delegatableSellersScope";
 import { supabase } from "@/lib/supabase";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
@@ -46,6 +51,7 @@ import {
   RefreshCw,
   Trash2,
   User,
+  UserCheck,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -99,6 +105,8 @@ interface Event {
   status: "programada" | "completada" | "cancelada";
   leadId?: string | null;
   vehicleId?: string | null;
+  userId?: string | null;
+  assigneeName?: string | null;
   clientName?: string;
   clientPhone?: string;
   vehicleInfo?: string;
@@ -129,6 +137,8 @@ const eventStatusLabels: Record<Event["status"], string> = {
 };
 
 type AppointmentDialogMode = "create" | "view" | "edit" | "day-pick";
+
+const APPOINTMENT_NO_SELLER = "__appointment_sin_vendedor__";
 
 // Mapeo tipo DB (español) -> tipo Event (inglés)
 const DB_TYPE_TO_EVENT: Record<string, Event["type"]> = {
@@ -199,6 +209,25 @@ export default function Appointments() {
   const canSeeTenant =
     role === "admin" || role === "financiero" || role === "jefe_jefe";
 
+  const delegateScope = resolveDelegatableSellersScope(user);
+  const canDelegate = canSeeTenant || canSeeTeam || !!delegateScope;
+  const sellersQueryEnabled = !!user?.tenant_id && canDelegate;
+
+  const delegatedSellerOpts = useBranchSellersOptionsFromUser(user, {
+    enabled: sellersQueryEnabled,
+  });
+  const { sellers: delegatableSellers, loading: loadingDelegatableSellers } = useBranchSellers(
+    delegateScope
+      ? delegatedSellerOpts
+      : {
+          tenantId: user?.tenant_id ?? null,
+          branchId: canSeeTeam ? user?.branch_id ?? null : null,
+          scope: canSeeTenant ? "tenant" : "branch",
+          enabled: sellersQueryEnabled,
+          roles: ["vendedor", "jefe_sucursal"],
+        },
+  );
+
   const { leads } = useLeads({
     branchId: user?.branch_id ?? undefined,
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
@@ -249,6 +278,7 @@ export default function Appointments() {
   const [dayPickerEvents, setDayPickerEvents] = useState<Event[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isAssigningSeller, setIsAssigningSeller] = useState(false);
   const [formData, setFormData] = useState<Partial<Event>>({
     title: "",
     start: new Date(),
@@ -257,6 +287,7 @@ export default function Appointments() {
     status: "programada",
     leadId: "",
     vehicleId: "",
+    userId: "",
     description: "",
   });
   /** Hora inicio/fin editables como texto (ej. "16:00") cuando se abre desde slot */
@@ -298,6 +329,8 @@ export default function Appointments() {
           status: safeEventStatus(appointment.status),
           leadId: appointment.lead_id,
           vehicleId: appointment.vehicle_id,
+          userId: appointment.user_id,
+          assigneeName: appointment.user?.full_name?.trim() || appointment.user?.email?.trim() || null,
           clientName: appointment.lead?.full_name,
           clientPhone: appointment.lead?.phone || undefined,
           vehicleInfo,
@@ -315,8 +348,69 @@ export default function Appointments() {
       status: event.status,
       leadId: event.leadId || "",
       vehicleId: event.vehicleId || "",
+      userId: event.userId || "",
       description: event.description || "",
     });
+  };
+
+  const resolveAssigneeUserId = (raw: string | undefined | null) => {
+    const trimmed = raw?.trim() ?? "";
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  const sellerLabel = (sellerId: string | null | undefined) => {
+    if (!sellerId) return "Sin asignar";
+    const match = delegatableSellers.find((s) => s.id === sellerId);
+    return match?.full_name?.trim() || match?.email?.trim() || "Vendedor";
+  };
+
+  const handleAssignSeller = async () => {
+    if (!selectedEvent || !canDelegate) return;
+
+    const nextUserId = resolveAssigneeUserId(formData.userId);
+    const currentUserId = selectedEvent.userId ?? null;
+    if (nextUserId === currentUserId) {
+      toast({
+        title: "Sin cambios",
+        description: "El vendedor asignado ya es el mismo.",
+      });
+      return;
+    }
+
+    const seller = nextUserId ? delegatableSellers.find((s) => s.id === nextUserId) : null;
+    setIsAssigningSeller(true);
+    try {
+      const updates: { user_id: string | null; branch_id?: string | null } = {
+        user_id: nextUserId,
+      };
+      if (seller?.branch_id) updates.branch_id = seller.branch_id;
+
+      await appointmentService.update(selectedEvent.id, updates);
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+
+      const assigneeName = seller
+        ? seller.full_name?.trim() || seller.email?.trim() || null
+        : null;
+      setSelectedEvent({ ...selectedEvent, userId: nextUserId, assigneeName });
+      setFormData((f) => ({ ...f, userId: nextUserId ?? "" }));
+
+      toast({
+        variant: "success",
+        title: "Vendedor asignado",
+        description: nextUserId
+          ? `La cita aparecerá en el calendario de ${assigneeName ?? "el vendedor"}.`
+          : "La cita quedó sin vendedor asignado.",
+      });
+    } catch (error) {
+      console.error("[Appointments] assign seller", error);
+      toast({
+        title: "No se pudo asignar",
+        description: error instanceof Error ? error.message : "Intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAssigningSeller(false);
+    }
   };
 
   const closeAppointmentDialog = () => {
@@ -372,6 +466,7 @@ export default function Appointments() {
       status: "programada",
       leadId: "",
       vehicleId: "",
+      userId: user?.id ?? "",
       description: "",
     });
     setIsDialogOpen(true);
@@ -404,6 +499,13 @@ export default function Appointments() {
 
     try {
       setIsSaving(true);
+      const assigneeId = canDelegate
+        ? resolveAssigneeUserId(formData.userId)
+        : user?.id ?? null;
+      const assigneeSeller = assigneeId
+        ? delegatableSellers.find((s) => s.id === assigneeId)
+        : null;
+
       const payload = {
         title: formData.title.trim(),
         description: formData.description?.trim() || null,
@@ -413,8 +515,8 @@ export default function Appointments() {
         end_at: endDate.toISOString(),
         lead_id: formData.leadId ? formData.leadId : null,
         vehicle_id: formData.vehicleId ? formData.vehicleId : null,
-        user_id: user?.id ?? null,
-        branch_id: user?.branch_id ?? null,
+        user_id: assigneeId,
+        branch_id: assigneeSeller?.branch_id ?? user?.branch_id ?? null,
         tenant_id: user?.tenant_id ?? null,
       } as Parameters<typeof appointmentService.update>[1] & {
         title: string;
@@ -459,6 +561,7 @@ export default function Appointments() {
         status: "programada",
         leadId: "",
         vehicleId: "",
+        userId: user?.id ?? "",
         description: "",
       });
     } catch (error) {
@@ -634,6 +737,7 @@ export default function Appointments() {
               status: "programada",
               leadId: "",
               vehicleId: "",
+              userId: user?.id ?? "",
               description: "",
             });
             setIsDialogOpen(true);
@@ -957,6 +1061,57 @@ export default function Appointments() {
                   <p className="text-base">{selectedEvent.vehicleInfo}</p>
                 </div>
               ) : null}
+              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5" />
+                  Vendedor asignado
+                </p>
+                {canDelegate ? (
+                  <>
+                    <Select
+                      value={
+                        formData.userId?.trim()
+                          ? formData.userId
+                          : APPOINTMENT_NO_SELLER
+                      }
+                      onValueChange={(value) =>
+                        setFormData({
+                          ...formData,
+                          userId: value === APPOINTMENT_NO_SELLER ? "" : value,
+                        })
+                      }
+                      disabled={loadingDelegatableSellers || isAssigningSeller}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            loadingDelegatableSellers
+                              ? "Cargando vendedores…"
+                              : "Seleccionar vendedor"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={APPOINTMENT_NO_SELLER}>Sin asignar</SelectItem>
+                        {delegatableSellers.map((seller) => (
+                          <SelectItem key={seller.id} value={seller.id}>
+                            {seller.full_name?.trim() || seller.email || "Vendedor"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Al asignar, la cita aparecerá en el calendario personal del vendedor.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-base font-medium">
+                    {selectedEvent.assigneeName ||
+                      sellerLabel(selectedEvent.userId) ||
+                      "Sin asignar"}
+                  </p>
+                )}
+              </div>
               {selectedEvent.description?.trim() ? (
                 <div>
                   <p className="text-sm text-muted-foreground">Motivo / notas</p>
@@ -1156,6 +1311,45 @@ export default function Appointments() {
               </div>
             </div>
 
+            {canDelegate ? (
+              <div className="space-y-2">
+                <Label>Vendedor asignado</Label>
+                <Select
+                  value={
+                    formData.userId?.trim() ? formData.userId : APPOINTMENT_NO_SELLER
+                  }
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      userId: value === APPOINTMENT_NO_SELLER ? "" : value,
+                    })
+                  }
+                  disabled={loadingDelegatableSellers}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        loadingDelegatableSellers
+                          ? "Cargando vendedores…"
+                          : "Seleccionar vendedor"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={APPOINTMENT_NO_SELLER}>Sin asignar</SelectItem>
+                    {delegatableSellers.map((seller) => (
+                      <SelectItem key={seller.id} value={seller.id}>
+                        {seller.full_name?.trim() || seller.email || "Vendedor"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  La cita se mostrará en el calendario del vendedor elegido.
+                </p>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <Label htmlFor="description">Descripción</Label>
               <Textarea
@@ -1196,7 +1390,26 @@ export default function Appointments() {
                 ) : (
                   <span className="text-xs text-muted-foreground">Esta cita ya está cancelada</span>
                 )}
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {canDelegate &&
+                  selectedEvent.status !== "cancelada" &&
+                  resolveAssigneeUserId(formData.userId) !==
+                    (selectedEvent.userId ?? null) ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="gap-2"
+                      disabled={isAssigningSeller || loadingDelegatableSellers}
+                      onClick={() => void handleAssignSeller()}
+                    >
+                      {isAssigningSeller ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <UserCheck className="h-4 w-4" />
+                      )}
+                      Asignar al calendario
+                    </Button>
+                  ) : null}
                   <Button variant="outline" onClick={closeAppointmentDialog}>
                     Cerrar
                   </Button>

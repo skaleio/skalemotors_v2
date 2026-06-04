@@ -112,6 +112,8 @@ export function TopBar() {
         return <Car className="h-5 w-5 text-amber-600" />;
       case 'lead_stale':
         return <Clock className="h-5 w-5 text-red-500" />;
+      case 'seller_inactive':
+        return <UserPlus className="h-5 w-5 text-rose-500" />;
       case 'lead_contactado':
         return <Info className="h-5 w-5 text-blue-500" />;
       case 'lead_assigned':
@@ -149,6 +151,10 @@ export function TopBar() {
     }
     if (notification.entity_type === "vehicle") {
       navigateWithLoading("/app/inventory");
+      return;
+    }
+    if (notification.entity_type === "seller") {
+      navigateWithLoading("/app/vendors");
     }
   };
 

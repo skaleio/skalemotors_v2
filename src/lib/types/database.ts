@@ -130,6 +130,7 @@ export interface Database {
           full_name: string
           role_label: string
           base_salary_clp: number
+          monthly_sales_goal: number | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -141,6 +142,7 @@ export interface Database {
           full_name: string
           role_label?: string
           base_salary_clp?: number
+          monthly_sales_goal?: number | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -152,6 +154,7 @@ export interface Database {
           full_name?: string
           role_label?: string
           base_salary_clp?: number
+          monthly_sales_goal?: number | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -243,6 +246,7 @@ export interface Database {
           plan: string
           legacy_mode: boolean
           protected_account_email: string | null
+          default_monthly_sales_goal: number
           created_at: string
           updated_at: string
         }
@@ -254,6 +258,7 @@ export interface Database {
           plan?: string
           legacy_mode?: boolean
           protected_account_email?: string | null
+          default_monthly_sales_goal?: number
           created_at?: string
           updated_at?: string
         }
@@ -265,6 +270,7 @@ export interface Database {
           plan?: string
           legacy_mode?: boolean
           protected_account_email?: string | null
+          default_monthly_sales_goal?: number
           created_at?: string
           updated_at?: string
         }
@@ -425,6 +431,7 @@ export interface Database {
           url: string
           sort_order: number
           is_cover: boolean
+          counts_for_publish: boolean
           created_by: string | null
           created_at: string
           updated_at: string
@@ -437,6 +444,7 @@ export interface Database {
           url: string
           sort_order?: number
           is_cover?: boolean
+          counts_for_publish?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -449,6 +457,7 @@ export interface Database {
           url?: string
           sort_order?: number
           is_cover?: boolean
+          counts_for_publish?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string

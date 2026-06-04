@@ -12,6 +12,23 @@ export interface PreviewVehicle {
   mileage: number | null;
   primary_image_url: string | null;
   images: unknown;
+  /** Solo vitrina pública: muestra badge si es reservado. */
+  status?: string | null;
+}
+
+function VehicleReservadoBadge({ status }: { status?: string | null }) {
+  if (status !== "reservado") return null;
+  return (
+    <span
+      className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm"
+      style={{
+        backgroundColor: "color-mix(in srgb, var(--sm-primary) 85%, transparent)",
+        color: "var(--sm-bg)",
+      }}
+    >
+      Reservado
+    </span>
+  );
 }
 
 interface VehiclesBlockProps {
@@ -87,6 +104,7 @@ function LuxuryVehicleCard({
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)" }}
         />
         <span className="sm-shine" />
+        <VehicleReservadoBadge status={v.status} />
         {v.year ? (
           <span
             className="absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm"
@@ -188,7 +206,7 @@ export function VehiclesBlock({
                     className="overflow-hidden border-2 transition-shadow hover:shadow-md"
                     style={{ borderColor: "var(--sm-border)", backgroundColor: "var(--sm-bg)" }}
                   >
-                    <div className="aspect-[16/10]" style={{ backgroundColor: "var(--sm-border)" }}>
+                    <div className="relative aspect-[16/10]" style={{ backgroundColor: "var(--sm-border)" }}>
                       {img ? (
                         <img src={img} alt={label} className="h-full w-full object-cover" loading="lazy" />
                       ) : (
@@ -196,6 +214,7 @@ export function VehiclesBlock({
                           Sin foto
                         </div>
                       )}
+                      <VehicleReservadoBadge status={v.status} />
                     </div>
                     <div className="border-t p-5" style={{ borderColor: "var(--sm-border)" }}>
                       <p className="text-lg font-semibold" style={{ fontFamily: "var(--sm-font-heading)" }}>
@@ -301,7 +320,7 @@ export function VehiclesBlock({
             const img = firstImage(v);
             const card = (
               <div className="overflow-hidden" style={cardStyle}>
-                <div className="aspect-[4/3]" style={{ backgroundColor: "var(--sm-border)" }}>
+                <div className="relative aspect-[4/3]" style={{ backgroundColor: "var(--sm-border)" }}>
                   {img ? (
                     <img
                       src={img}
@@ -317,6 +336,7 @@ export function VehiclesBlock({
                       Sin foto
                     </div>
                   )}
+                  <VehicleReservadoBadge status={v.status} />
                 </div>
                 <div className="p-4">
                   <p className="font-semibold" style={{ color: "var(--sm-fg)" }}>

@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import { useChat } from "@/contexts/ChatContext";
 import { useDevice } from "@/contexts/DeviceContext";
 import { useSessionInactivity } from "@/hooks/useSessionInactivity";
+import { useSellerPresence } from "@/hooks/useSellerPresence";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export function Layout({ children }: LayoutProps) {
   useGlobalShortcuts();
   useKeyboardShortcuts();
   useSessionInactivity();
+  useSellerPresence();
 
   // Versión app móvil: fijar html/body para que no hagan zoom ni scroll (solo el contenido principal)
   useEffect(() => {

@@ -1,6 +1,12 @@
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { vehicleService } from "@/lib/services/vehicles";
+import { albumCoverUrl, flattenVehicleImageUrls } from "@/lib/website/albumDisplay";
+import {
+  CONSIGNMENT_REFERENCE_ALBUM,
+  countPublishableAlbumPhotos,
+  isConsignmentReferenceAsset,
+} from "@/lib/website/albumPublishRules";
 
 export type VehiclePhotoAsset =
   Database["public"]["Tables"]["vehicle_photo_assets"]["Row"];
@@ -8,11 +14,20 @@ export type VehiclePhotoAsset =
 export type VehiclePhotoAlbumSummary = {
   album: string;
   count: number;
+  publishableCount: number;
   coverUrl: string | null;
+  isReferenceAlbum: boolean;
 };
 
 function normalizeAlbumName(raw: string): string {
   return raw.trim();
+}
+
+async function resolveVehicleTenantId(vehicleId: string): Promise<string> {
+  const vehicle = await vehicleService.getById(vehicleId);
+  const tenantId = (vehicle as { tenant_id?: string | null }).tenant_id;
+  if (!tenantId) throw new Error("No se pudo resolver el tenant del vehículo.");
+  return tenantId;
 }
 
 export const vehiclePhotosService = {
@@ -47,11 +62,60 @@ export const vehiclePhotosService = {
     // Esta función se deja para futuras extensiones; hoy no hace nada.
   },
 
+  async countPublishableByVehicleIds(vehicleIds: string[]): Promise<Record<string, number>> {
+    if (!vehicleIds.length) return {};
+    const { data, error } = await supabase
+      .from("vehicle_photo_assets")
+      .select("vehicle_id, album, counts_for_publish")
+      .in("vehicle_id", vehicleIds);
+    if (error) throw error;
+    const out: Record<string, number> = {};
+    for (const id of vehicleIds) out[id] = 0;
+    for (const row of data ?? []) {
+      const r = row as Pick<VehiclePhotoAsset, "vehicle_id" | "album" | "counts_for_publish">;
+      if (isConsignmentReferenceAsset(r)) continue;
+      out[r.vehicle_id] = (out[r.vehicle_id] ?? 0) + 1;
+    }
+    return out;
+  },
+
+  async countPublishable(vehicleId: string): Promise<number> {
+    const map = await this.countPublishableByVehicleIds([vehicleId]);
+    return map[vehicleId] ?? 0;
+  },
+
+  /** Portada de consignación: visible en listados, no suma al mínimo de 15 fotos de álbum. */
+  async addConsignmentReferenceCover(input: {
+    vehicleId: string;
+    url: string;
+    makeCover?: boolean;
+  }): Promise<void> {
+    const url = input.url.trim();
+    if (!url) return;
+    const tenantId = await resolveVehicleTenantId(input.vehicleId);
+    const { error } = await supabase.from("vehicle_photo_assets").insert({
+      tenant_id: tenantId,
+      vehicle_id: input.vehicleId,
+      album: CONSIGNMENT_REFERENCE_ALBUM,
+      url,
+      sort_order: 0,
+      is_cover: input.makeCover ?? true,
+      counts_for_publish: false,
+    } as any);
+    if (error) throw error;
+    if (input.makeCover) {
+      await this.setCover({ vehicleId: input.vehicleId, url });
+    } else {
+      await this.syncVehicleImages(input.vehicleId);
+    }
+  },
+
   async addAssets(input: {
     vehicleId: string;
     album: string;
     urls: string[];
     makeCover?: boolean;
+    countsForPublish?: boolean;
   }): Promise<void> {
     const album = normalizeAlbumName(input.album);
     if (!album) throw new Error("Álbum inválido");
@@ -63,12 +127,16 @@ export const vehiclePhotosService = {
       .filter((a) => a.album === album)
       .reduce((m, a) => Math.max(m, Number(a.sort_order || 0)), 0);
 
+    const tenantId = await resolveVehicleTenantId(input.vehicleId);
+    const countsForPublish = input.countsForPublish ?? true;
     const rows = urls.map((url, idx) => ({
+      tenant_id: tenantId,
       vehicle_id: input.vehicleId,
       album,
       url,
       sort_order: maxSort + idx + 1,
       is_cover: false,
+      counts_for_publish: countsForPublish,
     }));
 
     const { error } = await supabase.from("vehicle_photo_assets").insert(rows as any);
@@ -130,12 +198,10 @@ export const vehiclePhotosService = {
     await this.syncVehicleImages(input.vehicleId);
   },
 
-  /** Flatten de assets → vehicles.images (cover primero). */
+  /** Flatten de assets → vehicles.images (portada primero; primary_image_url es columna generada). */
   async syncVehicleImages(vehicleId: string) {
     const assets = await this.listByVehicle(vehicleId);
-    const cover = assets.filter((a) => a.is_cover);
-    const rest = assets.filter((a) => !a.is_cover);
-    const urls = [...cover, ...rest].map((a) => a.url).filter(Boolean);
+    const urls = flattenVehicleImageUrls(assets);
     await vehicleService.update(vehicleId, { images: urls as any });
   },
 
@@ -152,7 +218,9 @@ export const vehiclePhotosService = {
       .map(([album, list]) => ({
         album,
         count: list.length,
-        coverUrl: list.find((x) => x.is_cover)?.url ?? list[0]?.url ?? null,
+        publishableCount: countPublishableAlbumPhotos(list),
+        coverUrl: albumCoverUrl(list),
+        isReferenceAlbum: album === CONSIGNMENT_REFERENCE_ALBUM,
       }))
       .sort((a, b) => a.album.localeCompare(b.album));
   },
