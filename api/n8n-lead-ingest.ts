@@ -56,8 +56,10 @@ type Payload = {
   update_existing?: boolean;
   /** UUID de usuario vendedor (public.users) para asignar el lead al crear/actualizar. */
   assigned_to?: string | null;
+  assigned_to_email?: string | null;
+  calendar_email?: string | null;
 
-  /** Cita en calendario (agendamiento web → n8n). Si vienen con assigned_to, se usa appointment-ingest. */
+  /** Cita en calendario (agendamiento web → n8n). Si vienen fecha/hora, se usa appointment-ingest. */
   date?: string;
   time?: string;
   scheduled_at?: string;
@@ -409,10 +411,8 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
   const isCalendarIngest =
     (!!body.date?.trim() && !!body.time?.trim()) ||
     !!body.scheduled_at?.trim();
-  const calendarAssignee =
-    optionalAssignedToUuid(body.assigned_to) ?? optionalAssignedToUuid(body.user_id);
 
-  if (isCalendarIngest && calendarAssignee) {
+  if (isCalendarIngest) {
     const idempotencyKeyEarly = (req.headers["idempotency-key"] as string | undefined)?.trim();
     const cacheKey = idempotencyKeyEarly ? `appt:${idempotencyKeyEarly}` : "";
     if (cacheKey) {

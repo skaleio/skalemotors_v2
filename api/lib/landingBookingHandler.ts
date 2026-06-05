@@ -1,12 +1,14 @@
 /**
- * Lead + cita en calendario (NotHessen / sucursal landing). Service role — bypass RLS.
+ * Cita en calendario desde landing (Miami Motors). No crea leads en CRM.
+ * Service role — bypass RLS.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { chileLocalToUtcIso } from "./chileDateTime";
 
-export const LANDING_BRANCH_ID = "c673d388-6ae0-43b6-99b9-1d62db3692d9";
-export const LANDING_USER_ID = "1bad02e7-7888-4cbc-9d79-e4d583401ed0";
+/** Miami Motors — Sucursal 1 + calendario miami@motors.cl */
+export const LANDING_BRANCH_ID = "caca3351-cefb-4bee-93e7-1398f9eec76d";
+export const LANDING_USER_ID = "f42dab10-6dcc-4f99-b169-e679eea0638d";
 const APPOINTMENT_DURATION_MIN = 60;
 
 export type LandingBookingPayload = {
@@ -56,6 +58,21 @@ function parseScheduledAt(date: string, time: string, scheduledAtIso?: string): 
   return chileLocalToUtcIso(date, time);
 }
 
+function buildLandingContactNotes(opts: {
+  fullName: string;
+  phone: string;
+  email?: string | null;
+  source: string;
+  interestNotes: string;
+}): string {
+  const lines = [`Cliente: ${opts.fullName}`, `Tel: ${opts.phone}`];
+  const email = opts.email?.trim();
+  if (email) lines.push(`Email: ${email}`);
+  lines.push(`Origen: ${opts.source}`);
+  if (opts.interestNotes) lines.push(opts.interestNotes);
+  return lines.join("\n");
+}
+
 export type LandingBookingResult =
   | {
       ok: true;
@@ -64,11 +81,10 @@ export type LandingBookingResult =
         | { ok: true }
         | {
             ok: true;
-            lead: { id: string; created: boolean };
             appointment: { id: string; scheduled_at: string; user_id: string };
           };
     }
-  | { ok: false; status: number; body: { ok: false; error: string; lead_id?: string } };
+  | { ok: false; status: number; body: { ok: false; error: string } };
 
 /** Cita en calendario tras ingesta n8n si la landing envió date+time al endpoint equivocado. */
 export async function maybeCreateAppointmentAfterIngest(
@@ -159,9 +175,13 @@ export async function processLandingBooking(
   const endAt = new Date(new Date(scheduledAt).getTime() + APPOINTMENT_DURATION_MIN * 60_000).toISOString();
   const landingSource = body.source?.trim() || "meta-ads";
   const interestNotes = body.notes?.trim() || "";
-  const leadNotes = interestNotes
-    ? `Landing ${landingSource}: ${interestNotes}`
-    : `Lead desde landing (${landingSource})`;
+  const contactNotes = buildLandingContactNotes({
+    fullName,
+    phone: normalizedPhone,
+    email: body.email,
+    source: landingSource,
+    interestNotes,
+  });
 
   const { data: branch, error: branchError } = await supabase
     .from("branches")
@@ -188,81 +208,13 @@ export async function processLandingBooking(
     return { ok: false, status: 500, body: { ok: false, error: "Invalid calendar user configuration" } };
   }
 
-  let leadId: string;
-  let leadCreated = false;
-
-  const { data: existingLead, error: findLeadError } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("branch_id", LANDING_BRANCH_ID)
-    .eq("phone", normalizedPhone)
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
-
-  if (findLeadError) {
-    console.error("[landing-booking] find lead:", findLeadError);
-    return { ok: false, status: 500, body: { ok: false, error: "Internal error finding lead" } };
-  }
-
-  if (existingLead?.id) {
-    leadId = existingLead.id as string;
-    const { error: updError } = await supabase
-      .from("leads")
-      .update({
-        full_name: fullName,
-        email: body.email?.trim() ? body.email.trim() : null,
-        source: "redes_sociales",
-        status: "nuevo",
-        priority: "media",
-        notes: leadNotes,
-        tags: ["meta-ads", "landing"],
-        tenant_id: tenantId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", leadId);
-
-    if (updError) {
-      console.error("[landing-booking] update lead:", updError);
-      return { ok: false, status: 500, body: { ok: false, error: "Internal error updating lead" } };
-    }
-  } else {
-    const { data: createdLead, error: insertLeadError } = await supabase
-      .from("leads")
-      .insert({
-        full_name: fullName,
-        phone: normalizedPhone,
-        email: body.email?.trim() ? body.email.trim() : null,
-        source: "redes_sociales",
-        status: "nuevo",
-        priority: "media",
-        branch_id: LANDING_BRANCH_ID,
-        tenant_id: tenantId,
-        notes: leadNotes,
-        tags: ["meta-ads", "landing"],
-      })
-      .select("id")
-      .single();
-
-    if (insertLeadError || !createdLead) {
-      console.error("[landing-booking] insert lead:", insertLeadError);
-      return {
-        ok: false,
-        status: 500,
-        body: { ok: false, error: insertLeadError?.message ?? "Could not create lead" },
-      };
-    }
-    leadId = createdLead.id as string;
-    leadCreated = true;
-  }
-
   const appointmentTitle = `Visita landing · ${fullName}`;
   const appointmentDescription = interestNotes || `Solicitud desde landing (${landingSource})`;
 
   const { data: appointment, error: apptError } = await supabase
     .from("appointments")
     .insert({
-      lead_id: leadId,
+      lead_id: null,
       user_id: LANDING_USER_ID,
       branch_id: LANDING_BRANCH_ID,
       tenant_id: tenantId,
@@ -273,7 +225,7 @@ export async function processLandingBooking(
       duration_minutes: APPOINTMENT_DURATION_MIN,
       title: appointmentTitle,
       description: appointmentDescription,
-      notes: leadNotes,
+      notes: contactNotes,
     })
     .select("id, scheduled_at, user_id")
     .single();
@@ -286,7 +238,6 @@ export async function processLandingBooking(
       body: {
         ok: false,
         error: apptError?.message ?? "Could not create appointment",
-        lead_id: leadId,
       },
     };
   }
@@ -296,7 +247,6 @@ export async function processLandingBooking(
     status: 200,
     body: {
       ok: true,
-      lead: { id: leadId, created: leadCreated },
       appointment: {
         id: appointment.id as string,
         scheduled_at: appointment.scheduled_at as string,

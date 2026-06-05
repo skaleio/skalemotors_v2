@@ -3,20 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { gastosEmpresaService } from '@/lib/services/gastosEmpresa'
 import { ingresosEmpresaService } from '@/lib/services/ingresosEmpresa'
 import { saleService } from '@/lib/services/sales'
+import { pickRecentTenantSales, saleRecordToListItem, type RecentSaleListItem } from '@/lib/recentSales'
 
-type SaleListItem = {
-  id: string
-  vehicle: string
-  amount: number
-  date: string
-  seller: string
-  clientName: string
-  margin: number
-  status: string
-  payment_status: string | null
-  commission_credit_status: string | null
-  stock_origin: string | null
-}
+export const DASHBOARD_STATS_QUERY_KEY = 'dashboard-stats-v2' as const
+
+type SaleListItem = RecentSaleListItem
 
 export type DashboardSelectedMonth = { year: number; month: number }
 
@@ -54,19 +45,7 @@ interface DashboardStats {
   vehiclesByCategory: Array<{ category: string; count: number }>
   expensesByType: Array<{ type: string; amount: number }>
   leadsByStatus: Array<{ status: string; count: number }>
-  recentSales: Array<{
-    id: string
-    vehicle: string
-    amount: number
-    date: string
-    seller: string
-    clientName: string
-    margin: number
-    status: string
-    payment_status: string | null
-    commission_credit_status: string | null
-    stock_origin: string | null
-  }>
+  recentSales: RecentSaleListItem[]
   recentGastos: Array<{
     id: string
     amount: number
@@ -108,7 +87,7 @@ function monthRange(year: number, month0: number) {
 
 export function useDashboardStats(branchId?: string, selectedYearMonth?: DashboardSelectedMonth, userId?: string) {
   return useQuery({
-    queryKey: ['dashboard-stats-v2', branchId ?? 'no-branch', selectedYearMonth?.year, selectedYearMonth?.month],
+    queryKey: [DASHBOARD_STATS_QUERY_KEY, branchId ?? 'no-branch', selectedYearMonth?.year, selectedYearMonth?.month],
     queryFn: async (): Promise<DashboardStats> => {
       const now = new Date()
       const year = selectedYearMonth?.year ?? now.getFullYear()
@@ -210,7 +189,7 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
         vehiclesRaw,
         leadsRaw,
         appointmentsRaw,
-        recentSalesRaw,
+        recentSalesAllRaw,
       ] = await Promise.all([
         saleService.getAll({
           dateFrom: firstDayStr,
@@ -225,28 +204,14 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
         safe(supabase.from('vehicles').select('id, status, category').then(r => r), 'vehicles'),
         safe(supabase.from('leads').select('status').then(r => r), 'leads'),
         safe(supabase.from('appointments').select('id').gte('scheduled_at', now.toISOString()).eq('status', 'programada').then(r => r), 'appointments'),
-        saleService.getAll({
-          dateFrom: firstDayStr,
-          dateTo: lastDayStr,
-        }).catch(err => { console.warn('[Dashboard] recentSales:', err); return [] as any[] }),
+        saleService.getAll().catch(err => { console.warn('[Dashboard] recentSales:', err); return [] as any[] }),
       ])
 
       // Ventas del mes
       const salesThisMonthData = (salesThisMonthRaw || []) as any[]
       const salesThisMonth = salesThisMonthData.length
       const salesRevenue = salesThisMonthData.reduce((sum: number, s: any) => sum + Number(s.sale_price || 0), 0)
-      const salesThisMonthList: SaleListItem[] = salesThisMonthData.map((sale: any) => {
-        const vehicleName = sale.vehicle_description?.trim() ||
-          (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
-        return {
-          id: sale.id, vehicle: vehicleName, amount: Number(sale.sale_price || 0), date: sale.sale_date,
-          seller: sale.seller?.full_name || 'N/A',
-          clientName: sale.client_name?.trim() || 'PENDIENTE',
-          margin: Number(sale.margin || 0), status: sale.status ?? 'pendiente',
-          payment_status: sale.payment_status ?? null, commission_credit_status: sale.commission_credit_status ?? null,
-          stock_origin: sale.stock_origin ?? null,
-        }
-      })
+      const salesThisMonthList: SaleListItem[] = salesThisMonthData.map((sale: any) => saleRecordToListItem(sale))
 
       // Ingresos ventas
       const incomeFromSalesMonth = ((incomeSalesMonthRaw || []) as any[]).reduce((sum: number, s: any) => sum + Number(s.margin || 0), 0)
@@ -316,20 +281,10 @@ export function useDashboardStats(branchId?: string, selectedYearMonth?: Dashboa
         if (bucket) { bucket.sales += 1; bucket.revenue += Number(sale.sale_price || 0) }
       }
 
-      // Ventas recientes
-      const recentSalesData = ((recentSalesRaw || []) as any[]).slice(0, 5)
-      const recentSales = recentSalesData.map((sale: any) => {
-        const vehicleName = sale.vehicle_description?.trim() ||
-          (sale.vehicle ? [sale.vehicle.make, sale.vehicle.model, sale.vehicle.year].filter(Boolean).join(' ').trim() : 'Vehículo') || 'Vehículo'
-        return {
-          id: sale.id, vehicle: vehicleName, amount: Number(sale.sale_price || 0), date: sale.sale_date,
-          seller: sale.seller?.full_name || 'N/A',
-          clientName: sale.client_name?.trim() || 'PENDIENTE',
-          margin: Number(sale.margin || 0), status: sale.status ?? 'pendiente',
-          payment_status: sale.payment_status ?? null, commission_credit_status: sale.commission_credit_status ?? null,
-          stock_origin: sale.stock_origin ?? null,
-        }
-      })
+      // Ventas recientes: últimas 5 del tenant (sin filtro de mes del selector)
+      const recentSales = pickRecentTenantSales((recentSalesAllRaw || []) as any[], 5).map((sale) =>
+        saleRecordToListItem(sale),
+      )
 
       return {
         salesThisMonth, salesRevenue, salesThisMonthList,

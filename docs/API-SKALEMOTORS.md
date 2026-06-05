@@ -176,6 +176,8 @@ Cada ítem del listado incluye campos como `id`, `title`, `make`, `model`, `pric
 
 Flujo recomendado: **landing envía webhook** → **n8n** (agente estructura JSON) → **POST a Skale Motors** → la cita aparece en **Citas**.
 
+**No crea leads en CRM.** Los leads entran solo por `/api/n8n-lead-ingest` (o el módulo Leads). El agendamiento guarda nombre/teléfono/email en las notas de la cita.
+
 ### 2.1 Endpoint
 
 | | |
@@ -194,17 +196,18 @@ Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta
 
 | Campo | Tipo | Notas |
 |-------|------|--------|
-| `assigned_to` | string (UUID) | **Requerido.** Usuario en `public.users` dueño del calendario (ej. vendedor NotHessen). |
+| `assigned_to` | string (UUID) | Dueño del calendario. Si es de otro tenant, se ignora y se usa `assigned_to_email` o el usuario de la sucursal de la clave. |
+| `assigned_to_email` | string | Alternativa recomendada: ej. `miami@motors.cl` (mismo tenant que la clave API). |
 | `date` + `time` | string | **Requerido** si no envías `scheduled_at`. Fecha `YYYY-MM-DD` y hora `HH:mm` en **Chile** (`America/Santiago`). |
 | `scheduled_at` | string | Alternativa: ISO UTC (ej. `2026-06-04T14:00:00.000Z`). |
-| `full_name` | string | Requerido si `create_lead` es true y no hay `lead_id`. |
-| `phone` | string | Requerido si se crea lead (`create_lead` true, sin `lead_id`). Formato Chile `+56 …`. |
-| `email`, `notes`, `description` | string | Opcionales. |
+| `full_name` | string | Recomendado; aparece en título y notas de la cita. |
+| `phone` | string | Recomendado; se guarda en notas (formato Chile `+56 …`). |
+| `email`, `notes`, `description` | string | Opcionales; van a notas/descripción de la cita. |
 | `title` | string | Opcional; default `Visita agendada · {nombre}`. |
 | `type` | string | `test_drive`, `reunion`, `entrega`, `servicio`, `otro` (o alias en inglés `meeting`, etc.). Default: `reunion`. |
 | `status` | string | `programada`, `completada`, `cancelada`. Default: `programada`. |
-| `lead_id` | string | Si ya existe el lead, no hace falta `phone`/`full_name`. |
-| `create_lead` | boolean | Default **true**: crea o actualiza lead por teléfono en la sucursal de la clave. |
+| `lead_id` | string | Opcional: vincula la cita a un lead **ya existente** en CRM (no crea lead nuevo). |
+| `create_lead` | boolean | Default **false**. Solo si envías `true` explícito crea/actualiza lead (no usar en agendamiento web). |
 | `vehicle_id` | string | Opcional. |
 | `source` | string | Etiqueta de origen (ej. `landing-meta`). |
 | `branch_id` | string | Solo con clave global de dev; con clave mintada debe coincidir si se envía. |
@@ -216,7 +219,7 @@ Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta
 ```json
 {
   "ok": true,
-  "lead": { "id": "uuid", "created": true },
+  "lead": null,
   "appointment": {
     "id": "uuid",
     "scheduled_at": "2026-06-04T14:00:00.000Z",
@@ -239,8 +242,7 @@ Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta
   "title": "Visita agendada · Juan Pérez",
   "notes": "Interesado en SUV",
   "source": "landing-meta",
-  "assigned_to": "1bad02e7-7888-4cbc-9d79-e4d583401ed0",
-  "create_lead": true
+  "assigned_to_email": "miami@motors.cl"
 }
 ```
 

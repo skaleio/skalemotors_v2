@@ -1305,6 +1305,7 @@ export default function CRM() {
         });
         queryClient.invalidateQueries({ queryKey: ["sales-ranking"] });
         queryClient.invalidateQueries({ queryKey: ["sales"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-stats-v2"] });
       } catch (saleErr) {
         console.error("No se pudo registrar la venta para el ranking", saleErr);
         toast({

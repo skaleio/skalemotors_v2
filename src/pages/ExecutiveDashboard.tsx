@@ -5,6 +5,7 @@ import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/Fin
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { formatCLP } from "@/lib/format";
+import { DASHBOARD_KPI_INFO } from "@/lib/dashboardKpiInfo";
 import { CHART_PALETTE, CHART_PRIMARY, CHART_TOOLTIP_PROPS } from "@/lib/chartPalette";
 import { ArrowUpRight, Award, BarChart3, Calendar, Car, ChevronRight, DollarSign, PieChart as PieChartIcon, Receipt, Sparkles, TrendingUp, Trophy, Users } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -234,6 +235,7 @@ export default function ExecutiveDashboard() {
           value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
           delta={stats && deltas.revenue !== 0 ? { value: deltas.revenue } : undefined}
           subtitle={`Ingresos · ${periodLabel || "—"}`}
+          info={DASHBOARD_KPI_INFO.totalIngresos}
           sparkline={revenueSparkline}
           sparklineColor="hsl(var(--chart-2))"
         />
@@ -245,6 +247,7 @@ export default function ExecutiveDashboard() {
           value={stats?.salesThisMonth ?? 0}
           delta={stats && deltas.sales !== 0 ? { value: deltas.sales } : undefined}
           subtitle={`Ventas · ${periodLabel || "—"}`}
+          info={DASHBOARD_KPI_INFO.vehiculosVendidos}
           sparkline={salesSparkline}
         />
         <KPICard
@@ -628,7 +631,7 @@ export default function ExecutiveDashboard() {
           value={stats ? formatCLP(totalMarginMonth) : ""}
           valueTone={totalMarginMonth > 0 ? "positive" : "default"}
           subtitle="Ganancia bruta sobre ventas"
-          info="Suma del margen (precio venta − costo) de cada venta del mes. La ganancia bruta antes de gastos generales."
+          info={DASHBOARD_KPI_INFO.margenDelMes}
         />
         <KPICard
           label="Stock disponible"

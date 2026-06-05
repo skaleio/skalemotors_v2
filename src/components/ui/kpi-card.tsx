@@ -83,6 +83,8 @@ export function KPICard({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-help"
                     aria-label="Más información"
                   >

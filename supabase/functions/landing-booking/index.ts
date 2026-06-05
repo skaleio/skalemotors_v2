@@ -1,4 +1,4 @@
-// landing-booking — Lead + cita desde landing Meta (Miami Motors / automotora fija).
+// landing-booking — Solo cita en calendario desde landing (Miami Motors). No crea leads en CRM.
 // Auth: misma ingesta que lead-create (verify_lead_ingest_key por sucursal o legacy env).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -6,8 +6,8 @@ import { DateTime } from "https://esm.sh/luxon@3.5.0?target=deno";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
 
-const LANDING_BRANCH_ID = "c673d388-6ae0-43b6-99b9-1d62db3692d9";
-const LANDING_USER_ID = "1bad02e7-7888-4cbc-9d79-e4d583401ed0";
+const LANDING_BRANCH_ID = "caca3351-cefb-4bee-93e7-1398f9eec76d";
+const LANDING_USER_ID = "f42dab10-6dcc-4f99-b169-e679eea0638d";
 const APPOINTMENT_DURATION_MIN = 60;
 
 function getEnvAny(names: string[]): string | null {
@@ -131,9 +131,14 @@ export default async function handler(req: Request): Promise<Response> {
   const endAt = new Date(new Date(scheduledAt).getTime() + APPOINTMENT_DURATION_MIN * 60_000).toISOString();
   const landingSource = body.source?.trim() || "meta-ads";
   const interestNotes = body.notes?.trim() || "";
-  const leadNotes = interestNotes
-    ? `Landing ${landingSource}: ${interestNotes}`
-    : `Lead desde landing (${landingSource})`;
+  const contactLines = [
+    `Cliente: ${fullName}`,
+    `Tel: ${normalizedPhone}`,
+  ];
+  if (body.email?.trim()) contactLines.push(`Email: ${body.email.trim()}`);
+  contactLines.push(`Origen: ${landingSource}`);
+  if (interestNotes) contactLines.push(interestNotes);
+  const contactNotes = contactLines.join("\n");
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
@@ -164,77 +169,13 @@ export default async function handler(req: Request): Promise<Response> {
     return json(500, { ok: false, error: "Invalid calendar user configuration" });
   }
 
-  let leadId: string;
-  let leadCreated = false;
-
-  const { data: existingLead, error: findLeadError } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("branch_id", LANDING_BRANCH_ID)
-    .eq("phone", normalizedPhone)
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
-
-  if (findLeadError) {
-    console.error("[landing-booking] find lead:", findLeadError);
-    return json(500, { ok: false, error: "Internal error finding lead" });
-  }
-
-  if (existingLead?.id) {
-    leadId = existingLead.id as string;
-    const { error: updError } = await supabase
-      .from("leads")
-      .update({
-        full_name: fullName,
-        email: body.email?.trim() ? body.email.trim() : null,
-        source: "redes_sociales",
-        status: "nuevo",
-        priority: "media",
-        notes: leadNotes,
-        tags: ["meta-ads", "landing"],
-        tenant_id: tenantId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", leadId);
-
-    if (updError) {
-      console.error("[landing-booking] update lead:", updError);
-      return json(500, { ok: false, error: "Internal error updating lead" });
-    }
-  } else {
-    const { data: createdLead, error: insertLeadError } = await supabase
-      .from("leads")
-      .insert({
-        full_name: fullName,
-        phone: normalizedPhone,
-        email: body.email?.trim() ? body.email.trim() : null,
-        source: "redes_sociales",
-        status: "nuevo",
-        priority: "media",
-        branch_id: LANDING_BRANCH_ID,
-        tenant_id: tenantId,
-        notes: leadNotes,
-        tags: ["meta-ads", "landing"],
-      })
-      .select("id")
-      .single();
-
-    if (insertLeadError || !createdLead) {
-      console.error("[landing-booking] insert lead:", insertLeadError);
-      return json(500, { ok: false, error: insertLeadError?.message ?? "Could not create lead" });
-    }
-    leadId = createdLead.id as string;
-    leadCreated = true;
-  }
-
   const appointmentTitle = `Visita landing · ${fullName}`;
   const appointmentDescription = interestNotes || `Solicitud desde landing (${landingSource})`;
 
   const { data: appointment, error: apptError } = await supabase
     .from("appointments")
     .insert({
-      lead_id: leadId,
+      lead_id: null,
       user_id: LANDING_USER_ID,
       branch_id: LANDING_BRANCH_ID,
       tenant_id: tenantId,
@@ -245,9 +186,9 @@ export default async function handler(req: Request): Promise<Response> {
       duration_minutes: APPOINTMENT_DURATION_MIN,
       title: appointmentTitle,
       description: appointmentDescription,
-      notes: leadNotes,
+      notes: contactNotes,
     })
-    .select("id, scheduled_at, lead_id, user_id")
+    .select("id, scheduled_at, user_id")
     .single();
 
   if (apptError || !appointment) {
@@ -255,13 +196,11 @@ export default async function handler(req: Request): Promise<Response> {
     return json(500, {
       ok: false,
       error: apptError?.message ?? "Could not create appointment",
-      lead_id: leadId,
     });
   }
 
   return json(200, {
     ok: true,
-    lead: { id: leadId, created: leadCreated },
     appointment: {
       id: appointment.id,
       scheduled_at: appointment.scheduled_at,

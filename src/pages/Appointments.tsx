@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KPICard } from "@/components/ui/kpi-card";
 import {
     Dialog,
@@ -33,8 +34,10 @@ import { supabase } from "@/lib/supabase";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { resolveAppointmentCalendarScope } from "@/lib/appointmentCalendarScope";
 import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
+import { cn } from "@/lib/utils";
 import "@/styles/calendar.css";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, endOfDay, format, getDay, isSameDay, isToday, isWithinInterval, parse, startOfDay, startOfWeek } from "date-fns";
@@ -44,6 +47,7 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Loader2,
   Pencil,
@@ -55,6 +59,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Calendar as BigCalendar, dateFnsLocalizer, View } from "react-big-calendar";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
@@ -101,7 +106,15 @@ interface Event {
   start: Date;
   end: Date;
   description?: string;
-  type: "test_drive" | "meeting" | "delivery" | "service" | "other";
+  type:
+    | "test_drive"
+    | "meeting"
+    | "delivery"
+    | "service"
+    | "other"
+    | "vehicle_purchase"
+    | "trade_in"
+    | "consignment";
   status: "programada" | "completada" | "cancelada";
   leadId?: string | null;
   vehicleId?: string | null;
@@ -120,6 +133,9 @@ const eventTypeClass: Record<Event["type"], string> = {
   delivery: "event-delivery",      // violeta (chart-4)
   service: "event-service",        // ámbar (chart-3)
   other: "event-other",            // muted
+  vehicle_purchase: "event-vehicle-purchase",
+  trade_in: "event-trade-in",
+  consignment: "event-consignment",
 };
 
 const eventTypeLabels = {
@@ -128,6 +144,9 @@ const eventTypeLabels = {
   delivery: "Entrega",
   service: "Servicio",
   other: "Otro",
+  vehicle_purchase: "Compra de vehículo",
+  trade_in: "Vehículo en parte",
+  consignment: "Consignación",
 };
 
 const eventStatusLabels: Record<Event["status"], string> = {
@@ -147,6 +166,9 @@ const DB_TYPE_TO_EVENT: Record<string, Event["type"]> = {
   entrega: "delivery",
   servicio: "service",
   otro: "other",
+  compra_vehiculo: "vehicle_purchase",
+  vehiculo_en_parte: "trade_in",
+  consignacion: "consignment",
 };
 
 function safeEventType(t: string | undefined): Event["type"] {
@@ -200,14 +222,16 @@ export default function Appointments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppointmentId = searchParams.get("id");
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   const role = user?.role;
   const tenantId = user?.tenant_id ?? undefined;
-  const canSeeSelf = role === "vendedor";
-  const canSeeTeam =
-    role === "gerente" || role === "servicio" || role === "inventario" || role === "jefe_sucursal";
-  const canSeeTenant =
-    role === "admin" || role === "financiero" || role === "jefe_jefe";
+  const appointmentCalendarScope = resolveAppointmentCalendarScope(user);
+  const canSeeSelf = appointmentCalendarScope?.scope === "self";
+  const canSeeTeam = appointmentCalendarScope?.scope === "branch";
+  const canSeeTenant = appointmentCalendarScope?.scope === "tenant";
 
   const delegateScope = resolveDelegatableSellersScope(user);
   const canDelegate = canSeeTenant || canSeeTeam || !!delegateScope;
@@ -238,10 +262,10 @@ export default function Appointments() {
     enabled: !!user,
   });
   const { appointments, loading, isFetching, refetch } = useAppointments({
-    userId: canSeeSelf ? user?.id : undefined,
-    tenantId: canSeeTenant ? tenantId : undefined,
-    branchId: canSeeTeam ? user?.branch_id ?? undefined : undefined,
-    enabled: !!user,
+    userId: appointmentCalendarScope?.userId,
+    tenantId: appointmentCalendarScope?.tenantId,
+    branchId: appointmentCalendarScope?.branchId,
+    enabled: !!user && !!appointmentCalendarScope,
     live: true,
   });
 
@@ -279,6 +303,7 @@ export default function Appointments() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isAssigningSeller, setIsAssigningSeller] = useState(false);
+  const [cancelledSectionOpen, setCancelledSectionOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Event>>({
     title: "",
     start: new Date(),
@@ -338,6 +363,19 @@ export default function Appointments() {
       })
       .filter((e): e is Event => e != null);
   }, [appointments]);
+
+  const calendarEvents = useMemo(
+    () => events.filter((e) => e.status !== "cancelada"),
+    [events],
+  );
+
+  const cancelledEvents = useMemo(
+    () =>
+      events
+        .filter((e) => e.status === "cancelada")
+        .sort((a, b) => b.start.getTime() - a.start.getTime()),
+    [events],
+  );
 
   const populateFormFromEvent = (event: Event) => {
     setFormData({
@@ -428,6 +466,27 @@ export default function Appointments() {
     setIsDialogOpen(true);
   };
 
+  useEffect(() => {
+    handledDeepLinkRef.current = null;
+  }, [deepLinkAppointmentId]);
+
+  useEffect(() => {
+    if (!deepLinkAppointmentId || loading) return;
+    if (handledDeepLinkRef.current === deepLinkAppointmentId) return;
+    const event = events.find((item) => item.id === deepLinkAppointmentId);
+    if (!event) return;
+    handledDeepLinkRef.current = deepLinkAppointmentId;
+    openEventView(event);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("id");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [deepLinkAppointmentId, loading, events, setSearchParams]);
+
   const openEventEdit = (event: Event) => {
     setSelectedEvent(event);
     setOpenedFromSlot(false);
@@ -438,8 +497,8 @@ export default function Appointments() {
 
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
     const day = startOfDay(start);
-    const onDay = events
-      .filter((e) => isSameDay(e.start, day) && e.status !== "cancelada")
+    const onDay = calendarEvents
+      .filter((e) => isSameDay(e.start, day))
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
     if (onDay.length === 1) {
@@ -491,7 +550,7 @@ export default function Appointments() {
     if (!formData.title?.trim() || !startDate || !endDate) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios (título, fecha/hora inicio y fin)",
+        description: "Por favor completa los campos obligatorios (nombre, fecha/hora inicio y fin)",
         variant: "destructive",
       });
       return;
@@ -582,7 +641,7 @@ export default function Appointments() {
     const ok = await askConfirm({
       title: "¿Cancelar esta cita?",
       description:
-        "La visita quedará marcada como cancelada. Seguirá visible en el calendario y contará en las métricas de cancelación.",
+        "La visita quedará marcada como cancelada. Dejará de mostrarse en el calendario y pasará al apartado de canceladas.",
       confirmLabel: "Sí, cancelar cita",
       destructive: true,
     });
@@ -595,8 +654,9 @@ export default function Appointments() {
       toast({
         variant: "success",
         title: "Cita cancelada",
-        description: "La visita quedó registrada como cancelada.",
+        description: "La visita quedó en el apartado de citas canceladas.",
       });
+      setCancelledSectionOpen(true);
       closeAppointmentDialog();
     } catch (error) {
       console.error("Error al cancelar cita:", error);
@@ -638,11 +698,11 @@ export default function Appointments() {
   };
 
   const upcomingEvents = useMemo(() => {
-    return events
-      .filter((e) => e.start >= new Date() && e.status !== "cancelada")
+    return calendarEvents
+      .filter((e) => e.start >= new Date())
       .sort((a, b) => a.start.getTime() - b.start.getTime())
       .slice(0, 5);
-  }, [events]);
+  }, [calendarEvents]);
 
   /** KPI stats — operación diaria + funnel últimos 30 días (incl. canceladas). */
   const appointmentStats = useMemo(() => {
@@ -677,10 +737,7 @@ export default function Appointments() {
   }, [events]);
 
   const eventStyleGetter = (event: Event) => ({
-    className:
-      event.status === "cancelada"
-        ? `${eventTypeClass[event.type]} event-cancelled`
-        : eventTypeClass[event.type],
+    className: eventTypeClass[event.type],
   });
 
   const isRefreshing = loading || isFetching;
@@ -793,6 +850,7 @@ export default function Appointments() {
               ? "1 cita cancelada (30 días)"
               : `${appointmentStats.cancelled30d} citas canceladas (30 días)`
           }
+          onClick={() => setCancelledSectionOpen(true)}
         />
         <KPICard
           label="% cancelación"
@@ -835,7 +893,7 @@ export default function Appointments() {
             <div style={{ height: "600px" }}>
               <BigCalendar
                 localizer={localizer}
-                events={events}
+                events={calendarEvents}
                 startAccessor="start"
                 endAccessor="end"
                 view={view}
@@ -939,6 +997,90 @@ export default function Appointments() {
           </CardContent>
         </Card>
       </div>
+
+      <Collapsible open={cancelledSectionOpen} onOpenChange={setCancelledSectionOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left transition-colors hover:bg-muted/40"
+            >
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                  <span className="text-base font-semibold">Citas canceladas</span>
+                  <Badge variant="secondary" className="text-[10px] h-5">
+                    {cancelledEvents.length}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  No aparecen en el calendario. Abrí este apartado para ver fecha y horario.
+                </p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                  cancelledSectionOpen && "rotate-180",
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="border-t pt-4 pb-6">
+              {cancelledEvents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <p className="text-sm font-medium text-foreground">Sin citas canceladas</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                    Cuando canceles una visita, va a quedar registrada acá con su horario original.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {cancelledEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => openEventView(event)}
+                      className="w-full rounded-lg border border-border/80 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex min-w-[72px] flex-col items-start gap-0.5 pt-0.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {format(event.start, "EEE d MMM", { locale: es })}
+                          </span>
+                          <span className="skale-num text-sm font-semibold tabular-nums text-destructive/90">
+                            {format(event.start, "HH:mm")} – {format(event.end, "HH:mm")}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`event-dot ${eventTypeClass[event.type]} opacity-60`} />
+                            <span className="text-xs text-muted-foreground">
+                              {eventTypeLabels[event.type]}
+                            </span>
+                            <Badge variant="destructive" className="text-[10px] h-5">
+                              Cancelada
+                            </Badge>
+                          </div>
+                          <p className="truncate text-sm font-medium">{event.title}</p>
+                          {event.clientName ? (
+                            <p className="truncate text-xs text-muted-foreground">{event.clientName}</p>
+                          ) : null}
+                          {event.assigneeName ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {event.assigneeName}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Event Dialog */}
       <Dialog
@@ -1124,10 +1266,10 @@ export default function Appointments() {
           ) : (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Título *</Label>
+              <Label htmlFor="title">Nombre de la persona *</Label>
               <Input
                 id="title"
-                placeholder="Ej: Test Drive - Toyota Corolla"
+                placeholder="Ej: Juan Pérez"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
@@ -1241,6 +1383,9 @@ export default function Appointments() {
                   <SelectItem value="meeting">Reunión</SelectItem>
                   <SelectItem value="delivery">Entrega</SelectItem>
                   <SelectItem value="service">Servicio</SelectItem>
+                  <SelectItem value="vehicle_purchase">Compra de vehículo</SelectItem>
+                  <SelectItem value="trade_in">Vehículo en parte</SelectItem>
+                  <SelectItem value="consignment">Consignación</SelectItem>
                   <SelectItem value="other">Otro</SelectItem>
                 </SelectContent>
               </Select>

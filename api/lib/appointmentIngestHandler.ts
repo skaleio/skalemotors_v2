@@ -1,10 +1,13 @@
 /**
  * Ingesta de citas vía POST (n8n / webhook landing → agente → Skale Motors).
+ * Solo crea la cita en Calendario; no crea ni actualiza leads en CRM salvo `lead_id` explícito
+ * o `create_lead: true` (opt-in, no usar en agendamiento web).
  * Misma auth que leads: x-api-key (lead_ingest_keys por sucursal).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chileLocalToUtcIso } from "./chileDateTime";
+import { resolveAssigneeForBranch } from "./resolveAssignee";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -55,6 +58,10 @@ export type AppointmentIngestPayload = {
   duration_minutes?: number;
   assigned_to?: string | null;
   user_id?: string | null;
+  /** Alternativa a UUID: email del dueño del calendario (mismo tenant que la clave API). */
+  assigned_to_email?: string | null;
+  calendar_email?: string | null;
+  calendar_user_email?: string | null;
   vehicle_id?: string | null;
   source?: string;
   /** Honeypot */
@@ -109,6 +116,23 @@ function toDbType(type: string | undefined): string {
   return TYPE_TO_DB[t] ?? "reunion";
 }
 
+function buildAppointmentContactNotes(opts: {
+  fullName: string;
+  phone?: string;
+  email?: string | null;
+  source: string;
+  interestNotes: string;
+}): string {
+  const lines = [`Cliente: ${opts.fullName}`];
+  const phone = opts.phone?.trim();
+  if (phone) lines.push(`Tel: ${phone}`);
+  const email = opts.email?.trim();
+  if (email) lines.push(`Email: ${email}`);
+  lines.push(`Origen: ${opts.source}`);
+  if (opts.interestNotes) lines.push(opts.interestNotes);
+  return lines.join("\n");
+}
+
 export type AppointmentIngestResult =
   | {
       ok: true;
@@ -124,6 +148,7 @@ export type AppointmentIngestResult =
               user_id: string;
               title: string;
             };
+            calendar_user_resolved_via?: string;
           };
     }
   | { ok: false; status: number; body: { ok: false; error: string; lead_id?: string } };
@@ -192,36 +217,16 @@ export async function processAppointmentIngest(
 
   const tenantId = branch.tenant_id as string;
 
-  const assigneeId =
-    optionalUuid(body.assigned_to) ??
-    optionalUuid(body.user_id) ??
-    optionalUuid(process.env.APPOINTMENT_INGEST_DEFAULT_USER_ID);
-
-  if (!assigneeId) {
+  const assigneeResolution = await resolveAssigneeForBranch(supabase, branchId, tenantId, body);
+  if (!assigneeResolution.ok) {
     return {
       ok: false,
-      status: 400,
-      body: {
-        ok: false,
-        error: "assigned_to (UUID vendedor en public.users) is required",
-      },
+      status: assigneeResolution.status,
+      body: { ok: false, error: assigneeResolution.error },
     };
   }
 
-  const { data: assignee, error: userError } = await supabase
-    .from("users")
-    .select("id, tenant_id")
-    .eq("id", assigneeId)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (userError || !assignee) {
-    return { ok: false, status: 400, body: { ok: false, error: "assigned_to user not found or inactive" } };
-  }
-
-  if (assignee.tenant_id && assignee.tenant_id !== tenantId) {
-    return { ok: false, status: 403, body: { ok: false, error: "assigned_to does not belong to this tenant" } };
-  }
+  const assigneeId = assigneeResolution.userId;
 
   const fullNameRaw = (body.full_name ?? body.fullName ?? "").trim();
   const fullName = toTitleCase(fullNameRaw) || "Sin nombre";
@@ -233,7 +238,7 @@ export async function processAppointmentIngest(
   let leadId: string | null = optionalUuid(body.lead_id) ?? null;
   let leadCreated = false;
 
-  const createLead = body.create_lead !== false;
+  const createLead = body.create_lead === true;
 
   if (leadId) {
     const { data: leadRow, error: leadErr } = await supabase
@@ -279,7 +284,7 @@ export async function processAppointmentIngest(
 
     if (existingLead?.id) {
       leadId = existingLead.id as string;
-      await supabase
+      const { error: updLeadError } = await supabase
         .from("leads")
         .update({
           full_name: fullName,
@@ -294,6 +299,15 @@ export async function processAppointmentIngest(
           updated_at: new Date().toISOString(),
         })
         .eq("id", leadId);
+
+      if (updLeadError) {
+        console.error("[appointment-ingest] update lead:", updLeadError);
+        return {
+          ok: false,
+          status: 500,
+          body: { ok: false, error: updLeadError.message ?? "Could not update lead" },
+        };
+      }
     } else {
       const { data: createdLead, error: insertLeadError } = await supabase
         .from("leads")
@@ -328,6 +342,17 @@ export async function processAppointmentIngest(
 
   const vehicleId = optionalUuid(body.vehicle_id) ?? null;
 
+  const contactNotes = buildAppointmentContactNotes({
+    fullName,
+    phone: body.phone,
+    email: body.email,
+    source: landingSource,
+    interestNotes,
+  });
+  const appointmentDescription =
+    body.description?.trim() || (leadId ? interestNotes || null : contactNotes);
+  const appointmentNotes = leadId ? interestNotes || null : contactNotes;
+
   const { data: appointment, error: apptError } = await supabase
     .from("appointments")
     .insert({
@@ -342,8 +367,8 @@ export async function processAppointmentIngest(
       end_at: endAt,
       duration_minutes: durationMin,
       title,
-      description: body.description?.trim() || interestNotes || null,
-      notes: interestNotes || null,
+      description: appointmentDescription,
+      notes: appointmentNotes,
     })
     .select("id, scheduled_at, user_id, title")
     .single();
@@ -373,6 +398,7 @@ export async function processAppointmentIngest(
         user_id: appointment.user_id as string,
         title: appointment.title as string,
       },
+      calendar_user_resolved_via: assigneeResolution.resolvedVia,
     },
   };
 }

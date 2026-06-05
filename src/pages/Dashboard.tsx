@@ -12,16 +12,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAppointments } from "@/hooks/useAppointments";
-import { useDashboardStats, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
+import { useDashboardStats, DASHBOARD_STATS_QUERY_KEY, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { PendingTaskRow } from "@/components/tasks/PendingTaskRow";
 import { formatCLP } from "@/lib/format";
+import { DASHBOARD_KPI_INFO } from "@/lib/dashboardKpiInfo";
+import {
+  isAppointmentCalendarQueryEnabled,
+  resolveAppointmentCalendarScope,
+} from "@/lib/appointmentCalendarScope";
 import { appointmentService } from "@/lib/services/appointments";
+import { supabase } from "@/lib/supabase";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
 import { leadService } from "@/lib/services/leads";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, Users, Wallet, Banknote } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar, Car, CheckCircle2, ChevronLeft, ChevronRight, Clock, DollarSign, ExternalLink, FileText, Mail, MapPin, Phone, Send, TrendingUp, Trash2, UserCheck, Users, Wallet, Banknote } from "lucide-react";
 import type { PendingTask } from "@/hooks/usePendingTasks";
-import { addDays, endOfDay, format, isSameDay, isToday, startOfDay } from "date-fns";
+import { addDays, format, isSameDay, isToday } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -38,14 +44,12 @@ const categoryLabels: Record<string, string> = {
   consignado: 'Consignados'
 };
 
-/** Etiquetas para tipos de cita (tabla appointments, tipos en DB) */
-const appointmentTypeLabels: Record<string, string> = {
-  test_drive: 'Test Drive',
-  reunion: 'Reunión',
-  entrega: 'Entrega',
-  servicio: 'Servicio',
-  otro: 'Otro',
-};
+import {
+  appointmentTypeLabels,
+  buildAppointmentDetailSnapshot,
+  type AppointmentDetailSnapshot,
+  type AppointmentListItem,
+} from "@/lib/appointmentDisplay";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -90,21 +94,71 @@ export default function Dashboard() {
     });
   };
 
-  // Próximas citas: solo las que vienen del módulo Citas, ventana de 3 días para tener tiempo de preparación
-  const appointmentsWindow = useMemo(() => {
-    const now = new Date();
-    const from = startOfDay(now);
-    const to = endOfDay(addDays(now, 3));
-    return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
-  }, []);
-  const { appointments: upcomingAppointments, loading: appointmentsLoading } = useAppointments({
-    branchId: user?.branch_id,
-    dateFrom: appointmentsWindow.dateFrom,
-    dateTo: appointmentsWindow.dateTo,
-    status: 'programada',
-    enabled: !!user?.branch_id,
+  const appointmentCalendarScope = useMemo(() => resolveAppointmentCalendarScope(user), [user]);
+  const { appointments: calendarAppointments, loading: appointmentsLoading } = useAppointments({
+    userId: appointmentCalendarScope?.userId,
+    tenantId: appointmentCalendarScope?.tenantId,
+    branchId: appointmentCalendarScope?.branchId,
+    enabled: isAppointmentCalendarQueryEnabled(appointmentCalendarScope),
     live: true,
   });
+
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+    return calendarAppointments
+      .filter((apt) => {
+        const scheduledAt = new Date(apt.scheduled_at);
+        return scheduledAt >= now && apt.status !== "cancelada";
+      })
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .slice(0, 5);
+  }, [calendarAppointments]);
+
+  useEffect(() => {
+    const tenantId = user?.tenant_id;
+    if (!tenantId) return;
+    const channel = supabase
+      .channel(`dashboard-appointments-live-${tenantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.tenant_id, queryClient]);
+
+  useEffect(() => {
+    const tenantId = user?.tenant_id;
+    if (!tenantId) return;
+    const channel = supabase
+      .channel(`dashboard-sales-live-${tenantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sales",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: [DASHBOARD_STATS_QUERY_KEY] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.tenant_id, queryClient]);
 
   // Modales de KPI: Ventas del mes, Total ingresos y Balance (gastos)
   const [showVentasMesModal, setShowVentasMesModal] = useState(false);
@@ -136,6 +190,7 @@ export default function Dashboard() {
   const [showNewAppointmentDialog, setShowNewAppointmentDialog] = useState(false);
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [showCompleteAppointmentDialog, setShowCompleteAppointmentDialog] = useState(false);
+  const [showAppointmentDetailDialog, setShowAppointmentDetailDialog] = useState(false);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [showConfirmTestDriveDialog, setShowConfirmTestDriveDialog] = useState(false);
   const [showContactLeadDialog, setShowContactLeadDialog] = useState(false);
@@ -171,14 +226,33 @@ export default function Dashboard() {
 
   const [rescheduleData, setRescheduleData] = useState({ date: '', time: '', reason: '' });
   const [confirmTestDriveData, setConfirmTestDriveData] = useState({ notes: '' });
-  const [selectedAppointmentSnapshot, setSelectedAppointmentSnapshot] = useState<{
-    id: string;
-    clientName: string;
-    vehicleStr: string;
-    typeLabel: string;
-    scheduledAt: string;
-    status: string;
-  } | null>(null);
+  const [selectedAppointmentSnapshot, setSelectedAppointmentSnapshot] = useState<AppointmentDetailSnapshot | null>(null);
+
+  const openAppointmentDetail = (apt: AppointmentListItem) => {
+    const snapshot = buildAppointmentDetailSnapshot(apt);
+    setSelectedAppointmentId(apt.id);
+    setSelectedAppointmentSnapshot(snapshot);
+    setShowAppointmentDetailDialog(true);
+  };
+
+  const selectAppointmentForAction = (apt: AppointmentListItem) => {
+    setSelectedAppointmentId(apt.id);
+    setSelectedAppointmentSnapshot(buildAppointmentDetailSnapshot(apt));
+  };
+
+  const openRescheduleFromSnapshot = (snapshot: AppointmentDetailSnapshot) => {
+    setSelectedAppointmentId(snapshot.id);
+    setSelectedAppointmentSnapshot(snapshot);
+    const d = new Date(snapshot.scheduledAt);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setRescheduleData({
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+      reason: "",
+    });
+    setShowAppointmentDetailDialog(false);
+    setShowRescheduleDialog(true);
+  };
 
   const handleDeleteOtherIncome = async (id: string) => {
     if (!id) return;
@@ -228,7 +302,7 @@ export default function Dashboard() {
         navigate(`/app/leads?id=${task.entity_id}`);
       }
     } else if (task.entity_type === 'appointment' && task.entity_id) {
-      navigate(`/appointments?id=${task.entity_id}`);
+      navigate(`/app/appointments?id=${task.entity_id}`);
     } else if (task.entity_type === 'vehicle' && task.entity_id) {
       navigate(`/app/consignaciones?vehicle=${task.entity_id}`);
     } else if (task.entity_type === 'consignacion' && task.entity_id) {
@@ -330,12 +404,15 @@ export default function Dashboard() {
         title: "✅ Cita completada",
         description: "La cita ha sido marcada como completada",
       });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : 'Error desconocido', variant: "destructive" });
     } finally {
       setIsSavingAppointment(false);
     }
     setShowCompleteAppointmentDialog(false);
+    setShowAppointmentDetailDialog(false);
   };
 
   const handleReschedule = async () => {
@@ -494,6 +571,7 @@ export default function Dashboard() {
           value={stats ? formatCLP(stats.salesRevenue || 0) : ""}
           delta={stats && salesChange !== 0 ? { value: salesChange } : undefined}
           subtitle={stats ? `${stats.salesThisMonth || 0} vehículos · ${stats.selectedMonthLabel ?? ""}` : undefined}
+          info={DASHBOARD_KPI_INFO.ventasDelMes}
           onClick={() => setShowVentasMesModal(true)}
         />
 
@@ -504,6 +582,7 @@ export default function Dashboard() {
           loadingWidth="lg"
           value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
           subtitle={`Ingresos del mes (${stats?.selectedMonthLabel ?? "—"})`}
+          info={DASHBOARD_KPI_INFO.totalIngresos}
           onClick={() => setShowTotalIngresosModal(true)}
         />
 
@@ -515,6 +594,7 @@ export default function Dashboard() {
           value={stats ? formatCLP(stats.balance ?? 0) : ""}
           valueTone={(stats?.balance ?? 0) >= 0 ? "positive" : "negative"}
           subtitle={`Ingresos − gastos (${stats?.selectedMonthLabel ?? "mes"})`}
+          info={DASHBOARD_KPI_INFO.balance}
           onClick={() => setShowBalanceModal(true)}
         />
 
@@ -557,9 +637,11 @@ export default function Dashboard() {
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   Próximas citas
                 </CardTitle>
-                <CardDescription className="text-xs">Tus citas programadas</CardDescription>
+                <CardDescription className="text-xs">
+                  {appointmentCalendarScope?.listDescription ?? "Citas programadas"}
+                </CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/appointments')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/app/appointments')}>
                 Ver todas
               </Button>
             </div>
@@ -580,19 +662,26 @@ export default function Dashboard() {
                     : isSameDay(scheduledAt, addDays(new Date(), 1))
                       ? "MAÑANA"
                       : format(scheduledAt, "EEE d MMM", { locale: es });
-                  const lead = (apt as { lead?: { full_name?: string | null } | null }).lead;
-                  const vehicle = (apt as { vehicle?: { make: string; model: string; year?: number | null } | null }).vehicle;
-                  const branch = (apt as { branch?: { name: string } | null }).branch;
-                  const typeLabel = appointmentTypeLabels[apt.type] ?? apt.type;
-                  const clientName = lead?.full_name ?? "Sin nombre";
-                  const vehicleStr = vehicle
-                    ? `${vehicle.make} ${vehicle.model} ${vehicle.year ?? ""}`.trim()
-                    : "—";
-                  const branchName = branch?.name ?? "—";
+                  const listItem = apt as AppointmentListItem;
+                  const detail = buildAppointmentDetailSnapshot(listItem);
+                  const typeLabel = detail.typeLabel;
+                  const clientName = detail.clientName;
+                  const vehicleStr = detail.vehicleStr;
+                  const branchName = detail.branchName;
+                  const assigneeName = detail.assigneeName;
                   return (
                     <div
                       key={apt.id}
-                      className="flex items-start gap-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openAppointmentDetail(listItem)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openAppointmentDetail(listItem);
+                        }
+                      }}
+                      className="flex items-start gap-4 p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <div className="flex flex-col items-center gap-1 min-w-[60px]">
                         <Badge variant="default" className="bg-pink-500">
@@ -603,7 +692,7 @@ export default function Dashboard() {
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center justify-between">
                           <h4 className="font-semibold">{typeLabel}</h4>
-                          <Badge variant="outline">{apt.status === "programada" ? "Programada" : apt.status}</Badge>
+                          <Badge variant="outline">{detail.statusLabel}</Badge>
                         </div>
                         <div className="space-y-1 text-sm text-muted-foreground">
                           <div className="flex items-center gap-2">
@@ -618,13 +707,19 @@ export default function Dashboard() {
                             <MapPin className="h-4 w-4" />
                             <span>{branchName}</span>
                           </div>
+                          {appointmentCalendarScope?.scope === "tenant" && (
+                            <div className="flex items-center gap-2">
+                              <UserCheck className="h-4 w-4" />
+                              <span>{assigneeName || "Sin vendedor"}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex flex-wrap gap-2 pt-2">
+                        <div className="flex flex-wrap gap-2 pt-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                           <Button
                             size="sm"
                             variant="default"
                             onClick={() => {
-                              setSelectedAppointmentId(apt.id);
+                              selectAppointmentForAction(listItem);
                               setShowCompleteAppointmentDialog(true);
                             }}
                           >
@@ -635,15 +730,7 @@ export default function Dashboard() {
                               size="sm"
                               variant="secondary"
                               onClick={() => {
-                                setSelectedAppointmentId(apt.id);
-                                setSelectedAppointmentSnapshot({
-                                  id: apt.id,
-                                  clientName,
-                                  vehicleStr,
-                                  typeLabel,
-                                  scheduledAt: apt.scheduled_at,
-                                  status: apt.status,
-                                });
+                                selectAppointmentForAction(listItem);
                                 setConfirmTestDriveData({ notes: '' });
                                 setShowConfirmTestDriveDialog(true);
                               }}
@@ -654,25 +741,7 @@ export default function Dashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              setSelectedAppointmentId(apt.id);
-                              setSelectedAppointmentSnapshot({
-                                id: apt.id,
-                                clientName,
-                                vehicleStr,
-                                typeLabel,
-                                scheduledAt: apt.scheduled_at,
-                                status: apt.status,
-                              });
-                              const d = new Date(apt.scheduled_at);
-                              const pad = (n: number) => String(n).padStart(2, '0');
-                              setRescheduleData({
-                                date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-                                time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-                                reason: '',
-                              });
-                              setShowRescheduleDialog(true);
-                            }}
+                            onClick={() => openRescheduleFromSnapshot(detail)}
                           >
                             Reagendar
                           </Button>
@@ -683,14 +752,16 @@ export default function Dashboard() {
                 })}
                 <div className="text-center py-4 text-sm text-muted-foreground">
                   <p>
-                    Tienes {upcomingAppointments.length} cita(s) en los próximos 3 días
+                    {upcomingAppointments.length === 5
+                      ? "Mostrando las 5 citas más próximas del calendario"
+                      : `${upcomingAppointments.length} cita${upcomingAppointments.length === 1 ? "" : "s"} próxima${upcomingAppointments.length === 1 ? "" : "s"} en el calendario`}
                   </p>
                 </div>
               </div>
             ) : (
               <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground">
                 <Calendar className="h-12 w-12 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No tienes citas en los próximos 3 días</p>
+                <p className="text-sm font-medium">No hay citas próximas en el calendario</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1603,6 +1674,146 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Diálogo: Marcar Cita como Completada */}
+      {/* Diálogo: Detalle de cita */}
+      <Dialog open={showAppointmentDetailDialog} onOpenChange={setShowAppointmentDetailDialog}>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-pink-500" />
+              Detalle de la cita
+            </DialogTitle>
+            <DialogDescription>
+              Información completa de la visita agendada
+            </DialogDescription>
+          </DialogHeader>
+          {selectedAppointmentSnapshot && (
+            <div className="space-y-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{selectedAppointmentSnapshot.typeLabel}</Badge>
+                <Badge
+                  variant={
+                    selectedAppointmentSnapshot.status === "completada"
+                      ? "default"
+                      : selectedAppointmentSnapshot.status === "cancelada"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {selectedAppointmentSnapshot.statusLabel}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-lg font-semibold leading-snug">{selectedAppointmentSnapshot.title}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="text-base">
+                    {format(new Date(selectedAppointmentSnapshot.scheduledAt), "EEEE d 'de' MMMM yyyy", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Horario</p>
+                  <p className="text-base tabular-nums">
+                    {format(new Date(selectedAppointmentSnapshot.scheduledAt), "HH:mm")} –{" "}
+                    {format(new Date(selectedAppointmentSnapshot.endAt), "HH:mm")}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Cliente / lead
+                </p>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <p className="text-base font-medium">{selectedAppointmentSnapshot.clientName}</p>
+                </div>
+                {selectedAppointmentSnapshot.clientPhone ? (
+                  <p className="text-sm text-muted-foreground pl-6">{selectedAppointmentSnapshot.clientPhone}</p>
+                ) : null}
+                {selectedAppointmentSnapshot.clientEmail ? (
+                  <p className="text-sm text-muted-foreground pl-6">{selectedAppointmentSnapshot.clientEmail}</p>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Vehículo</p>
+                  <p className="text-base">{selectedAppointmentSnapshot.vehicleStr}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Sucursal</p>
+                  <p className="text-base">{selectedAppointmentSnapshot.branchName}</p>
+                </div>
+              </div>
+              {selectedAppointmentSnapshot.assigneeName ? (
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 mb-1">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Vendedor asignado
+                  </p>
+                  <p className="text-base font-medium">{selectedAppointmentSnapshot.assigneeName}</p>
+                </div>
+              ) : null}
+              {selectedAppointmentSnapshot.location ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Ubicación</p>
+                  <p className="text-base">{selectedAppointmentSnapshot.location}</p>
+                </div>
+              ) : null}
+              {selectedAppointmentSnapshot.notes ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Motivo / notas</p>
+                  <p className="text-base whitespace-pre-wrap rounded-md border bg-muted/20 p-3">
+                    {selectedAppointmentSnapshot.notes}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                if (!selectedAppointmentSnapshot) return;
+                setShowAppointmentDetailDialog(false);
+                navigate(`/app/appointments?id=${selectedAppointmentSnapshot.id}`);
+              }}
+            >
+              <ExternalLink className="h-4 w-4" />
+              Ver en calendario
+            </Button>
+            <div className="flex flex-wrap gap-2 justify-end">
+              {selectedAppointmentSnapshot?.status !== "completada" &&
+              selectedAppointmentSnapshot?.status !== "cancelada" ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedAppointmentSnapshot) return;
+                      openRescheduleFromSnapshot(selectedAppointmentSnapshot);
+                    }}
+                  >
+                    Reagendar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowAppointmentDetailDialog(false);
+                      setShowCompleteAppointmentDialog(true);
+                    }}
+                  >
+                    Marcar completada
+                  </Button>
+                </>
+              ) : null}
+              <Button variant="secondary" onClick={() => setShowAppointmentDetailDialog(false)}>
+                Cerrar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showCompleteAppointmentDialog} onOpenChange={setShowCompleteAppointmentDialog}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
@@ -1615,12 +1826,21 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <p className="text-sm font-semibold">Test Drive</p>
-              <p className="text-xs text-muted-foreground">Cliente: Juan Pérez</p>
-              <p className="text-xs text-muted-foreground">Vehículo: Toyota Corolla 2024</p>
-              <p className="text-xs text-muted-foreground">Fecha: Hoy, 14:00</p>
-            </div>
+            {selectedAppointmentSnapshot ? (
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <p className="text-sm font-semibold">
+                  {selectedAppointmentSnapshot.typeLabel} — {selectedAppointmentSnapshot.clientName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(selectedAppointmentSnapshot.scheduledAt), "EEEE d MMM, HH:mm", { locale: es })}
+                </p>
+                <p className="text-xs text-muted-foreground">Vehículo: {selectedAppointmentSnapshot.vehicleStr}</p>
+              </div>
+            ) : (
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">Cita seleccionada</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCompleteAppointmentDialog(false)}>

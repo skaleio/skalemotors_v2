@@ -206,9 +206,10 @@ export function LeadIngestApiKeysSection({
             <li>
               <strong>Calendario / citas</strong> (webhook → n8n):{" "}
               <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/appointment-ingest</code>{" "}
-              o el mismo body en{" "}
-              <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code> si aún no
-              está desplegado appointment-ingest.
+              — solo crea la cita; no agrega leads al CRM. Mismo body en{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">POST /api/n8n-lead-ingest</code> si envías{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">date</code> +{" "}
+              <code className="text-xs rounded bg-muted px-1 py-0.5">time</code>.
             </li>
           </ul>
         </CardDescription>

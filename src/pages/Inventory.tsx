@@ -63,7 +63,7 @@ import {
   type VehicleStatus,
   VEHICLE_STATUS_LABELS as statusLabels,
 } from "@/components/inventory/VehicleStatusPicker";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   canViewInventoryPrice,
   hidesInventoryCosts,
@@ -71,7 +71,9 @@ import {
 } from "@/lib/appRoles";
 import { formatCLP } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
+import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
+import { DASHBOARD_STATS_QUERY_KEY } from "@/hooks/useDashboardStats";
 import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
@@ -569,6 +571,7 @@ const updateVehicleImages = async (
 
 export default function Inventory() {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const hidesCosts = hidesInventoryCosts(user?.role);
   const showPrice = canViewInventoryPrice(user?.role);
   const isPhotographer = isPhotographerRole(user?.role);
@@ -1374,8 +1377,8 @@ export default function Inventory() {
   };
 
   const handleSellVehicle = async () => {
-    if (!vehicleToSell || !user?.branch_id) {
-      toast({ variant: "destructive", title: "Faltan datos", description: "No hay vehículo seleccionado o sucursal asignada." });
+    if (!vehicleToSell || !user?.branch_id || !user?.tenant_id) {
+      toast({ variant: "destructive", title: "Faltan datos", description: "No hay vehículo seleccionado, sucursal o tenant asignado." });
       return;
     }
 
@@ -1387,51 +1390,55 @@ export default function Inventory() {
     setIsSaving(true);
     try {
       const margin = saleData.salePrice - Number(vehicleToSell.cost || 0);
-      const commission = margin * 0.15; // 15% de comisión sobre el margen
+      const commission = margin * 0.15;
+      const vehicleDescription = [vehicleToSell.make, vehicleToSell.model, vehicleToSell.year]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
 
-      // Crear la venta
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .insert({
-          vehicle_id: vehicleToSell.id,
-          seller_id: user.id,
-          branch_id: user.branch_id,
-          sale_price: saleData.salePrice,
-          down_payment: saleData.downPayment,
-          financing_amount: saleData.salePrice - saleData.downPayment,
-          margin: margin,
-          commission: commission,
-          status: 'completada',
-          sale_date: new Date().toISOString().split('T')[0],
-          payment_method: saleData.paymentMethod,
-          notes: saleData.notes
-        })
-        .select()
-        .single();
+      await saleService.create({
+        vehicle_id: vehicleToSell.id,
+        seller_id: user.id,
+        branch_id: user.branch_id,
+        tenant_id: user.tenant_id,
+        vehicle_description: vehicleDescription || null,
+        sale_price: saleData.salePrice,
+        down_payment: saleData.downPayment,
+        financing_amount: saleData.salePrice - saleData.downPayment,
+        margin,
+        commission,
+        status: "completada",
+        payment_status: "realizado",
+        sale_date: new Date().toISOString().split("T")[0],
+        payment_method: saleData.paymentMethod,
+        notes: saleData.notes || null,
+        client_name: "PENDIENTE",
+      });
 
-      if (saleError) throw saleError;
-
-      // Actualizar el estado del vehículo a vendido
-      await vehicleService.update(vehicleToSell.id, { status: 'vendido' });
-
-      // Cerrar diálogo y resetear
       setVehicleToSell(null);
       setSaleData({
         salePrice: 0,
         downPayment: 0,
-        paymentMethod: 'contado',
-        notes: ''
+        paymentMethod: "contado",
+        notes: "",
       });
 
-      // Refrescar lista
+      void queryClient.invalidateQueries({ queryKey: [DASHBOARD_STATS_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: ["sales"] });
+      void queryClient.invalidateQueries({ queryKey: ["sales-ranking"] });
+
       setTimeout(() => {
         refetch();
       }, 100);
 
       toast({ title: "✅ Venta registrada", description: "La venta quedó guardada correctamente." });
-    } catch (error: any) {
-      console.error('❌ Error registrando venta:', error);
-      toast({ variant: "destructive", title: "Error al registrar venta", description: error?.message || "Intentá de nuevo o pedí ayuda al admin." });
+    } catch (error: unknown) {
+      console.error("❌ Error registrando venta:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al registrar venta",
+        description: error instanceof Error ? error.message : "Intentá de nuevo o pedí ayuda al admin.",
+      });
     } finally {
       setIsSaving(false);
     }

@@ -13,7 +13,7 @@ const url =
 const apiKey = process.env.APPOINTMENT_INGEST_API_KEY?.trim();
 const assignedTo =
   process.env.APPOINTMENT_INGEST_ASSIGNED_TO?.trim() ||
-  "1bad02e7-7888-4cbc-9d79-e4d583401ed0";
+  "f42dab10-6dcc-4f99-b169-e679eea0638d";
 const date = process.env.TEST_DATE?.trim() || "2026-06-04";
 const time = process.env.TEST_TIME?.trim() || "10:00";
 
@@ -33,7 +33,6 @@ const body = {
   notes: `Prueba appointment-ingest ${new Date().toISOString()}`,
   source: "landing-webhook",
   assigned_to: assignedTo,
-  create_lead: true,
 };
 
 const res = await fetch(url, {
