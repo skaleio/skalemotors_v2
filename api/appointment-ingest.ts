@@ -1,8 +1,12 @@
 /**
  * Ingesta de citas (calendario Skale Motors).
- * Flujo: landing webhook → n8n → POST aquí.
+ * Un solo entrypoint; helpers en ./lib (sin prefijo _ — Vercel no despliega api/_lib).
  */
 import { createClient } from "@supabase/supabase-js";
+
+import { processAppointmentIngest, type AppointmentIngestPayload } from "./lib/appointmentIngestHandler";
+import { loadIdempotentResponse, storeIdempotentResponse } from "./lib/ingestIdempotency";
+import { getIngestAllowedOrigin, resolveIngestKey } from "./lib/leadIngestAuth";
 
 interface VercelRequest {
   method?: string;
@@ -16,26 +20,22 @@ interface VercelResponse {
   json(body: unknown): void;
 }
 
-function parseBody(req: VercelRequest): Record<string, unknown> | null {
+function parseBody(req: VercelRequest): AppointmentIngestPayload | null {
   const raw = req.body;
   if (raw == null) return {};
   if (typeof raw === "string") {
     try {
-      return JSON.parse(raw) as Record<string, unknown>;
+      return JSON.parse(raw) as AppointmentIngestPayload;
     } catch {
       return null;
     }
   }
-  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "object") return raw as AppointmentIngestPayload;
   return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const { getIngestAllowedOrigin, resolveIngestKey } = await import("./_lib/leadIngestAuth");
-    const { loadIdempotentResponse, storeIdempotentResponse } = await import("./_lib/ingestIdempotency");
-    const { processAppointmentIngest } = await import("./_lib/appointmentIngestHandler");
-
     const origin = (req.headers["origin"] as string | undefined) ?? undefined;
     res.setHeader("Access-Control-Allow-Origin", getIngestAllowedOrigin(origin));
     res.setHeader("Vary", "Origin");
@@ -80,12 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const envKey = process.env.N8N_LEAD_INGEST_API_KEY?.trim() || undefined;
-    const auth = await resolveIngestKey(
-      supabase,
-      providedKey,
-      body.branch_id as string | undefined,
-      envKey,
-    );
+    const auth = await resolveIngestKey(supabase, providedKey, body.branch_id, envKey);
     if (!auth.ok) {
       return res.status(auth.status).json({ ok: false, error: auth.error });
     }
@@ -100,11 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const result = await processAppointmentIngest(
-      supabase,
-      branchId,
-      body as import("./_lib/appointmentIngestHandler").AppointmentIngestPayload,
-    );
+    const result = await processAppointmentIngest(supabase, branchId, body);
 
     if (idempotencyKey && result.ok && result.status >= 200 && result.status < 300) {
       await storeIdempotentResponse(

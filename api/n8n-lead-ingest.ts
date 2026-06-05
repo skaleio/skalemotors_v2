@@ -6,6 +6,12 @@
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  processAppointmentIngest,
+  type AppointmentIngestPayload,
+} from "./lib/appointmentIngestHandler";
+import { maybeCreateAppointmentAfterIngest } from "./lib/landingBookingHandler";
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -415,11 +421,10 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
         return res.status(cached.status_code).json(cached.response_body);
       }
     }
-    const { processAppointmentIngest } = await import("./_lib/appointmentIngestHandler");
     const result = await processAppointmentIngest(
       supabase,
       branchId,
-      body as import("./_lib/appointmentIngestHandler").AppointmentIngestPayload,
+      body as AppointmentIngestPayload,
     );
     if (cacheKey && result.ok && result.status >= 200 && result.status < 300) {
       await storeIdempotentResponse(supabase, branchId, cacheKey, result.status, result.body);
@@ -598,7 +603,6 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
 
       let appointment: { id: string; scheduled_at: string } | null = null;
       if (tenantId && body.date?.trim() && body.time?.trim()) {
-        const { maybeCreateAppointmentAfterIngest } = await import("./_lib/landingBookingHandler");
         appointment = await maybeCreateAppointmentAfterIngest(supabase, {
           branchId,
           leadId: existing.id as string,
@@ -675,7 +679,6 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
 
   let appointment: { id: string; scheduled_at: string } | null = null;
   if (tenantId && body.date?.trim() && body.time?.trim()) {
-    const { maybeCreateAppointmentAfterIngest } = await import("./_lib/landingBookingHandler");
     appointment = await maybeCreateAppointmentAfterIngest(supabase, {
       branchId,
       leadId: created.id as string,

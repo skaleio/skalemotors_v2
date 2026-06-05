@@ -1,4 +1,15 @@
 {
+  "functions": {
+    "api/appointment-ingest.ts": {
+      "includeFiles": "api/lib/**"
+    },
+    "api/n8n-lead-ingest.ts": {
+      "includeFiles": "api/lib/**"
+    },
+    "api/landing-booking.ts": {
+      "includeFiles": "api/lib/**"
+    }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/" }
   ],
