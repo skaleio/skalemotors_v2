@@ -18,7 +18,7 @@ export interface Database {
           id: string
           title: string | null
           description: string | null
-          type: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          type: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro' | 'compra_vehiculo' | 'vehiculo_en_parte' | 'consignacion'
           status: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at: string
           end_at: string | null
@@ -38,7 +38,7 @@ export interface Database {
           id?: string
           title?: string | null
           description?: string | null
-          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro' | 'compra_vehiculo' | 'vehiculo_en_parte' | 'consignacion'
           status?: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at: string
           end_at?: string | null
@@ -58,7 +58,7 @@ export interface Database {
           id?: string
           title?: string | null
           description?: string | null
-          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro'
+          type?: 'test_drive' | 'reunion' | 'entrega' | 'servicio' | 'otro' | 'compra_vehiculo' | 'vehiculo_en_parte' | 'consignacion'
           status?: 'programada' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
           scheduled_at?: string
           end_at?: string | null

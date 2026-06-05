@@ -1,50 +1,37 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { useNavigationWithLoading } from "./useNavigationWithLoading";
 import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
-import { formatKeyCombo } from "@/lib/shortcuts-defaults";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatKeyCombo, type ShortcutActionId } from "@/lib/shortcuts-defaults";
+import { getQuickActionsForRole, isShortcutActionAvailable } from "@/lib/quickActions";
+import { hasPermission } from "@/lib/rbac";
 
 type ActionHandler = () => void;
 
 function useShortcutHandlers() {
-  const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
+  const { user } = useAuth();
 
   const handlersRef = useRef<Record<string, ActionHandler>>({});
-  handlersRef.current = {
-    new_lead: () => {
-      const onLeadsPage = window.location.pathname === "/app/leads" || window.location.pathname === "/leads";
-      if (onLeadsPage) window.dispatchEvent(new CustomEvent("openNewLeadForm"));
-      else navigateWithLoading("/app/leads?new=true");
-    },
-    crm: () => navigateWithLoading("/app/crm"),
-    quotes: () => navigateWithLoading("/app/quotes"),
-    new_sale: () => {
-      const onSalesPage = window.location.pathname === "/app/sales";
-      if (onSalesPage) window.dispatchEvent(new CustomEvent("openNewSaleForm"));
-      else navigateWithLoading("/app/sales?new=true");
-    },
-    appointments: () => navigateWithLoading("/app/appointments"),
-    financial_calculator: () => navigateWithLoading("/app/financial-calculator"),
-    inventory: () => {
-      const onInventoryPage = window.location.pathname === "/app/consignaciones";
-      if (onInventoryPage) window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
-      else navigateWithLoading("/app/consignaciones?new=true");
-    },
-    consignaciones: () => {
-      const onConsignacionesPage = window.location.pathname === "/app/consignaciones";
-      if (onConsignacionesPage) window.dispatchEvent(new CustomEvent("openNewConsignacionForm"));
-      else navigateWithLoading("/app/consignaciones?new=true");
-    },
-    billing: () => navigateWithLoading("/app/billing"),
-    tasacion: () => navigateWithLoading("/app/tasacion"),
+
+  const ctx = {
+    navigateWithLoading,
+    pathname: typeof window !== "undefined" ? window.location.pathname : "",
   };
+
+  handlersRef.current = {};
+  for (const action of getQuickActionsForRole(user?.role)) {
+    if (!action.shortcutId) continue;
+    handlersRef.current[action.shortcutId] = () => action.run(ctx);
+  }
+
   return handlersRef;
 }
 
 export function useGlobalShortcuts() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const { shortcuts, shortcutsEnabled } = useShortcutsPreferences();
+  const { user } = useAuth();
   const handlersRef = useShortcutHandlers();
 
   useEffect(() => {
@@ -65,14 +52,12 @@ export function useGlobalShortcuts() {
       const key = event.key.toLowerCase();
       if (key === "control" || key === "meta") return;
 
-      // Ctrl+K siempre abre Acciones Rápidas (fijo)
       if ((ctrl || meta) && key === "k") {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent("openQuickActions"));
         return;
       }
 
-      // Atajos numéricos y coma (fijos)
       if (ctrl || meta) {
         if (key === "1") {
           event.preventDefault();
@@ -91,12 +76,16 @@ export function useGlobalShortcuts() {
         }
         if (key === "4") {
           event.preventDefault();
-          navigateWithLoading("/app/finance");
+          if (hasPermission(user?.role, "finance:read")) {
+            navigateWithLoading("/app/finance");
+          } else {
+            navigateWithLoading("/app/appointments");
+          }
           return;
         }
         if (key === "5") {
           event.preventDefault();
-          navigateWithLoading("/app/post-sale");
+          navigateWithLoading("/app/tasks");
           return;
         }
         if (key === ",") {
@@ -106,11 +95,14 @@ export function useGlobalShortcuts() {
         }
       }
 
-      // Atajos personalizables: comparar combo con preferencias
       if (ctrl || meta) {
         const combo = formatKeyCombo(ctrl, meta, key);
         const actionId = Object.entries(shortcuts).find(([, v]) => v === combo)?.[0];
-        if (actionId && handlersRef.current[actionId]) {
+        if (
+          actionId &&
+          isShortcutActionAvailable(actionId as ShortcutActionId, user?.role) &&
+          handlersRef.current[actionId]
+        ) {
           event.preventDefault();
           handlersRef.current[actionId]!();
         }
@@ -119,5 +111,5 @@ export function useGlobalShortcuts() {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [shortcuts, shortcutsEnabled, navigateWithLoading]);
+  }, [shortcuts, shortcutsEnabled, navigateWithLoading, user?.role]);
 }

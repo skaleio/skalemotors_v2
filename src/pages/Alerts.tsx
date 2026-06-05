@@ -28,6 +28,7 @@ type Filter = "all" | "unread" | EventKey;
 type EventKey =
   | "lead_sold"
   | "vehicle_sold"
+  | "vehicle_status_changed"
   | "lead_contactado"
   | "lead_assigned"
   | "lead_stale"
@@ -66,6 +67,15 @@ const EVENT_TYPES: readonly EventMeta[] = [
     roles: ["admin"],
   },
   {
+    key: "vehicle_status_changed",
+    label: "Estados de inventario",
+    short: "Estados",
+    icon: Car,
+    iconClass: "text-sky-600",
+    description: "Un vendedor cambia el estado de un vehículo (reservado, reparación, etc.)",
+    roles: ["admin"],
+  },
+  {
     key: "lead_contactado",
     label: "Leads contactados",
     short: "Contactados",
@@ -98,8 +108,8 @@ const EVENT_TYPES: readonly EventMeta[] = [
     short: "Nuevas",
     icon: Car,
     iconClass: "text-indigo-500",
-    description: "Alta de consignación en el sistema",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
+    description: "Un vendedor registra una consignación nueva",
+    roles: ["admin"],
   },
   {
     key: "consignacion_stale",

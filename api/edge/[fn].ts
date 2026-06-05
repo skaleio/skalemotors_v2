@@ -1,5 +1,5 @@
 /**
- * Proxy same-origin hacia Supabase Edge Functions (Zernio y similares).
+ * Proxy same-origin hacia Supabase Edge Functions (Zernio, vendor-user-*, etc.).
  * Evita CORS / preflight 304 cuando ALLOWED_ORIGINS no coincide con Vercel.
  */
 interface VercelRequest {
@@ -16,7 +16,8 @@ interface VercelResponse {
   json(body: unknown): void;
 }
 
-const ZERNIO_FN_RE = /^zernio-[a-z0-9-]+$/;
+const ALLOWED_FN_RE =
+  /^(zernio-[a-z0-9-]+|vendor-user-create|vendor-user-delete)$/;
 
 function header(req: VercelRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
@@ -32,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rawFn = req.query.fn;
   const fn = typeof rawFn === "string" ? rawFn : Array.isArray(rawFn) ? rawFn[0] : "";
-  if (!fn || !ZERNIO_FN_RE.test(fn)) {
+  if (!fn || !ALLOWED_FN_RE.test(fn)) {
     return res.status(404).json({ ok: false, error: "Función no encontrada" });
   }
 

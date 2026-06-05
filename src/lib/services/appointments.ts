@@ -17,6 +17,9 @@ const TYPE_TO_DB: Record<string, Appointment['type']> = {
   delivery: 'entrega',
   service: 'servicio',
   other: 'otro',
+  vehicle_purchase: 'compra_vehiculo',
+  trade_in: 'vehiculo_en_parte',
+  consignment: 'consignacion',
 }
 
 function toDbType(type: string): Appointment['type'] {

@@ -4,6 +4,7 @@ import {
   getSupabaseAuthStorageKey,
   isAccessTokenExpired,
   readPersistedAuthSession,
+  refreshPersistedSessionIfNeeded,
 } from "./authSessionCleanup";
 
 describe("getSupabaseAuthStorageKey", () => {
@@ -40,6 +41,46 @@ describe("canRefreshPersistedSession", () => {
   });
 });
 
+describe("refreshPersistedSessionIfNeeded", () => {
+  it("no llama refresh si el access token sigue vigente", async () => {
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    const session = {
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: future,
+      user: { id: "u1" },
+    } as import("@supabase/supabase-js").Session;
+    const refreshSession = vi.fn();
+    const result = await refreshPersistedSessionIfNeeded(
+      { auth: { refreshSession } },
+      session,
+    );
+    expect(result).toBe(session);
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it("renueva cuando el access token venció y hay refresh_token", async () => {
+    const past = Math.floor(Date.now() / 1000) - 3600;
+    const oldSession = {
+      access_token: "old",
+      refresh_token: "r",
+      expires_at: past,
+      user: { id: "u1" },
+    } as import("@supabase/supabase-js").Session;
+    const newSession = {
+      ...oldSession,
+      access_token: "new",
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    };
+    const refreshSession = vi.fn().mockResolvedValue({ data: { session: newSession }, error: null });
+    const result = await refreshPersistedSessionIfNeeded(
+      { auth: { refreshSession } },
+      oldSession,
+    );
+    expect(refreshSession).toHaveBeenCalledOnce();
+    expect(result?.access_token).toBe("new");
+  });
+});
 describe("readPersistedAuthSession", () => {
   const key = getSupabaseAuthStorageKey();
 

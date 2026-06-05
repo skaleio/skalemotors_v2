@@ -38,7 +38,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase";
+import { createVendorUser, deleteVendorUser } from "@/lib/services/vendorUserApi";
+import { supabase } from "@/lib/supabase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import type { Database } from "@/lib/types/database";
@@ -60,98 +61,12 @@ async function createVendorViaEdgeFunction(payload: {
   password: string;
   full_name: string;
   branch_id: string;
-}): Promise<{ ok: boolean; user_id?: string; email?: string }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) {
-    throw new Error("Tu sesión expiró. Cierra sesión y vuelve a entrar.");
-  }
-  const base = (supabaseUrl ?? "").replace(/\/$/, "");
-  if (!base) {
-    throw new Error("Falta VITE_SUPABASE_URL en la configuración del build.");
-  }
-  const url = `${base}/functions/v1/vendor-user-create`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        apikey: supabaseAnonKey ?? "",
-        "x-client-info": "skale-motors-web",
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(
-      `No se pudo conectar con el servidor (${msg}). Revisa tu red, que en Supabase esté desplegada la función «vendor-user-create» y que VITE_SUPABASE_URL apunte a este proyecto (sin barra final al final del dominio).`,
-    );
-  }
-  const text = await res.text();
-  let body: { ok?: boolean; error?: string } = {};
-  try {
-    body = text ? (JSON.parse(text) as typeof body) : {};
-  } catch {
-    throw new Error(
-      `Respuesta inesperada (${res.status}). ¿Existe la función «vendor-user-create»? ${text.slice(0, 160)}`,
-    );
-  }
-  if (!res.ok) {
-    throw new Error(body.error || `Error ${res.status}: ${text.slice(0, 200)}`);
-  }
-  if (!body.ok) {
-    throw new Error(body.error || "No se pudo crear el vendedor");
-  }
-  return body as { ok: boolean; user_id?: string; email?: string };
+}) {
+  return createVendorUser(payload);
 }
 
-async function deleteVendorViaEdgeFunction(userId: string): Promise<{ ok: boolean; user_id?: string }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) {
-    throw new Error("Tu sesión expiró. Cierra sesión y vuelve a entrar.");
-  }
-  const base = (supabaseUrl ?? "").replace(/\/$/, "");
-  if (!base) {
-    throw new Error("Falta VITE_SUPABASE_URL en la configuración del build.");
-  }
-  const url = `${base}/functions/v1/vendor-user-delete`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        apikey: supabaseAnonKey ?? "",
-        "x-client-info": "skale-motors-web",
-      },
-      body: JSON.stringify({ user_id: userId }),
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(
-      `No se pudo conectar con el servidor (${msg}). Revisa que la función «vendor-user-delete» esté desplegada.`,
-    );
-  }
-  const text = await res.text();
-  let body: { ok?: boolean; error?: string } = {};
-  try {
-    body = text ? (JSON.parse(text) as typeof body) : {};
-  } catch {
-    throw new Error(
-      `Respuesta inesperada (${res.status}). ¿Existe la función «vendor-user-delete»? ${text.slice(0, 160)}`,
-    );
-  }
-  if (!res.ok) {
-    throw new Error(body.error || `Error ${res.status}: ${text.slice(0, 200)}`);
-  }
-  if (!body.ok) {
-    throw new Error(body.error || "No se pudo eliminar el usuario");
-  }
-  return body as { ok: boolean; user_id?: string };
+async function deleteVendorViaEdgeFunction(userId: string) {
+  return deleteVendorUser(userId);
 }
 
 const CAN_MANAGE_TEAM = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);

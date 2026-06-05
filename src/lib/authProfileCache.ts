@@ -14,11 +14,21 @@ function getProfileCacheKey(userId: string) {
   return `${PROFILE_CACHE_KEY_PREFIX}.${userId}`;
 }
 
-function envelopeFromRaw(raw: string): User | null {
+type ReadCachedProfileOptions = {
+  /** Permite reutilizar perfil guardado aunque venció el TTL (p. ej. volver al día siguiente). */
+  ignoreTtl?: boolean;
+};
+
+function envelopeFromRaw(raw: string, options?: ReadCachedProfileOptions): User | null {
   const parsed = JSON.parse(raw) as ProfileCacheEnvelope | User;
   if (parsed && typeof parsed === "object" && "cachedAt" in parsed && "profile" in parsed) {
     const env = parsed as ProfileCacheEnvelope;
-    if (Date.now() - env.cachedAt > getAuthTimings().profileCacheTtlMs) return null;
+    if (
+      !options?.ignoreTtl &&
+      Date.now() - env.cachedAt > getAuthTimings().profileCacheTtlMs
+    ) {
+      return null;
+    }
     return env.profile;
   }
   return parsed as User;
@@ -28,13 +38,16 @@ export function isProfileCacheValid(profile: User | null | undefined): boolean {
   return !!(profile?.tenant_id || profile?.legacy_protected);
 }
 
-export function readCachedProfile(userId: string): User | null {
+export function readCachedProfile(
+  userId: string,
+  options?: ReadCachedProfileOptions,
+): User | null {
   if (typeof window === "undefined") return null;
 
   try {
     const fromLs = window.localStorage.getItem(getProfileCacheKey(userId));
     if (fromLs) {
-      const profile = envelopeFromRaw(fromLs);
+      const profile = envelopeFromRaw(fromLs, options);
       if (profile) return profile;
     }
   } catch {
@@ -48,7 +61,12 @@ export function readCachedProfile(userId: string): User | null {
     if (!backupRaw) return null;
     const backup = JSON.parse(backupRaw) as { userId: string; envelope: ProfileCacheEnvelope };
     if (backup.userId !== userId) return null;
-    if (Date.now() - backup.envelope.cachedAt > getAuthTimings().profileCacheTtlMs) return null;
+    if (
+      !options?.ignoreTtl &&
+      Date.now() - backup.envelope.cachedAt > getAuthTimings().profileCacheTtlMs
+    ) {
+      return null;
+    }
     return backup.envelope.profile;
   } catch {
     return null;

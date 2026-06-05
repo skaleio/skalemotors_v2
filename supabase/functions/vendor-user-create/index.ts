@@ -1,10 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(status: number, body: unknown) {
+function jsonResponse(req: Request, status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
@@ -37,19 +37,19 @@ function validatePassword(pw: string): string | null {
 }
 
 async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
+  if (req.method !== "POST") return jsonResponse(req, 405, { ok: false, error: "Method not allowed" });
 
   const authHeader = req.headers.get("authorization") || "";
   if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse(401, { ok: false, error: "Missing auth" });
+    return jsonResponse(req, 401, { ok: false, error: "Missing auth" });
   }
 
   let body: Body;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "Invalid JSON body" });
+    return jsonResponse(req, 400, { ok: false, error: "Invalid JSON body" });
   }
 
   const email = body.email ? normalizeEmail(body.email) : "";
@@ -58,17 +58,17 @@ async function handler(req: Request): Promise<Response> {
   const branchId = (body.branch_id ?? "").trim();
 
   if (!email || !EMAIL_RE.test(email) || email.length > 254) {
-    return jsonResponse(400, { ok: false, error: "email inválido" });
+    return jsonResponse(req,400, { ok: false, error: "email inválido" });
   }
   const pwError = validatePassword(password);
   if (pwError) {
-    return jsonResponse(400, { ok: false, error: pwError });
+    return jsonResponse(req,400, { ok: false, error: pwError });
   }
   if (!fullName || fullName.length > 120) {
-    return jsonResponse(400, { ok: false, error: "Nombre requerido (máx 120 caracteres)" });
+    return jsonResponse(req,400, { ok: false, error: "Nombre requerido (máx 120 caracteres)" });
   }
   if (!branchId || !UUID_RE.test(branchId)) {
-    return jsonResponse(400, { ok: false, error: "Sucursal inválida" });
+    return jsonResponse(req,400, { ok: false, error: "Sucursal inválida" });
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
@@ -81,7 +81,7 @@ async function handler(req: Request): Promise<Response> {
       !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
     ].filter(Boolean).join(", ");
     console.error(`[vendor-user-create] Missing env vars: ${missing}`);
-    return jsonResponse(500, { ok: false, error: "Missing Supabase env vars" });
+    return jsonResponse(req,500, { ok: false, error: "Missing Supabase env vars" });
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -89,7 +89,7 @@ async function handler(req: Request): Promise<Response> {
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) {
-    return jsonResponse(401, { ok: false, error: "Invalid auth" });
+    return jsonResponse(req,401, { ok: false, error: "Invalid auth" });
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -103,17 +103,17 @@ async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (callerErr || !callerRow?.tenant_id) {
-    return jsonResponse(403, { ok: false, error: "Sin tenant asignado" });
+    return jsonResponse(req,403, { ok: false, error: "Sin tenant asignado" });
   }
 
   const role = callerRow.role as string;
   if (!CAN_CREATE.has(role)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para crear vendedores" });
+    return jsonResponse(req,403, { ok: false, error: "Sin permiso para crear vendedores" });
   }
 
   if (role === "gerente" || role === "jefe_sucursal") {
     if (!callerRow.branch_id || callerRow.branch_id !== branchId) {
-      return jsonResponse(403, { ok: false, error: "Solo puedes crear vendedores en tu sucursal" });
+      return jsonResponse(req,403, { ok: false, error: "Solo puedes crear vendedores en tu sucursal" });
     }
   }
 
@@ -124,7 +124,7 @@ async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (branchErr || !branchRow || branchRow.tenant_id !== callerRow.tenant_id) {
-    return jsonResponse(400, { ok: false, error: "Sucursal no válida para tu organización" });
+    return jsonResponse(req,400, { ok: false, error: "Sucursal no válida para tu organización" });
   }
 
   const { data: existingUser } = await admin
@@ -135,7 +135,7 @@ async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (existingUser) {
-    return jsonResponse(409, { ok: false, error: "Ya existe un usuario con ese correo en tu equipo" });
+    return jsonResponse(req,409, { ok: false, error: "Ya existe un usuario con ese correo en tu equipo" });
   }
 
   await admin.from("pending_vendor_provisions").delete().eq("email", email);
@@ -149,7 +149,7 @@ async function handler(req: Request): Promise<Response> {
 
   if (pendErr) {
     console.error("[vendor-user-create] pending_vendor_provisions insert error:", pendErr.code, pendErr.message);
-    return jsonResponse(500, { ok: false, error: pendErr.message || "No se pudo preparar el alta" });
+    return jsonResponse(req,500, { ok: false, error: pendErr.message || "No se pudo preparar el alta" });
   }
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -165,9 +165,9 @@ async function handler(req: Request): Promise<Response> {
     const msg = createErr?.message ?? "No se pudo crear el usuario";
     console.error("[vendor-user-create] auth.admin.createUser error:", msg);
     if (msg.toLowerCase().includes("already")) {
-      return jsonResponse(409, { ok: false, error: "Ese correo ya está registrado en el sistema de acceso" });
+      return jsonResponse(req,409, { ok: false, error: "Ese correo ya está registrado en el sistema de acceso" });
     }
-    return jsonResponse(400, { ok: false, error: msg });
+    return jsonResponse(req,400, { ok: false, error: msg });
   }
 
   const { error: linkCreatorErr } = await admin
@@ -178,7 +178,7 @@ async function handler(req: Request): Promise<Response> {
     console.error("[vendor-user-create] created_by_user_id:", linkCreatorErr.code, linkCreatorErr.message);
   }
 
-  return jsonResponse(200, {
+  return jsonResponse(req,200, {
     ok: true,
     user_id: created.user.id,
     email,

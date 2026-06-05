@@ -1,18 +1,14 @@
 /**
  * IDs de acciones y atajos por defecto.
- * Las claves deben coincidir con los actionId usados en useGlobalShortcuts.
+ * Deben existir en `quickActions.ts` con `shortcutId` y ruta real.
  */
 export const DEFAULT_SHORTCUTS: Record<string, string> = {
   new_lead: "Ctrl+L",
   crm: "Ctrl+P",
-  quotes: "Ctrl+Q",
   new_sale: "Ctrl+E",
   appointments: "Ctrl+A",
   financial_calculator: "Ctrl+F",
   inventory: "Ctrl+B",
-  consignaciones: "Ctrl+G",
-  billing: "Ctrl+I",
-  /** M de mercado; evita Ctrl+T (nueva pestaña del navegador) */
   tasacion: "Ctrl+M",
 };
 
@@ -26,16 +22,13 @@ export interface ShortcutActionDef {
 }
 
 export const SHORTCUT_ACTIONS: ShortcutActionDef[] = [
-  { id: "new_lead", label: "Nuevo Lead", description: "Agregar prospecto", category: "CRM" },
-  { id: "crm", label: "CRM Pipeline", description: "Gestionar ventas", category: "CRM" },
-  { id: "quotes", label: "Nueva Cotización", description: "Crear propuesta", category: "CRM" },
-  { id: "new_sale", label: "Nueva Venta", description: "Registrar venta", category: "CRM" },
-  { id: "appointments", label: "Nueva Cita", description: "Programar reunión", category: "Operaciones" },
-  { id: "financial_calculator", label: "Financiamiento", description: "Calcular cuotas", category: "Operaciones" },
-  { id: "tasacion", label: "Tasación", description: "Valorar vehículo por patente", category: "Operaciones" },
-  { id: "inventory", label: "Agregar Vehículo", description: "Nuevo stock", category: "Inventario" },
-  { id: "consignaciones", label: "Agregar Consignación", description: "Nueva consignación", category: "Inventario" },
-  { id: "billing", label: "Nueva Factura", description: "Emitir documento", category: "Finanzas" },
+  { id: "new_lead", label: "Nuevo lead", description: "Registrar prospecto", category: "CRM" },
+  { id: "crm", label: "CRM pipeline", description: "Abrir tablero de ventas", category: "CRM" },
+  { id: "new_sale", label: "Nueva venta", description: "Registrar venta", category: "CRM" },
+  { id: "appointments", label: "Citas", description: "Abrir calendario", category: "Operaciones" },
+  { id: "financial_calculator", label: "Calculadora financiera", description: "Simular cuotas", category: "Operaciones" },
+  { id: "tasacion", label: "Tasación", description: "Valorar por patente", category: "Operaciones" },
+  { id: "inventory", label: "Agregar vehículo", description: "Nuevo stock", category: "Inventario" },
 ];
 
 /** Formato normalizado para comparar: siempre "Ctrl+..." (Ctrl y Cmd se tratan igual). */

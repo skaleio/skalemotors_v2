@@ -442,6 +442,9 @@
 .event-meeting    { --evt: var(--chart-2); }  /* verde */
 .event-delivery   { --evt: var(--chart-4); }  /* violeta */
 .event-service    { --evt: var(--chart-3); }  /* ámbar */
+.event-vehicle-purchase { --evt: var(--chart-5); }  /* cian */
+.event-trade-in         { --evt: var(--chart-1); }  /* azul */
+.event-consignment      { --evt: var(--chart-4); }  /* violeta */
 
 /* Citas canceladas — atenuadas en el grid */
 .rbc-event.event-cancelled {
@@ -477,6 +480,9 @@
 .event-dot.event-meeting    { background-color: hsl(var(--chart-2)); }
 .event-dot.event-delivery   { background-color: hsl(var(--chart-4)); }
 .event-dot.event-service    { background-color: hsl(var(--chart-3)); }
+.event-dot.event-vehicle-purchase { background-color: hsl(var(--chart-5)); }
+.event-dot.event-trade-in         { background-color: hsl(var(--chart-1)); }
+.event-dot.event-consignment      { background-color: hsl(var(--chart-4)); }
 .event-dot.event-other      { background-color: hsl(var(--muted-foreground)); }
 
 /* ====================================================================

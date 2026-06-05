@@ -11,6 +11,7 @@ import {
   fastLocalSignOut,
   isAccessTokenExpired,
   readPersistedAuthSession,
+  refreshPersistedSessionIfNeeded,
 } from "@/lib/authSessionCleanup";
 import { getAuthTimings, isFastAuthDev } from "@/lib/authTimings";
 import { supabase, type User } from "@/lib/supabase";
@@ -22,6 +23,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 
 type ProfileFetchReason = "ok" | "disabled" | "no-profile" | "error";
+
+function mustSignOutOnProfileFailure(reason: ProfileFetchReason): boolean {
+  return reason === "disabled" || reason === "no-profile";
+}
 
 interface AuthContextType {
   user: User | null;
@@ -86,6 +91,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
         window.clearTimeout(timeoutId);
       }
     }
+  };
+
+  const applyCachedProfileIfValid = (
+    userId: string,
+    options?: { ignoreTtl?: boolean },
+  ): boolean => {
+    const cachedProfile = readCachedProfile(userId, options);
+    if (!isProfileCacheValid(cachedProfile) || !cachedProfile) return false;
+    applyAuthenticatedUser(cachedProfile);
+    setNeedsOnboarding(!cachedProfile.onboarding_completed);
+    setLoading(false);
+    return true;
+  };
+
+  const revalidateProfileInBackground = (userId: string) => {
+    void fetchUserProfileWithReason(userId).then((reason) => {
+      if (mustSignOutOnProfileFailure(reason)) {
+        void invalidateSessionAfterProfileFailure(userId);
+      }
+    });
   };
 
   const applyAuthenticatedUser = (profile: User) => {
@@ -352,6 +377,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
 
+      if (session?.user) {
+        session = (await refreshPersistedSessionIfNeeded(supabase, session)) ?? session;
+      }
+
       if (cancelled) return;
 
       if (!session?.user) {
@@ -364,30 +393,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       pendingSessionRef.current = currentSession;
       setSession(currentSession);
 
-      const cachedProfile = readCachedProfile(currentSession.user.id);
-      const hasValidCache = isProfileCacheValid(cachedProfile);
-      if (hasValidCache && cachedProfile) {
-        applyAuthenticatedUser(cachedProfile);
-        setNeedsOnboarding(!cachedProfile.onboarding_completed);
-        setLoading(false);
-        void fetchUserProfileWithReason(currentSession.user.id).then((reason) => {
-          if (reason === "disabled" || reason === "no-profile") {
-            void invalidateSessionAfterProfileFailure(currentSession.user.id);
-          }
-        });
-      } else {
-        // Sin cache válido: verificar DB antes de dar acceso (no mostrar app con fallback)
-        // pendingSessionRef ya está seteado; el timeout guard lleva la carga si la red falla
-        const ok = await fetchUserProfile(currentSession.user.id);
-        if (!ok) {
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
-          setUser(null);
-          currentUserRef.current = null;
-          setSession(null);
-          setLoading(false);
-        }
-        // Si ok: fetchUserProfile ya llamó setUser + setLoading(false)
+      const userId = currentSession.user.id;
+      if (applyCachedProfileIfValid(userId)) {
+        revalidateProfileInBackground(userId);
+        return;
       }
+
+      const reason = await fetchUserProfileWithReason(userId);
+      if (reason === "ok") {
+        return;
+      }
+      if (mustSignOutOnProfileFailure(reason)) {
+        await invalidateSessionAfterProfileFailure(userId);
+        return;
+      }
+
+      // Error de red/timeout: no cerrar sesión si hay perfil guardado (aunque venció el TTL).
+      if (applyCachedProfileIfValid(userId, { ignoreTtl: true })) {
+        revalidateProfileInBackground(userId);
+        return;
+      }
+
+      setLoading(false);
     };
 
     void bootstrap();
@@ -445,17 +472,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
           event === "TOKEN_REFRESHED" ||
           event === "USER_UPDATED"
         ) {
-          const ok = await fetchUserProfile(session.user.id);
-          if (!ok) {
-            // Sin perfil en DB y sin cache válido → no otorgar acceso
+          const reason = await fetchUserProfileWithReason(session.user.id);
+          if (reason === "ok") {
+            return;
+          }
+          if (mustSignOutOnProfileFailure(reason)) {
             if (!cacheIsValid) {
-              try { await supabase.auth.signOut(); } catch { /* ignore */ }
-              setUser(null);
-              currentUserRef.current = null;
-              setSession(null);
+              await invalidateSessionAfterProfileFailure(session.user.id);
             }
             setLoading(false);
+            return;
           }
+          if (!sameUserAlreadyLoaded && applyCachedProfileIfValid(session.user.id, { ignoreTtl: true })) {
+            revalidateProfileInBackground(session.user.id);
+          }
+          setLoading(false);
         }
       }
     });
@@ -583,16 +614,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadingTimeoutRef.current = window.setTimeout(() => {
       const pending = pendingSessionRef.current;
       if (pending?.user) {
-        const cached = readCachedProfile(pending.user.id);
-        const hasValidCache = !!(cached?.tenant_id || cached?.legacy_protected);
-        if (!hasValidCache) {
-          supabase.auth.signOut().catch(() => {});
+        const uid = pending.user.id;
+        if (applyCachedProfileIfValid(uid)) {
+          revalidateProfileInBackground(uid);
+        } else if (applyCachedProfileIfValid(uid, { ignoreTtl: true })) {
+          revalidateProfileInBackground(uid);
+        } else if (!canRefreshPersistedSession(pending)) {
+          void fastLocalSignOut(supabase);
           setUser(null);
           currentUserRef.current = null;
           setSession(null);
-        } else if (cached) {
-          setUser(cached);
-          currentUserRef.current = cached;
         }
       } else {
         setUser(null);
@@ -686,11 +717,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         log("fetching profile (no cache)", { uid });
         const reason = await fetchUserProfileWithReason(uid);
         log("fetchUserProfile done", { reason });
-        if (reason !== "ok") {
+        if (reason === "ok") {
+          log("success", { role: currentUserRef.current?.role });
+          return { error: null, role: currentUserRef.current?.role };
+        }
+        if (mustSignOutOnProfileFailure(reason)) {
           await invalidateSessionAfterProfileFailure(uid);
           return { error: new Error(reason === "disabled" ? "ACCOUNT_DISABLED" : "NO_PROFILE") };
         }
-        log("success", { role: currentUserRef.current?.role });
+        if (applyCachedProfileIfValid(uid, { ignoreTtl: true })) {
+          revalidateProfileInBackground(uid);
+          return { error: null, role: currentUserRef.current?.role };
+        }
+        setLoading(false);
+        return { error: new Error("Sin conexión al cargar tu perfil. Intentá de nuevo.") };
       } else {
         setUser(null);
         currentUserRef.current = null;

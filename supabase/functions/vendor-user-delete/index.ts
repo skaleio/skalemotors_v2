@@ -1,10 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-function jsonResponse(status: number, body: unknown) {
+function jsonResponse(req: Request, status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
@@ -19,24 +19,24 @@ type Body = {
 };
 
 async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
+  if (req.method !== "POST") return jsonResponse(req, 405, { ok: false, error: "Method not allowed" });
 
   const authHeader = req.headers.get("authorization") || "";
   if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse(401, { ok: false, error: "Missing auth" });
+    return jsonResponse(req, 401, { ok: false, error: "Missing auth" });
   }
 
   let body: Body;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse(400, { ok: false, error: "Invalid JSON body" });
+    return jsonResponse(req, 400, { ok: false, error: "Invalid JSON body" });
   }
 
   const targetId = (body.user_id ?? "").trim();
   if (!targetId) {
-    return jsonResponse(400, { ok: false, error: "user_id requerido" });
+    return jsonResponse(req, 400, { ok: false, error: "user_id requerido" });
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
@@ -49,7 +49,7 @@ async function handler(req: Request): Promise<Response> {
       !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
     ].filter(Boolean).join(", ");
     console.error(`[vendor-user-delete] Missing env vars: ${missing}`);
-    return jsonResponse(500, { ok: false, error: "Missing Supabase env vars" });
+    return jsonResponse(req, 500, { ok: false, error: "Missing Supabase env vars" });
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -57,7 +57,7 @@ async function handler(req: Request): Promise<Response> {
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) {
-    return jsonResponse(401, { ok: false, error: "Invalid auth" });
+    return jsonResponse(req, 401, { ok: false, error: "Invalid auth" });
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -71,16 +71,16 @@ async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (callerErr || !callerRow?.tenant_id) {
-    return jsonResponse(403, { ok: false, error: "Sin tenant asignado" });
+    return jsonResponse(req, 403, { ok: false, error: "Sin tenant asignado" });
   }
 
   const callerRole = callerRow.role as string;
   if (!CAN_DELETE.has(callerRole)) {
-    return jsonResponse(403, { ok: false, error: "Sin permiso para eliminar usuarios" });
+    return jsonResponse(req, 403, { ok: false, error: "Sin permiso para eliminar usuarios" });
   }
 
   if (callerRow.id === targetId) {
-    return jsonResponse(403, { ok: false, error: "No puedes eliminar tu propia cuenta" });
+    return jsonResponse(req, 403, { ok: false, error: "No puedes eliminar tu propia cuenta" });
   }
 
   const { data: targetRow, error: targetErr } = await admin
@@ -90,19 +90,19 @@ async function handler(req: Request): Promise<Response> {
     .maybeSingle();
 
   if (targetErr || !targetRow) {
-    return jsonResponse(404, { ok: false, error: "Usuario no encontrado" });
+    return jsonResponse(req, 404, { ok: false, error: "Usuario no encontrado" });
   }
 
   if (targetRow.tenant_id !== callerRow.tenant_id) {
-    return jsonResponse(403, { ok: false, error: "Usuario no pertenece a tu organización" });
+    return jsonResponse(req, 403, { ok: false, error: "Usuario no pertenece a tu organización" });
   }
 
   if (targetRow.legacy_protected) {
-    return jsonResponse(403, { ok: false, error: "Esta cuenta está protegida y no puede eliminarse" });
+    return jsonResponse(req, 403, { ok: false, error: "Esta cuenta está protegida y no puede eliminarse" });
   }
 
   if (targetRow.role !== "vendedor") {
-    return jsonResponse(403, {
+    return jsonResponse(req, 403, {
       ok: false,
       error: "Solo se pueden eliminar cuentas con rol vendedor desde esta pantalla",
     });
@@ -110,7 +110,7 @@ async function handler(req: Request): Promise<Response> {
 
   if (callerRole === "gerente" || callerRole === "jefe_sucursal") {
     if (!callerRow.branch_id || targetRow.branch_id !== callerRow.branch_id) {
-      return jsonResponse(403, { ok: false, error: "Solo puedes eliminar vendedores de tu sucursal" });
+      return jsonResponse(req, 403, { ok: false, error: "Solo puedes eliminar vendedores de tu sucursal" });
     }
   }
 
@@ -120,22 +120,22 @@ async function handler(req: Request): Promise<Response> {
   const { error: docErr } = await admin.from("documents").update({ created_by: null }).eq("created_by", targetId);
   if (docErr) {
     console.error("[vendor-user-delete] documents cleanup:", docErr.code, docErr.message);
-    return jsonResponse(500, { ok: false, error: docErr.message || "No se pudo liberar referencias" });
+    return jsonResponse(req, 500, { ok: false, error: docErr.message || "No se pudo liberar referencias" });
   }
 
   const { error: authDelErr } = await admin.auth.admin.deleteUser(targetId);
   if (authDelErr) {
     console.error("[vendor-user-delete] auth.admin.deleteUser:", authDelErr.message);
-    return jsonResponse(400, { ok: false, error: authDelErr.message || "No se pudo eliminar la sesión de acceso" });
+    return jsonResponse(req, 400, { ok: false, error: authDelErr.message || "No se pudo eliminar la sesión de acceso" });
   }
 
   const { error: pubErr } = await admin.from("users").delete().eq("id", targetId);
   if (pubErr) {
     console.error("[vendor-user-delete] public.users delete:", pubErr.code, pubErr.message);
-    return jsonResponse(500, { ok: false, error: pubErr.message || "Acceso eliminado pero falló limpiar el perfil" });
+    return jsonResponse(req, 500, { ok: false, error: pubErr.message || "Acceso eliminado pero falló limpiar el perfil" });
   }
 
-  return jsonResponse(200, { ok: true, user_id: targetId });
+  return jsonResponse(req, 200, { ok: true, user_id: targetId });
 }
 
 Deno.serve((req) => handler(req));

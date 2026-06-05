@@ -1,27 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useDeferredValue, memo } from "react";
-import {
-  Car,
-  Users,
-  Calendar,
-  TrendingUp,
-  DollarSign,
-  Star,
-  UserPlus,
-  Car as CarIcon,
-  CalendarPlus,
-  FileText,
-  Phone,
-  Command,
-  Target,
-  Receipt,
-  CreditCard,
-  Search,
-  Activity,
-  CheckCircle,
-  ClipboardList,
-  CircleDollarSign,
-  Calculator,
-} from "lucide-react";
+import { Command, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,12 +10,15 @@ import {
 } from "@/components/ui/dialog";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import { ShortcutsCustomizerModal } from "@/components/ShortcutsCustomizerModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { getQuickActionsForRole, shortcutLabelForAction, type QuickActionDef } from "@/lib/quickActions";
 import { cn } from "@/lib/utils";
+import { useLocation } from "react-router-dom";
 
 type QuickActionOption = {
   label: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: QuickActionDef["icon"];
   color: string;
   category: string;
   keywords: string[];
@@ -134,9 +115,9 @@ const QuickActionCategory = memo(function QuickActionCategory({
         </Badge>
       </div>
       <div className="grid grid-cols-1 gap-0.5">
-        {options.map((option, index) => (
+        {options.map((option) => (
           <QuickActionRow
-            key={`${option.label}-${index}`}
+            key={option.label}
             option={option}
             onSelect={() => onSelect(option.action)}
           />
@@ -147,6 +128,8 @@ const QuickActionCategory = memo(function QuickActionCategory({
 });
 
 export function GlobalQuickActions() {
+  const { user } = useAuth();
+  const { pathname } = useLocation();
   const { navigateWithLoading } = useNavigationWithLoading();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -154,275 +137,19 @@ export function GlobalQuickActions() {
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const createOptions = useMemo(
-    () => [
-      {
-        label: "Nuevo Lead",
-        description: "Agregar un nuevo prospecto al sistema",
-        icon: UserPlus,
-        shortcut: "Ctrl+L",
-        action: () => {
-          const onLeadsPage =
-            window.location.pathname === "/app/leads" || window.location.pathname === "/leads";
-          if (onLeadsPage) {
-            window.dispatchEvent(new CustomEvent("openNewLeadForm"));
-          } else {
-            navigateWithLoading("/app/leads?new=true");
-          }
-        },
-        color: "bg-blue-600",
-        category: "CRM",
-        keywords: ["lead", "prospecto", "cliente", "venta", "crm"],
-      },
-      {
-        label: "CRM Pipeline",
-        description: "Gestionar el proceso de ventas",
-        icon: Target,
-        shortcut: "Ctrl+P",
-        action: () => navigateWithLoading("/app/crm"),
-        color: "bg-green-600",
-        category: "CRM",
-        keywords: ["pipeline", "ventas", "proceso", "crm", "seguimiento"],
-      },
-      {
-        label: "Nueva Cotización",
-        description: "Crear propuesta comercial",
-        icon: FileText,
-        shortcut: "Ctrl+Q",
-        action: () => navigateWithLoading("/app/quotes"),
-        color: "bg-purple-600",
-        category: "CRM",
-        keywords: ["cotización", "propuesta", "precio", "oferta", "comercial"],
-      },
-      {
-        label: "Nueva Venta",
-        description: "Registrar una venta de vehículo",
-        icon: CircleDollarSign,
-        shortcut: "Ctrl+E",
-        action: () => {
-          const onSalesPage = window.location.pathname === "/app/sales";
-          if (onSalesPage) {
-            window.dispatchEvent(new CustomEvent("openNewSaleForm"));
-          } else {
-            navigateWithLoading("/app/sales?new=true");
-          }
-        },
-        color: "bg-emerald-600",
-        category: "CRM",
-        keywords: ["venta", "vender", "registrar", "ventas", "vehículo"],
-      },
-      {
-        label: "Seguimiento de Ventas",
-        description: "Revisar estado de negociaciones",
-        icon: TrendingUp,
-        action: () => navigateWithLoading("/app/crm"),
-        color: "bg-indigo-600",
-        category: "CRM",
-        keywords: ["seguimiento", "ventas", "negociación", "estado", "progreso"],
-      },
-      {
-        label: "Llamada",
-        description: "Realizar llamada telefónica",
-        icon: Phone,
-        action: () => navigateWithLoading("/app/calls"),
-        color: "bg-red-600",
-        category: "Operaciones",
-        keywords: ["llamada", "teléfono", "contacto", "comunicación", "call"],
-      },
-      {
-        label: "Agendar Cita",
-        description: "Programar test drive o reunión",
-        icon: CalendarPlus,
-        shortcut: "Ctrl+A",
-        action: () => navigateWithLoading("/app/appointments"),
-        color: "bg-orange-600",
-        category: "Operaciones",
-        keywords: ["cita", "agendar", "test drive", "reunión", "calendario"],
-      },
-      {
-        label: "Financiamiento",
-        description: "Calcular opciones de financiamiento",
-        icon: CreditCard,
-        shortcut: "Ctrl+F",
-        action: () => navigateWithLoading("/app/financial-calculator"),
-        color: "bg-green-600",
-        category: "Operaciones",
-        keywords: ["financiamiento", "crédito", "cuotas", "calcular", "préstamo"],
-      },
-      {
-        label: "Tasación",
-        description: "Valorar vehículo por patente",
-        icon: Calculator,
-        shortcut: "Ctrl+M",
-        action: () => navigateWithLoading("/app/tasacion"),
-        color: "bg-cyan-600",
-        category: "Operaciones",
-        keywords: ["tasación", "tasacion", "valorar", "patente", "precio mercado", "appraisal"],
-      },
-      {
-        label: "Gestión de Citas",
-        description: "Ver y administrar citas programadas",
-        icon: Calendar,
-        shortcut: "Ctrl+A",
-        action: () => navigateWithLoading("/app/appointments"),
-        color: "bg-blue-600",
-        category: "Operaciones",
-        keywords: ["citas", "calendario", "agenda", "programar", "administrar"],
-      },
-      {
-        label: "Reportes de Actividad",
-        description: "Ver resumen de actividades diarias",
-        icon: Activity,
-        action: () => navigateWithLoading("/app/reports"),
-        color: "bg-purple-600",
-        category: "Operaciones",
-        keywords: ["reportes", "actividad", "resumen", "estadísticas", "métricas"],
-      },
-      {
-        label: "Agregar Vehículo",
-        description: "Registrar un nuevo vehículo en inventario",
-        icon: CarIcon,
-        shortcut: "Ctrl+V",
-        action: () => {
-          if (window.location.pathname === "/app/consignaciones") {
-            window.dispatchEvent(new CustomEvent("openNewVehicleForm"));
-          } else {
-            navigateWithLoading("/app/consignaciones?new=true");
-          }
-        },
-        color: "bg-emerald-600",
-        category: "Inventario",
-        keywords: ["vehículo", "auto", "inventario", "stock", "agregar"],
-      },
-      {
-        label: "Agregar Consignación",
-        description: "Nuevo vehículo en consignación",
-        icon: ClipboardList,
-        shortcut: "Ctrl+C",
-        action: () => {
-          if (window.location.pathname === "/app/consignaciones") {
-            window.dispatchEvent(new CustomEvent("openNewConsignacionForm"));
-          } else {
-            navigateWithLoading("/app/consignaciones?new=true");
-          }
-        },
-        color: "bg-teal-600",
-        category: "Inventario",
-        keywords: ["consignación", "consignar", "vehículo", "inventario"],
-      },
-      {
-        label: "Gestión de Inventario",
-        description: "Administrar stock de vehículos",
-        icon: Car,
-        action: () => navigateWithLoading("/app/consignaciones"),
-        color: "bg-blue-600",
-        category: "Inventario",
-        keywords: ["inventario", "stock", "vehículos", "administrar", "gestión"],
-      },
-      {
-        label: "Actualizar Precios",
-        description: "Modificar precios de vehículos",
-        icon: DollarSign,
-        action: () => navigateWithLoading("/app/consignaciones"),
-        color: "bg-yellow-600",
-        category: "Inventario",
-        keywords: ["precios", "actualizar", "modificar", "vehículos", "costos"],
-      },
-      {
-        label: "Estados de Vehículos",
-        description: "Cambiar estado de vehículos",
-        icon: CheckCircle,
-        action: () => navigateWithLoading("/app/consignaciones"),
-        color: "bg-green-600",
-        category: "Inventario",
-        keywords: ["estado", "vehículos", "disponible", "vendido", "reservado"],
-      },
-      {
-        label: "Nueva Factura",
-        description: "Emitir una factura electrónica",
-        icon: Receipt,
-        shortcut: "Ctrl+I",
-        action: () => navigateWithLoading("/app/billing"),
-        color: "bg-red-600",
-        category: "Finanzas",
-        keywords: ["factura", "emitir", "electrónica", "documento", "cobro"],
-      },
-      {
-        label: "Calculadora Financiera",
-        description: "Calcular financiamiento y cuotas",
-        icon: CreditCard,
-        shortcut: "Ctrl+F",
-        action: () => navigateWithLoading("/app/financial-calculator"),
-        color: "bg-indigo-600",
-        category: "Finanzas",
-        keywords: ["calculadora", "financiera", "cuotas", "crédito", "calcular"],
-      },
-      {
-        label: "Reportes Financieros",
-        description: "Ver reportes de ingresos y gastos",
-        icon: TrendingUp,
-        action: () => navigateWithLoading("/app/finance"),
-        color: "bg-green-600",
-        category: "Finanzas",
-        keywords: ["reportes", "financieros", "ingresos", "gastos", "estadísticas"],
-      },
-      {
-        label: "Gestión de Pagos",
-        description: "Administrar pagos y cobros",
-        icon: DollarSign,
-        action: () => navigateWithLoading("/app/finance"),
-        color: "bg-yellow-600",
-        category: "Finanzas",
-        keywords: ["pagos", "cobros", "administrar", "finanzas", "dinero"],
-      },
-      {
-        label: "CRM Post Venta",
-        description: "Gestionar clientes post venta",
-        icon: Users,
-        action: () => navigateWithLoading("/app/post-sale"),
-        color: "bg-purple-600",
-        category: "Post Venta",
-        keywords: ["post venta", "clientes", "servicio", "mantenimiento", "garantía"],
-      },
-      {
-        label: "Servicios Programados",
-        description: "Ver servicios de mantenimiento",
-        icon: Calendar,
-        action: () => navigateWithLoading("/app/post-sale"),
-        color: "bg-blue-600",
-        category: "Post Venta",
-        keywords: ["servicios", "mantenimiento", "programados", "citas", "taller"],
-      },
-      {
-        label: "Garantías",
-        description: "Administrar garantías de vehículos",
-        icon: CheckCircle,
-        action: () => navigateWithLoading("/app/post-sale"),
-        color: "bg-green-600",
-        category: "Post Venta",
-        keywords: ["garantías", "administrar", "vehículos", "cobertura", "seguro"],
-      },
-      {
-        label: "Configuración",
-        description: "Ajustar configuración del sistema",
-        icon: Star,
-        action: () => navigateWithLoading("/app/settings"),
-        color: "bg-gray-600",
-        category: "Configuración",
-        keywords: ["configuración", "ajustes", "sistema", "preferencias", "opciones"],
-      },
-      {
-        label: "Usuarios",
-        description: "Gestionar usuarios del sistema",
-        icon: Users,
-        action: () => navigateWithLoading("/app/settings"),
-        color: "bg-indigo-600",
-        category: "Configuración",
-        keywords: ["usuarios", "gestionar", "permisos", "acceso", "equipo"],
-      },
-    ],
-    [navigateWithLoading],
-  );
+  const createOptions = useMemo((): QuickActionOption[] => {
+    const ctx = { navigateWithLoading, pathname };
+    return getQuickActionsForRole(user?.role).map((def) => ({
+      label: def.label,
+      description: def.description,
+      icon: def.icon,
+      color: def.color,
+      category: def.category,
+      keywords: def.keywords,
+      shortcut: shortcutLabelForAction(def),
+      action: () => def.run(ctx),
+    }));
+  }, [navigateWithLoading, pathname, user?.role]);
 
   useEffect(() => {
     const handleOpenQuickActions = () => {
@@ -452,7 +179,7 @@ export function GlobalQuickActions() {
   }, [createOptions, deferredSearchQuery]);
 
   const groupedOptions = useMemo(() => {
-    const groups: { [key: string]: typeof createOptions } = {};
+    const groups: { [key: string]: QuickActionOption[] } = {};
     filteredOptions.forEach((option) => {
       if (!groups[option.category]) {
         groups[option.category] = [];
@@ -485,7 +212,7 @@ export function GlobalQuickActions() {
                   Acciones Rápidas
                 </DialogTitle>
                 <DialogDescription className="truncate text-xs">
-                  Busca y ejecuta funciones rápidamente
+                  Solo módulos disponibles en tu cuenta
                 </DialogDescription>
               </div>
             </div>
@@ -494,7 +221,7 @@ export function GlobalQuickActions() {
               <Input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Buscar acciones... (ej: factura, vehículo, cita)"
+                placeholder="Buscar acciones... (ej: lead, cita, inventario)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 rounded-lg border-border bg-muted/40 pl-9 text-sm focus:bg-background"

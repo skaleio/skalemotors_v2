@@ -17,7 +17,9 @@ export function getAuthTimings() {
   return {
     profileFetchTimeoutMs: fast ? 5_000 : 20_000,
     profileNetworkRetries: fast ? 1 : 3,
-    profileCacheTtlMs: fast ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000,
+    // Producción: TTL largo para re-entrar al app días después sin depender de red al arranque.
+    // El perfil se revalida en visibilitychange / TOKEN_REFRESHED.
+    profileCacheTtlMs: fast ? 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000,
     signInTimeoutMs: fast ? 8_000 : 15_000,
     bootstrapTimeoutMs: fast ? 8_000 : 20_000,
     profileRetryBackoffMaxMs: fast ? 0 : 4_000,

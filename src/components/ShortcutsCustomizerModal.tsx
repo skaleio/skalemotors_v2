@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
 import {
   DEFAULT_SHORTCUTS,
@@ -20,6 +21,7 @@ import {
   SHORTCUT_ACTIONS,
   type ShortcutActionDef,
 } from "@/lib/shortcuts-defaults";
+import { isShortcutActionAvailable } from "@/lib/quickActions";
 import type { ShortcutsMap } from "@/lib/services/shortcutsPreferences";
 import { toast } from "sonner";
 
@@ -38,6 +40,7 @@ function shortcutsEqual(a: ShortcutsMap, b: ShortcutsMap): boolean {
 
 export function ShortcutsCustomizerModal({ open, onOpenChange }: ShortcutsCustomizerModalProps) {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const { shortcuts, saveShortcutsMap, isLoading } = useShortcutsPreferences();
   const [draftShortcuts, setDraftShortcuts] = useState<ShortcutsMap>(() => ({ ...shortcuts }));
   const [listeningId, setListeningId] = useState<string | null>(null);
@@ -77,11 +80,16 @@ export function ShortcutsCustomizerModal({ open, onOpenChange }: ShortcutsCustom
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [listeningId, handleKeyDown]);
 
-  const grouped = SHORTCUT_ACTIONS.reduce<Record<string, ShortcutActionDef[]>>((acc, action) => {
-    if (!acc[action.category]) acc[action.category] = [];
-    acc[action.category].push(action);
-    return acc;
-  }, {});
+  const grouped = useMemo(() => {
+    const role = user?.role;
+    return SHORTCUT_ACTIONS.filter((action) => isShortcutActionAvailable(action.id, role)).reduce<
+      Record<string, ShortcutActionDef[]>
+    >((acc, action) => {
+      if (!acc[action.category]) acc[action.category] = [];
+      acc[action.category].push(action);
+      return acc;
+    }, {});
+  }, [user?.role]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);

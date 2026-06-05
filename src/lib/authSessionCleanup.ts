@@ -55,6 +55,23 @@ export function canRefreshPersistedSession(
   return Boolean(session?.refresh_token);
 }
 
+/** Renueva el access token si venció pero el refresh_token sigue disponible. */
+export async function refreshPersistedSessionIfNeeded(
+  client: Pick<SupabaseClient, "auth">,
+  session: Session | null | undefined,
+): Promise<Session | null> {
+  if (!session?.user) return null;
+  if (!isAccessTokenExpired(session)) return session;
+  if (!canRefreshPersistedSession(session)) return null;
+  try {
+    const { data, error } = await client.auth.refreshSession();
+    if (error || !data.session) return session;
+    return data.session;
+  } catch {
+    return session;
+  }
+}
+
 /**
  * Solo borra storage cuando no hay forma de renovar (sin refresh_token).
  * No usar cuando solo venció el access token: eso obliga a login diario.
