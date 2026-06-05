@@ -51,6 +51,7 @@ export type AppointmentListItem = {
   description?: string | null;
   notes?: string | null;
   location?: string | null;
+  client_phone?: string | null;
   lead?: AppointmentLead;
   vehicle?: AppointmentVehicle;
   user?: AppointmentUser;
@@ -103,7 +104,7 @@ export function buildAppointmentDetailSnapshot(apt: AppointmentListItem): Appoin
     scheduledAt: apt.scheduled_at,
     endAt: endAt.toISOString(),
     clientName,
-    clientPhone: lead?.phone?.trim() || null,
+    clientPhone: apt.client_phone?.trim() || lead?.phone?.trim() || null,
     clientEmail: lead?.email?.trim() || null,
     vehicleStr,
     branchName: branch?.name ?? "—",

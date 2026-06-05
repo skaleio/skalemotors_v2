@@ -61,7 +61,7 @@ function optionalAssignedToUuid(value: unknown): string | undefined {
 }
 
 const SOURCES = ["web", "referido", "walk_in", "telefono", "redes_sociales", "evento", "otro"] as const;
-const PIPELINE_STATUSES = ["contactado", "negociando", "en_espera", "para_cierre"] as const;
+const PIPELINE_STATUSES = ["nuevo", "contactado", "negociando", "en_espera", "para_cierre"] as const;
 const PRIORITIES = ["baja", "media", "alta"] as const;
 
 type Payload = {
@@ -114,9 +114,10 @@ export default async function handler(req: Request): Promise<Response> {
   const fullNameRaw = body.full_name?.trim() || "";
   const fullName = toTitleCase(fullNameRaw) || "Sin nombre";
 
-  const status = body.status && PIPELINE_STATUSES.includes(body.status as typeof PIPELINE_STATUSES[number])
+  const explicitStatus = body.status && PIPELINE_STATUSES.includes(body.status as typeof PIPELINE_STATUSES[number])
     ? body.status
-    : "contactado";
+    : null;
+  const insertStatus = explicitStatus ?? "nuevo";
 
   const source = body.source && SOURCES.includes(body.source as typeof SOURCES[number])
     ? body.source
@@ -200,7 +201,6 @@ export default async function handler(req: Request): Promise<Response> {
       const updatePayload: Record<string, unknown> = {
         full_name: fullName,
         email: body.email !== undefined && body.email !== null ? String(body.email).trim() || null : undefined,
-        status,
         source,
         priority,
         region: body.region !== undefined ? (body.region?.trim() || null) : undefined,
@@ -210,6 +210,7 @@ export default async function handler(req: Request): Promise<Response> {
         notes: body.notes !== undefined ? (body.notes?.trim() || null) : undefined,
         updated_at: new Date().toISOString(),
       };
+      if (explicitStatus) updatePayload.status = explicitStatus;
       if (tenantId) updatePayload.tenant_id = tenantId;
       if (tagsForUpdate !== undefined) updatePayload.tags = tagsForUpdate;
       const ingestAssigned = optionalAssignedToUuid(body.assigned_to);
@@ -241,7 +242,7 @@ export default async function handler(req: Request): Promise<Response> {
     email: body.email !== undefined && body.email !== null && String(body.email).trim()
       ? String(body.email).trim()
       : null,
-    status,
+    status: insertStatus,
     source,
     priority,
     branch_id: branchId,

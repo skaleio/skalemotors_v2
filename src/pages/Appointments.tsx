@@ -313,6 +313,7 @@ export default function Appointments() {
     leadId: "",
     vehicleId: "",
     userId: "",
+    clientPhone: "",
     description: "",
   });
   /** Hora inicio/fin editables como texto (ej. "16:00") cuando se abre desde slot */
@@ -357,7 +358,10 @@ export default function Appointments() {
           userId: appointment.user_id,
           assigneeName: appointment.user?.full_name?.trim() || appointment.user?.email?.trim() || null,
           clientName: appointment.lead?.full_name,
-          clientPhone: appointment.lead?.phone || undefined,
+          clientPhone:
+            appointment.client_phone?.trim() ||
+            appointment.lead?.phone?.trim() ||
+            undefined,
           vehicleInfo,
         } as Event;
       })
@@ -387,6 +391,7 @@ export default function Appointments() {
       leadId: event.leadId || "",
       vehicleId: event.vehicleId || "",
       userId: event.userId || "",
+      clientPhone: event.clientPhone || "",
       description: event.description || "",
     });
   };
@@ -526,6 +531,7 @@ export default function Appointments() {
       leadId: "",
       vehicleId: "",
       userId: user?.id ?? "",
+      clientPhone: "",
       description: "",
     });
     setIsDialogOpen(true);
@@ -574,6 +580,7 @@ export default function Appointments() {
         end_at: endDate.toISOString(),
         lead_id: formData.leadId ? formData.leadId : null,
         vehicle_id: formData.vehicleId ? formData.vehicleId : null,
+        client_phone: formData.clientPhone?.trim() || null,
         user_id: assigneeId,
         branch_id: assigneeSeller?.branch_id ?? user?.branch_id ?? null,
         tenant_id: user?.tenant_id ?? null,
@@ -621,6 +628,7 @@ export default function Appointments() {
         leadId: "",
         vehicleId: "",
         userId: user?.id ?? "",
+        clientPhone: "",
         description: "",
       });
     } catch (error) {
@@ -795,6 +803,7 @@ export default function Appointments() {
               leadId: "",
               vehicleId: "",
               userId: user?.id ?? "",
+              clientPhone: "",
               description: "",
             });
             setIsDialogOpen(true);
@@ -1265,14 +1274,30 @@ export default function Appointments() {
             </div>
           ) : (
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Nombre de la persona *</Label>
-              <Input
-                id="title"
-                placeholder="Ej: Juan Pérez"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Nombre de la persona *</Label>
+                <Input
+                  id="title"
+                  placeholder="Ej: Juan Pérez"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client-phone">Teléfono</Label>
+                <Input
+                  id="client-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="Ej: +56912345678"
+                  value={formData.clientPhone ?? ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, clientPhone: e.target.value })
+                  }
+                />
+              </div>
             </div>
 
             {openedFromSlot ? (
@@ -1415,9 +1440,15 @@ export default function Appointments() {
                 <Label>Lead (opcional)</Label>
                 <Select
                   value={formData.leadId || "none"}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, leadId: value === "none" ? "" : value })
-                  }
+                  onValueChange={(value) => {
+                    const leadId = value === "none" ? "" : value;
+                    const lead = leadId ? leads.find((l) => l.id === leadId) : null;
+                    setFormData({
+                      ...formData,
+                      leadId,
+                      clientPhone: lead?.phone?.trim() || formData.clientPhone || "",
+                    });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona un lead" />

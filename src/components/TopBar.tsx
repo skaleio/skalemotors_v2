@@ -13,11 +13,17 @@ import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
 import { usePreloadUserAvatar } from "@/hooks/usePreloadUserAvatar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AppBreadcrumb } from "@/components/AppBreadcrumb";
 import { openGlobalQuickActions } from "@/components/GlobalQuickActions";
+import {
+  countUnseenInBell,
+  latestNotificationTimestamp,
+  loadBellAckUpTo,
+  saveBellAckUpTo,
+} from "@/lib/notificationBellAck";
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -79,23 +85,53 @@ export function TopBar() {
   const markAllReadMutation = useMarkAllNotificationsRead();
   const dismissMutation = useDismissNotification();
 
-  // Animación campana: brinca cuando el contador de no leídas aumenta (nueva notificación).
-  const prevUnreadRef = useRef(unreadCount);
+  const [bellAckUpTo, setBellAckUpTo] = useState<string | null>(() =>
+    user?.id ? loadBellAckUpTo(user.id) : null,
+  );
+
+  useEffect(() => {
+    if (user?.id) setBellAckUpTo(loadBellAckUpTo(user.id));
+  }, [user?.id]);
+
+  const unseenBellCount = useMemo(
+    () => countUnseenInBell(notifications, bellAckUpTo),
+    [notifications, bellAckUpTo],
+  );
+
+  const showBellBadge = !notificationsOpen && unseenBellCount > 0;
+
+  const handleNotificationsOpenChange = useCallback(
+    (open: boolean) => {
+      setNotificationsOpen(open);
+      if (open && user?.id) {
+        const upTo = latestNotificationTimestamp(notifications);
+        saveBellAckUpTo(user.id, upTo);
+        setBellAckUpTo(upTo);
+      }
+    },
+    [notifications, user?.id],
+  );
+
+  const prevUnseenRef = useRef(unseenBellCount);
   const [bellBounce, setBellBounce] = useState(false);
   useEffect(() => {
-    if (unreadCount > prevUnreadRef.current) {
+    if (unseenBellCount > prevUnseenRef.current) {
       setBellBounce(true);
       const t = setTimeout(() => setBellBounce(false), 1800);
-      prevUnreadRef.current = unreadCount;
+      prevUnseenRef.current = unseenBellCount;
       return () => clearTimeout(t);
     }
-    prevUnreadRef.current = unreadCount;
-  }, [unreadCount]);
+    prevUnseenRef.current = unseenBellCount;
+  }, [unseenBellCount]);
 
   const markAsRead = (id: string) => markReadMutation.mutate(id);
   const dismissNotification = (id: string) => dismissMutation.mutate(id);
   const markAllAsRead = () => {
-    if (user?.id) markAllReadMutation.mutate(user.id);
+    if (!user?.id) return;
+    markAllReadMutation.mutate(user.id);
+    const upTo = latestNotificationTimestamp(notifications);
+    saveBellAckUpTo(user.id, upTo);
+    setBellAckUpTo(upTo);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -333,11 +369,11 @@ export function TopBar() {
         )}
 
         {/* Notifications */}
-        <DropdownMenu onOpenChange={setNotificationsOpen}>
+        <DropdownMenu onOpenChange={handleNotificationsOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative h-9 w-9">
               <Bell className={`h-4 w-4 transition-transform ${bellBounce ? 'animate-bounce text-primary' : ''}`} />
-              {unreadCount > 0 && (
+              {showBellBadge && (
                 <>
                   <span className="absolute -top-1 -right-1 flex h-5 w-5">
                     <span className="absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-60 animate-ping" />
@@ -346,7 +382,7 @@ export function TopBar() {
                     variant="destructive"
                     className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center z-10"
                   >
-                    {unreadCount > 99 ? '99+' : unreadCount}
+                    {unseenBellCount > 99 ? '99+' : unseenBellCount}
                   </Badge>
                 </>
               )}
@@ -406,9 +442,14 @@ export function TopBar() {
                             className="flex-1 cursor-pointer"
                             onClick={() => openNotification(notification)}
                           >
-                            <h4 className={`text-sm font-semibold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'
+                            <h4 className={`text-sm font-semibold mb-1 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'
                               }`}>
                               {notification.title}
+                              {unread && (
+                                <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-medium uppercase tracking-wide">
+                                  Nueva
+                                </Badge>
+                              )}
                             </h4>
                             {notification.message && (
                               <p className={`text-sm mb-2 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'

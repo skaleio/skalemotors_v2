@@ -129,6 +129,7 @@ const statusLabels = CRM_PIPELINE_STATUS_LABELS;
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
 
 const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
+  nuevo: { border: "border-slate-400", badge: "bg-slate-50 text-slate-700 dark:bg-slate-950/40 dark:text-slate-200", dot: "bg-slate-400" },
   contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
   negociando: { border: "border-orange-500", badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
   en_espera: { border: "border-violet-500", badge: "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300", dot: "bg-violet-500" },
@@ -297,7 +298,8 @@ const LeadCard = memo(function LeadCard({
   const showContactAttemptsSemaforo = useMemo(() => {
     const stage = getLeadCrmStageKey(lead.status);
     return (
-      stage === "contactado"
+      stage === "nuevo"
+      || stage === "contactado"
       || stage === "negociando"
       || stage === "en_espera"
       || stage === "para_cierre"
@@ -1561,7 +1563,7 @@ export default function CRM() {
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
 

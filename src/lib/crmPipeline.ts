@@ -3,6 +3,7 @@
  */
 
 export type CrmStageKey =
+  | "nuevo"
   | "contactado"
   | "negociando"
   | "en_espera"
@@ -19,9 +20,14 @@ export type CrmStageDefinition = {
 /** Orden visual del embudo (izquierda → derecha). */
 export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
   {
+    key: "nuevo",
+    label: "NUEVO",
+    statuses: ["nuevo"],
+  },
+  {
     key: "contactado",
     label: "CONTACTADO",
-    statuses: ["contactado", "nuevo", "interesado"],
+    statuses: ["contactado", "interesado"],
   },
   {
     key: "negociando",
@@ -47,6 +53,7 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
 
 /** Columnas donde el usuario puede mover leads sin flujo de cierre de negocio. */
 export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerrado">[] = [
+  "nuevo",
   "contactado",
   "negociando",
   "en_espera",
@@ -54,6 +61,7 @@ export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerr
 ];
 
 export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
+  nuevo: "NUEVO",
   contactado: "CONTACTADO",
   negociando: "NEGOCIANDO",
   en_espera: "EN ESPERA",
@@ -63,6 +71,8 @@ export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
 
 /** Estilos de pill / banner alineados con las columnas del pipeline. */
 export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
+  nuevo:
+    "border-slate-200/80 bg-slate-50 text-slate-800 dark:border-slate-700/60 dark:bg-slate-950/50 dark:text-slate-200",
   contactado:
     "border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-800/60 dark:bg-blue-950/50 dark:text-blue-200",
   negociando:
@@ -76,6 +86,7 @@ export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
 };
 
 export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
+  nuevo: "bg-slate-400",
   contactado: "bg-blue-500",
   negociando: "bg-orange-500",
   en_espera: "bg-violet-500",
@@ -108,7 +119,8 @@ export function getLeadCrmStageKey(status: string | null | undefined): CrmStageK
   if (s === "negociando" || s === "cotizando") return "negociando";
   if (s === "en_espera") return "en_espera";
   if (s === "para_cierre") return "para_cierre";
-  if (s === "contactado" || s === "nuevo" || s === "interesado") return "contactado";
+  if (s === "nuevo") return "nuevo";
+  if (s === "contactado" || s === "interesado") return "contactado";
   return "contactado";
 }
 
@@ -128,7 +140,8 @@ export function leadBelongsToCrmStage(
 export function crmStageToDbStatus(stageKey: string): string {
   if (stageKey === "negocio_cerrado") return "vendido";
   if (
-    stageKey === "contactado"
+    stageKey === "nuevo"
+    || stageKey === "contactado"
     || stageKey === "negociando"
     || stageKey === "en_espera"
     || stageKey === "para_cierre"

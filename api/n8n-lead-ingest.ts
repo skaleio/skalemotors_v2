@@ -461,8 +461,10 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
 
   const fullName = toTitleCase(pickString(body.full_name, body.nombre, parsed.nombre) || "") || "Sin nombre";
 
-  const status =
-    body.status && includes(VALID_STATUSES, body.status) ? body.status : "contactado";
+  const explicitStatus =
+    body.status && includes(VALID_STATUSES, body.status) ? body.status : null;
+  /** Leads sin `status` en el body entran al embudo en columna NUEVO. */
+  const insertStatus = explicitStatus ?? "nuevo";
 
   const source =
     body.source && includes(VALID_SOURCES, body.source) ? body.source : "whatsapp";
@@ -545,7 +547,6 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
     if (existing?.id) {
       const updatePayload: Record<string, unknown> = {
         full_name: fullName,
-        status,
         source,
         priority,
         payment_type: paymentType,
@@ -567,6 +568,7 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
       };
 
       if (email !== null) updatePayload.email = email;
+      if (explicitStatus) updatePayload.status = explicitStatus;
       if (tenantId) updatePayload.tenant_id = tenantId;
       if (tags.length > 0) updatePayload.tags = tags;
       if (stateVal) {
@@ -623,7 +625,7 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
     full_name: fullName,
     phone: normalizedPhone,
     email,
-    status,
+    status: insertStatus,
     source,
     priority,
     branch_id: branchId,

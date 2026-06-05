@@ -11,7 +11,7 @@ import {
 
 describe("crmPipeline", () => {
   it("mapea estados legacy a la columna correcta", () => {
-    expect(getLeadCrmStageKey("nuevo")).toBe("contactado");
+    expect(getLeadCrmStageKey("nuevo")).toBe("nuevo");
     expect(getLeadCrmStageKey("cotizando")).toBe("negociando");
     expect(getLeadCrmStageKey("en_espera")).toBe("en_espera");
     expect(getLeadCrmStageKey("vendido")).toBe("negocio_cerrado");
@@ -26,6 +26,7 @@ describe("crmPipeline", () => {
   });
 
   it("convierte columna CRM a status DB al mover", () => {
+    expect(crmStageToDbStatus("nuevo")).toBe("nuevo");
     expect(crmStageToDbStatus("en_espera")).toBe("en_espera");
     expect(crmStageToDbStatus("negociando")).toBe("negociando");
     expect(crmStageToDbStatus("negocio_cerrado")).toBe("vendido");
@@ -35,6 +36,7 @@ describe("crmPipeline", () => {
   it("mantiene orden del embudo con en_espera entre negociando y para_cierre", () => {
     const keys = CRM_PIPELINE_STAGES.map((s) => s.key);
     expect(keys).toEqual([
+      "nuevo",
       "contactado",
       "negociando",
       "en_espera",
@@ -57,7 +59,8 @@ describe("crmPipeline", () => {
       { status: "perdido", count: 2 },
     ]);
 
-    expect(result.stages.find((s) => s.stageKey === "contactado")?.count).toBe(5);
+    expect(result.stages.find((s) => s.stageKey === "nuevo")?.count).toBe(3);
+    expect(result.stages.find((s) => s.stageKey === "contactado")?.count).toBe(2);
     expect(result.stages.find((s) => s.stageKey === "negociando")?.count).toBe(4);
     expect(result.stages.find((s) => s.stageKey === "negocio_cerrado")?.count).toBe(1);
     expect(result.perdidos).toBe(2);

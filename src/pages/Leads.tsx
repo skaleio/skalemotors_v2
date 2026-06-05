@@ -268,6 +268,7 @@ const CLOSED_STATUS_LABELS: Record<string, string> = {
 };
 
 const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
+  nuevo: { dot: "bg-slate-400", text: "text-slate-700" },
   contactado: { dot: "bg-blue-500", text: "text-blue-600" },
   negociando: { dot: "bg-orange-500", text: "text-orange-600" },
   en_espera: { dot: "bg-violet-500", text: "text-violet-700" },
@@ -636,7 +637,7 @@ function LeadsImpl({ user }: { user: User }) {
     full_name: "",
     rut: "",
     phone: "",
-    status: "contactado",
+    status: "nuevo",
     make: "",
     vehicle: "",
     region: "",
@@ -804,12 +805,7 @@ function LeadsImpl({ user }: { user: User }) {
 
   const resolvedStatusFilter = useMemo(() => {
     if (statusFilter === "all") return "all";
-    if (
-      statusFilter === "contactado"
-      || statusFilter === "negociando"
-      || statusFilter === "en_espera"
-      || statusFilter === "para_cierre"
-    ) {
+    if ((CRM_MOVABLE_STAGE_KEYS as readonly string[]).includes(statusFilter)) {
       return statusFilter;
     }
     return "all";
@@ -837,11 +833,12 @@ function LeadsImpl({ user }: { user: User }) {
   const leadStats = useMemo(() => {
     const total = leads.length;
     const openLeads = leads.filter((l) => !isClosedLeadStatus(l.status));
+    const nuevo = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "nuevo").length;
     const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
     const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
     const enEspera = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "en_espera").length;
     const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
-    return { total, contactado, negociando, enEspera, paraCierre };
+    return { total, nuevo, contactado, negociando, enEspera, paraCierre };
   }, [leads]);
 
   const {
@@ -929,7 +926,7 @@ function LeadsImpl({ user }: { user: User }) {
       full_name: "",
       rut: "",
       phone: "",
-      status: "contactado",
+      status: "nuevo",
       make: "",
       vehicle: "",
       region: "",
@@ -1583,6 +1580,9 @@ function LeadsImpl({ user }: { user: User }) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Exportar por estado</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => handleExportLeads("nuevo")}>
+                {PIPELINE_STATUS_LABELS.nuevo}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleExportLeads("contactado")}>
                 {PIPELINE_STATUS_LABELS.contactado}
               </DropdownMenuItem>
@@ -1604,11 +1604,17 @@ function LeadsImpl({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <Card className="border-l-4 border-slate-400">
           <CardHeader className="pb-2">
             <CardDescription>Leads total</CardDescription>
             <CardTitle className="text-2xl text-slate-700">{leadStats.total}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-slate-300">
+          <CardHeader className="pb-2">
+            <CardDescription>NUEVO</CardDescription>
+            <CardTitle className="text-2xl text-slate-600">{leadStats.nuevo}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-l-4 border-blue-500">
@@ -1629,7 +1635,7 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-violet-700">{leadStats.enEspera}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-emerald-500 md:col-span-2 lg:col-span-1">
+        <Card className="border-l-4 border-emerald-500">
           <CardHeader className="pb-2">
             <CardDescription>PARA CIERRE</CardDescription>
             <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>

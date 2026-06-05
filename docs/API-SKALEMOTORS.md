@@ -64,7 +64,7 @@ Envía la clave en **una** de estas formas:
 | `full_name` | string | Opcional; si falta o vacío → `"Sin nombre"` (formato título). |
 | `rut`, `email`, `region` | string \| null | Opcionales. |
 | `source` | string | `web`, `referido`, `walk_in`, `telefono`, `redes_sociales`, `evento`, `otro`, `whatsapp`. Default: `whatsapp`. |
-| `status` | string | `nuevo`, `contactado`, `interesado`, `cotizando`, `negociando`, `vendido`, `perdido`, `para_cierre`. Default: `contactado`. |
+| `status` | string | `nuevo`, `contactado`, `interesado`, `cotizando`, `negociando`, `vendido`, `perdido`, `para_cierre`. Default: `nuevo`. |
 | `priority` | string | `baja`, `media`, `alta`. Default: `alta`. |
 | `payment_type`, `budget` | string / number | Opcionales. |
 | `vehicle_interest`, `notes`, `chat_summary` | string | Se vuelcan al campo `notes` del lead (texto combinado). |

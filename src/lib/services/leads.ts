@@ -235,7 +235,7 @@ export const leadService = {
   async create(lead: LeadInsert) {
     const row: LeadInsert = {
       ...lead,
-      status: coerceLeadStatus(lead.status, 'contactado') as LeadInsert['status'],
+      status: coerceLeadStatus(lead.status, 'nuevo') as LeadInsert['status'],
     }
     const { data, error } = await supabase
       .from('leads')
@@ -255,7 +255,7 @@ export const leadService = {
   async update(id: string, updates: LeadUpdate) {
     const payload: LeadUpdate = { ...updates }
     if (Object.prototype.hasOwnProperty.call(payload, 'status') && payload.status !== undefined) {
-      payload.status = coerceLeadStatus(payload.status, 'contactado') as LeadUpdate['status']
+      payload.status = coerceLeadStatus(payload.status, 'nuevo') as LeadUpdate['status']
     }
     const { data, error } = await supabase
       .from('leads')
