@@ -93,13 +93,14 @@ function optionalUuid(value: unknown): string | undefined {
 }
 
 function parseScheduledAt(body: AppointmentIngestPayload): string | null {
-  const iso = body.scheduled_at?.trim();
+  const iso = body.scheduled_at != null ? String(body.scheduled_at).trim() : "";
   if (iso) {
     const d = new Date(iso);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  const date = body.date?.trim() || "";
-  const time = body.time?.trim() || "";
+  const date = body.date != null ? String(body.date).trim() : "";
+  let time = body.time != null ? String(body.time).trim() : "";
+  if (time.length >= 5) time = time.slice(0, 5);
   return chileLocalToUtcIso(date, time);
 }
 
@@ -138,12 +139,18 @@ export async function processAppointmentIngest(
 
   const scheduledAt = parseScheduledAt(body);
   if (!scheduledAt) {
+    const received = Object.keys(body as object);
     return {
       ok: false,
       status: 400,
       body: {
         ok: false,
         error: "scheduled_at (ISO) or date+time (YYYY-MM-DD, HH:mm Chile) are required",
+        hint:
+          received.length === 0
+            ? "El servidor recibió body vacío. En n8n HTTP: Body JSON con expresión ={{ $json }} (con = al inicio)."
+            : "Revisa date, time o scheduled_at en el JSON enviado.",
+        received_keys: received.length ? received : undefined,
       },
     };
   }

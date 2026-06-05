@@ -1,12 +1,12 @@
 /**
  * Ingesta de citas (calendario Skale Motors).
- * Un solo entrypoint; helpers en ./lib (sin prefijo _ — Vercel no despliega api/_lib).
  */
 import { createClient } from "@supabase/supabase-js";
 
 import { processAppointmentIngest, type AppointmentIngestPayload } from "./lib/appointmentIngestHandler";
 import { loadIdempotentResponse, storeIdempotentResponse } from "./lib/ingestIdempotency";
 import { getIngestAllowedOrigin, resolveIngestKey } from "./lib/leadIngestAuth";
+import { normalizeIngestBody } from "./lib/parseIngestBody";
 
 interface VercelRequest {
   method?: string;
@@ -18,20 +18,6 @@ interface VercelResponse {
   setHeader(name: string, value: string): VercelResponse;
   status(code: number): VercelResponse;
   json(body: unknown): void;
-}
-
-function parseBody(req: VercelRequest): AppointmentIngestPayload | null {
-  const raw = req.body;
-  if (raw == null) return {};
-  if (typeof raw === "string") {
-    try {
-      return JSON.parse(raw) as AppointmentIngestPayload;
-    } catch {
-      return null;
-    }
-  }
-  if (typeof raw === "object") return raw as AppointmentIngestPayload;
-  return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -63,10 +49,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ ok: false, error: "Missing API key" });
     }
 
-    const body = parseBody(req);
-    if (body === null) {
+    const normalized = normalizeIngestBody(req.body);
+    if (normalized === null) {
       return res.status(400).json({ ok: false, error: "Invalid JSON body" });
     }
+
+    const body = normalized as AppointmentIngestPayload;
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
