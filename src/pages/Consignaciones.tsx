@@ -47,7 +47,11 @@ import { vehiclePhotosService } from "@/lib/services/vehiclePhotos";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase } from "@/lib/supabase";
-import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
+import {
+  buildVehicleStoragePath,
+  safeAlbumPathSegment,
+  uploadVehicleImageToStorage,
+} from "@/lib/vehicleImageUpload";
 import { CONSIGNMENT_REFERENCE_ALBUM } from "@/lib/website/albumPublishRules";
 import type { Database } from "@/lib/types/database";
 import { VehicleImage } from "@/components/VehicleImage";
@@ -91,7 +95,7 @@ const ConsignacionVehicleThumb = memo(function ConsignacionVehicleThumb({
     <VehicleImage
       src={url}
       alt=""
-      preset="thumb-sm"
+      preset="thumb-xs"
       className="h-14 w-[4.5rem] shrink-0 rounded-md border border-border object-cover bg-muted"
       displayWidth={72}
       displayHeight={56}
@@ -815,20 +819,15 @@ export default function Consignaciones() {
   };
 
   const uploadConsignmentReferenceCover = async (vehicleId: string, file: File) => {
-    const fileExt = file.name.split(".").pop();
-    const safeAlbum = CONSIGNMENT_REFERENCE_ALBUM.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
-    const fileName = `${vehicleId}/${safeAlbum}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
-    const optimizedFile = await optimizeVehicleImageForUpload(file);
-    const { error: uploadError } = await supabase.storage.from("vehicles").upload(fileName, optimizedFile, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: optimizedFile.type,
-    });
-    if (uploadError) throw uploadError;
-    const { data } = supabase.storage.from("vehicles").getPublicUrl(fileName);
+    const storagePath = buildVehicleStoragePath(
+      vehicleId,
+      safeAlbumPathSegment(CONSIGNMENT_REFERENCE_ALBUM),
+      file.name,
+    );
+    const publicUrl = await uploadVehicleImageToStorage(file, storagePath);
     await vehiclePhotosService.addConsignmentReferenceCover({
       vehicleId,
-      url: data.publicUrl,
+      url: publicUrl,
       makeCover: true,
     });
   };

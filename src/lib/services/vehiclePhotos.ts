@@ -34,7 +34,9 @@ export const vehiclePhotosService = {
   async listByVehicle(vehicleId: string): Promise<VehiclePhotoAsset[]> {
     const { data, error } = await supabase
       .from("vehicle_photo_assets")
-      .select("*")
+      .select(
+        "id, tenant_id, vehicle_id, album, url, sort_order, is_cover, counts_for_publish, created_at",
+      )
       .eq("vehicle_id", vehicleId)
       .order("is_cover", { ascending: false })
       .order("sort_order", { ascending: true })

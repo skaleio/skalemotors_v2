@@ -41,17 +41,7 @@ import { albumPublishProgressLabel } from "@/lib/website/albumPublishRules";
 import type { VehiclePhotoAsset } from "@/lib/services/vehiclePhotos";
 import { formatCLP } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
-import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
-
-const PLACEHOLDER_VEHICLE_IMAGE = "/placeholder-vehicle.svg";
-
-function firstVehicleImageUrl(images: unknown): string {
-  const list = images as string[] | null | undefined;
-  if (!Array.isArray(list) || list.length === 0) return PLACEHOLDER_VEHICLE_IMAGE;
-  const first = list.find((item) => typeof item === "string" && item.trim());
-  return typeof first === "string" ? first : PLACEHOLDER_VEHICLE_IMAGE;
-}
+import { uploadVehicleImagesBatch } from "@/lib/vehicleImageUpload";
 
 export default function Albums() {
   const { user } = useAuth();
@@ -80,7 +70,7 @@ export default function Albums() {
         year: v.year ?? null,
         patente: (v as any).patente ?? null,
         price: v.price ?? null,
-        images: v.images,
+        primary_image_url: (v as { primary_image_url?: string | null }).primary_image_url ?? null,
         publishable_photo_count: publishableByVehicle[v.id] ?? 0,
         publicado_web: (v as any).publicado_web ?? false,
         status: (v as any).status ?? "disponible",
@@ -150,7 +140,9 @@ export default function Albums() {
       s?.id === vehicleId
         ? {
             ...s,
-            images: refreshed.images,
+            primary_image_url:
+              (refreshed as { primary_image_url?: string | null }).primary_image_url ??
+              s.primary_image_url,
             price: refreshed.price ?? s.price,
             publishable_photo_count: publishable,
           }
@@ -202,21 +194,12 @@ export default function Albums() {
 
     setUploadingAlbum(albumTrimmed);
     try {
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const fileExt = file.name.split(".").pop();
-        const safeAlbum = albumTrimmed.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "album";
-        const fileName = `${selected.id}/${safeAlbum}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
-        const optimizedFile = await optimizeVehicleImageForUpload(file);
-        const { error: uploadError } = await supabase.storage.from("vehicles").upload(fileName, optimizedFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: optimizedFile.type,
-        });
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("vehicles").getPublicUrl(fileName);
-        urls.push(data.publicUrl);
+      const urls = await uploadVehicleImagesBatch(selected.id, albumTrimmed, files, {
+        concurrency: 3,
+      });
+      if (!urls.length) {
+        toast.error("No se detectaron imágenes válidas");
+        return;
       }
 
       await vehiclePhotosService.addAssets({ vehicleId: selected.id, album: albumTrimmed, urls });
@@ -336,7 +319,7 @@ export default function Albums() {
                 >
                   <div className="h-12 w-12 overflow-hidden rounded-md bg-muted shrink-0">
                     <VehicleImage
-                      src={firstVehicleImageUrl(v.images)}
+                      src={v.primary_image_url}
                       alt=""
                       preset="thumb-xs"
                       className="h-full w-full object-cover"

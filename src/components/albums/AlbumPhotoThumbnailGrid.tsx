@@ -38,10 +38,10 @@ export function AlbumPhotoThumbnailGrid({
             <VehicleImage
               src={asset.url}
               alt=""
-              preset="thumb-sm"
+              preset="thumb-xs"
               className="h-full w-full object-cover"
-              displayWidth={128}
-              displayHeight={96}
+              displayWidth={64}
+              displayHeight={64}
             />
 
             {(asset.is_cover || isRef) && (
