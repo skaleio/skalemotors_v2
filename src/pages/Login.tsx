@@ -9,10 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAal, listFactors } from '@/lib/services/mfa'
+import { schedulePostAuthChunkPrefetch } from '@/lib/postAuthChunkPrefetch'
 import { isFastAuthDev } from '@/lib/authTimings'
 import { MFA_GATE_ENABLED, roleRequiresMfa } from '@/lib/mfaPolicy'
 import { StaticLoginBackground } from '@/components/StaticLoginBackground'
-import { scheduleWhenIdle } from '@/lib/scheduleIdle'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -33,19 +33,14 @@ export default function Login() {
     }
   }, [])
 
-  // Prefetch del chunk post-login más probable: CRM (para vendedores).
-  // Dashboard es estático (ya está en bundle principal). Solo precargamos
-  // CRM porque es el primer destino del 80% de logins (vendedores). El resto
-  // se lazy-loadea natural al navegar. Se dispara en idle para no competir
-  // con el render del Login.
+  // Prefetch de chunks post-login en idle (vendedor → CRM, fotógrafo → consignaciones).
   useEffect(() => {
-    const cancel = scheduleWhenIdle(
-      () => {
-        void import('./CRM').catch(() => {});
-      },
-      { idleTimeoutMs: 2000, fallbackDelayMs: 400 },
-    );
-    return cancel;
+    const cancelVendedor = schedulePostAuthChunkPrefetch('vendedor')
+    const cancelFotografo = schedulePostAuthChunkPrefetch('fotografo')
+    return () => {
+      cancelVendedor()
+      cancelFotografo()
+    }
   }, [])
 
   const startCooldown = (seconds: number) => {

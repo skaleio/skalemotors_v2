@@ -13,6 +13,8 @@ import {
   readPersistedAuthSession,
   refreshPersistedSessionIfNeeded,
 } from "@/lib/authSessionCleanup";
+import { readOptimisticAuthSnapshot } from "@/lib/authOptimisticHydration";
+import { schedulePostAuthChunkPrefetch } from "@/lib/postAuthChunkPrefetch";
 import { getAuthTimings, isFastAuthDev } from "@/lib/authTimings";
 import { supabase, type User } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -348,6 +350,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let optimisticHydrated = false;
+
+    const optimistic = readOptimisticAuthSnapshot();
+    if (optimistic) {
+      optimisticHydrated = true;
+      pendingSessionRef.current = optimistic.session;
+      setSession(optimistic.session);
+      applyAuthenticatedUser(optimistic.profile);
+      setNeedsOnboarding(!optimistic.profile.onboarding_completed);
+      setLoading(false);
+      schedulePostAuthChunkPrefetch(optimistic.profile.role);
+    }
 
     const bootstrap = async () => {
       const { bootstrapTimeoutMs } = getAuthTimings();
@@ -394,13 +408,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(currentSession);
 
       const userId = currentSession.user.id;
+
+      if (optimisticHydrated && currentUserRef.current?.id === userId) {
+        pendingSessionRef.current = currentSession;
+        setSession(currentSession);
+        revalidateProfileInBackground(userId);
+        return;
+      }
+
       if (applyCachedProfileIfValid(userId)) {
+        schedulePostAuthChunkPrefetch(currentUserRef.current?.role);
         revalidateProfileInBackground(userId);
         return;
       }
 
       const reason = await fetchUserProfileWithReason(userId);
       if (reason === "ok") {
+        schedulePostAuthChunkPrefetch(currentUserRef.current?.role);
         return;
       }
       if (mustSignOutOnProfileFailure(reason)) {
@@ -410,6 +434,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Error de red/timeout: no cerrar sesión si hay perfil guardado (aunque venció el TTL).
       if (applyCachedProfileIfValid(userId, { ignoreTtl: true })) {
+        schedulePostAuthChunkPrefetch(currentUserRef.current?.role);
         revalidateProfileInBackground(userId);
         return;
       }
@@ -705,6 +730,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setNeedsOnboarding(!cachedProfile.onboarding_completed);
           setLoading(false);
           log("cache hit — navigate now, revalidate in background", { uid });
+          schedulePostAuthChunkPrefetch(cachedProfile.role);
           void fetchUserProfileWithReason(uid).then((reason) => {
             log("background profile", { reason });
             if (reason === "disabled" || reason === "no-profile") {

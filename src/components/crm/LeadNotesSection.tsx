@@ -2,10 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -71,11 +72,13 @@ type LeadNotesSectionProps = {
 export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, className }: LeadNotesSectionProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   const queryKey = ["lead-notes", leadId] as const;
 
@@ -164,6 +167,32 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
     }
   }, [editingNoteId, editDraft, cancelEdit, invalidate]);
 
+  const handleDeleteNote = useCallback(
+    async (noteId: string) => {
+      const ok = await askConfirm({
+        title: "¿Eliminar esta nota?",
+        description: "Se borrará de forma permanente. Esta acción no se puede deshacer.",
+        confirmLabel: "Eliminar",
+        destructive: true,
+      });
+      if (!ok) return;
+
+      setDeletingNoteId(noteId);
+      try {
+        await leadNoteService.delete(noteId);
+        if (editingNoteId === noteId) cancelEdit();
+        invalidate();
+        toast.success("Nota eliminada");
+      } catch (err) {
+        console.error("[LeadNotesSection] delete", err);
+        toast.error(err instanceof Error ? err.message : "No se pudo eliminar la nota.");
+      } finally {
+        setDeletingNoteId(null);
+      }
+    },
+    [askConfirm, editingNoteId, cancelEdit, invalidate],
+  );
+
   const openAddComposer = useCallback(() => {
     cancelEdit();
     setComposerOpen(true);
@@ -171,6 +200,7 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
 
   return (
     <div className={cn("grid gap-2", className)}>
+      {ConfirmDialog}
       <Label>Notas de seguimiento</Label>
 
       <div
@@ -223,6 +253,22 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
                   <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={cancelEdit}>
                     Cancelar
                   </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={isSaving || deletingNoteId === note.id}
+                    onClick={() => void handleDeleteNote(note.id)}
+                  >
+                    {deletingNoteId === note.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+                        Eliminar
+                      </>
+                    )}
+                  </Button>
                 </div>
                 <NoteTimestamps
                   createdAt={note.created_at}
@@ -236,20 +282,38 @@ export function LeadNotesSection({ leadId, tenantId, branchId, legacyNotes, clas
           return (
             <article
               key={note.id}
-              className="group relative rounded-md border border-border/45 bg-background/90 px-3 py-2 pr-10 shadow-sm"
+              className="group relative rounded-md border border-border/45 bg-background/90 px-3 py-2 pr-[4.25rem] shadow-sm"
             >
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1 h-7 w-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                onClick={() => startEdit(note.id, note.body)}
-                disabled={isSaving || composerOpen}
-                aria-label="Editar nota"
-                title="Editar nota"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
+              <div className="absolute right-1 top-1 flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                  onClick={() => startEdit(note.id, note.body)}
+                  disabled={isSaving || composerOpen || deletingNoteId !== null}
+                  aria-label="Editar nota"
+                  title="Editar nota"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive opacity-100 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                  onClick={() => void handleDeleteNote(note.id)}
+                  disabled={isSaving || composerOpen || deletingNoteId === note.id}
+                  aria-label="Eliminar nota"
+                  title="Eliminar nota"
+                >
+                  {deletingNoteId === note.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
               <NoteTimestamps
                 createdAt={note.created_at}

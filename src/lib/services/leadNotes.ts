@@ -68,4 +68,9 @@ export const leadNoteService = {
     if (error) throw error
     return data as LeadNoteWithAuthor
   },
+
+  async delete(noteId: string) {
+    const { error } = await supabase.from('lead_notes').delete().eq('id', noteId)
+    if (error) throw error
+  },
 }

@@ -21,8 +21,9 @@ export function getAuthTimings() {
     // El perfil se revalida en visibilitychange / TOKEN_REFRESHED.
     profileCacheTtlMs: fast ? 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000,
     signInTimeoutMs: fast ? 8_000 : 15_000,
-    bootstrapTimeoutMs: fast ? 8_000 : 20_000,
+    // Bootstrap F5: timeouts más cortos en prod; el fallback usa cache local antes de colgar 15s+.
+    bootstrapTimeoutMs: fast ? 8_000 : 6_000,
     profileRetryBackoffMaxMs: fast ? 0 : 4_000,
-    authLoadingTimeoutMs: fast ? 20_000 : 45_000,
+    authLoadingTimeoutMs: fast ? 20_000 : 10_000,
   };
 }

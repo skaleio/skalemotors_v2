@@ -2172,6 +2172,20 @@ export default function CRM() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2.5">
+                    <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
+                    <ContactAttemptsBar
+                      leadId={editingLead.id}
+                      value={editingLead.contact_attempts ?? 0}
+                      showLabel={false}
+                      onChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
+                      }
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna.
+                    </p>
+                  </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select
@@ -2360,6 +2374,9 @@ export default function CRM() {
                       leadId={editingLead.id}
                       value={editingLead.contact_attempts ?? 0}
                       showLabel={false}
+                      onChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
+                      }
                     />
                     <p className="text-[11px] text-muted-foreground mt-1.5">
                       Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna.
