@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
@@ -70,6 +70,27 @@ type LeadWithAssignee = Lead & {
 const CRM_UNASSIGNED_VALUE = "__crm_sin_asignar__";
 const CRM_VIEW_CEO = "__ceo__";
 const CRM_VIEW_GLOBAL = "__all__";
+
+const CLOSE_DEAL_PAYMENT_METHODS = [
+  { value: "transferencia", label: "Transferencia" },
+  { value: "contado", label: "Contado" },
+] as const;
+
+type CloseDealPaymentMethod = (typeof CLOSE_DEAL_PAYMENT_METHODS)[number]["value"];
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function inferCloseDealPaymentMethod(paymentType: string | null | undefined): CloseDealPaymentMethod {
+  const pt = (paymentType || "").toLowerCase();
+  if (pt.includes("transfer")) return "transferencia";
+  return "contado";
+}
+
+function closeDealPaymentMethodLabel(method: CloseDealPaymentMethod): string {
+  return CLOSE_DEAL_PAYMENT_METHODS.find((o) => o.value === method)?.label ?? "Contado";
+}
 
 function resolveEffectiveAssigneeId(
   lead: Pick<Lead, "assigned_to" | "created_by"> | null | undefined,
@@ -980,7 +1001,8 @@ export default function CRM() {
   const [showCloseDealDialog, setShowCloseDealDialog] = useState(false);
   const [closeDealLead, setCloseDealLead] = useState<Lead | null>(null);
   const [closeDealVehicle, setCloseDealVehicle] = useState("");
-  const [closeDealSaleType, setCloseDealSaleType] = useState<"financiado" | "contado">("contado");
+  const [closeDealPaymentMethod, setCloseDealPaymentMethod] = useState<CloseDealPaymentMethod>("contado");
+  const [closeDealSaleDate, setCloseDealSaleDate] = useState(todayIsoDate);
   const [closeDealSellerKey, setCloseDealSellerKey] = useState("");
   const [closeDealPrice, setCloseDealPrice] = useState("");
   const [closeDealSellerOptions, setCloseDealSellerOptions] = useState<CloseDealSellerOption[]>([]);
@@ -991,7 +1013,8 @@ export default function CRM() {
     setShowCloseDealDialog(false);
     setCloseDealLead(null);
     setCloseDealVehicle("");
-    setCloseDealSaleType("contado");
+    setCloseDealPaymentMethod("contado");
+    setCloseDealSaleDate(todayIsoDate());
     setCloseDealSellerKey("");
     setCloseDealPrice("");
     setCloseDealSellerOptions([]);
@@ -1001,8 +1024,8 @@ export default function CRM() {
     (lead: Lead) => {
       setCloseDealLead(lead);
       setCloseDealVehicle(getTagValue(lead.tags, VEHICULO_TAG_PREFIX) || "");
-      const pt = (lead.payment_type || "").toLowerCase();
-      setCloseDealSaleType(pt.includes("financ") ? "financiado" : "contado");
+      setCloseDealPaymentMethod(inferCloseDealPaymentMethod(lead.payment_type));
+      setCloseDealSaleDate(todayIsoDate());
       const aid = lead.assigned_to;
       if (aid) setCloseDealSellerKey(closeDealSellerKeyUser(aid));
       else setCloseDealSellerKey("");
@@ -1318,7 +1341,8 @@ export default function CRM() {
     const sellerOption = closeDealSellerOptions.find((o) => o.key === closeDealSellerKey);
     const sellerLabel = sellerOption?.label ?? "";
 
-    const paymentLabel = closeDealSaleType === "financiado" ? "Financiado" : "Contado";
+    const paymentLabel = closeDealPaymentMethodLabel(closeDealPaymentMethod);
+    const saleDate = closeDealSaleDate.trim() || todayIsoDate();
     const leadId = closeDealLead.id;
     const nextTags = buildTagsWithVehicle(closeDealLead.tags, vehicle);
 
@@ -1339,12 +1363,18 @@ export default function CRM() {
               assigned_to: assignedToAfter,
               closed_by_staff_id: closedByStaffAfter,
               tags: nextTags,
+              closed_at: `${saleDate}T12:00:00.000Z`,
             }
           : l,
       );
     });
 
     const previousStatus = closeDealLead.status ?? null;
+    const previousPaymentType = closeDealLead.payment_type ?? null;
+    const previousAssignedTo = closeDealLead.assigned_to ?? null;
+    const previousClosedByStaff = closeDealLead.closed_by_staff_id ?? null;
+    const previousTags = closeDealLead.tags;
+    const previousClosedAt = closeDealLead.closed_at ?? null;
     try {
       const updated = await leadService.update(leadId, {
         status: "vendido",
@@ -1352,12 +1382,12 @@ export default function CRM() {
         assigned_to: assignedToAfter,
         closed_by_staff_id: closedByStaffAfter,
         tags: nextTags,
+        closed_at: `${saleDate}T12:00:00.000Z`,
       });
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
       });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
       try {
         await saleService.create({
           lead_id: leadId,
@@ -1371,24 +1401,37 @@ export default function CRM() {
                 ? sellerLabel
                 : null,
           branch_id: updated.branch_id ?? user?.branch_id ?? null,
-          tenant_id: updated.tenant_id ?? null,
+          tenant_id: updated.tenant_id ?? user?.tenant_id ?? null,
           sale_price: salePrice,
-          payment_method: closeDealSaleType,
+          payment_method: closeDealPaymentMethod,
           payment_status: "realizado",
           status: "completada",
-          sale_date: new Date().toISOString().slice(0, 10),
+          sale_date: saleDate,
+          notes: `Cierre desde CRM · Lead ${closeDealLead.full_name ?? leadId}`,
         });
         queryClient.invalidateQueries({ queryKey: ["sales-ranking"] });
         queryClient.invalidateQueries({ queryKey: ["sales"] });
+        queryClient.invalidateQueries({ queryKey: ["sales-stats"] });
         queryClient.invalidateQueries({ queryKey: ["dashboard-stats-v2"] });
+        queryClient.invalidateQueries({ queryKey: ["fund-management"] });
       } catch (saleErr) {
-        console.error("No se pudo registrar la venta para el ranking", saleErr);
+        console.error("No se pudo registrar la venta", saleErr);
+        await leadService.update(leadId, {
+          status: previousStatus ?? "negociando",
+          payment_type: previousPaymentType,
+          assigned_to: previousAssignedTo,
+          closed_by_staff_id: previousClosedByStaff,
+          tags: previousTags as Lead["tags"],
+          closed_at: previousClosedAt,
+        });
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
         toast({
-          title: "Venta no registrada en ranking",
+          title: "No se pudo registrar la venta",
           description:
-            "El lead quedó como vendido, pero no se pudo crear la venta en el registro. Contacta a soporte.",
+            "El lead no se movió a negocio cerrado. Revisa permisos o intenta desde Ventas.",
           variant: "destructive",
         });
+        return;
       }
       notifyDealClosed({
         lead: updated,
@@ -1398,6 +1441,7 @@ export default function CRM() {
         salePrice,
         sellerName: sellerLabel && sellerLabel !== "Vendedor asignado al lead" ? sellerLabel : null,
       });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
       setLandedLeadId(leadId);
       landHighlightTimerRef.current = setTimeout(() => {
@@ -1407,7 +1451,7 @@ export default function CRM() {
       closeCloseDealDialog();
       toast({
         title: "Negocio concretado",
-        description: `Venta registrada por ${salePrice.toLocaleString("es-CL")} CLP.`,
+        description: `Venta registrada (${paymentLabel}) por ${salePrice.toLocaleString("es-CL")} CLP. Visible en Ventas y ranking.`,
       });
     } catch (err) {
       console.error("[CRM] handleConfirmCloseDeal", err);
@@ -1425,7 +1469,8 @@ export default function CRM() {
     closeCloseDealDialog,
     closeDealLead,
     closeDealPrice,
-    closeDealSaleType,
+    closeDealPaymentMethod,
+    closeDealSaleDate,
     closeDealSellerKey,
     closeDealSellerOptions,
     closeDealVehicle,
@@ -1433,6 +1478,7 @@ export default function CRM() {
     user?.role,
     user?.id,
     user?.branch_id,
+    user?.tenant_id,
   ]);
 
   if (vendorMode && user?.role !== "vendedor") {
@@ -1529,15 +1575,19 @@ export default function CRM() {
                     <SelectItem value={CRM_VIEW_GLOBAL}>Vista global</SelectItem>
                   </>
                 ) : null}
+                {canUseCeoView && vendorList.length > 0 ? <SelectSeparator /> : null}
                 {vendorList.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel>Vendedores</SelectLabel>
-                    {vendorList.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.full_name || v.email || v.id}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
+                  <>
+                    <SelectGroup>
+                      <SelectLabel>Vendedores</SelectLabel>
+                      {vendorList.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.full_name || v.email || v.id}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    {canUseCeoView ? <SelectSeparator /> : null}
+                  </>
                 ) : null}
               </SelectContent>
             </Select>
@@ -1877,18 +1927,33 @@ export default function CRM() {
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Este monto suma al ranking de vendedores.
+                  Se crea una venta en el módulo Ventas (precio, vehículo, vendedor y fecha).
                 </p>
               </div>
               <div className="grid gap-2">
-                <Label>Forma de venta</Label>
-                <Select value={closeDealSaleType} onValueChange={(v) => setCloseDealSaleType(v as "financiado" | "contado")}>
-                  <SelectTrigger id="close-deal-sale-type">
+                <Label htmlFor="close-deal-sale-date">Fecha de venta</Label>
+                <Input
+                  id="close-deal-sale-date"
+                  type="date"
+                  value={closeDealSaleDate}
+                  onChange={(e) => setCloseDealSaleDate(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="close-deal-payment-method">Método de pago</Label>
+                <Select
+                  value={closeDealPaymentMethod}
+                  onValueChange={(v) => setCloseDealPaymentMethod(v as CloseDealPaymentMethod)}
+                >
+                  <SelectTrigger id="close-deal-payment-method">
                     <SelectValue placeholder="Selecciona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="contado">Contado</SelectItem>
-                    <SelectItem value="financiado">Financiado</SelectItem>
+                    {CLOSE_DEAL_PAYMENT_METHODS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1932,6 +1997,7 @@ export default function CRM() {
                 isSubmittingCloseDeal ||
                 !closeDealVehicle.trim() ||
                 !closeDealSellerKey ||
+                !closeDealSaleDate.trim() ||
                 !Number(String(closeDealPrice).replace(/[^\d]/g, "")) ||
                 loadingBranchSellers
               }

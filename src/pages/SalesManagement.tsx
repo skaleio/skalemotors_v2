@@ -79,8 +79,17 @@ const STOCK_ORIGIN_OPTIONS = [
 
 const PAYMENT_OPTIONS = [
   { value: "contado", label: "Al contado" },
+  { value: "transferencia", label: "Transferencia" },
   { value: "financiamiento", label: "Con financiamiento" },
 ] as const;
+
+function formatSalePaymentMethod(method: string | null | undefined): string {
+  if (!method) return "—";
+  if (method === "financiamiento") return "Con financiamiento";
+  if (method === "contado") return "Al contado";
+  if (method === "transferencia") return "Transferencia";
+  return method;
+}
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: "realizado", label: "Pago realizado" },
@@ -896,13 +905,7 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                     </div>
                     <div>
                       <p className="text-muted-foreground">Forma de pago</p>
-                      <p className="font-medium">
-                        {selectedSale.payment_method === "financiamiento"
-                          ? "Con financiamiento"
-                          : selectedSale.payment_method === "contado"
-                            ? "Al contado"
-                            : selectedSale.payment_method ?? "—"}
-                      </p>
+                      <p className="font-medium">{formatSalePaymentMethod(selectedSale.payment_method)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Estado del pago</p>
