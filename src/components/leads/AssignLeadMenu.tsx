@@ -15,7 +15,7 @@ import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import { leadService } from "@/lib/services/leads";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, UserPlus, UserX } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 
 interface AssignLeadMenuProps {
   leadId: string;
@@ -42,6 +42,21 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
 
   const sellerQuery = useBranchSellersOptionsFromUser(user, { enabled: open && canDelegate });
   const { sellers, loading } = useBranchSellers(sellerQuery);
+
+  const sellerOptions = useMemo(() => {
+    if (!assignedTo || sellers.some((s) => s.id === assignedTo)) return sellers;
+    return [
+      {
+        id: assignedTo,
+        full_name: assignedLabel?.trim() || "Vendedor asignado",
+        email: null,
+        branch_id: null,
+        role: "vendedor",
+        crm_color: null,
+      },
+      ...sellers,
+    ];
+  }, [sellers, assignedTo, assignedLabel]);
 
   const assignMutation = useMutation({
     mutationFn: async (vendorId: string | null) => {
@@ -95,7 +110,7 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Cargando vendedores…
           </div>
-        ) : sellers.length === 0 ? (
+        ) : sellerOptions.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">No hay vendedores con acceso al CRM.</p>
             <p>
@@ -104,7 +119,7 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
             </p>
           </div>
         ) : (
-          sellers.map((seller) => {
+          sellerOptions.map((seller) => {
             const isCurrent = seller.id === assignedTo;
             const isJefe = seller.role === "jefe_sucursal";
             const sellerDot = resolveAssigneeBorderColor({

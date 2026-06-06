@@ -14,8 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
-import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
-import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
@@ -25,17 +23,12 @@ import {
   fetchDelegatableSellers,
   resolveDelegatableSellersScope,
   useBranchSellersOptionsFromUser,
+  type BranchSeller,
 } from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
-import {
-  formatLeadScheduleDisplayLine,
-  parseCrmLeadQuickAppointmentMotive,
-  pickActiveCrmLeadQuickAppointment,
-  type AppointmentRow,
-} from "@/lib/crmLeadQuickAppointment";
 import {
   CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
@@ -51,11 +44,10 @@ import {
   pickCancelledLeadIdsVisibleInCrm,
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
-import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
+import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
-import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
@@ -66,7 +58,6 @@ import { CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, Mail, Pencil, Phone
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { format, parseISO } from "date-fns";
 import { Link, useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
@@ -76,6 +67,32 @@ type LeadWithAssignee = Lead & {
 };
 
 const CRM_UNASSIGNED_VALUE = "__crm_sin_asignar__";
+
+function resolveEffectiveAssigneeId(
+  lead: Pick<Lead, "assigned_to" | "created_by"> | null | undefined,
+): string | null {
+  if (!lead) return null;
+  return lead.assigned_to ?? lead.created_by ?? null;
+}
+
+function assigneeDisplayName(lead: LeadWithAssignee): string | null {
+  const assigneeId = resolveEffectiveAssigneeId(lead);
+  if (!assigneeId) return null;
+  const full = lead.assigned_user?.full_name?.trim();
+  if (full) return full;
+  const email = lead.assigned_user?.email?.trim();
+  if (email) return email;
+  return "Vendedor asignado";
+}
+
+/** Etiqueta corta para la esquina de la tarjeta (primer nombre). */
+function assigneeCornerLabel(lead: LeadWithAssignee): string | null {
+  const name = assigneeDisplayName(lead);
+  if (!name) return null;
+  if (name === "Vendedor asignado") return name;
+  const first = name.split(/\s+/).filter(Boolean)[0];
+  return first || name;
+}
 
 type CloseDealSellerOption = { key: string; label: string };
 
@@ -277,6 +294,7 @@ const LeadCard = memo(function LeadCard({
   onExternalDragOver,
   onExternalDrop,
   justLanded,
+  showAssigneeBadge = false,
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
@@ -289,6 +307,8 @@ const LeadCard = memo(function LeadCard({
   onExternalDrop?: (e: DragEvent) => void;
   /** Breve feedback visual tras soltar en otra columna (sin toast). */
   justLanded?: boolean;
+  /** Solo admin / supervisión: etiqueta con vendedor asignado en la esquina. */
+  showAssigneeBadge?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const label = getConsignacionLabel(lead.tags);
@@ -297,10 +317,14 @@ const LeadCard = memo(function LeadCard({
   const lastDragEndRef = useRef(0);
   const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
   const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
+  const assigneeId = resolveEffectiveAssigneeId(lead);
+  const assigneeName = assigneeCornerLabel(lead);
+  const assigneeFullName = assigneeDisplayName(lead);
+  const cornerAssigneeLabel = showAssigneeBadge ? assigneeName : null;
   const assigneeBorder = socio
     ? null
     : resolveAssigneeBorderColor({
-        userId: lead.assigned_to,
+        userId: assigneeId,
         crmColor: lead.assigned_user?.crm_color ?? null,
       });
   /** Semáforo de intentos: visible en columnas activas del pipeline (no en vendido). */
@@ -366,7 +390,24 @@ const LeadCard = memo(function LeadCard({
       )}
       style={assigneeBorder ? { borderLeftColor: assigneeBorder } : undefined}
     >
-      {socio ? (
+      {cornerAssigneeLabel ? (
+        <span
+          title={assigneeFullName ? `Asignado a ${assigneeFullName}` : undefined}
+          className={cn(
+            "pointer-events-none absolute right-1 top-1 z-[1] max-w-[5.75rem] truncate rounded-md border px-1.5 py-0.5 text-[9px] font-medium leading-tight shadow-sm",
+            assigneeBorder
+              ? "border-current/25 bg-background/90"
+              : "border-border/60 bg-muted/90 text-muted-foreground",
+          )}
+          style={
+            assigneeBorder
+              ? { color: assigneeBorder, borderColor: `${assigneeBorder}55` }
+              : undefined
+          }
+        >
+          {cornerAssigneeLabel}
+        </span>
+      ) : socio ? (
         <span
           title={`Seguimiento: ${socio}`}
           className={cn(
@@ -377,7 +418,9 @@ const LeadCard = memo(function LeadCard({
           {socio}
         </span>
       ) : null}
-      <div className={cn("font-medium", socio && "pr-12")}>{lead.full_name || "Sin nombre"}</div>
+      <div className={cn("font-medium", (cornerAssigneeLabel || socio) && "pr-[4.75rem]")}>
+        {lead.full_name || "Sin nombre"}
+      </div>
       <div className="text-muted-foreground text-[13px]">
         {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
       </div>
@@ -474,13 +517,13 @@ const LeadCard = memo(function LeadCard({
               </div>
             );
           })()}
-          {!socio && (lead.assigned_user?.full_name || lead.assigned_user?.email) && (
+          {showAssigneeBadge && !socio && assigneeFullName && (
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               {assigneeBorder ? (
                 <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border" style={{ backgroundColor: assigneeBorder }} />
               ) : null}
               <span className="truncate">
-                Seguimiento: {lead.assigned_user?.full_name || lead.assigned_user?.email}
+                Seguimiento: {assigneeFullName}
               </span>
             </div>
           )}
@@ -594,60 +637,33 @@ export default function CRM() {
     status: "contactado",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
-    /** Mike / Antonio / Jota (`leads.crm_seguimiento_socio`) */
-    crm_seguimiento_socio: null as "Mike" | "Antonio" | "Jota" | null,
-    /** Día de cita rápida (`yyyy-MM-dd`) sincronizado con `appointments`. */
-    citaDayKey: null as string | null,
-    citaMotivo: "",
-    crmQuickAppointmentId: null as string | null,
   });
 
-  const editCitaSyncedRef = useRef(false);
-
-  const crmQuickAppointmentQuery = useQuery({
-    queryKey: ["crmLeadQuickAppointment", editingLead?.id],
-    enabled: Boolean(showEditDialog && editingLead?.id && user?.tenant_id),
-    queryFn: async () => {
-      const rows = await appointmentService.getAll({ leadId: editingLead!.id });
-      return pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
-    },
-  });
-
-  useEffect(() => {
-    if (!isEditingForm) {
-      editCitaSyncedRef.current = false;
-      return;
-    }
-    if (!editingLead?.id) return;
-    if (!crmQuickAppointmentQuery.isFetched) return;
-    if (editCitaSyncedRef.current) return;
-    editCitaSyncedRef.current = true;
-
-    const appt = crmQuickAppointmentQuery.data ?? null;
-    setEditForm((f) => {
-      if (!appt) {
-        return { ...f, citaDayKey: null, citaMotivo: "", crmQuickAppointmentId: null };
-      }
-      const dayKey = format(parseISO(appt.scheduled_at), "yyyy-MM-dd");
-      return {
-        ...f,
-        citaDayKey: dayKey,
-        citaMotivo: parseCrmLeadQuickAppointmentMotive(appt.description),
-        crmQuickAppointmentId: appt.id,
-      };
-    });
-  }, [
-    isEditingForm,
-    editingLead?.id,
-    crmQuickAppointmentQuery.isFetched,
-    crmQuickAppointmentQuery.data?.id,
-    crmQuickAppointmentQuery.data?.scheduled_at,
-  ]);
   const crmAssigneeQuery = useBranchSellersOptionsFromUser(user, {
     roles: ["vendedor", "jefe_sucursal"],
     enabled: !!user?.tenant_id && showEditDialog && isEditingForm,
   });
   const { sellers: crmAssigneeOptions } = useBranchSellers(crmAssigneeQuery);
+
+  const crmAssigneeSelectOptions = useMemo((): BranchSeller[] => {
+    if (!editingLead || !isEditingForm) return crmAssigneeOptions;
+    const currentId = editForm.assigned_to ?? resolveEffectiveAssigneeId(editingLead);
+    if (!currentId || crmAssigneeOptions.some((s) => s.id === currentId)) {
+      return crmAssigneeOptions;
+    }
+    const au = (editingLead as LeadWithAssignee).assigned_user;
+    return [
+      {
+        id: currentId,
+        full_name: au?.full_name?.trim() || "Vendedor asignado",
+        email: au?.email ?? null,
+        branch_id: editingLead.branch_id ?? null,
+        role: "vendedor",
+        crm_color: au?.crm_color ?? null,
+      },
+      ...crmAssigneeOptions,
+    ];
+  }, [crmAssigneeOptions, editingLead, editForm.assigned_to, isEditingForm]);
 
   useEffect(() => {
     if (!user) return;
@@ -750,7 +766,6 @@ export default function CRM() {
 
   const startEditing = useCallback(() => {
     if (!editingLead) return;
-    editCitaSyncedRef.current = false;
     setEditForm({
       full_name: editingLead.full_name || "",
       phone: (editingLead.phone || "").replace(/^(\+56\s*)/g, ""),
@@ -763,13 +778,7 @@ export default function CRM() {
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
       transmision: leadTransmissionForForm(editingLead.transmision),
       status: safePipelineSelectValue(editingLead.status),
-      assigned_to: editingLead.assigned_to ?? null,
-      crm_seguimiento_socio: isCrmSeguimientoSocio(editingLead.crm_seguimiento_socio)
-        ? editingLead.crm_seguimiento_socio
-        : null,
-      citaDayKey: null,
-      citaMotivo: "",
-      crmQuickAppointmentId: null,
+      assigned_to: resolveEffectiveAssigneeId(editingLead),
     });
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
@@ -1000,26 +1009,10 @@ export default function CRM() {
             transmision: leadTransmissionForSave(editForm.transmision),
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
-            crm_seguimiento_socio: editForm.crm_seguimiento_socio,
           }
         : { status: crmStageToDbStatus(leadStatus) };
 
       const updated = await leadService.update(editingLead.id, updates as any);
-
-      if (isEditingForm) {
-        await appointmentService.upsertCrmLeadQuickAppointment({
-          leadId: editingLead.id,
-          leadDisplayName: editForm.full_name.trim() || editingLead.full_name || "Lead",
-          tenantId: editingLead.tenant_id ?? user?.tenant_id ?? null,
-          branchId: editingLead.branch_id ?? user?.branch_id ?? null,
-          userId: user?.id ?? null,
-          existingId: editForm.crmQuickAppointmentId,
-          dayKey: editForm.citaDayKey,
-          motive: editForm.citaMotivo,
-        });
-        await queryClient.invalidateQueries({ queryKey: ["appointments"] });
-        await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", editingLead.id] });
-      }
 
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
@@ -1029,15 +1022,6 @@ export default function CRM() {
       if (isEditingForm) {
         setEditingLead(updated as Lead);
         setIsEditingForm(false);
-        if (editForm.citaDayKey) {
-          toast({
-            title: "Fecha guardada",
-            description: `${formatLeadScheduleDisplayLine(
-              new Date(`${editForm.citaDayKey}T10:00:00`).toISOString(),
-              editForm.citaMotivo,
-            )} · visible en Citas`,
-          });
-        }
       } else {
         closeEditDialog();
       }
@@ -1059,9 +1043,6 @@ export default function CRM() {
     queryClient,
     closeEditDialog,
     openCloseDealForLead,
-    user?.id,
-    user?.tenant_id,
-    user?.branch_id,
   ]);
 
   useEffect(() => {
@@ -1759,6 +1740,7 @@ export default function CRM() {
                       <LeadCard
                         key={lead.id}
                         lead={lead}
+                        showAssigneeBadge={canSupervise}
                         draggable={!loading && movingLeadId !== lead.id}
                         isDragging={draggingLeadId === lead.id}
                         justLanded={landedLeadId === lead.id}
@@ -1905,7 +1887,7 @@ export default function CRM() {
               <div className="flex items-center gap-1 shrink-0">
                 <AssignLeadMenu
                   leadId={editingLead.id}
-                  assignedTo={editingLead.assigned_to}
+                  assignedTo={resolveEffectiveAssigneeId(editingLead)}
                   assignedLabel={(editingLead as Lead & {
                     assigned_user?: { full_name?: string | null; email?: string | null } | null;
                   }).assigned_user?.full_name ?? null}
@@ -2026,56 +2008,12 @@ export default function CRM() {
                     onChange={(transmision) => setEditForm((f) => ({ ...f, transmision }))}
                     disabled={isUpdating}
                   />
-                  <LeadCrmQuickAppointmentPicker
-                    id="crm-edit-cita"
-                    dayKey={editForm.citaDayKey}
-                    motive={editForm.citaMotivo}
-                    onDayChange={(dayKey) =>
-                      setEditForm((f) => ({
-                        ...f,
-                        citaDayKey: dayKey,
-                        ...(dayKey ? {} : { citaMotivo: "" }),
-                      }))
-                    }
-                    onMotiveChange={(citaMotivo) => setEditForm((f) => ({ ...f, citaMotivo }))}
-                    disabled={isUpdating || crmQuickAppointmentQuery.isLoading}
-                  />
                   <LeadNotesSection
                     leadId={editingLead.id}
                     tenantId={editingLead.tenant_id ?? user?.tenant_id}
                     branchId={editingLead.branch_id ?? user?.branch_id}
                     legacyNotes={editingLead.notes}
                   />
-                  <div className="grid gap-2">
-                    <Label htmlFor="crm-edit-socio">Encargado del seguimiento (socio)</Label>
-                    <Select
-                      value={editForm.crm_seguimiento_socio ?? CRM_UNASSIGNED_VALUE}
-                      onValueChange={(v) =>
-                        setEditForm((f) => ({
-                          ...f,
-                          crm_seguimiento_socio:
-                            v === CRM_UNASSIGNED_VALUE
-                              ? null
-                              : (v as "Mike" | "Antonio" | "Jota"),
-                        }))
-                      }
-                    >
-                      <SelectTrigger id="crm-edit-socio">
-                        <SelectValue placeholder="Sin asignar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={CRM_UNASSIGNED_VALUE}>Sin asignar</SelectItem>
-                        {CRM_SEGUIMIENTO_SOCIOS.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Etiqueta pequeña arriba a la derecha en el pipeline: Mike (azul), Antonio (celeste), Jota (verde).
-                    </p>
-                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="crm-edit-assignee">Seguimiento (vendedor)</Label>
                     <Select
@@ -2092,16 +2030,13 @@ export default function CRM() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={CRM_UNASSIGNED_VALUE}>Sin asignar</SelectItem>
-                        {crmAssigneeOptions.map((s) => (
+                        {crmAssigneeSelectOptions.map((s) => (
                           <SelectItem key={s.id} value={s.id}>
                             {s.full_name || s.email || s.id}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Si no hay socio asignado, el color del borde usa el vendedor y su color en Configuración.
-                    </p>
                   </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
@@ -2137,13 +2072,6 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
-                  {crmQuickAppointmentQuery.data?.scheduled_at ? (
-                    <LeadScheduleEventTag
-                      scheduledAtIso={crmQuickAppointmentQuery.data.scheduled_at}
-                      description={crmQuickAppointmentQuery.data.description}
-                      footnote="Sincronizado con Citas · edita con el lápiz para cambiar fecha o motivo"
-                    />
-                  ) : null}
                   {(() => {
                     const rut = editingLead.rut?.trim();
                     const email = editingLead.email?.trim();
@@ -2264,40 +2192,20 @@ export default function CRM() {
                     legacyNotes={editingLead.notes}
                   />
                   <div>
-                    <p className="text-sm text-muted-foreground">Encargado (socio)</p>
-                    <p className="text-base flex items-center gap-2">
-                      {(() => {
-                        const s = editingLead.crm_seguimiento_socio;
-                        if (!isCrmSeguimientoSocio(s)) {
-                          return <span>Sin asignar</span>;
-                        }
-                        return (
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold text-white",
-                              seguimientoSocioPillClass(s),
-                            )}
-                          >
-                            {s}
-                          </span>
-                        );
-                      })()}
-                    </p>
-                  </div>
-                  <div>
                     <p className="text-sm text-muted-foreground">Vendedor asignado (seguimiento)</p>
                     <p className="text-base flex items-center gap-2">
                       {(() => {
+                        const assigneeId = resolveEffectiveAssigneeId(editingLead);
                         const au = (editingLead as LeadWithAssignee).assigned_user;
                         const dot = resolveAssigneeBorderColor({
-                          userId: editingLead.assigned_to,
+                          userId: assigneeId,
                           crmColor: au?.crm_color ?? null,
                         });
                         const label =
-                          au?.full_name?.trim() || au?.email?.trim() || "Sin asignar";
+                          au?.full_name?.trim() || au?.email?.trim() || (assigneeId ? "Vendedor asignado" : "Sin asignar");
                         return (
                           <>
-                            {dot && editingLead.assigned_to ? (
+                            {dot && assigneeId ? (
                               <span
                                 className="h-3 w-3 shrink-0 rounded-full ring-1 ring-border"
                                 style={{ backgroundColor: dot }}
