@@ -62,7 +62,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronUp, Eye, Pencil, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -532,12 +532,15 @@ export default function CRM() {
     enabled: !!user,
   });
 
-  const { data: deletedLeads = [] } = useQuery({
+  const { data: deletedLeads = [], isLoading: loadingPapelera, refetch: refetchPapelera } = useQuery({
     queryKey: ["leads", "deleted"],
     queryFn: () => leadService.getDeleted(),
     enabled: !!user,
     staleTime: 1 * 60 * 1000,
   });
+
+  const [showPapeleraDialog, setShowPapeleraDialog] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
@@ -677,7 +680,8 @@ export default function CRM() {
     if (!editingLead) return;
     const ok = await askConfirm({
       title: "¿Eliminar este lead?",
-      description: "Esta acción no se puede deshacer.",
+      description:
+        "El lead se moverá a la papelera. Podrás verlo y restaurarlo desde el icono de papelera en el pipeline.",
       confirmLabel: "Eliminar",
       destructive: true,
     });
@@ -690,10 +694,11 @@ export default function CRM() {
         return current.filter((lead: { id: string }) => lead.id !== editingLead.id);
       });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads", "deleted"] });
       closeEditDialog();
       toast({
         title: "Lead eliminado",
-        description: "El lead se eliminó correctamente.",
+        description: "El lead se movió a la papelera.",
       });
     } catch (error) {
       console.error("Error eliminando lead:", error);
@@ -705,7 +710,43 @@ export default function CRM() {
     } finally {
       setIsDeleting(false);
     }
-  }, [editingLead, queryClient, closeEditDialog]);
+  }, [editingLead, queryClient, closeEditDialog, askConfirm]);
+
+  const papeleraLeads = useMemo(() => {
+    return deletedLeads.filter((lead) => {
+      const tags = normalizeTags(lead.tags);
+      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
+      return true;
+    });
+  }, [deletedLeads, supervisedVendorId]);
+
+  const handleRestoreLead = useCallback(
+    async (id: string) => {
+      setRestoringId(id);
+      try {
+        await leadService.restore(id);
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        queryClient.invalidateQueries({ queryKey: ["leads", "deleted"] });
+        await refetch();
+        await refetchPapelera();
+        toast({
+          title: "Lead restaurado",
+          description: "El lead volvió al pipeline del CRM.",
+        });
+      } catch (error: unknown) {
+        console.error("Error restaurando lead:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "No se pudo restaurar el lead.",
+          variant: "destructive",
+        });
+      } finally {
+        setRestoringId(null);
+      }
+    },
+    [queryClient, refetch, refetchPapelera],
+  );
 
   const startEditing = useCallback(() => {
     if (!editingLead) return;
@@ -1465,6 +1506,21 @@ export default function CRM() {
               aria-label="Buscar cliente en el CRM"
             />
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowPapeleraDialog(true)}
+            title="Ver papelera — leads eliminados del pipeline"
+            aria-label="Ver papelera de leads eliminados"
+            className="relative shrink-0"
+          >
+            <Trash2 className="h-4 w-4" />
+            {papeleraLeads.length > 0 ? (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                {papeleraLeads.length > 99 ? "99+" : papeleraLeads.length}
+              </span>
+            ) : null}
+          </Button>
         </div>
       </div>
 
@@ -1524,7 +1580,26 @@ export default function CRM() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn(
+            "transition-colors",
+            papeleraLeads.length > 0 && "cursor-pointer hover:bg-muted/40",
+          )}
+          onClick={papeleraLeads.length > 0 ? () => setShowPapeleraDialog(true) : undefined}
+          role={papeleraLeads.length > 0 ? "button" : undefined}
+          tabIndex={papeleraLeads.length > 0 ? 0 : undefined}
+          onKeyDown={
+            papeleraLeads.length > 0
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setShowPapeleraDialog(true);
+                  }
+                }
+              : undefined
+          }
+          title={papeleraLeads.length > 0 ? "Ver leads en la papelera" : undefined}
+        >
           <CardContent className="flex items-center gap-3 py-4">
             <div className="rounded-lg bg-rose-50 p-2 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
               <PhoneOff className="h-5 w-5" />
@@ -1538,6 +1613,7 @@ export default function CRM() {
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {metrics.noRespondieron} en papelera
+                {papeleraLeads.length > 0 ? " · clic para ver" : ""}
               </p>
             </div>
           </CardContent>
@@ -1581,6 +1657,25 @@ export default function CRM() {
       </div>
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Pipeline de ventas</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowPapeleraDialog(true)}
+          className="gap-2"
+          title="Ver leads eliminados del pipeline"
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground" />
+          Papelera
+          {papeleraLeads.length > 0 ? (
+            <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1.5">
+              {papeleraLeads.length}
+            </Badge>
+          ) : null}
+        </Button>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {leadsByStage.map((stage) => {
@@ -2283,6 +2378,82 @@ export default function CRM() {
                 </>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPapeleraDialog} onOpenChange={setShowPapeleraDialog}>
+        <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-muted-foreground" />
+              Papelera
+            </DialogTitle>
+            <DialogDescription>
+              Leads eliminados del pipeline. Puedes restaurarlos para que vuelvan al embudo del CRM.
+              {supervisedVendorId && supervisedVendorName
+                ? ` Mostrando solo los de ${supervisedVendorName}.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 py-2 -mx-1 px-1">
+            {loadingPapelera ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                Cargando...
+              </div>
+            ) : papeleraLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No hay leads en la papelera.</p>
+            ) : (
+              <ul className="space-y-2">
+                {papeleraLeads.map((lead) => (
+                  <li
+                    key={lead.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{lead.full_name || "Sin nombre"}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 shrink-0" />
+                        {formatChilePhoneForDisplay(lead.phone) || "—"}
+                        {lead.email ? (
+                          <>
+                            <span className="mx-1">·</span>
+                            <Mail className="h-3.5 w-3.5 shrink-0 inline" />
+                            <span className="truncate">{lead.email}</span>
+                          </>
+                        ) : null}
+                      </p>
+                      {lead.deleted_at ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Eliminado{" "}
+                          {new Date(lead.deleted_at).toLocaleDateString("es-CL", { dateStyle: "medium" })}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleRestoreLead(lead.id)}
+                      disabled={restoringId !== null}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {restoringId === lead.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-4 w-4" />
+                      )}
+                      Restaurar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter className="shrink-0 border-t pt-4">
+            <Button variant="outline" onClick={() => setShowPapeleraDialog(false)}>
+              Cerrar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

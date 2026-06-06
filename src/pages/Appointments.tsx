@@ -34,7 +34,13 @@ import { supabase } from "@/lib/supabase";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { leadsAssignedToForQuery } from "@/lib/leadsScope";
-import { resolveAppointmentCalendarScope } from "@/lib/appointmentCalendarScope";
+import {
+  CAN_SUPERVISE_APPOINTMENTS,
+  filterAppointmentsForCalendarView,
+  resolveAppointmentCalendarScope,
+  resolveAppointmentSupervisionVendorScope,
+  resolveSupervisedAppointmentQueryFilters,
+} from "@/lib/appointmentCalendarScope";
 import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -49,6 +55,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Eye,
   Loader2,
   Pencil,
   Plus,
@@ -56,6 +63,7 @@ import {
   Trash2,
   User,
   UserCheck,
+  X,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -233,6 +241,51 @@ export default function Appointments() {
   const canSeeTeam = appointmentCalendarScope?.scope === "branch";
   const canSeeTenant = appointmentCalendarScope?.scope === "tenant";
 
+  const canSupervise = !!user?.role && CAN_SUPERVISE_APPOINTMENTS.has(user.role);
+  const supervisionVendorScope = resolveAppointmentSupervisionVendorScope(user);
+  const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
+
+  const { sellers: supervisionVendorList } = useBranchSellers({
+    tenantId: supervisionVendorScope?.tenantId ?? null,
+    branchId: supervisionVendorScope?.branchId ?? null,
+    scope: supervisionVendorScope?.scope ?? "tenant",
+    teamOwnerUserId: supervisionVendorScope?.teamOwnerUserId ?? null,
+    roles: ["vendedor"],
+    enabled: canSupervise && !!supervisionVendorScope,
+  });
+
+  const supervisionVendorIds = useMemo(
+    () => supervisionVendorList.map((v) => v.id),
+    [supervisionVendorList],
+  );
+
+  const effectiveSupervisedVendorId = useMemo(() => {
+    if (!supervisedVendorId) return null;
+    return supervisionVendorIds.includes(supervisedVendorId) ? supervisedVendorId : null;
+  }, [supervisedVendorId, supervisionVendorIds]);
+
+  const supervisedVendorName = useMemo(
+    () =>
+      supervisionVendorList.find((v) => v.id === effectiveSupervisedVendorId)?.full_name?.trim() ||
+      supervisionVendorList.find((v) => v.id === effectiveSupervisedVendorId)?.email?.trim() ||
+      null,
+    [supervisionVendorList, effectiveSupervisedVendorId],
+  );
+
+  const appointmentQueryFilters = useMemo(
+    () =>
+      resolveSupervisedAppointmentQueryFilters(
+        appointmentCalendarScope,
+        supervisedVendorId,
+        supervisionVendorIds,
+      ),
+    [appointmentCalendarScope, supervisedVendorId, supervisionVendorIds],
+  );
+
+  useEffect(() => {
+    setSupervisedVendorId(null);
+  }, [user?.id, user?.tenant_id]);
+
   const delegateScope = resolveDelegatableSellersScope(user);
   const canDelegate = canSeeTenant || canSeeTeam || !!delegateScope;
   const sellersQueryEnabled = !!user?.tenant_id && canDelegate;
@@ -262,12 +315,22 @@ export default function Appointments() {
     enabled: !!user,
   });
   const { appointments, loading, isFetching, refetch } = useAppointments({
-    userId: appointmentCalendarScope?.userId,
-    tenantId: appointmentCalendarScope?.tenantId,
-    branchId: appointmentCalendarScope?.branchId,
+    userId: appointmentQueryFilters.userId,
+    tenantId: appointmentQueryFilters.tenantId,
+    branchId: appointmentQueryFilters.branchId,
     enabled: !!user && !!appointmentCalendarScope,
     live: true,
   });
+
+  const scopedAppointments = useMemo(
+    () =>
+      filterAppointmentsForCalendarView(
+        appointments,
+        tenantId,
+        effectiveSupervisedVendorId,
+      ),
+    [appointments, tenantId, effectiveSupervisedVendorId],
+  );
 
   // Citas creadas desde landing-booking u otros canales externos
   useEffect(() => {
@@ -331,7 +394,7 @@ export default function Appointments() {
   }, [isDialogOpen]);
 
   const events = useMemo(() => {
-    return (appointments as AppointmentWithRelations[])
+    return (scopedAppointments as AppointmentWithRelations[])
       .map((appointment) => {
         const start = safeDate(appointment.scheduled_at);
         if (!start) return null;
@@ -366,7 +429,7 @@ export default function Appointments() {
         } as Event;
       })
       .filter((e): e is Event => e != null);
-  }, [appointments]);
+  }, [scopedAppointments]);
 
   const calendarEvents = useMemo(
     () => events.filter((e) => e.status !== "cancelada"),
@@ -771,15 +834,56 @@ export default function Appointments() {
 
   return (
     <div className="space-y-6">
+      {effectiveSupervisedVendorId ? (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-400 bg-blue-50 px-4 py-2.5 dark:bg-blue-950/30 dark:border-blue-600">
+          <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-300 flex-1">
+            Supervisando calendario de{" "}
+            <span className="font-bold">{supervisedVendorName ?? "Vendedor"}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
+            onClick={() => setSupervisedVendorId(null)}
+            title="Volver a vista global"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
+
       {/* Hero */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Citas</h1>
           <p className="text-muted-foreground mt-2">
-            Agendá test drives, reuniones, entregas y servicios desde un solo lugar.
+            {effectiveSupervisedVendorId
+              ? `Citas asignadas a ${supervisedVendorName ?? "el vendedor"}.`
+              : appointmentCalendarScope?.listDescription ??
+                "Agendá test drives, reuniones, entregas y servicios desde un solo lugar."}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          {canSupervise && supervisionVendorList.length > 0 ? (
+            <Select
+              value={supervisedVendorId ?? "__all__"}
+              onValueChange={(val) => setSupervisedVendorId(val === "__all__" ? null : val)}
+            >
+              <SelectTrigger className="w-full sm:w-56 gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Ver calendario de vendedor…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Vista global</SelectItem>
+                {supervisionVendorList.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.full_name?.trim() || v.email || v.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -886,7 +990,9 @@ export default function Appointments() {
                   Calendario
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Clic en cita o día con visitas: ver detalle · día vacío: nueva cita
+                  {effectiveSupervisedVendorId
+                    ? `Solo citas de ${supervisedVendorName ?? "este vendedor"} · clic para ver detalle`
+                    : "Clic en cita o día con visitas: ver detalle · día vacío: nueva cita"}
                 </CardDescription>
               </div>
               {/* Leyenda de tipos */}
