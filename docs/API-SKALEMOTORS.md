@@ -1,220 +1,212 @@
-# API HTTP en Vercel — SKALEMOTORS
+# API Skale Motors — Referencia
 
-Documentación de los endpoints servidos por la **aplicación desplegada en Vercel**. Todo lo que sigue usa este origen:
+Documentación de los **endpoints HTTP propios** de Skale Motors v2: rutas servidas por Vercel, Edge Functions de Supabase y el proxy de la app vitrina.
 
-**Base URL:** `https://skalemotors-v2.vercel.app`
-
----
-
-## Importante: no confundir con Supabase Edge Functions
-
-| Dónde integras | Host | Ejemplo de ruta |
-|----------------|------|-----------------|
-| **Esta documentación (Vercel)** | `skalemotors-v2.vercel.app` | `POST …/api/n8n-lead-ingest`, `POST …/api/appointment-ingest` |
-| **Otro camino (no es Vercel)** | `<TU_PROJECT_REF>.supabase.co` | `POST …/functions/v1/lead-create` |
-
-- **`/api/n8n-lead-ingest`** vive en **Vercel**. Autenticación: variable de entorno **`N8N_LEAD_INGEST_API_KEY`** (clave global) o **claves emitidas en la app** (`mint_lead_ingest_key` → tabla `lead_ingest_keys`).
-- **`lead-create`** es una **Edge Function de Supabase**: URL `https://<TU_PROJECT_REF>.supabase.co/functions/v1/lead-create`, secreto **`LEAD_INGEST_API_KEY`**. El contrato (enums, `update_existing`, etc.) **no es idéntico** al de Vercel.
-
-Si en **n8n** quieres integrar contra el dominio del producto en Vercel, la URL base correcta es **`https://skalemotors-v2.vercel.app`**, no `*.supabase.co`.
+> Esta guía describe **nuestra API**, no contratos de terceros (Meta, GetAPI, ChileAutos, OpenAI, etc.).
 
 ---
 
-## Convenciones
+## Hosts y rutas base
+
+| Superficie | Base URL | Cuándo usarla |
+|------------|----------|---------------|
+| **Vercel (producto)** | `https://skalemotors-v2.vercel.app` | n8n, landings, integraciones externas contra el dominio del producto |
+| **Supabase Edge** | `https://<PROJECT_REF>.supabase.co/functions/v1/<nombre>` | App CRM, vitrina SSR, webhooks, caminos legacy |
+| **Vitrina Next.js** | `https://<dominio-vitrina>/api/lead` | Formularios públicos de la vitrina (proxy interno) |
+
+**Preview / local:** sustituye el host de Vercel por la URL del deployment o `http://localhost:5173` según corresponda.
+
+---
+
+## Convenciones globales
 
 | Tema | Detalle |
 |------|---------|
-| **JSON** | Cuerpos y respuestas JSON salvo donde se indique otro `Content-Type`. |
-| **Errores** | Suele devolverse `{ ok: false, error: string }` con 4xx/5xx. |
-| **CORS (ingesta)** | `POST` y `OPTIONS`; cabeceras permitidas incluyen `Content-Type`, `x-api-key`, `Authorization`. |
+| **Formato** | JSON en cuerpos y respuestas, salvo indicación contraria |
+| **Errores** | `{ ok: false, error: string }` o `{ error: string }` con HTTP 4xx/5xx |
+| **CORS (ingesta)** | `POST` + `OPTIONS`; cabeceras permitidas: `Content-Type`, `x-api-key`, `Authorization`, `Idempotency-Key` |
+| **Idempotencia** | Cabecera `Idempotency-Key` en ingesta de leads/citas; respuestas cacheadas en `lead_ingest_idempotency` |
+| **Teléfono Chile** | Se normaliza a `+56 9XXXXXXXX` |
+| **Fechas citas** | `date` (`YYYY-MM-DD`) + `time` (`HH:mm`) en zona `America/Santiago`, o `scheduled_at` ISO UTC |
+| **Honeypot anti-spam** | Campos `company` / `website` rellenos → HTTP 200 `{ ok: true }` sin persistir datos |
 
 ---
 
-## 1. Ingesta de leads (N8N e integraciones externas)
+## Autenticación
 
-### 1.1 Endpoint
+### 1. Clave de ingesta por sucursal (recomendada en producción)
 
-| | |
-|---|---|
-| **URL** | `https://skalemotors-v2.vercel.app/api/n8n-lead-ingest` |
-| **Método** | `POST` |
-| **Content-Type** | `application/json` |
+- Generada en la app: **Ajustes → API ingesta** (`mint_lead_ingest_key`).
+- Se guarda solo el hash en `lead_ingest_keys`; el secreto en claro se muestra **una vez** al crear.
+- Envío: `x-api-key: <secreto>` **o** `Authorization: Bearer <secreto>`.
+- La clave está ligada a un `branch_id`; si envías `branch_id` en el body, debe coincidir.
 
-### 1.2 Autenticación
+### 2. Clave global de desarrollo (solo no-producción)
 
-Envía la clave en **una** de estas formas:
+- Variable Vercel: `N8N_LEAD_INGEST_API_KEY`.
+- **Bloqueada en producción.** Requiere siempre `branch_id` en el JSON.
 
-1. **`x-api-key: <clave>`**
-2. **`Authorization: Bearer <clave>`**
+### 3. JWT de Supabase (app CRM)
 
-**Modo A — Clave global (Vercel)**  
-- Valor configurado en el proyecto Vercel como **`N8N_LEAD_INGEST_API_KEY`**.  
-- **Obligatorio** incluir **`branch_id`** en el JSON (la clave no está atada a una sucursal).
+- Cabecera: `Authorization: Bearer <access_token>`.
+- También: `apikey: <SUPABASE_ANON_KEY>`.
+- Usado por casi todas las Edge Functions internas.
 
-**Modo B — Clave por sucursal (app)**  
-- Generada en la aplicación vía RPC `mint_lead_ingest_key` (se guarda solo el hash en `lead_ingest_keys`).  
-- **`branch_id` en el cuerpo es opcional**; si lo envías, debe coincidir con la sucursal de esa clave.
+### 4. Secrets de automatización (Edge)
 
-### 1.3 Cuerpo (campos)
+| Secret | Endpoint |
+|--------|----------|
+| `LEAD_INGEST_API_KEY` | `lead-create`, `landing-booking` (legacy) |
+| `LEAD_STATE_API_KEY` | `lead-state-update` (solo no-prod; prod usa clave mintada) |
+| `PENDING_TASK_API_KEY` | `pending-task-create` |
+| `CHILEAUTOS_SCRAPE_API_KEY` | `GET /api/chileautos-scrape` (obligatorio en prod) |
+
+### 5. Webhooks firmados
+
+- `meta-webhook`: firma `X-Hub-Signature-256`.
+- `ycloud-webhook`: firma `YCloud-Signature`.
+
+### RPCs de gestión de claves (desde usuario autenticado en CRM)
+
+| RPC | Uso |
+|-----|-----|
+| `mint_lead_ingest_key(p_branch_id, p_label?)` | Crea clave; devuelve secreto en claro una sola vez |
+| `list_lead_ingest_keys(p_branch_id)` | Metadatos de claves activas |
+| `revoke_lead_ingest_key(p_key_id)` | Revoca clave |
+
+---
+
+# Parte I — API Vercel (integraciones externas)
+
+Base: `https://skalemotors-v2.vercel.app`
+
+Estos son los endpoints **recomendados** para n8n, landings y partners.
+
+---
+
+## 1. Ingesta de leads
+
+### `POST /api/n8n-lead-ingest`
+
+Crea o actualiza un lead en CRM. Si el body incluye `date` + `time` (o `scheduled_at`), **desvía automáticamente** a ingesta de cita (`processAppointmentIngest`).
+
+#### Autenticación
+
+`x-api-key` o `Authorization: Bearer` (clave mintada o global dev).
+
+Cabecera opcional: `Idempotency-Key`.
+
+#### Cuerpo — campos principales
 
 | Campo | Tipo | Notas |
 |-------|------|--------|
-| `branch_id` | string | Obligatorio con clave global; con clave mintada, opcional pero debe coincidir si se envía. |
-| `phone` | string | **Requerido**; se normaliza a formato Chile (`+56 …`). |
-| `full_name` | string | Opcional; si falta o vacío → `"Sin nombre"` (formato título). |
-| `rut`, `email`, `region` | string \| null | Opcionales. |
-| `source` | string | `web`, `referido`, `walk_in`, `telefono`, `redes_sociales`, `evento`, `otro`, `whatsapp`. Default: `whatsapp`. |
-| `status` | string | `nuevo`, `contactado`, `interesado`, `cotizando`, `negociando`, `vendido`, `perdido`, `para_cierre`. Default: `nuevo`. |
-| `priority` | string | `baja`, `media`, `alta`. Default: `alta`. |
-| `payment_type`, `budget` | string / number | Opcionales. |
-| `vehicle_interest`, `notes`, `chat_summary` | string | Se vuelcan al campo `notes` del lead (texto combinado). |
-| `tags` | array | Si se envía, debe ser array. |
-| `state`, `state_confidence`, `state_reason` | string / number | Opcional (estado enriquecido). |
-| `update_existing` | boolean | Default **`true`**: si ya existe lead con mismo `phone` y `branch_id`, **actualiza**. Con `false` no entra en esa rama de actualización por teléfono. |
+| `branch_id` | string (UUID) | Obligatorio con clave global dev; opcional con clave mintada |
+| `phone` / `telefono` | string | **Requerido** (formato Chile) |
+| `full_name` / `nombre` | string | Default: `"Sin nombre"` |
+| `email`, `rut`, `region` | string \| null | Opcionales |
+| `source` | string | `web`, `referido`, `walk_in`, `telefono`, `redes_sociales`, `evento`, `otro`, `whatsapp`. Default: `whatsapp` |
+| `status` | string | `nuevo`, `contactado`, `interesado`, `cotizando`, `negociando`, `en_espera`, `vendido`, `perdido`, `para_cierre`, `cancelado`. Default al crear: `nuevo` |
+| `priority` | string | `baja`, `media`, `alta`. Default: `alta` |
+| `payment_type` / `payment_method` | string | Opcional |
+| `budget` / `presupuesto` | string \| number | Opcional |
+| `vehicle_interest` / `tipo_vehiculo` | string | También columna dedicada |
+| `notes`, `chat_summary`, `raw_message` / `mensaje_mike` | string | Se combinan en `notes` / `raw_message` |
+| `tags` | array | Debe ser array si se envía |
+| `state`, `state_confidence`, `state_reason` | string / number | Estado enriquecido (IA) |
+| `update_existing` | boolean | Default `true`: actualiza por teléfono + sucursal |
+| `assigned_to` | UUID | Vendedor asignado (`public.users`) |
+| `assigned_to_email`, `calendar_email` | string | Resolución alternativa de asignado |
 
-### 1.4 Respuesta exitosa
+**Campos IA / WhatsApp (opcionales):** `uso_principal`, `pasajeros_filas`, `transmision`, `pie_disponible`, `marca_preferida`, `anos_minimo`, `preferencia`, `alerta_crediticia`, y aliases en español.
 
-**HTTP 200**
+**Campos de cita (si vienen, activan flujo calendario):** `date`, `time`, `scheduled_at`, `title`, `type`, `description`, `create_lead`, `lead_id`, `vehicle_id`.
+
+#### Respuesta `200`
 
 ```json
 {
   "ok": true,
   "created": true,
   "data": {
-    "id": "…",
-    "full_name": "…",
-    "phone": "+56 …",
-    "status": "contactado",
+    "id": "uuid",
+    "full_name": "Juan Pérez",
+    "phone": "+56 912345678",
+    "status": "nuevo",
     "state": null,
-    "branch_id": "…",
-    "tenant_id": "…",
+    "branch_id": "uuid",
+    "tenant_id": "uuid",
     "created_at": "…",
     "updated_at": "…"
-  }
+  },
+  "appointment": null
 }
 ```
 
-- `created: false` cuando se actualizó un lead existente (mismo teléfono + sucursal y `update_existing` no desactiva ese comportamiento).
+- `created: false` → lead actualizado.
+- `appointment` → presente si se creó cita colateral (p. ej. landing Miami con `date`+`time`).
 
-### 1.5 Errores frecuentes
+#### Errores frecuentes
 
-| HTTP | Situación típica |
-|------|------------------|
-| `401` | Falta clave o clave inválida. |
-| `403` | `branch_id` no coincide con la clave por sucursal. |
-| `400` | Cuerpo inválido, teléfono inválido, `tags` no es array, sucursal inexistente, etc. |
-| `405` | Método distinto de `POST` (u `OPTIONS` para preflight). |
-| `500` | P. ej. variables `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` faltantes en Vercel. |
+| HTTP | Causa |
+|------|-------|
+| `401` | Falta clave o clave inválida |
+| `403` | `branch_id` no coincide con la clave |
+| `400` | JSON inválido, teléfono inválido, sucursal inexistente, `tags` no es array |
+| `405` | Método distinto de `POST` |
+| `500` | Variables Supabase faltantes en Vercel |
 
-### 1.6 Ejemplo cURL (clave global + branch)
+#### Ejemplo
 
 ```bash
 curl -sS -X POST "https://skalemotors-v2.vercel.app/api/n8n-lead-ingest" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: TU_N8N_LEAD_INGEST_API_KEY" \
+  -H "x-api-key: TU_CLAVE_MINTADA" \
+  -H "Idempotency-Key: lead-juan-20260605" \
   -d '{
-    "branch_id": "UUID-SUCURSAL",
     "phone": "912345678",
     "full_name": "Juan Pérez",
     "source": "whatsapp",
-    "status": "contactado"
+    "assigned_to_email": "vendedor@concesionaria.cl"
   }'
 ```
 
-### 1.7 n8n
-
-- Nodo **HTTP Request**: método `POST`, URL `https://skalemotors-v2.vercel.app/api/n8n-lead-ingest`.
-- Autenticación: cabecera `x-api-key` o `Authorization` Bearer con la misma clave que uses en producción.
-- Cuerpo: JSON con al menos `phone` y, si usas clave global, `branch_id`.
-
 ---
 
-## 2. Búsqueda de listados ChileAutos (scrape)
+## 2. Ingesta de citas (calendario)
 
-### 2.1 Endpoint
+### `POST /api/appointment-ingest`
 
-| | |
-|---|---|
-| **URL** | `https://skalemotors-v2.vercel.app/api/chileautos-scrape` |
-| **Método** | `GET` |
+Crea una cita en **Citas**. Por defecto **no crea leads** en CRM.
 
-### 2.2 Query
+Flujo típico: landing → webhook n8n → agente estructura JSON → este endpoint.
 
-| Parámetro | Requerido | Descripción |
-|-----------|-----------|-------------|
-| `q` | Sí | Término de búsqueda. |
-| `offset` | No | Paginación (default `0`). |
+#### Autenticación
 
-**Ejemplo:**  
-`https://skalemotors-v2.vercel.app/api/chileautos-scrape?q=toyota+corolla&offset=0`
+Igual que ingesta de leads + `Idempotency-Key` opcional (prefijo interno `appt:`).
 
-### 2.3 Respuesta `200`
-
-```json
-{
-  "keyword": "toyota corolla",
-  "offset": 0,
-  "total": 10,
-  "listings": [ /* … */ ]
-}
-```
-
-Cada ítem del listado incluye campos como `id`, `title`, `make`, `model`, `price`, `priceText`, `state`, `details`, `url`, etc.
-
-### 2.4 Errores
-
-| HTTP | Causa típica |
-|------|----------------|
-| `400` | Falta `q`. |
-| `405` | No es `GET`. |
-| `502` | ChileAutos respondió error HTTP. |
-| `500` | Error interno o de red. |
-
----
-
-## 2. Ingesta de citas (calendario — agendamiento web vía n8n)
-
-Flujo recomendado: **landing envía webhook** → **n8n** (agente estructura JSON) → **POST a Skale Motors** → la cita aparece en **Citas**.
-
-**No crea leads en CRM.** Los leads entran solo por `/api/n8n-lead-ingest` (o el módulo Leads). El agendamiento guarda nombre/teléfono/email en las notas de la cita.
-
-### 2.1 Endpoint
-
-| | |
-|---|---|
-| **URL** | `https://skalemotors-v2.vercel.app/api/appointment-ingest` |
-| **Método** | `POST` |
-| **Content-Type** | `application/json` |
-
-### 2.2 Autenticación
-
-Igual que leads: **`x-api-key`** o **`Authorization: Bearer`**, con la **misma clave mintada** en Ajustes → API ingesta (por sucursal).
-
-Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta.
-
-### 2.3 Cuerpo (campos)
+#### Cuerpo
 
 | Campo | Tipo | Notas |
 |-------|------|--------|
-| `assigned_to` | string (UUID) | Dueño del calendario. Si es de otro tenant, se ignora y se usa `assigned_to_email` o el usuario de la sucursal de la clave. |
-| `assigned_to_email` | string | Alternativa recomendada: ej. `miami@motors.cl` (mismo tenant que la clave API). |
-| `date` + `time` | string | **Requerido** si no envías `scheduled_at`. Fecha `YYYY-MM-DD` y hora `HH:mm` en **Chile** (`America/Santiago`). |
-| `scheduled_at` | string | Alternativa: ISO UTC (ej. `2026-06-04T14:00:00.000Z`). |
-| `full_name` | string | Recomendado; aparece en título y notas de la cita. |
-| `phone` | string | Recomendado; se guarda en notas (formato Chile `+56 …`). |
-| `email`, `notes`, `description` | string | Opcionales; van a notas/descripción de la cita. |
-| `title` | string | Opcional; default `Visita agendada · {nombre}`. |
-| `type` | string | `test_drive`, `reunion`, `entrega`, `servicio`, `otro` (o alias en inglés `meeting`, etc.). Default: `reunion`. |
-| `status` | string | `programada`, `completada`, `cancelada`. Default: `programada`. |
-| `lead_id` | string | Opcional: vincula la cita a un lead **ya existente** en CRM (no crea lead nuevo). |
-| `create_lead` | boolean | Default **false**. Solo si envías `true` explícito crea/actualiza lead (no usar en agendamiento web). |
-| `vehicle_id` | string | Opcional. |
-| `source` | string | Etiqueta de origen (ej. `landing-meta`). |
-| `branch_id` | string | Solo con clave global de dev; con clave mintada debe coincidir si se envía. |
+| `date` + `time` | string | **Requerido** si no hay `scheduled_at`. Hora Chile |
+| `scheduled_at` | string | ISO UTC alternativo |
+| `full_name` / `fullName` | string | Default `"Sin nombre"` |
+| `phone`, `email` | string | Van a notas de la cita |
+| `title` | string | Default: `Visita agendada · {nombre}` |
+| `type` | string | `test_drive`, `reunion`, `entrega`, `servicio`, `otro` (+ alias EN: `meeting`, `delivery`, …) |
+| `status` | string | `programada`, `completada`, `cancelada`. Default: `programada` |
+| `duration_minutes` | number | Default: `60` |
+| `end_at` | string | ISO; si falta, se calcula |
+| `assigned_to` | UUID | Dueño del calendario |
+| `assigned_to_email` / `calendar_email` / `calendar_user_email` | string | Alternativa recomendada al UUID |
+| `lead_id` | UUID | Vincula cita a lead existente |
+| `create_lead` | boolean | Default `false`. Solo `true` crea/actualiza lead |
+| `vehicle_id` | UUID | Opcional |
+| `notes`, `description` | string | Interés del cliente |
+| `source` | string | Etiqueta de origen (ej. `landing-meta`) |
+| `branch_id` | UUID | Solo relevante con clave global dev |
 
-### 2.4 Respuesta exitosa
-
-**HTTP 200**
+#### Respuesta `200`
 
 ```json
 {
@@ -225,61 +217,465 @@ Opcional: cabecera **`Idempotency-Key`** para no duplicar citas si n8n reintenta
     "scheduled_at": "2026-06-04T14:00:00.000Z",
     "user_id": "uuid-vendedor",
     "title": "Visita agendada · Juan Pérez"
-  }
+  },
+  "calendar_user_resolved_via": "assigned_to_email"
 }
 ```
 
-### 2.5 Ejemplo n8n (HTTP Request después del agente)
+Si `create_lead: true`:
 
 ```json
 {
-  "full_name": "Juan Pérez",
-  "phone": "+56 912345678",
-  "email": "juan@example.com",
-  "date": "2026-06-04",
-  "time": "10:00",
-  "type": "reunion",
-  "title": "Visita agendada · Juan Pérez",
-  "notes": "Interesado en SUV",
-  "source": "landing-meta",
-  "assigned_to_email": "miami@motors.cl"
+  "ok": true,
+  "lead": { "id": "uuid", "created": true },
+  "appointment": { "…": "…" }
 }
 ```
+
+#### Ejemplo
 
 ```bash
 curl -sS -X POST "https://skalemotors-v2.vercel.app/api/appointment-ingest" \
   -H "Content-Type: application/json" \
   -H "x-api-key: TU_CLAVE_MINTADA" \
-  -H "Idempotency-Key: booking-2026-06-04-juan" \
-  -d '{"full_name":"Juan Pérez","phone":"+56 912345678","date":"2026-06-04","time":"10:00","assigned_to":"1bad02e7-7888-4cbc-9d79-e4d583401ed0","type":"reunion","source":"landing"}'
+  -H "Idempotency-Key: booking-juan-20260604" \
+  -d '{
+    "full_name": "Juan Pérez",
+    "phone": "+56 912345678",
+    "date": "2026-06-04",
+    "time": "10:00",
+    "type": "reunion",
+    "source": "landing-meta",
+    "assigned_to_email": "miami@motors.cl"
+  }'
 ```
 
-Script local: `node scripts/test-appointment-ingest.mjs` (variables `APPOINTMENT_INGEST_API_KEY`, `APPOINTMENT_INGEST_ASSIGNED_TO`).
+Script de prueba: `node scripts/test-appointment-ingest.mjs`.
 
 ---
 
-## 3. Claves por sucursal (para usar con este endpoint)
+## 3. Agendamiento landing (Miami Motors)
 
-Las claves **mintadas en la app** no se gestionan por Vercel: se crean con RPCs en Supabase desde un usuario autenticado en el CRM, por ejemplo:
+### `POST /api/landing-booking`
 
-| RPC | Uso |
-|-----|-----|
-| `mint_lead_ingest_key` | Crea clave; el **secreto en claro** solo se muestra al crear. |
-| `list_lead_ingest_keys` | Lista metadatos de claves activas por `p_branch_id`. |
-| `revoke_lead_ingest_key` | Revoca por `p_key_id`. |
+Atajo dedicado: **solo cita**, sin lead en CRM. Sucursal y calendario fijos en código (`LANDING_BRANCH_ID`, `LANDING_USER_ID`).
 
-Ese **valor en claro** es el que debes poner en n8n como `x-api-key` / Bearer al llamar a **`/api/n8n-lead-ingest`** o **`/api/appointment-ingest`** (no hace falta `*.supabase.co` para la ingesta).
+#### Autenticación
+
+Igual que ingesta (clave mintada).
+
+#### Cuerpo
+
+| Campo | Requerido | Notas |
+|-------|-----------|--------|
+| `full_name` / `fullName` | Recomendado | |
+| `phone` | **Sí** | Formato Chile |
+| `email`, `notes` | No | |
+| `date` + `time` | **Sí** (o `scheduled_at`) | Chile |
+| `source` | No | Default: `meta-ads` |
+
+#### Respuesta `200`
+
+```json
+{
+  "ok": true,
+  "appointment": {
+    "id": "uuid",
+    "scheduled_at": "…",
+    "user_id": "uuid"
+  }
+}
+```
 
 ---
 
-## 4. Checklist (solo integración Vercel + n8n)
+## 4. Búsqueda ChileAutos (scrape)
 
-- [ ] Leads: `https://skalemotors-v2.vercel.app/api/n8n-lead-ingest`
-- [ ] Citas (agendamiento): `https://skalemotors-v2.vercel.app/api/appointment-ingest` con `assigned_to` del vendedor del calendario.
-- [ ] En Vercel: `N8N_LEAD_INGEST_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` configurados.
-- [ ] Elegir modo: clave global (siempre enviar `branch_id`) o clave mintada por sucursal.
-- [ ] Validar `phone` y enums según la tabla del §1.3.
+### `GET /api/chileautos-scrape`
+
+Busca listados publicados en chileautos.cl. Uso interno / módulo inventario.
+
+#### Query
+
+| Parámetro | Requerido | Descripción |
+|-----------|-----------|-------------|
+| `q` | Sí | Término de búsqueda (máx. 200 chars) |
+| `offset` | No | Paginación (default `0`, máx. `1000`) |
+
+#### Autenticación
+
+- **Producción:** `x-api-key: <CHILEAUTOS_SCRAPE_API_KEY>` o query `?api_key=…`
+- **Dev/preview:** sin clave si la variable no está configurada
+
+Rate-limit: 30 req/min por IP.
+
+#### Respuesta `200`
+
+```json
+{
+  "keyword": "toyota corolla",
+  "offset": 0,
+  "total": 10,
+  "listings": [
+    {
+      "id": "…",
+      "title": "…",
+      "make": "…",
+      "model": "…",
+      "price": "…",
+      "priceText": "…",
+      "state": "…",
+      "details": ["…"],
+      "url": "https://www.chileautos.cl/…"
+    }
+  ]
+}
+```
 
 ---
 
-*Referencia alineada al despliegue Vercel `skalemotors-v2.vercel.app`. Para Edge Functions, webhooks Meta y demás rutas en `*.supabase.co`, el host y los secretos son distintos.*
+## 5. Proxy Edge (same-origin Vercel)
+
+### `POST /api/edge/{fn}`
+
+Reenvía peticiones autenticadas al host Supabase. Evita CORS cuando el frontend en Vercel llama funciones que exigen JWT.
+
+#### Funciones permitidas
+
+- `zernio-*` (todas las de redes sociales Zernio)
+- `vendor-user-create`
+- `vendor-user-delete`
+
+#### Autenticación
+
+`Authorization: Bearer <JWT Supabase>` (sesión del usuario CRM).
+
+#### Ejemplo
+
+```bash
+POST https://skalemotors-v2.vercel.app/api/edge/vendor-user-create
+Authorization: Bearer eyJ…
+Content-Type: application/json
+
+{ "email": "…", "full_name": "…", "branch_id": "…" }
+```
+
+---
+
+# Parte II — Edge Functions Supabase
+
+Base: `https://<PROJECT_REF>.supabase.co/functions/v1/<nombre>`
+
+---
+
+## A. Ingesta y automatización (API key)
+
+Endpoints para n8n y scripts. **En integraciones nuevas, preferir los equivalentes Vercel** (Parte I).
+
+### `POST /functions/v1/lead-create` ⚠️ Legacy
+
+Alternativa histórica a `/api/n8n-lead-ingest`. Contrato **más restrictivo** (menos campos, enums distintos).
+
+| Campo | Notas |
+|-------|--------|
+| `branch_id` | **Requerido** |
+| `phone` | **Requerido** |
+| `full_name`, `email`, `rut`, `region`, `notes`, `budget`, `tags` | Opcionales |
+| `source` | Sin `whatsapp` en lista original |
+| `status` | Subconjunto pipeline |
+| `update_existing` | boolean |
+| `assigned_to` | UUID vendedor |
+
+Auth: `x-api-key` / Bearer / `?api_key=` → `LEAD_INGEST_API_KEY` o clave mintada.
+
+---
+
+### `POST /functions/v1/lead-state-update`
+
+Actualiza el estado enriquecido de un lead (IA / n8n).
+
+| Campo | Requerido |
+|-------|-----------|
+| `lead_id` | Sí (UUID) |
+| `branch_id` | Sí (UUID) |
+| `state` | Sí |
+| `state_confidence`, `state_reason`, `state_updated_at` | No |
+
+Si `state` coincide con un `status` válido del pipeline, también sincroniza `status`.
+
+Auth: clave mintada (`verify_lead_ingest_key`) en prod; `LEAD_STATE_API_KEY` solo en no-prod.
+
+Respuesta `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "uuid",
+    "state": "interesado_compra",
+    "state_confidence": 0.92,
+    "state_reason": "…",
+    "state_updated_at": "…",
+    "status": "interesado"
+  }
+}
+```
+
+---
+
+### `POST /functions/v1/landing-booking`
+
+Equivalente Supabase de `/api/landing-booking`. Misma lógica: cita sin lead CRM.
+
+Auth: `LEAD_INGEST_API_KEY` / `BOOKING_INGEST_API_KEY` o clave mintada.
+
+---
+
+### `POST /functions/v1/pending-task-create`
+
+Crea tarea pendiente para un vendedor/sucursal.
+
+| Campo | Requerido | Valores |
+|-------|-----------|---------|
+| `branch_id` | Sí | UUID |
+| `title` | Sí | string |
+| `assigned_to` | No | UUID |
+| `priority` | No | `urgent`, `today`, `later` (default `today`) |
+| `action_type` | No | `contactar`, `llamar`, `confirmar`, `enviar_cotizacion`, `otro` |
+| `entity_type` | No | `lead`, `appointment`, `custom` |
+| `entity_id` | No | UUID |
+| `description`, `action_label`, `metadata`, `due_at`, `source` | No | |
+
+Auth: clave mintada o `PENDING_TASK_API_KEY`.
+
+---
+
+## B. Vitrina pública (sin JWT)
+
+El `tenant_id` **nunca** viene del cliente; se resuelve por hostname verificado (`tenant_domains`).
+
+### `GET /functions/v1/public-vitrina`
+
+Lectura pública de sitio, sucursales y vehículos publicados.
+
+| Query | Descripción |
+|-------|-------------|
+| `host` | Dominio del sitio (**requerido** si no viene en headers) |
+| `path` | `home` (default), `site`, `vehicles`, `vehicle` |
+| `id` | UUID vehículo (solo `path=vehicle`) |
+
+Respuestas:
+
+| `path` | Contenido |
+|--------|-----------|
+| `site` | `{ site, branches }` |
+| `vehicles` | `{ vehicles: [...] }` |
+| `vehicle` | `{ vehicle }` |
+| `home` | `{ site, branches, vehicles }` |
+
+Cache: `public, s-maxage=60, stale-while-revalidate=300`.
+
+---
+
+### `POST /functions/v1/vitrina-lead`
+
+Formulario de contacto / consulta por vehículo → crea lead en CRM.
+
+| Campo | Requerido |
+|-------|-----------|
+| `host` | Sí (o header `Host` / `X-Forwarded-Host`) |
+| `full_name` | Sí |
+| `phone` | Sí (mín. 8 dígitos) |
+| `email`, `message`, `vehicle_id` | No |
+
+Anti-spam: honeypot `company`/`website`, dedup 2 min por teléfono+tenant.
+
+Respuesta: `{ ok: true }` o `{ ok: true, deduped: true }`.
+
+---
+
+### `POST /api/lead` (app vitrina Next.js)
+
+Proxy same-origin que reenvía a `vitrina-lead` con el `host` de la petición.
+
+```bash
+POST https://autos.ejemplo.cl/api/lead
+Content-Type: application/json
+
+{
+  "full_name": "María López",
+  "phone": "+56987654321",
+  "message": "Consulta por el SUV",
+  "vehicle_id": "uuid-opcional"
+}
+```
+
+---
+
+## C. Webhooks entrantes
+
+| Función | Método | Descripción |
+|---------|--------|-------------|
+| `meta-webhook` | GET/POST | Verificación y eventos Meta (WhatsApp / Ads) |
+| `ycloud-webhook` | POST | Eventos YCloud WhatsApp |
+
+Configuración de URLs en Meta/YCloud: `https://<PROJECT_REF>.supabase.co/functions/v1/<nombre>`.
+
+---
+
+## D. API interna CRM (JWT requerido)
+
+Invocadas desde la app React con sesión Supabase. Todas aceptan `POST` salvo donde se indique.
+
+### Usuarios y acceso vendor
+
+| Función | Propósito |
+|---------|-----------|
+| `vendor-user-create` | Crear usuario vendedor |
+| `vendor-user-delete` | Eliminar/desactivar vendedor |
+
+> También accesibles vía `POST /api/edge/{fn}` desde Vercel.
+
+### WhatsApp
+
+| Función | Propósito |
+|---------|-----------|
+| `whatsapp-connect` | Iniciar conexión Meta WhatsApp |
+| `whatsapp-disconnect` | Desconectar |
+| `whatsapp-status` | Estado de conexión |
+| `whatsapp-send` | Enviar mensaje |
+
+### YCloud (WhatsApp alternativo)
+
+| Función | Propósito |
+|---------|-----------|
+| `ycloud-connect` | Conectar cuenta YCloud |
+| `ycloud-disconnect` | Desconectar |
+| `ycloud-status` | Estado |
+
+### Meta Ads
+
+| Función | Propósito |
+|---------|-----------|
+| `meta-ads-connect` | OAuth / vincular cuenta |
+| `meta-ads-disconnect` | Desvincular |
+| `meta-ads-status` | Estado conexión |
+| `meta-ads-campaigns` | Listar campañas |
+| `meta-ads-insights` | Métricas / insights |
+
+### Marketplaces
+
+| Función | Propósito |
+|---------|-----------|
+| `marketplace-connect` | Vincular marketplace |
+| `marketplace-sync` | Sincronizar inventario |
+| `marketplace-publish` | Publicar vehículo |
+
+### Vehículos y tasación
+
+| Función | Propósito |
+|---------|-----------|
+| `vehicle-lookup` | Consulta datos vehículo |
+| `vehicle-appraisal` | Tasación (scraper + respaldos) |
+| `vehicle-valuation` | Valoración |
+| `getapi-appraisal` | Tasación vía GetAPI |
+
+### IA
+
+| Función | Propósito |
+|---------|-----------|
+| `ai-chat` | Chat asistente interno |
+| `ai-generate` | Generación Anthropic |
+| `ai-brain-refresh` | Refrescar contexto IA por sucursal |
+| `studio-ia-generate` | Generadores Studio IA (+ webhook n8n) |
+| `support-chat` | Chat de soporte |
+
+### Redes sociales (Zernio)
+
+| Función | Propósito |
+|---------|-----------|
+| `zernio-connect-url` | URL OAuth Zernio |
+| `zernio-accounts-list` | Cuentas conectadas |
+| `zernio-accounts-sync` | Sincronizar cuentas |
+| `zernio-accounts-disconnect` | Desconectar cuenta |
+| `zernio-posts-list` | Listar publicaciones |
+| `zernio-posts-create` | Crear publicación |
+| `zernio-media-presign` | URL firmada para media |
+
+### Vitrina (admin)
+
+| Función | Propósito |
+|---------|-----------|
+| `vitrina-domain` | Gestionar dominios (JWT gerente/admin) |
+
+### Utilidades
+
+| Función | Propósito |
+|---------|-----------|
+| `chileautos-scrape` | Scrape ChileAutos (Edge; análogo al de Vercel) |
+| `chileautos-proxy` | Proxy HTML controlado a chileautos.cl |
+
+---
+
+# Parte III — Variables de entorno (Vercel)
+
+| Variable | Endpoints afectados |
+|----------|---------------------|
+| `SUPABASE_URL` / `VITE_SUPABASE_URL` | Todos los de ingesta |
+| `SUPABASE_SERVICE_ROLE_KEY` | Todos los de ingesta |
+| `N8N_LEAD_INGEST_API_KEY` | Ingesta leads/citas (solo dev) |
+| `LEAD_INGEST_ALLOWED_ORIGINS` | CORS ingesta (comma-separated) |
+| `CHILEAUTOS_SCRAPE_API_KEY` | `GET /api/chileautos-scrape` (prod) |
+| `VITE_SUPABASE_ANON_KEY` | Proxy `/api/edge/*` |
+
+---
+
+# Parte IV — Guía de integración rápida
+
+## n8n → leads
+
+```
+POST https://skalemotors-v2.vercel.app/api/n8n-lead-ingest
+x-api-key: <clave mintada>
+Body: { "phone": "…", "full_name": "…", "source": "whatsapp" }
+```
+
+## n8n → citas (sin lead)
+
+```
+POST https://skalemotors-v2.vercel.app/api/appointment-ingest
+x-api-key: <clave mintada>
+Idempotency-Key: <id único>
+Body: { "full_name", "phone", "date", "time", "assigned_to_email", "source" }
+```
+
+## Vitrina → lead
+
+```
+POST https://<dominio-vitrina>/api/lead
+Body: { "full_name", "phone", "message?", "vehicle_id?" }
+```
+
+## Actualizar estado IA de lead
+
+```
+POST https://<PROJECT_REF>.supabase.co/functions/v1/lead-state-update
+x-api-key: <clave mintada>
+Body: { "lead_id", "branch_id", "state", "state_confidence?" }
+```
+
+---
+
+# Checklist pre-producción
+
+- [ ] Claves mintadas por sucursal (`mint_lead_ingest_key`); no depender de `N8N_LEAD_INGEST_API_KEY` en prod
+- [ ] `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` en Vercel
+- [ ] `CHILEAUTOS_SCRAPE_API_KEY` si usas scrape en prod
+- [ ] `LEAD_INGEST_ALLOWED_ORIGINS` restringido si la ingesta se llama desde browser
+- [ ] n8n apunta a `skalemotors-v2.vercel.app`, no a `*.supabase.co` (salvo legacy)
+- [ ] Citas: `assigned_to_email` del vendedor dueño del calendario
+- [ ] Idempotency-Key en flujos con reintentos
+
+---
+
+*Última revisión alineada al código en `api/` y `supabase/functions/`. Para cambios de contrato, verificar implementación antes de integrar.*

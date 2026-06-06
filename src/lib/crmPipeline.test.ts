@@ -5,7 +5,9 @@ import {
   coerceCrmPipelineStatus,
   crmStageToDbStatus,
   getLeadCrmStageKey,
+  isLeadVisibleInCrmKanban,
   leadBelongsToCrmStage,
+  pickCancelledLeadIdsVisibleInCrm,
   safePipelineSelectValue,
 } from "./crmPipeline";
 
@@ -15,6 +17,7 @@ describe("crmPipeline", () => {
     expect(getLeadCrmStageKey("cotizando")).toBe("negociando");
     expect(getLeadCrmStageKey("en_espera")).toBe("en_espera");
     expect(getLeadCrmStageKey("vendido")).toBe("negocio_cerrado");
+    expect(getLeadCrmStageKey("cancelado")).toBe("cancelado");
     expect(getLeadCrmStageKey("perdido")).toBeNull();
   });
 
@@ -30,7 +33,26 @@ describe("crmPipeline", () => {
     expect(crmStageToDbStatus("en_espera")).toBe("en_espera");
     expect(crmStageToDbStatus("negociando")).toBe("negociando");
     expect(crmStageToDbStatus("negocio_cerrado")).toBe("vendido");
+    expect(crmStageToDbStatus("cancelado")).toBe("cancelado");
     expect(coerceCrmPipelineStatus("negocio_cerrado")).toBe("vendido");
+  });
+
+  it("solo muestra los 5 cancelados más recientes en CRM", () => {
+    const leads = [
+      { id: "1", status: "cancelado", updated_at: "2026-01-01T00:00:00Z" },
+      { id: "2", status: "cancelado", updated_at: "2026-06-01T00:00:00Z" },
+      { id: "3", status: "cancelado", updated_at: "2026-05-01T00:00:00Z" },
+      { id: "4", status: "cancelado", updated_at: "2026-04-01T00:00:00Z" },
+      { id: "5", status: "cancelado", updated_at: "2026-03-01T00:00:00Z" },
+      { id: "6", status: "cancelado", updated_at: "2026-02-01T00:00:00Z" },
+      { id: "7", status: "contactado", updated_at: "2026-01-01T00:00:00Z" },
+    ];
+    const visible = pickCancelledLeadIdsVisibleInCrm(leads);
+    expect(visible.size).toBe(5);
+    expect(visible.has("2")).toBe(true);
+    expect(visible.has("1")).toBe(false);
+    expect(isLeadVisibleInCrmKanban(leads[0], visible)).toBe(false);
+    expect(isLeadVisibleInCrmKanban(leads[6], visible)).toBe(true);
   });
 
   it("mantiene orden del embudo con en_espera entre negociando y para_cierre", () => {
@@ -42,6 +64,7 @@ describe("crmPipeline", () => {
       "en_espera",
       "para_cierre",
       "negocio_cerrado",
+      "cancelado",
     ]);
   });
 

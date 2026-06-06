@@ -39,10 +39,13 @@ import {
 import {
   CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
+  CRM_CANCELLED_VISIBLE_MAX,
   type CrmStageKey,
   crmStageToDbStatus,
   getLeadCrmStageKey,
+  isLeadVisibleInCrmKanban,
   leadBelongsToCrmStage,
+  pickCancelledLeadIdsVisibleInCrm,
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
 import { CRM_SEGUIMIENTO_SOCIOS, isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
@@ -135,6 +138,7 @@ const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: st
   en_espera: { border: "border-violet-500", badge: "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300", dot: "bg-violet-500" },
   para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
   negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
+  cancelado: { border: "border-zinc-500", badge: "bg-zinc-100 text-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-200", dot: "bg-zinc-500" },
 };
 
 const normalizeTags = (tags: unknown) => {
@@ -747,7 +751,7 @@ export default function CRM() {
     const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
     const cerradosMes = base.filter((l) => isVendidoInLocalCalendarMonth(l, crmCalendarMonthKey)).length;
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
-    const enPipeline = total - cerrados - perdidos;
+    const enPipeline = total - cerrados - perdidos - base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
     const noRespondieron = deletedLeads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
@@ -803,10 +807,15 @@ export default function CRM() {
       ? onlyLeads.filter((lead) => lead.assigned_to === supervisedVendorId)
       : onlyLeads;
 
+    const visibleCancelledIds = pickCancelledLeadIdsVisibleInCrm(supervised);
+    const kanbanLeads = supervised.filter((lead) =>
+      isLeadVisibleInCrmKanban(lead, visibleCancelledIds),
+    );
+
     // 4) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return supervised;
-    return supervised.filter((lead) => {
+    if (!q) return kanbanLeads;
+    return kanbanLeads.filter((lead) => {
       const name = (lead.full_name || "").toLowerCase();
       const phone = (lead.phone || "").replace(/\D/g, "");
       const phoneQuery = q.replace(/\D/g, "");
@@ -829,6 +838,11 @@ export default function CRM() {
         })
         .slice()
         .sort((a, b) => {
+          if (stage.key === "cancelado") {
+            const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return tb - ta;
+          }
           const aMax = maxedOut(a) ? 1 : 0;
           const bMax = maxedOut(b) ? 1 : 0;
           return aMax - bMax;
@@ -1563,7 +1577,7 @@ export default function CRM() {
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
 
@@ -1603,6 +1617,11 @@ export default function CRM() {
                 {stage.key === "negocio_cerrado" ? (
                   <CardDescription className="text-[11px] pt-1">
                     Solo negocios cerrados en el mes en curso (calendario local). Al cambiar de mes, la columna arranca vacía; el resto del embudo no se mueve.
+                  </CardDescription>
+                ) : null}
+                {stage.key === "cancelado" ? (
+                  <CardDescription className="text-[11px] pt-1">
+                    Últimos {CRM_CANCELLED_VISIBLE_MAX} cancelados. Los anteriores siguen en Leads pero no se muestran aquí.
                   </CardDescription>
                 ) : null}
               </CardHeader>

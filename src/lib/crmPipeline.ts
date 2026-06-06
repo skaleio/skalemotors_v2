@@ -8,7 +8,8 @@ export type CrmStageKey =
   | "negociando"
   | "en_espera"
   | "para_cierre"
-  | "negocio_cerrado";
+  | "negocio_cerrado"
+  | "cancelado";
 
 export type CrmStageDefinition = {
   key: CrmStageKey;
@@ -49,7 +50,15 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
     label: "NEGOCIO CONCRETADO",
     statuses: ["vendido"],
   },
+  {
+    key: "cancelado",
+    label: "CANCELADO",
+    statuses: ["cancelado"],
+  },
 ] as const;
+
+/** Máximo de leads cancelados visibles en el Kanban CRM (el resto sigue en Leads). */
+export const CRM_CANCELLED_VISIBLE_MAX = 5;
 
 /** Columnas donde el usuario puede mover leads sin flujo de cierre de negocio. */
 export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerrado">[] = [
@@ -67,6 +76,7 @@ export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
   en_espera: "EN ESPERA",
   para_cierre: "PARA CIERRE",
   negocio_cerrado: "NEGOCIO CONCRETADO",
+  cancelado: "CANCELADO",
 };
 
 /** Estilos de pill / banner alineados con las columnas del pipeline. */
@@ -83,6 +93,8 @@ export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
     "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-200",
   negocio_cerrado:
     "border-red-200/80 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/50 dark:text-red-200",
+  cancelado:
+    "border-zinc-300/80 bg-zinc-100 text-zinc-800 dark:border-zinc-600/60 dark:bg-zinc-950/50 dark:text-zinc-200",
 };
 
 export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
@@ -92,6 +104,7 @@ export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
   en_espera: "bg-violet-500",
   para_cierre: "bg-emerald-500",
   negocio_cerrado: "bg-red-600",
+  cancelado: "bg-zinc-500",
 };
 
 /** Estados activos del embudo (excluye vendido/perdido). */
@@ -115,6 +128,7 @@ function normalizeLeadStatus(status: string | null | undefined): string {
 export function getLeadCrmStageKey(status: string | null | undefined): CrmStageKey | null {
   const s = normalizeLeadStatus(status);
   if (!s || s === "perdido") return null;
+  if (s === "cancelado") return "cancelado";
   if (s === "vendido") return "negocio_cerrado";
   if (s === "negociando" || s === "cotizando") return "negociando";
   if (s === "en_espera") return "en_espera";
@@ -139,6 +153,7 @@ export function leadBelongsToCrmStage(
 /** `leads.status` canónico al soltar o guardar desde una columna. */
 export function crmStageToDbStatus(stageKey: string): string {
   if (stageKey === "negocio_cerrado") return "vendido";
+  if (stageKey === "cancelado") return "cancelado";
   if (
     stageKey === "nuevo"
     || stageKey === "contactado"
@@ -156,6 +171,28 @@ export function coerceCrmPipelineStatus(status: unknown, fallback = "contactado"
   const s = typeof status === "string" ? status.trim().toLowerCase() : "";
   if (!s) return fallback;
   return crmStageToDbStatus(s);
+}
+
+/** IDs de cancelados que pueden verse en CRM (los `CRM_CANCELLED_VISIBLE_MAX` más recientes). */
+export function pickCancelledLeadIdsVisibleInCrm<
+  T extends { id: string; status?: string | null; updated_at?: string | null },
+>(leads: readonly T[]): Set<string> {
+  const cancelled = leads
+    .filter((l) => normalizeLeadStatus(l.status) === "cancelado")
+    .slice()
+    .sort((a, b) => {
+      const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return tb - ta;
+    });
+  return new Set(cancelled.slice(0, CRM_CANCELLED_VISIBLE_MAX).map((l) => l.id));
+}
+
+export function isLeadVisibleInCrmKanban<
+  T extends { id: string; status?: string | null },
+>(lead: T, visibleCancelledIds: Set<string>): boolean {
+  if (normalizeLeadStatus(lead.status) !== "cancelado") return true;
+  return visibleCancelledIds.has(lead.id);
 }
 
 export type CrmStageCount = {
@@ -195,7 +232,7 @@ export function aggregateLeadsByCrmStage(
   }));
 
   const totalInPipeline = stages
-    .filter((s) => s.stageKey !== "negocio_cerrado")
+    .filter((s) => s.stageKey !== "negocio_cerrado" && s.stageKey !== "cancelado")
     .reduce((sum, s) => sum + s.count, 0);
 
   return { stages, perdidos, totalInPipeline };

@@ -19,6 +19,7 @@ const ALLOWED_LEAD_STATUSES = new Set<string>([
   'vendido',
   'perdido',
   'para_cierre',
+  'cancelado',
 ])
 
 function coerceLeadStatus(status: unknown, fallback: string): string {

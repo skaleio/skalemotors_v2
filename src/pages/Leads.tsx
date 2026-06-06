@@ -265,6 +265,11 @@ const PIPELINE_STATUS_LABELS = CRM_PIPELINE_STATUS_LABELS;
 const CLOSED_STATUS_LABELS: Record<string, string> = {
   vendido: "Cerrado (vendido)",
   perdido: "Cerrado (perdido)",
+  cancelado: "Cancelado",
+};
+
+const CANCELLED_STATUS_LABELS: Record<string, string> = {
+  cancelado: "CANCELADO",
 };
 
 const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
@@ -273,6 +278,7 @@ const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
   negociando: { dot: "bg-orange-500", text: "text-orange-600" },
   en_espera: { dot: "bg-violet-500", text: "text-violet-700" },
   para_cierre: { dot: "bg-emerald-500", text: "text-emerald-700" },
+  cancelado: { dot: "bg-zinc-500", text: "text-zinc-700" },
 };
 
 const CLOSED_STYLES: Record<string, { dot: string; text: string }> = {
@@ -286,11 +292,12 @@ function getLeadPipelineStage(status?: string | null): LeadPipelineStage {
   return safePipelineSelectValue(status);
 }
 
-/** Bucket para filtro / stats: pipeline activo o cerrado (no mezcla vendido con CONTACTADO). */
-type LeadStatusBucket = LeadPipelineStage | "cerrado";
+/** Bucket para filtro / stats: pipeline activo, cancelado o cerrado (vendido/perdido). */
+type LeadStatusBucket = LeadPipelineStage | "cancelado" | "cerrado";
 
 function getLeadStatusBucket(status?: string | null): LeadStatusBucket {
   const s = (status || "").toLowerCase();
+  if (s === "cancelado") return "cancelado";
   if (s === "vendido" || s === "perdido") return "cerrado";
   return getLeadPipelineStage(status);
 }
@@ -303,7 +310,7 @@ function isClosedLeadStatus(status?: string | null): boolean {
 /** Estado para el formulario de edición (pipeline o cerrado). */
 function statusForEditForm(status?: string | null): string {
   const s = (status || "").toLowerCase();
-  if (s === "vendido" || s === "perdido") return s;
+  if (s === "vendido" || s === "perdido" || s === "cancelado") return s;
   return getLeadPipelineStage(status);
 }
 
@@ -316,6 +323,9 @@ const getStatusMeta = (value?: string | null) => {
   }
   if (s === "perdido") {
     return { label: CLOSED_STATUS_LABELS.perdido, styles: CLOSED_STYLES.perdido };
+  }
+  if (s === "cancelado") {
+    return { label: CANCELLED_STATUS_LABELS.cancelado, styles: PIPELINE_STYLES.cancelado };
   }
   const stage = getLeadPipelineStage(value);
   if (stage === "negocio_cerrado") {
@@ -805,9 +815,11 @@ function LeadsImpl({ user }: { user: User }) {
 
   const resolvedStatusFilter = useMemo(() => {
     if (statusFilter === "all") return "all";
+    if (statusFilter === "cancelado") return "cancelado";
     if ((CRM_MOVABLE_STAGE_KEYS as readonly string[]).includes(statusFilter)) {
       return statusFilter;
     }
+    if (statusFilter === "cerrado") return "cerrado";
     return "all";
   }, [statusFilter]);
 
@@ -834,11 +846,12 @@ function LeadsImpl({ user }: { user: User }) {
     const total = leads.length;
     const openLeads = leads.filter((l) => !isClosedLeadStatus(l.status));
     const nuevo = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "nuevo").length;
+    const cancelado = openLeads.filter((lead) => getLeadStatusBucket(lead.status) === "cancelado").length;
     const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
     const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
     const enEspera = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "en_espera").length;
     const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
-    return { total, nuevo, contactado, negociando, enEspera, paraCierre };
+    return { total, nuevo, contactado, negociando, enEspera, paraCierre, cancelado };
   }, [leads]);
 
   const {
@@ -1595,6 +1608,9 @@ function LeadsImpl({ user }: { user: User }) {
               <DropdownMenuItem onSelect={() => handleExportLeads("para_cierre")}>
                 {PIPELINE_STATUS_LABELS.para_cierre}
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportLeads("cancelado")}>
+                {CANCELLED_STATUS_LABELS.cancelado}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button onClick={() => setShowCreateDialog(true)}>
@@ -1604,7 +1620,7 @@ function LeadsImpl({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <Card className="border-l-4 border-slate-400">
           <CardHeader className="pb-2">
             <CardDescription>Leads total</CardDescription>
@@ -1641,6 +1657,12 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>
           </CardHeader>
         </Card>
+        <Card className="border-l-4 border-zinc-500">
+          <CardHeader className="pb-2">
+            <CardDescription>CANCELADO</CardDescription>
+            <CardTitle className="text-2xl text-zinc-700">{leadStats.cancelado}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -1668,6 +1690,7 @@ function LeadsImpl({ user }: { user: User }) {
                     {PIPELINE_STATUS_LABELS[key]}
                   </SelectItem>
                 ))}
+                <SelectItem value="cancelado">{CANCELLED_STATUS_LABELS.cancelado}</SelectItem>
               </SelectContent>
             </Select>
             <Button
