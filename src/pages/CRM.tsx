@@ -78,21 +78,27 @@ function resolveEffectiveAssigneeId(
   return lead.assigned_to ?? lead.created_by ?? null;
 }
 
+/** Vendedor de seguimiento explícito (`assigned_to`); sin fallback a `created_by`. */
+function leadAssignedToId(lead: Pick<Lead, "assigned_to"> | null | undefined): string | null {
+  if (!lead) return null;
+  const id = lead.assigned_to?.trim();
+  return id || null;
+}
+
 function assigneeDisplayName(lead: LeadWithAssignee): string | null {
-  const assigneeId = resolveEffectiveAssigneeId(lead);
+  const assigneeId = leadAssignedToId(lead);
   if (!assigneeId) return null;
   const full = lead.assigned_user?.full_name?.trim();
   if (full) return full;
   const email = lead.assigned_user?.email?.trim();
   if (email) return email;
-  return "Vendedor asignado";
+  return null;
 }
 
 /** Etiqueta corta para la esquina de la tarjeta (primer nombre). */
 function assigneeCornerLabel(lead: LeadWithAssignee): string | null {
   const name = assigneeDisplayName(lead);
   if (!name) return null;
-  if (name === "Vendedor asignado") return name;
   const first = name.split(/\s+/).filter(Boolean)[0];
   return first || name;
 }
@@ -320,10 +326,10 @@ const LeadCard = memo(function LeadCard({
   const lastDragEndRef = useRef(0);
   const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
   const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
-  const assigneeId = resolveEffectiveAssigneeId(lead);
+  const assigneeId = leadAssignedToId(lead);
   const assigneeName = assigneeCornerLabel(lead);
   const assigneeFullName = assigneeDisplayName(lead);
-  const cornerAssigneeLabel = showAssigneeBadge ? assigneeName : null;
+  const cornerAssigneeLabel = showAssigneeBadge && assigneeName ? assigneeName : null;
   const assigneeBorder = socio
     ? null
     : resolveAssigneeBorderColor({
@@ -670,7 +676,7 @@ export default function CRM() {
 
   const crmAssigneeSelectOptions = useMemo((): BranchSeller[] => {
     if (!editingLead || !isEditingForm) return crmAssigneeOptions;
-    const currentId = editForm.assigned_to ?? resolveEffectiveAssigneeId(editingLead);
+    const currentId = editForm.assigned_to ?? editingLead.assigned_to ?? null;
     if (!currentId || crmAssigneeOptions.some((s) => s.id === currentId)) {
       return crmAssigneeOptions;
     }
@@ -678,7 +684,7 @@ export default function CRM() {
     return [
       {
         id: currentId,
-        full_name: au?.full_name?.trim() || "Vendedor asignado",
+        full_name: au?.full_name?.trim() || au?.email?.trim() || currentId,
         email: au?.email ?? null,
         branch_id: editingLead.branch_id ?? null,
         role: "vendedor",
@@ -801,7 +807,7 @@ export default function CRM() {
       vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
       transmision: leadTransmissionForForm(editingLead.transmision),
       status: safePipelineSelectValue(editingLead.status),
-      assigned_to: resolveEffectiveAssigneeId(editingLead),
+      assigned_to: editingLead.assigned_to ?? null,
     });
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
@@ -1949,7 +1955,7 @@ export default function CRM() {
               <div className="flex items-center gap-1 shrink-0">
                 <AssignLeadMenu
                   leadId={editingLead.id}
-                  assignedTo={resolveEffectiveAssigneeId(editingLead)}
+                  assignedTo={editingLead.assigned_to}
                   assignedLabel={(editingLead as Lead & {
                     assigned_user?: { full_name?: string | null; email?: string | null } | null;
                   }).assigned_user?.full_name ?? null}
@@ -2257,17 +2263,19 @@ export default function CRM() {
                     <p className="text-sm text-muted-foreground">Vendedor asignado (seguimiento)</p>
                     <p className="text-base flex items-center gap-2">
                       {(() => {
-                        const assigneeId = resolveEffectiveAssigneeId(editingLead);
+                        const assigneeId = leadAssignedToId(editingLead);
+                        if (!assigneeId) {
+                          return <span className="text-muted-foreground">Sin asignar</span>;
+                        }
                         const au = (editingLead as LeadWithAssignee).assigned_user;
                         const dot = resolveAssigneeBorderColor({
                           userId: assigneeId,
                           crmColor: au?.crm_color ?? null,
                         });
-                        const label =
-                          au?.full_name?.trim() || au?.email?.trim() || (assigneeId ? "Vendedor asignado" : "Sin asignar");
+                        const label = au?.full_name?.trim() || au?.email?.trim() || assigneeId;
                         return (
                           <>
-                            {dot && assigneeId ? (
+                            {dot ? (
                               <span
                                 className="h-3 w-3 shrink-0 rounded-full ring-1 ring-border"
                                 style={{ backgroundColor: dot }}
