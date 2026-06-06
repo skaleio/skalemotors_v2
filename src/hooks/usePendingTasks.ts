@@ -13,6 +13,8 @@ type UsePendingTasksOptions = {
   tenantId?: string | null
   role?: string | null
   userId?: string | null
+  /** false desactiva la query (p. ej. admin usa avisos en lugar de tareas). */
+  enabled?: boolean
 }
 
 // Backward compat: acepta un string (branchId) como en la versión anterior,
@@ -80,7 +82,7 @@ export function usePendingTasks(input: UsePendingTasksInput) {
 
   const { branchId, tenantId, role } = opts
   const isAdminWide = role === 'admin' || role === 'jefe_jefe'
-  const enabled = isAdminWide ? !!tenantId : !!branchId
+  const enabled = (opts.enabled ?? true) && (isAdminWide ? !!tenantId : !!branchId)
   const queryKey = pendingTasksQueryKey(opts)
   const syncScopeRef = useRef<string | null>(null)
 

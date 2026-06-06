@@ -1,3 +1,4 @@
+import { vendorLeadScopeOrFilter } from '../leadsScope'
 import { coerceCrmPipelineStatus } from '../crmPipeline'
 import { supabase } from '../supabase'
 import type { Database } from '../types/database'
@@ -85,7 +86,7 @@ export const leadService = {
       .order('created_at', { ascending: false })
 
     if (filters?.assignedTo) {
-      query = query.eq('assigned_to', filters.assignedTo)
+      query = query.or(vendorLeadScopeOrFilter(filters.assignedTo))
     }
 
     if (filters?.branchId) {
@@ -323,7 +324,7 @@ export const leadService = {
       .select('status, created_at')
 
     if (userId) {
-      query = query.eq('assigned_to', userId)
+      query = query.or(vendorLeadScopeOrFilter(userId))
     }
 
     if (branchId) {
@@ -370,7 +371,7 @@ export const leadService = {
       query = query.eq('branch_id', params.branchId)
     }
     if (params.assignedTo) {
-      query = query.or(`assigned_to.is.null,assigned_to.eq.${params.assignedTo}`)
+      query = query.or(vendorLeadScopeOrFilter(params.assignedTo))
     }
 
     const { count, error } = await query

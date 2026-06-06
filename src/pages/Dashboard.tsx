@@ -15,6 +15,7 @@ import { useAppointments } from "@/hooks/useAppointments";
 import { useDashboardStats, DASHBOARD_STATS_QUERY_KEY, type DashboardSelectedMonth } from "@/hooks/useDashboardStats";
 import { useCompletePendingTask, usePendingTasks } from "@/hooks/usePendingTasks";
 import { PendingTaskRow } from "@/components/tasks/PendingTaskRow";
+import { DashboardAdminAlertsPanel } from "@/components/dashboard/DashboardAdminAlertsPanel";
 import { formatCLP } from "@/lib/format";
 import { DASHBOARD_KPI_INFO } from "@/lib/dashboardKpiInfo";
 import {
@@ -69,11 +70,13 @@ export default function Dashboard() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const { data: stats, isLoading, error, refetch: refetchStats } = useDashboardStats(user?.branch_id, selectedMonth, user?.id);
+  const isAdminDashboard = user?.role === "admin";
   const { urgentCount, urgentTasks, todayTasks, laterTasks, isLoading: tasksLoading, queryClient } = usePendingTasks({
     branchId: user?.branch_id,
     tenantId: user?.tenant_id,
     role: user?.role,
     userId: user?.id,
+    enabled: !isAdminDashboard,
   });
   const completeTaskMutation = useCompletePendingTask();
 
@@ -775,8 +778,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Tareas Pendientes */}
+        {/* Tareas pendientes (operativas) o avisos de control (admin) */}
         <Card className="border-0 shadow-sm hover:shadow-md transition-all duration-300">
+          {isAdminDashboard ? (
+            <DashboardAdminAlertsPanel userId={user?.id} />
+          ) : (
+            <>
           <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
@@ -800,7 +807,7 @@ export default function Dashboard() {
                   <CheckCircle2 className="h-12 w-12 mb-3 opacity-20" />
                   <p className="text-sm font-medium">No hay tareas pendientes</p>
                   <p className="text-xs mt-1">Las alertas aparecerán aquí (leads sin contactar, seguimientos, citas por confirmar, recordatorios WhatsApp).</p>
-                  <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate('/leads')}>
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate('/app/leads')}>
                     Ver leads
                   </Button>
                 </div>
@@ -876,7 +883,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   <div className="text-center pt-4 border-t">
-                    <Button variant="link" onClick={() => navigate('/leads')}>
+                    <Button variant="link" onClick={() => navigate('/app/leads')}>
                       Ver leads →
                     </Button>
                   </div>
@@ -884,6 +891,8 @@ export default function Dashboard() {
               )}
             </div>
           </CardContent>
+            </>
+          )}
         </Card>
       </div>
 

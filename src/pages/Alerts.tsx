@@ -9,8 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Bell, Car, Check, CheckCircle, Clock, Info, Loader2, UserPlus, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import {
+  NOTIFICATION_EVENT_TYPES,
+  getNotificationEventMeta,
+  notificationEventsForRole,
+  notificationLabelForType,
+  type NotificationEventKey,
+} from "@/lib/notificationEvents";
+import { Bell, Check, Clock, Info, Loader2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import {
@@ -23,125 +29,12 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 
-type Filter = "all" | "unread" | EventKey;
+import { navigateFromNotification } from "@/lib/notificationNavigation";
 
-type EventKey =
-  | "lead_sold"
-  | "vehicle_sold"
-  | "vehicle_status_changed"
-  | "lead_contactado"
-  | "lead_assigned"
-  | "lead_stale"
-  | "consignacion_created"
-  | "consignacion_stale"
-  | "vehicle_unpublished"
-  | "seller_inactive";
-
-type EventMeta = {
-  key: EventKey;
-  label: string;
-  short: string;
-  icon: LucideIcon;
-  iconClass: string;
-  description: string;
-  roles: readonly ("admin" | "vendedor" | "fotografo" | "gerente" | "jefe_jefe" | "jefe_sucursal" | "inventario" | "financiero" | "servicio")[];
-};
-
-const EVENT_TYPES: readonly EventMeta[] = [
-  {
-    key: "lead_sold",
-    label: "Negocios cerrados",
-    short: "Cerrados",
-    icon: CheckCircle,
-    iconClass: "text-green-500",
-    description: "Cuando un lead pasa a vendido",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal"],
-  },
-  {
-    key: "vehicle_sold",
-    label: "Vehículos vendidos",
-    short: "Veh. vendidos",
-    icon: Car,
-    iconClass: "text-emerald-600",
-    description: "Vendedor marca inventario como vendido o vendido por dueño",
-    roles: ["admin"],
-  },
-  {
-    key: "vehicle_status_changed",
-    label: "Estados de inventario",
-    short: "Estados",
-    icon: Car,
-    iconClass: "text-sky-600",
-    description: "Un vendedor cambia el estado de un vehículo (reservado, reparación, etc.)",
-    roles: ["admin"],
-  },
-  {
-    key: "lead_contactado",
-    label: "Leads contactados",
-    short: "Contactados",
-    icon: Info,
-    iconClass: "text-blue-500",
-    description: "Vendedor marca un lead como contactado",
-    roles: ["admin"],
-  },
-  {
-    key: "lead_assigned",
-    label: "Asignados a mí",
-    short: "Asignados",
-    icon: UserPlus,
-    iconClass: "text-pink-500",
-    description: "Un admin te asignó un lead",
-    roles: ["vendedor"],
-  },
-  {
-    key: "lead_stale",
-    label: "Sin movimiento",
-    short: "Estancados",
-    icon: Clock,
-    iconClass: "text-red-500",
-    description: "Leads del CRM sin movimiento ni actualización > 4 días",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "vendedor"],
-  },
-  {
-    key: "consignacion_created",
-    label: "Consignaciones nuevas",
-    short: "Nuevas",
-    icon: Car,
-    iconClass: "text-indigo-500",
-    description: "Un vendedor registra una consignación nueva",
-    roles: ["admin"],
-  },
-  {
-    key: "consignacion_stale",
-    label: "Consignación sin publicar",
-    short: "Consign.",
-    icon: Clock,
-    iconClass: "text-amber-500",
-    description: "Consignaciones en revisión > 7 días sin publicarse",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
-  },
-  {
-    key: "vehicle_unpublished",
-    label: "Inventario sin publicar",
-    short: "Inventario",
-    icon: Car,
-    iconClass: "text-amber-600",
-    description: "Vehículos disponibles > 5 días sin publicarse",
-    roles: ["admin", "gerente", "jefe_jefe", "jefe_sucursal", "inventario", "fotografo"],
-  },
-  {
-    key: "seller_inactive",
-    label: "Vendedor sin actividad",
-    short: "Vendedores",
-    icon: UserPlus,
-    iconClass: "text-rose-500",
-    description: "Vendedor sin uso de la plataforma ni movimiento de leads (> 24 h)",
-    roles: ["admin", "jefe_sucursal"],
-  },
-] as const;
+type Filter = "all" | "unread" | NotificationEventKey;
 
 function iconFor(type: string): JSX.Element {
-  const meta = EVENT_TYPES.find((e) => e.key === type);
+  const meta = getNotificationEventMeta(type);
   if (meta) {
     const Icon = meta.icon;
     return <Icon className={`h-5 w-5 ${meta.iconClass}`} />;
@@ -155,10 +48,6 @@ function formatTime(iso: string) {
   } catch {
     return "";
   }
-}
-
-function labelFor(type: string): string {
-  return EVENT_TYPES.find((e) => e.key === type)?.label ?? type;
 }
 
 export default function Alerts() {
@@ -181,17 +70,13 @@ export default function Alerts() {
 
   // Cards visibles según el rol del usuario (solo las que le aplican).
   const visibleEvents = useMemo(
-    () =>
-      user?.role
-        ? EVENT_TYPES.filter((e) => (e.roles as readonly string[]).includes(user.role))
-        : EVENT_TYPES,
+    () => notificationEventsForRole(user?.role),
     [user?.role],
   );
 
-  // Contador por tipo: unread + total (ventana actual).
   const countsByType = useMemo(() => {
     const acc: Record<string, { unread: number; total: number }> = {};
-    for (const t of EVENT_TYPES) {
+    for (const t of NOTIFICATION_EVENT_TYPES) {
       acc[t.key] = { unread: 0, total: 0 };
     }
     for (const n of notifications) {
@@ -211,25 +96,7 @@ export default function Alerts() {
 
   const openNotification = (n: Notification) => {
     if (!n.read_at) markReadMutation.mutate(n.id);
-    if (n.action_url) {
-      navigateWithLoading(n.action_url);
-      return;
-    }
-    if (n.entity_type === "lead" && n.entity_id) {
-      navigateWithLoading(`/app/leads?openLead=${n.entity_id}`);
-      return;
-    }
-    if (n.entity_type === "consignacion") {
-      navigateWithLoading("/app/consignaciones");
-      return;
-    }
-    if (n.entity_type === "vehicle") {
-      navigateWithLoading("/app/inventory");
-      return;
-    }
-    if (n.entity_type === "seller") {
-      navigateWithLoading("/app/vendors");
-    }
+    navigateFromNotification(n, navigateWithLoading);
   };
 
   const emptyHint = (() => {
@@ -339,7 +206,7 @@ export default function Alerts() {
                 <>
                   {" "}· filtrando por{" "}
                   <span className="font-medium">
-                    {filter === "unread" ? "no leídas" : labelFor(filter)}
+                    {filter === "unread" ? "no leídas" : notificationLabelForType(filter)}
                   </span>
                 </>
               )}
@@ -396,7 +263,7 @@ export default function Alerts() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-semibold">{n.title}</h4>
                           <Badge variant="outline" className="text-xs font-normal">
-                            {labelFor(n.type)}
+                            {notificationLabelForType(n.type)}
                           </Badge>
                           {unread && <Badge variant="secondary">Nuevo</Badge>}
                           {archived && <Badge variant="outline">Archivada</Badge>}

@@ -47,7 +47,7 @@ import {
 } from "@/lib/crmPipeline";
 import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { filterLeadsForVendorView, leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
@@ -610,6 +610,13 @@ export default function CRM() {
   });
   const { sellers: vendorList } = useBranchSellers(vendorListQuery);
 
+  const scopedLeads = useMemo(() => {
+    if (user?.role === "vendedor" && user.id) {
+      return filterLeadsForVendorView(leads, user.id);
+    }
+    return leads;
+  }, [leads, user?.role, user?.id]);
+
   const supervisedVendorName = useMemo(
     () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
     [vendorList, supervisedVendorId],
@@ -864,7 +871,7 @@ export default function CRM() {
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
     // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
-    const onlyLeads = leads.filter((lead) => {
+    const onlyLeads = scopedLeads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
       const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
       if (isConsignacion) return false;
@@ -896,7 +903,7 @@ export default function CRM() {
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [leads, searchQuery, supervisedVendorId, isCeoView]);
+  }, [scopedLeads, searchQuery, supervisedVendorId, isCeoView]);
 
   const leadsByStage = useMemo(() => {
     const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;

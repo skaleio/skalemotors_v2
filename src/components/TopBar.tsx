@@ -9,6 +9,7 @@ import {
   useNotifications,
   type Notification,
 } from "@/hooks/useNotifications";
+import { navigateFromNotification } from "@/lib/notificationNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
@@ -175,25 +176,7 @@ export function TopBar() {
 
   const openNotification = (notification: Notification) => {
     if (!notification.read_at) markAsRead(notification.id);
-    if (notification.action_url) {
-      navigateWithLoading(notification.action_url);
-      return;
-    }
-    if (notification.entity_type === "lead" && notification.entity_id) {
-      navigateWithLoading(`/app/leads?openLead=${notification.entity_id}`);
-      return;
-    }
-    if (notification.entity_type === "consignacion") {
-      navigateWithLoading("/app/consignaciones");
-      return;
-    }
-    if (notification.entity_type === "vehicle") {
-      navigateWithLoading("/app/inventory");
-      return;
-    }
-    if (notification.entity_type === "seller") {
-      navigateWithLoading("/app/vendors");
-    }
+    navigateFromNotification(notification, navigateWithLoading);
   };
 
   return (
