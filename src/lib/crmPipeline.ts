@@ -217,6 +217,26 @@ export function isLeadVisibleInCrmKanban<
   return visibleCancelledIds.has(lead.id);
 }
 
+/**
+ * Vista CEO del CRM: en columna NUEVO solo entran leads sin vendedor asignado.
+ * Tras delegar, el lead desaparece de NUEVO (sigue en estado nuevo en BD).
+ */
+export function isLeadHiddenFromCeoNuevoColumn(lead: {
+  status?: string | null;
+  assigned_to?: string | null;
+}): boolean {
+  return getLeadCrmStageKey(lead.status) === "nuevo" && Boolean(lead.assigned_to?.trim());
+}
+
+export function filterLeadsForCrmCeoView<
+  T extends { status?: string | null; assigned_to?: string | null },
+>(leads: readonly T[]): T[] {
+  return leads.filter((lead) => !isLeadHiddenFromCeoNuevoColumn(lead));
+}
+
+/** Alias por typo en imports (`Seo` → `Ceo`). Preferir filterLeadsForCrmCeoView. */
+export { filterLeadsForCrmCeoView as filterLeadsForCrmSeoView };
+
 export type CrmStageCount = {
   stageKey: CrmStageKey;
   label: string;

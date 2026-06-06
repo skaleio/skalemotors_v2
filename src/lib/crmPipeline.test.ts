@@ -4,7 +4,9 @@ import {
   CRM_PIPELINE_STAGES,
   coerceCrmPipelineStatus,
   crmStageToDbStatus,
+  filterLeadsForCrmCeoView,
   getLeadCrmStageKey,
+  isLeadHiddenFromCeoNuevoColumn,
   isLeadVisibleInCrmKanban,
   leadBelongsToCrmStage,
   pickCancelledLeadIdsVisibleInCrm,
@@ -26,6 +28,18 @@ describe("crmPipeline", () => {
     expect(leadBelongsToCrmStage("interesado", "contactado")).toBe(true);
     expect(leadBelongsToCrmStage("negociando", "en_espera")).toBe(false);
     expect(leadBelongsToCrmStage("para_cierre", "en_espera")).toBe(false);
+  });
+
+  it("Vista CEO oculta leads NUEVO ya asignados a vendedor", () => {
+    const leads = [
+      { id: "1", status: "nuevo", assigned_to: null },
+      { id: "2", status: "nuevo", assigned_to: "vendor-uuid" },
+      { id: "3", status: "contactado", assigned_to: "vendor-uuid" },
+    ];
+    expect(isLeadHiddenFromCeoNuevoColumn(leads[0])).toBe(false);
+    expect(isLeadHiddenFromCeoNuevoColumn(leads[1])).toBe(true);
+    expect(isLeadHiddenFromCeoNuevoColumn(leads[2])).toBe(false);
+    expect(filterLeadsForCrmCeoView(leads).map((l) => l.id)).toEqual(["1", "3"]);
   });
 
   it("convierte columna CRM a status DB al mover", () => {

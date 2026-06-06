@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
@@ -38,6 +38,7 @@ import {
   CRM_STAGE_PILL_CLASS,
   type CrmStageKey,
   crmStageToDbStatus,
+  filterLeadsForCrmCeoView,
   getLeadCrmStageKey,
   isLeadVisibleInCrmKanban,
   leadBelongsToCrmStage,
@@ -67,6 +68,8 @@ type LeadWithAssignee = Lead & {
 };
 
 const CRM_UNASSIGNED_VALUE = "__crm_sin_asignar__";
+const CRM_VIEW_CEO = "__ceo__";
+const CRM_VIEW_GLOBAL = "__all__";
 
 function resolveEffectiveAssigneeId(
   lead: Pick<Lead, "assigned_to" | "created_by"> | null | undefined,
@@ -558,6 +561,8 @@ const LeadCard = memo(function LeadCard({
 });
 
 const CAN_SUPERVISE = new Set(["admin", "gerente", "jefe_jefe", "jefe_sucursal", "financiero"]);
+/** Vista CEO / global: delegación de leads nuevos sin vendedor (rol CEO del tenant). */
+const CAN_USE_CRM_CEO_VIEW = new Set(["admin", "jefe_jefe"]);
 
 export default function CRM() {
   const { user } = useAuth();
@@ -586,7 +591,18 @@ export default function CRM() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
+  const canUseCeoView = !!user?.role && CAN_USE_CRM_CEO_VIEW.has(user.role);
+  const [crmWideView, setCrmWideView] = useState<"ceo" | "global">("ceo");
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
+
+  const isCeoView = useMemo(
+    () => canUseCeoView && !supervisedVendorId && crmWideView === "ceo",
+    [canUseCeoView, supervisedVendorId, crmWideView],
+  );
+
+  const crmSupervisorSelectValue =
+    supervisedVendorId ??
+    (canUseCeoView ? (crmWideView === "ceo" ? CRM_VIEW_CEO : CRM_VIEW_GLOBAL) : undefined);
 
   const vendorListQuery = useBranchSellersOptionsFromUser(user, {
     roles: ["vendedor"],
@@ -867,17 +883,20 @@ export default function CRM() {
       isLeadVisibleInCrmKanban(lead, visibleCancelledIds),
     );
 
+    const viewLeads =
+      isCeoView ? filterLeadsForCrmCeoView(kanbanLeads) : kanbanLeads;
+
     // 4) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return kanbanLeads;
-    return kanbanLeads.filter((lead) => {
+    if (!q) return viewLeads;
+    return viewLeads.filter((lead) => {
       const name = (lead.full_name || "").toLowerCase();
       const phone = (lead.phone || "").replace(/\D/g, "");
       const phoneQuery = q.replace(/\D/g, "");
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [leads, searchQuery, supervisedVendorId]);
+  }, [leads, searchQuery, supervisedVendorId, isCeoView]);
 
   const leadsByStage = useMemo(() => {
     const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;
@@ -1428,6 +1447,15 @@ export default function CRM() {
           </Button>
         </div>
       )}
+      {isCeoView && (
+        <div className="flex items-center gap-3 rounded-lg border border-cyan-500/70 bg-cyan-50 px-4 py-2.5 dark:bg-cyan-950/30 dark:border-cyan-600">
+          <Target className="h-4 w-4 text-cyan-700 dark:text-cyan-300 shrink-0" />
+          <span className="text-sm font-medium text-cyan-900 dark:text-cyan-100 flex-1">
+            <span className="font-bold">Vista CEO</span> — en{" "}
+            <span className="font-semibold">NUEVO</span> solo ves leads sin vendedor. Al asignar, salen de esta columna.
+          </span>
+        </div>
+      )}
       {supervisedVendorId && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-400 bg-blue-50 px-4 py-2.5 dark:bg-blue-950/30 dark:border-blue-600">
           <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -1438,8 +1466,11 @@ export default function CRM() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
-            onClick={() => setSupervisedVendorId(null)}
-            title="Volver a vista global"
+            onClick={() => {
+              setSupervisedVendorId(null);
+              setCrmWideView("ceo");
+            }}
+            title="Volver a vista CEO"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -1457,22 +1488,44 @@ export default function CRM() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shrink-0">
-          {canSupervise && vendorList.length > 0 && (
+          {canSupervise && (
             <Select
-              value={supervisedVendorId ?? "__all__"}
-              onValueChange={(val) => setSupervisedVendorId(val === "__all__" ? null : val)}
+              value={crmSupervisorSelectValue ?? ""}
+              onValueChange={(val) => {
+                if (val === CRM_VIEW_CEO) {
+                  setSupervisedVendorId(null);
+                  setCrmWideView("ceo");
+                  return;
+                }
+                if (val === CRM_VIEW_GLOBAL) {
+                  setSupervisedVendorId(null);
+                  setCrmWideView("global");
+                  return;
+                }
+                setSupervisedVendorId(val);
+              }}
             >
               <SelectTrigger className="w-full sm:w-52 gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
                 <SelectValue placeholder="Ver CRM de vendedor…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Vista global</SelectItem>
-                {vendorList.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.full_name || v.email || v.id}
-                  </SelectItem>
-                ))}
+                {canUseCeoView ? (
+                  <>
+                    <SelectItem value={CRM_VIEW_CEO}>Vista CEO</SelectItem>
+                    <SelectItem value={CRM_VIEW_GLOBAL}>Vista global</SelectItem>
+                  </>
+                ) : null}
+                {vendorList.length > 0 ? (
+                  <SelectGroup>
+                    <SelectLabel>Vendedores</SelectLabel>
+                    {vendorList.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.full_name || v.email || v.id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
               </SelectContent>
             </Select>
           )}
@@ -1697,7 +1750,9 @@ export default function CRM() {
                 </CardTitle>
                 {stage.key === "nuevo" ? (
                   <CardDescription className="text-[11px] pt-1 text-cyan-700/80 dark:text-cyan-300/80">
-                    Leads recién ingresados, sin contacto aún.
+                    {isCeoView
+                      ? "Solo leads sin vendedor asignado. Al delegar, desaparecen de aquí."
+                      : "Leads recién ingresados, sin contacto aún."}
                   </CardDescription>
                 ) : null}
                 {stage.key === "negocio_cerrado" ? (
