@@ -41,6 +41,10 @@ import { PaginationControls } from "@/components/PaginationControls";
 import {
   CRM_MOVABLE_STAGE_KEYS,
   CRM_PIPELINE_STATUS_LABELS,
+  CRM_STAGE_BORDER_CLASS,
+  CRM_STAGE_DOT_CLASS,
+  CRM_STAGE_PILL_CLASS,
+  CRM_STAGE_TEXT_CLASS,
   type CrmStageKey,
   crmStageToDbStatus,
   leadBelongsToCrmStage,
@@ -58,6 +62,7 @@ import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
+import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
@@ -272,18 +277,34 @@ const CANCELLED_STATUS_LABELS: Record<string, string> = {
   cancelado: "CANCELADO",
 };
 
-const PIPELINE_STYLES: Record<string, { dot: string; text: string }> = {
-  nuevo: { dot: "bg-slate-400", text: "text-slate-700" },
-  contactado: { dot: "bg-blue-500", text: "text-blue-600" },
-  negociando: { dot: "bg-orange-500", text: "text-orange-600" },
-  en_espera: { dot: "bg-violet-500", text: "text-violet-700" },
-  para_cierre: { dot: "bg-emerald-500", text: "text-emerald-700" },
-  cancelado: { dot: "bg-zinc-500", text: "text-zinc-700" },
-};
+type PipelineStatusStyle = { dot: string; text: string; pill: string; border: string };
 
-const CLOSED_STYLES: Record<string, { dot: string; text: string }> = {
-  vendido: { dot: "bg-emerald-600", text: "text-emerald-700" },
-  perdido: { dot: "bg-red-500", text: "text-red-600" },
+const pipelineStyleFor = (stage: CrmStageKey): PipelineStatusStyle => ({
+  dot: CRM_STAGE_DOT_CLASS[stage],
+  text: CRM_STAGE_TEXT_CLASS[stage],
+  pill: CRM_STAGE_PILL_CLASS[stage],
+  border: CRM_STAGE_BORDER_CLASS[stage],
+});
+
+const PIPELINE_STYLES: Record<CrmStageKey, PipelineStatusStyle> = Object.fromEntries(
+  (["nuevo", "contactado", "negociando", "en_espera", "para_cierre", "negocio_cerrado", "cancelado"] as const).map(
+    (key) => [key, pipelineStyleFor(key)],
+  ),
+) as Record<CrmStageKey, PipelineStatusStyle>;
+
+const CLOSED_STYLES: Record<string, PipelineStatusStyle> = {
+  vendido: {
+    dot: "bg-emerald-600",
+    text: "text-emerald-700 dark:text-emerald-300",
+    pill: "border-emerald-200/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-200",
+    border: "border-emerald-600",
+  },
+  perdido: {
+    dot: "bg-red-500",
+    text: "text-red-600 dark:text-red-300",
+    pill: "border-red-200/80 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/50 dark:text-red-200",
+    border: "border-red-500",
+  },
 };
 
 type LeadPipelineStage = CrmStageKey;
@@ -503,7 +524,10 @@ const LeadsTable = memo(function LeadsTable({
                       if (isClosedLeadStatus(lead.status)) {
                         return (
                           <span
-                            className="inline-flex h-8 items-center gap-2 rounded-full border px-3"
+                            className={cn(
+                              "inline-flex h-8 items-center gap-2 rounded-full border px-3",
+                              meta.styles.pill,
+                            )}
                             title="Lead cerrado. Puedes cambiar el estado desde Editar."
                           >
                             <span className={`h-2 w-2 rounded-full ${meta.styles.dot}`} />
@@ -518,7 +542,10 @@ const LeadsTable = memo(function LeadsTable({
                           onValueChange={(value) => handleStatusChange(lead.id, value)}
                         >
                           <SelectTrigger
-                            className="h-8 w-auto gap-2 rounded-full border px-3"
+                            className={cn(
+                              "h-8 w-auto gap-2 rounded-full border px-3",
+                              meta.styles.pill,
+                            )}
                             aria-label={`Estado ${meta.label}`}
                             onClick={(event) => event.stopPropagation()}
                           >
@@ -538,6 +565,14 @@ const LeadsTable = memo(function LeadsTable({
                                 </SelectItem>
                               );
                             })}
+                            <SelectItem value="cancelado">
+                              <span className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 rounded-full ${PIPELINE_STYLES.cancelado.dot}`} />
+                                <span className={PIPELINE_STYLES.cancelado.text}>
+                                  {CANCELLED_STATUS_LABELS.cancelado}
+                                </span>
+                              </span>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       );
@@ -1627,10 +1662,10 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-slate-700">{leadStats.total}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-slate-300">
+        <Card className="border-l-4 border-cyan-500">
           <CardHeader className="pb-2">
             <CardDescription>NUEVO</CardDescription>
-            <CardTitle className="text-2xl text-slate-600">{leadStats.nuevo}</CardTitle>
+            <CardTitle className="text-2xl text-cyan-700 dark:text-cyan-300">{leadStats.nuevo}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-l-4 border-blue-500">
@@ -1657,10 +1692,10 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-zinc-500">
+        <Card className="border-l-4 border-rose-500">
           <CardHeader className="pb-2">
             <CardDescription>CANCELADO</CardDescription>
-            <CardTitle className="text-2xl text-zinc-700">{leadStats.cancelado}</CardTitle>
+            <CardTitle className="text-2xl text-rose-700 dark:text-rose-300">{leadStats.cancelado}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -2242,7 +2277,17 @@ function LeadsImpl({ user }: { user: User }) {
                 <div>
                   <p className="text-sm text-muted-foreground">Estado</p>
                   <div className="mt-1">
-                    <Badge variant="secondary">{getStatusMeta(detailsLead.status).label}</Badge>
+                    <Badge className={cn("font-medium", getStatusMeta(detailsLead.status).styles.pill)}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            getStatusMeta(detailsLead.status).styles.dot,
+                          )}
+                        />
+                        {getStatusMeta(detailsLead.status).label}
+                      </span>
+                    </Badge>
                   </div>
                 </div>
               </div>

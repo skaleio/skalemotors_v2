@@ -40,6 +40,9 @@ import {
   CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
   CRM_CANCELLED_VISIBLE_MAX,
+  CRM_STAGE_BORDER_CLASS,
+  CRM_STAGE_DOT_CLASS,
+  CRM_STAGE_PILL_CLASS,
   type CrmStageKey,
   crmStageToDbStatus,
   getLeadCrmStageKey,
@@ -131,15 +134,17 @@ const statusLabels = CRM_PIPELINE_STATUS_LABELS;
 /** MIME para DataTransfer (evita colisiones con texto plano). */
 const DRAG_LEAD_MIME = "application/x-skale-lead-id";
 
-const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot?: string }> = {
-  nuevo: { border: "border-slate-400", badge: "bg-slate-50 text-slate-700 dark:bg-slate-950/40 dark:text-slate-200", dot: "bg-slate-400" },
-  contactado: { border: "border-blue-500", badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
-  negociando: { border: "border-orange-500", badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
-  en_espera: { border: "border-violet-500", badge: "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300", dot: "bg-violet-500" },
-  para_cierre: { border: "border-emerald-500", badge: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
-  negocio_cerrado: { border: "border-red-600", badge: "bg-red-50 text-red-700", dot: "bg-red-600" },
-  cancelado: { border: "border-zinc-500", badge: "bg-zinc-100 text-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-200", dot: "bg-zinc-500" },
-};
+const stageStyles: Record<CrmStageKey, { border: string; badge: string; dot: string }> =
+  Object.fromEntries(
+    CRM_PIPELINE_STAGES.map((stage) => [
+      stage.key,
+      {
+        border: CRM_STAGE_BORDER_CLASS[stage.key],
+        badge: CRM_STAGE_PILL_CLASS[stage.key],
+        dot: CRM_STAGE_DOT_CLASS[stage.key],
+      },
+    ]),
+  ) as Record<CrmStageKey, { border: string; badge: string; dot: string }>;
 
 const normalizeTags = (tags: unknown) => {
   if (!Array.isArray(tags)) return [] as string[];
@@ -1614,13 +1619,18 @@ export default function CRM() {
                     {stage.leads.length}
                   </Badge>
                 </CardTitle>
+                {stage.key === "nuevo" ? (
+                  <CardDescription className="text-[11px] pt-1 text-cyan-700/80 dark:text-cyan-300/80">
+                    Leads recién ingresados, sin contacto aún.
+                  </CardDescription>
+                ) : null}
                 {stage.key === "negocio_cerrado" ? (
                   <CardDescription className="text-[11px] pt-1">
                     Solo negocios cerrados en el mes en curso (calendario local). Al cambiar de mes, la columna arranca vacía; el resto del embudo no se mueve.
                   </CardDescription>
                 ) : null}
                 {stage.key === "cancelado" ? (
-                  <CardDescription className="text-[11px] pt-1">
+                  <CardDescription className="text-[11px] pt-1 text-rose-700/80 dark:text-rose-300/80">
                     Últimos {CRM_CANCELLED_VISIBLE_MAX} cancelados. Los anteriores siguen en Leads pero no se muestran aquí.
                   </CardDescription>
                 ) : null}

@@ -82,7 +82,7 @@ export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
 /** Estilos de pill / banner alineados con las columnas del pipeline. */
 export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
   nuevo:
-    "border-slate-200/80 bg-slate-50 text-slate-800 dark:border-slate-700/60 dark:bg-slate-950/50 dark:text-slate-200",
+    "border-cyan-200/80 bg-cyan-50 text-cyan-800 dark:border-cyan-800/60 dark:bg-cyan-950/50 dark:text-cyan-200",
   contactado:
     "border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-800/60 dark:bg-blue-950/50 dark:text-blue-200",
   negociando:
@@ -94,17 +94,39 @@ export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
   negocio_cerrado:
     "border-red-200/80 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/50 dark:text-red-200",
   cancelado:
-    "border-zinc-300/80 bg-zinc-100 text-zinc-800 dark:border-zinc-600/60 dark:bg-zinc-950/50 dark:text-zinc-200",
+    "border-rose-200/80 bg-rose-50 text-rose-800 dark:border-rose-800/60 dark:bg-rose-950/50 dark:text-rose-200",
 };
 
 export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
-  nuevo: "bg-slate-400",
+  nuevo: "bg-cyan-500",
   contactado: "bg-blue-500",
   negociando: "bg-orange-500",
   en_espera: "bg-violet-500",
   para_cierre: "bg-emerald-500",
   negocio_cerrado: "bg-red-600",
-  cancelado: "bg-zinc-500",
+  cancelado: "bg-rose-500",
+};
+
+/** Borde superior de columnas Kanban y acentos en tarjetas métricas. */
+export const CRM_STAGE_BORDER_CLASS: Record<CrmStageKey, string> = {
+  nuevo: "border-cyan-500",
+  contactado: "border-blue-500",
+  negociando: "border-orange-500",
+  en_espera: "border-violet-500",
+  para_cierre: "border-emerald-500",
+  negocio_cerrado: "border-red-600",
+  cancelado: "border-rose-500",
+};
+
+/** Color de texto para badges compactos en tablas. */
+export const CRM_STAGE_TEXT_CLASS: Record<CrmStageKey, string> = {
+  nuevo: "text-cyan-700 dark:text-cyan-300",
+  contactado: "text-blue-700 dark:text-blue-300",
+  negociando: "text-orange-700 dark:text-orange-300",
+  en_espera: "text-violet-700 dark:text-violet-300",
+  para_cierre: "text-emerald-700 dark:text-emerald-300",
+  negocio_cerrado: "text-red-700 dark:text-red-300",
+  cancelado: "text-rose-700 dark:text-rose-300",
 };
 
 /** Estados activos del embudo (excluye vendido/perdido). */
