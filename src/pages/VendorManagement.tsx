@@ -10,7 +10,7 @@ import { useSellerEngagement } from "@/hooks/useSellerEngagement";
 import { resolveEngagementForSeller } from "@/lib/sellerEngagement";
 import { useTenantSalesGoal } from "@/hooks/useTenantSalesGoal";
 import { resolveMonthlySalesGoal } from "@/lib/sellerPerformance";
-import { DollarSign, Plus, Search, Target, Trash2, User, Users } from "lucide-react";
+import { DollarSign, Pencil, Plus, Search, Target, Trash2, User, Users } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -27,13 +27,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { canSyncStaleAlerts } from "@/lib/services/pendingTasks";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
@@ -54,13 +55,20 @@ type Seller = {
   name: string;
   role: string;
   branch: string;
+  branchId: string | null;
   status: "Activo" | "Inactivo";
   monthlySalesGoal: number | null;
 };
 
+type BranchPick = { id: string; name: string };
+
 type StaffRow = Database["public"]["Tables"]["branch_sales_staff"]["Row"] & {
   branch?: { name: string } | null;
 };
+
+const BRANCH_EDIT_ROLES = new Set(["admin"]);
+
+const BRANCH_NONE_VALUE = "__none__";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("es-CL", {
@@ -75,6 +83,9 @@ const STAFF_ROLES_MANAGE = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucur
 const USERS_PAGE_ROLES = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursal"]);
 
 const TENANT_GOAL_EDIT_ROLES = new Set(["admin", "jefe_jefe"]);
+
+/** Ven toda la plantilla del tenant (p. ej. rotar vendedores entre sucursales). */
+const TENANT_WIDE_STAFF_VIEW_ROLES = new Set(["admin", "jefe_jefe", "gerente"]);
 
 const DEFAULT_SELLER_ROLE = "Vendedor";
 
@@ -95,6 +106,8 @@ export default function VendorManagement() {
   const canManageStaff = user?.role ? STAFF_ROLES_MANAGE.has(user.role) : false;
   const canOpenUsersPage = user?.role ? USERS_PAGE_ROLES.has(user.role) : false;
   const canEditTenantGoal = user?.role ? TENANT_GOAL_EDIT_ROLES.has(user.role) : false;
+  const canEditStaffBranch = user?.role ? BRANCH_EDIT_ROLES.has(user.role) : false;
+  const viewAllTenantStaff = user?.role ? TENANT_WIDE_STAFF_VIEW_ROLES.has(user.role) : false;
 
   const { goal: tenantSalesGoal, updateGoal: updateTenantGoal, isUpdating: updatingTenantGoal } =
     useTenantSalesGoal();
@@ -102,7 +115,7 @@ export default function VendorManagement() {
     enabled: !!user?.tenant_id,
   });
   const { data: engagementRows = [], isLoading: loadingEngagement } = useSellerEngagement({
-    branchId: user?.branch_id ?? null,
+    branchId: viewAllTenantStaff ? null : (user?.branch_id ?? null),
     enabled: !!user?.tenant_id && canManageStaff,
   });
   const inactivitySyncStarted = useRef(false);
@@ -138,9 +151,31 @@ export default function VendorManagement() {
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<string>(DEFAULT_SELLER_ROLE);
   const [editStaffGoal, setEditStaffGoal] = useState("");
+  const [branchEditOpen, setBranchEditOpen] = useState(false);
+  const [branchEditSeller, setBranchEditSeller] = useState<Seller | null>(null);
+  const [branchEditBranchId, setBranchEditBranchId] = useState("");
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ["branches", "vendor_management", user?.tenant_id],
+    enabled: !!user?.tenant_id && canEditStaffBranch,
+    queryFn: async (): Promise<BranchPick[]> => {
+      const { data, error } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("tenant_id", user!.tenant_id!)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as BranchPick[];
+    },
+  });
 
   const { data: staffList = [], isLoading: loadingStaff } = useQuery({
-    queryKey: ["branch_sales_staff", user?.tenant_id, user?.branch_id],
+    queryKey: [
+      "branch_sales_staff",
+      user?.tenant_id,
+      viewAllTenantStaff ? "all" : user?.branch_id,
+    ],
     enabled: !!user?.tenant_id,
     queryFn: async () => {
       let q = supabase
@@ -149,7 +184,7 @@ export default function VendorManagement() {
         .eq("tenant_id", user!.tenant_id!)
         .eq("is_active", true)
         .order("full_name", { ascending: true });
-      if (user!.branch_id) {
+      if (!viewAllTenantStaff && user!.branch_id) {
         q = q.or(`branch_id.eq.${user.branch_id},branch_id.is.null`);
       }
       const { data, error } = await q;
@@ -159,11 +194,12 @@ export default function VendorManagement() {
   });
 
   const sellers: Seller[] = useMemo(() => {
-      return staffList.map((row) => ({
+    return staffList.map((row) => ({
       id: row.id,
       name: row.full_name,
       role: row.role_label || "Vendedor",
       branch: row.branch?.name || (row.branch_id ? "Sucursal" : "Todas las sucursales"),
+      branchId: row.branch_id,
       status: row.is_active ? "Activo" : "Inactivo",
       monthlySalesGoal: row.monthly_sales_goal,
     }));
@@ -288,6 +324,76 @@ export default function VendorManagement() {
       void queryClient.invalidateQueries({ queryKey: ["branch_sales_staff"] });
     },
   });
+
+  const updateStaffBranchMutation = useMutation({
+    mutationFn: async ({ id, branchId }: { id: string; branchId: string | null }) => {
+      const { error } = await supabase
+        .from("branch_sales_staff")
+        .update({
+          branch_id: branchId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["branch_sales_staff"] });
+    },
+  });
+
+  const resolveBranchLabel = (branchId: string | null) => {
+    if (!branchId) return "Todas las sucursales";
+    return branches.find((b) => b.id === branchId)?.name ?? "Sucursal";
+  };
+
+  const handleOpenBranchEdit = (seller: Seller, event?: MouseEvent) => {
+    event?.stopPropagation();
+    if (!canEditStaffBranch) {
+      toast({
+        title: "Sin permiso",
+        description: "Solo administradores pueden cambiar la sucursal de un vendedor.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBranchEditSeller(seller);
+    setBranchEditBranchId(seller.branchId ?? BRANCH_NONE_VALUE);
+    setBranchEditOpen(true);
+  };
+
+  const handleSaveStaffBranch = () => {
+    if (!branchEditSeller || !canEditStaffBranch) return;
+    const branchId =
+      branchEditBranchId === BRANCH_NONE_VALUE || branchEditBranchId === ""
+        ? null
+        : branchEditBranchId;
+    updateStaffBranchMutation.mutate(
+      { id: branchEditSeller.id, branchId },
+      {
+        onSuccess: () => {
+          const label = resolveBranchLabel(branchId);
+          toast({
+            title: "Sucursal actualizada",
+            description: `${branchEditSeller.name} quedó asignado a ${label}.`,
+          });
+          setSelectedSeller((prev) =>
+            prev?.id === branchEditSeller.id
+              ? { ...prev, branchId, branch: label }
+              : prev,
+          );
+          setBranchEditOpen(false);
+          setBranchEditSeller(null);
+        },
+        onError: (err) => {
+          toast({
+            title: "No se pudo cambiar la sucursal",
+            description: err instanceof Error ? err.message : "Intenta de nuevo.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const handleSaveStaffGoal = () => {
     if (!selectedSeller || !canManageStaff) return;
@@ -665,7 +771,20 @@ export default function VendorManagement() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Sucursal</span>
-                  <span className="font-medium">{seller.branch}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{seller.branch}</span>
+                    {canEditStaffBranch ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        onClick={(event) => handleOpenBranchEdit(seller, event)}
+                        aria-label={`Editar sucursal de ${seller.name}`}
+                        disabled={updateStaffBranchMutation.isPending}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <SellerPerformanceBar engagement={engagement} compact />
                 <SellerSalesGoalBar salesCount={salesCount} goal={sellerGoal} compact />
@@ -886,6 +1005,58 @@ export default function VendorManagement() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cambiar sucursal (solo admin) */}
+      <Dialog
+        open={branchEditOpen}
+        onOpenChange={(open) => {
+          setBranchEditOpen(open);
+          if (!open) setBranchEditSeller(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cambiar sucursal</DialogTitle>
+            <DialogDescription>
+              {branchEditSeller
+                ? `Asigna la sucursal de ${branchEditSeller.name} en el CRM al cerrar negocios.`
+                : "Selecciona la sucursal del vendedor."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="staff-branch-edit">Sucursal</Label>
+            <Select
+              value={branchEditBranchId || BRANCH_NONE_VALUE}
+              onValueChange={setBranchEditBranchId}
+              disabled={branches.length === 0 && branchEditBranchId === BRANCH_NONE_VALUE}
+            >
+              <SelectTrigger id="staff-branch-edit" className="w-full">
+                <SelectValue placeholder="Selecciona sucursal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={BRANCH_NONE_VALUE}>Todas las sucursales</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBranchEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveStaffBranch}
+              disabled={updateStaffBranchMutation.isPending || !canEditStaffBranch}
+            >
+              {updateStaffBranchMutation.isPending ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -27,7 +27,7 @@ import {
 } from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useLeads } from "@/hooks/useLeads";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import {
   CRM_PIPELINE_STAGES,
@@ -234,6 +234,23 @@ function buildTagsWithVehicle(tags: unknown, vehicle: string): string[] {
   return [...current, `${VEHICULO_TAG_PREFIX}${v}`];
 }
 
+function buildCrmLeadEditForm(lead: Lead) {
+  return {
+    full_name: lead.full_name || "",
+    phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
+    email: lead.email || "",
+    region: lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX) || "",
+    payment_type: lead.payment_type || "",
+    budget: lead.budget || "",
+    pie: lead.pie_disponible || "",
+    cuotas_mensuales: lead.cuotas_mensuales || "",
+    vehicle: getTagValue(lead.tags, VEHICULO_TAG_PREFIX) || "",
+    transmision: leadTransmissionForForm(lead.transmision),
+    status: safePipelineSelectValue(lead.status),
+    assigned_to: lead.assigned_to ?? null,
+  };
+}
+
 function normalizePhoneChile(value: string): string {
   const raw = value.trim();
   if (!raw) return "";
@@ -314,9 +331,31 @@ function describeSupabaseError(err: unknown): string {
   return e.code ? `${joined} [${e.code}]` : joined;
 }
 
+function describeLeadMoveError(err: unknown, targetStage?: CrmStageKey): string {
+  const e = err as { message?: string; code?: string };
+  const raw = (e.message ?? "").toLowerCase();
+  if (e.code === "23514" && raw.includes("leads_status_check")) {
+    if (targetStage === "cancelado") {
+      return "No se pudo marcar como cancelado. Recarga la página e intenta de nuevo; si persiste, avisa al equipo técnico.";
+    }
+    return "Ese estado no está permitido en el pipeline. Recarga la página e intenta de nuevo.";
+  }
+  return describeSupabaseError(err);
+}
+
+function cancelLeadConfirmOptions(leadName: string): ConfirmOptions {
+  return {
+    title: "¿Marcar como cancelado?",
+    description: `«${leadName}» saldrá del pipeline activo. En esta vista solo verás los últimos ${CRM_CANCELLED_VISIBLE_MAX} cancelados; los anteriores siguen en Leads.`,
+    confirmLabel: "Sí, cancelar",
+    destructive: true,
+  };
+}
+
 const LeadCard = memo(function LeadCard({
   lead,
   onClick,
+  onEditClick,
   draggable,
   isDragging,
   onDragStart,
@@ -328,6 +367,8 @@ const LeadCard = memo(function LeadCard({
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
+  /** Si existe (p. ej. vendedor), el lápiz abre directo en modo edición. */
+  onEditClick?: () => void;
   draggable?: boolean;
   isDragging?: boolean;
   onDragStart?: (e: DragEvent) => void;
@@ -487,10 +528,10 @@ const LeadCard = memo(function LeadCard({
           onClick={(e) => {
             e.stopPropagation();
             if (Date.now() - lastDragEndRef.current < 400) return;
-            onClick();
+            (onEditClick ?? onClick)();
           }}
-          aria-label="Abrir ficha del lead"
-          title="Abrir ficha para ver o editar datos"
+          aria-label={onEditClick ? "Editar lead" : "Abrir ficha del lead"}
+          title={onEditClick ? "Editar datos del lead" : "Abrir ficha para ver o editar datos"}
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden />
         </Button>
@@ -728,10 +769,16 @@ export default function CRM() {
     };
   }, []);
 
-  const openEditDialog = useCallback((lead: LeadWithAssignee) => {
+  const openEditDialog = useCallback((lead: LeadWithAssignee, opts?: { editMode?: boolean }) => {
     setEditingLead(lead);
-    setLeadStatus(safePipelineSelectValue(lead.status));
-    setIsEditingForm(false);
+    const status = safePipelineSelectValue(lead.status);
+    setLeadStatus(status);
+    if (opts?.editMode) {
+      setEditForm(buildCrmLeadEditForm(lead));
+      setIsEditingForm(true);
+    } else {
+      setIsEditingForm(false);
+    }
     setShowEditDialog(true);
   }, []);
 
@@ -816,23 +863,15 @@ export default function CRM() {
 
   const startEditing = useCallback(() => {
     if (!editingLead) return;
-    setEditForm({
-      full_name: editingLead.full_name || "",
-      phone: (editingLead.phone || "").replace(/^(\+56\s*)/g, ""),
-      email: editingLead.email || "",
-      region: editingLead.region || getTagValue(editingLead.tags, REGION_TAG_PREFIX) || "",
-      payment_type: editingLead.payment_type || "",
-      budget: editingLead.budget || "",
-      pie: editingLead.pie_disponible || "",
-      cuotas_mensuales: editingLead.cuotas_mensuales || "",
-      vehicle: getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX) || "",
-      transmision: leadTransmissionForForm(editingLead.transmision),
-      status: safePipelineSelectValue(editingLead.status),
-      assigned_to: editingLead.assigned_to ?? null,
-    });
+    setEditForm(buildCrmLeadEditForm(editingLead));
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
   }, [editingLead]);
+
+  const openLeadForVendorEdit = useCallback(
+    (lead: LeadWithAssignee) => openEditDialog(lead, { editMode: true }),
+    [openEditDialog],
+  );
 
   const stages = CRM_PIPELINE_STAGES;
 
@@ -1048,6 +1087,13 @@ export default function CRM() {
       return;
     }
 
+    if (targetStageKey === "cancelado" && currentStageKey !== "cancelado") {
+      const ok = await askConfirm(
+        cancelLeadConfirmOptions(editingLead.full_name?.trim() || "Sin nombre"),
+      );
+      if (!ok) return;
+    }
+
     setIsUpdating(true);
     try {
       const updates: Record<string, unknown> = isEditingForm
@@ -1084,7 +1130,10 @@ export default function CRM() {
       console.error("[CRM] handleUpdateLead", { leadId: editingLead.id, isEditingForm, error });
       toast({
         title: "No se pudo actualizar el lead",
-        description: describeSupabaseError(error),
+        description: describeLeadMoveError(
+          error,
+          (isEditingForm ? editForm.status : leadStatus) as CrmStageKey,
+        ),
         variant: "destructive",
       });
     } finally {
@@ -1097,6 +1146,7 @@ export default function CRM() {
     editForm,
     queryClient,
     closeEditDialog,
+    askConfirm,
     openCloseDealForLead,
   ]);
 
@@ -1257,6 +1307,12 @@ export default function CRM() {
         return;
       }
 
+      if (stageKey === "cancelado") {
+        setDraggingLeadId(null);
+        const ok = await askConfirm(cancelLeadConfirmOptions(lead.full_name?.trim() || "Sin nombre"));
+        if (!ok) return;
+      }
+
       const nextStatus = crmStageToDbStatus(stageKey) as Lead["status"];
       const previousStatus = lead.status;
       setMovingLeadId(leadId);
@@ -1288,7 +1344,7 @@ export default function CRM() {
         queryClient.invalidateQueries({ queryKey: ["leads"] });
         toast({
           title: "No se pudo mover el lead",
-          description: describeSupabaseError(err),
+          description: describeLeadMoveError(err, stageKey),
           variant: "destructive",
         });
       } finally {
@@ -1296,7 +1352,7 @@ export default function CRM() {
         setDraggingLeadId(null);
       }
     },
-    [leads, filteredLeads, queryClient, openCloseDealForLead, showPipelineMoveNotice],
+    [leads, filteredLeads, queryClient, openCloseDealForLead, showPipelineMoveNotice, askConfirm],
   );
 
   const handleConfirmCloseDeal = useCallback(async () => {
@@ -1865,6 +1921,7 @@ export default function CRM() {
                         onDragStart={(e) => handleLeadDragStart(e, lead.id)}
                         onDragEnd={handleLeadDragEnd}
                         onClick={() => openEditDialog(lead)}
+                        onEditClick={user?.role === "vendedor" ? () => openLeadForVendorEdit(lead) : undefined}
                         onExternalDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
