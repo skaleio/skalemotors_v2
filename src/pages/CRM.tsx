@@ -601,30 +601,30 @@ const LeadCard = memo(function LeadCard({
               </span>
             </div>
           )}
-          {label && styles && (
-            <div className="mt-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
-                <span className={`h-2 w-2 rounded-full ${styles.dot}`} />
-                <span className={`${styles.text} font-medium`}>{label}</span>
-              </span>
-            </div>
+      {label && styles && (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
+            <span className={`h-2 w-2 rounded-full ${styles.dot}`} />
+            <span className={`${styles.text} font-medium`}>{label}</span>
+          </span>
+        </div>
+      )}
+      {hasAiState && (
+        <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="font-medium text-foreground/90">
+            Estado IA: {lead.state}
+            {lead.state_confidence != null && !Number.isNaN(Number(lead.state_confidence)) && (
+              <span> ({Math.round(Number(lead.state_confidence) * 100)}%)</span>
+            )}
+          </div>
+          {lead.state_reason && (
+            <div className="mt-0.5 truncate" title={lead.state_reason}>{lead.state_reason}</div>
           )}
-          {hasAiState && (
-            <div className="mt-2 rounded border border-dashed border-muted-foreground/30 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-              <div className="font-medium text-foreground/90">
-                Estado IA: {lead.state}
-                {lead.state_confidence != null && !Number.isNaN(Number(lead.state_confidence)) && (
-                  <span> ({Math.round(Number(lead.state_confidence) * 100)}%)</span>
-                )}
-              </div>
-              {lead.state_reason && (
-                <div className="mt-0.5 truncate" title={lead.state_reason}>{lead.state_reason}</div>
-              )}
-              {lead.state_updated_at && (
-                <div className="mt-0.5 text-[10px] opacity-80">{formatStateUpdatedAt(lead.state_updated_at)}</div>
-              )}
-            </div>
+          {lead.state_updated_at && (
+            <div className="mt-0.5 text-[10px] opacity-80">{formatStateUpdatedAt(lead.state_updated_at)}</div>
           )}
+        </div>
+      )}
         </>
       ) : null}
     </div>
@@ -781,7 +781,7 @@ export default function CRM() {
       setEditForm(buildCrmLeadEditForm(lead));
       setIsEditingForm(true);
     } else {
-      setIsEditingForm(false);
+    setIsEditingForm(false);
     }
     setShowEditDialog(true);
   }, []);
@@ -1680,15 +1680,15 @@ export default function CRM() {
             />
           )}
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar por nombre, teléfono o correo..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              aria-label="Buscar cliente en el CRM"
-            />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Buscar por nombre, teléfono o correo..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            aria-label="Buscar cliente en el CRM"
+          />
           </div>
           <Button
             variant="outline"
@@ -2115,16 +2115,16 @@ export default function CRM() {
                   }).assigned_user?.full_name ?? null}
                   leadBranchId={editingLead.branch_id}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={startEditing}
-                  aria-label="Editar datos del lead"
-                  title="Editar datos del lead"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={startEditing}
+                aria-label="Editar datos del lead"
+                title="Editar datos del lead"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
               </div>
             )}
           </DialogHeader>
@@ -2191,15 +2191,15 @@ export default function CRM() {
                       />
                     </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="crm-edit-payment">Financiamiento / Contado</Label>
-                    <Input
-                      id="crm-edit-payment"
-                      value={editForm.payment_type}
-                      onChange={(e) => setEditForm((f) => ({ ...f, payment_type: e.target.value }))}
-                      placeholder="Ej: Contado"
-                    />
-                  </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="crm-edit-payment">Financiamiento / Contado</Label>
+                      <Input
+                        id="crm-edit-payment"
+                        value={editForm.payment_type}
+                        onChange={(e) => setEditForm((f) => ({ ...f, payment_type: e.target.value }))}
+                        placeholder="Ej: Contado"
+                      />
+                    </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-budget">Presupuesto</Label>
@@ -2326,14 +2326,14 @@ export default function CRM() {
                     if (email) pairs.push({ label: "Correo", value: email });
                     if (region) pairs.push({ label: "Región", value: region });
                     return pairs.length ? (
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         {pairs.map((p) => (
                           <div key={p.label}>
                             <p className="text-sm text-muted-foreground">{p.label}</p>
                             <p className="text-base">{p.value}</p>
-                          </div>
+                    </div>
                         ))}
-                      </div>
+                    </div>
                     ) : null;
                   })()}
                   {(() => {
@@ -2354,19 +2354,19 @@ export default function CRM() {
                           <div key={p.label}>
                             <p className="text-sm text-muted-foreground">{p.label}</p>
                             <p className="text-base">{p.value}</p>
-                          </div>
+                  </div>
                         ))}
-                      </div>
+                    </div>
                     ) : null;
                   })()}
                   {(() => {
                     const vehicleInterest = editingLead.vehicle_interest?.trim()
                       || getTagValue(editingLead.tags, VEHICULO_TAG_PREFIX);
                     return vehicleInterest ? (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Vehículo de interés</p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vehículo de interés</p>
                         <p className="text-base">{vehicleInterest}</p>
-                      </div>
+                  </div>
                     ) : null;
                   })()}
                   {getConsignacionLabel(editingLead.tags) && (
@@ -2430,7 +2430,7 @@ export default function CRM() {
                       )}
                     </div>
                   )}
-                  <div>
+                    <div>
                     <p className="text-sm text-muted-foreground">Vendedor asignado (seguimiento)</p>
                     <p className="text-base flex items-center gap-2">
                       {(() => {
@@ -2458,7 +2458,7 @@ export default function CRM() {
                         );
                       })()}
                     </p>
-                  </div>
+                    </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select value={safePipelineSelectValue(leadStatus)} onValueChange={setLeadStatus}>

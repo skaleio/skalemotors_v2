@@ -38,41 +38,52 @@ const DEFAULT_ENGAGEMENT_SLICE = {
 
 export type EngagementBarSlice = typeof DEFAULT_ENGAGEMENT_SLICE;
 
+function engagementSliceFromRow(
+  row: Pick<
+    SellerEngagementRow,
+    | "engagement_score"
+    | "notes_count"
+    | "activities_count"
+    | "lead_moves_count"
+    | "is_inactive"
+    | "stale_assigned_leads"
+  >,
+): EngagementBarSlice {
+  return {
+    engagement_score: row.engagement_score,
+    notes_count: row.notes_count,
+    activities_count: row.activities_count,
+    lead_moves_count: row.lead_moves_count,
+    is_inactive: row.is_inactive,
+    stale_assigned_leads: row.stale_assigned_leads,
+  };
+}
+
 export function normalizeSellerName(name: string) {
   return name.trim().toLowerCase();
 }
 
-/** Plantilla staff + usuario CRM con mismo nombre comparten métricas del usuario. */
+/** Plantilla staff usa métricas CRM del usuario vinculado (staff_id o nombre). */
 export function resolveEngagementForSeller(
   rows: SellerEngagementRow[],
   staffId: string,
   sellerName: string,
+  linkedUserId?: string | null,
 ): EngagementBarSlice {
   const byStaff = rows.find((r) => r.staff_id === staffId);
-  if (byStaff) {
-    return {
-      engagement_score: byStaff.engagement_score,
-      notes_count: byStaff.notes_count,
-      activities_count: byStaff.activities_count,
-      lead_moves_count: byStaff.lead_moves_count,
-      is_inactive: byStaff.is_inactive,
-      stale_assigned_leads: byStaff.stale_assigned_leads,
-    };
+  if (byStaff) return engagementSliceFromRow(byStaff);
+
+  if (linkedUserId) {
+    const byUserId = rows.find((r) => r.user_id === linkedUserId);
+    if (byUserId) return engagementSliceFromRow(byUserId);
   }
+
   const key = normalizeSellerName(sellerName);
-  const byUser = rows.find(
+  const byName = rows.find(
     (r) => r.user_id != null && normalizeSellerName(r.seller_name) === key,
   );
-  if (byUser) {
-    return {
-      engagement_score: byUser.engagement_score,
-      notes_count: byUser.notes_count,
-      activities_count: byUser.activities_count,
-      lead_moves_count: byUser.lead_moves_count,
-      is_inactive: byUser.is_inactive,
-      stale_assigned_leads: byUser.stale_assigned_leads,
-    };
-  }
+  if (byName) return engagementSliceFromRow(byName);
+
   return { ...DEFAULT_ENGAGEMENT_SLICE };
 }
 

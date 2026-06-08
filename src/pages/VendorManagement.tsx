@@ -156,6 +156,7 @@ export default function VendorManagement() {
   const [editStaffGoal, setEditStaffGoal] = useState("");
   const [branchEditOpen, setBranchEditOpen] = useState(false);
   const [branchEditSeller, setBranchEditSeller] = useState<Seller | null>(null);
+  const [branchEditFullName, setBranchEditFullName] = useState("");
   const [branchEditBranchId, setBranchEditBranchId] = useState("");
 
   const { data: branches = [] } = useQuery({
@@ -294,6 +295,16 @@ export default function VendorManagement() {
     },
   });
 
+  const staffLinkedUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of engagementRows) {
+      if (row.staff_id && row.user_id) {
+        map.set(row.staff_id, row.user_id);
+      }
+    }
+    return map;
+  }, [engagementRows]);
+
   const filteredSellers = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return sellers;
@@ -328,19 +339,27 @@ export default function VendorManagement() {
     },
   });
 
-  const updateStaffBranchMutation = useMutation({
-    mutationFn: async ({ id, branchId }: { id: string; branchId: string | null }) => {
-      const { error } = await supabase
-        .from("branch_sales_staff")
-        .update({
-          branch_id: branchId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
+  const updateStaffProfileMutation = useMutation({
+    mutationFn: async ({
+      id,
+      fullName,
+      branchId,
+    }: {
+      id: string;
+      fullName: string;
+      branchId: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("update_branch_sales_staff_profile" as never, {
+        p_staff_id: id,
+        p_full_name: fullName,
+        p_branch_id: branchId,
+      } as never);
       if (error) throw error;
+      return data as { users_synced?: number } | null;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["branch_sales_staff"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenant_users"] });
     },
   });
 
@@ -354,42 +373,57 @@ export default function VendorManagement() {
     if (!canEditStaffBranch) {
       toast({
         title: "Sin permiso",
-        description: "Solo administradores pueden cambiar la sucursal de un vendedor.",
+        description: "Solo administradores pueden editar vendedores de plantilla.",
         variant: "destructive",
       });
       return;
     }
     setBranchEditSeller(seller);
+    setBranchEditFullName(seller.name);
     setBranchEditBranchId(seller.branchId ?? BRANCH_NONE_VALUE);
     setBranchEditOpen(true);
   };
 
-  const handleSaveStaffBranch = () => {
+  const handleSaveStaffProfile = () => {
     if (!branchEditSeller || !canEditStaffBranch) return;
+    const fullName = branchEditFullName.trim();
+    if (!fullName) {
+      toast({
+        title: "Nombre requerido",
+        description: "Indica el nombre completo del vendedor.",
+        variant: "destructive",
+      });
+      return;
+    }
     const branchId =
       branchEditBranchId === BRANCH_NONE_VALUE || branchEditBranchId === ""
         ? null
         : branchEditBranchId;
-    updateStaffBranchMutation.mutate(
-      { id: branchEditSeller.id, branchId },
+    updateStaffProfileMutation.mutate(
+      { id: branchEditSeller.id, fullName, branchId },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           const label = resolveBranchLabel(branchId);
+          const usersSynced = result?.users_synced ?? 0;
           toast({
-            title: "Sucursal actualizada",
-            description: `${branchEditSeller.name} quedó asignado a ${label}.`,
+            title: "Vendedor actualizado",
+            description:
+              usersSynced > 0
+                ? `${fullName} quedó en ${label}. También se sincronizó su acceso al CRM.`
+                : `${fullName} quedó en ${label}.`,
           });
           setSelectedSeller((prev) =>
             prev?.id === branchEditSeller.id
-              ? { ...prev, branchId, branch: label }
+              ? { ...prev, name: fullName, branchId, branch: label }
               : prev,
           );
           setBranchEditOpen(false);
           setBranchEditSeller(null);
+          setBranchEditFullName("");
         },
         onError: (err) => {
           toast({
-            title: "No se pudo cambiar la sucursal",
+            title: "No se pudo guardar",
             description: err instanceof Error ? err.message : "Intenta de nuevo.",
             variant: "destructive",
           });
@@ -744,6 +778,7 @@ export default function VendorManagement() {
             engagementRows,
             seller.id,
             seller.name,
+            staffLinkedUserId.get(seller.id),
           );
           return (
             <Card
@@ -789,8 +824,8 @@ export default function VendorManagement() {
                         type="button"
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                         onClick={(event) => handleOpenBranchEdit(seller, event)}
-                        aria-label={`Editar sucursal de ${seller.name}`}
-                        disabled={updateStaffBranchMutation.isPending}
+                        aria-label={`Editar ${seller.name}`}
+                        disabled={updateStaffProfileMutation.isPending}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -871,6 +906,7 @@ export default function VendorManagement() {
                     engagementRows,
                     selectedSeller.id,
                     selectedSeller.name,
+                    staffLinkedUserId.get(selectedSeller.id),
                   );
                   return (
                     <div className="space-y-3">
@@ -1019,42 +1055,57 @@ export default function VendorManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Cambiar sucursal (solo admin) */}
+      {/* Editar vendedor (solo admin) */}
       <Dialog
         open={branchEditOpen}
         onOpenChange={(open) => {
           setBranchEditOpen(open);
-          if (!open) setBranchEditSeller(null);
+          if (!open) {
+            setBranchEditSeller(null);
+            setBranchEditFullName("");
+          }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Cambiar sucursal</DialogTitle>
+            <DialogTitle>Editar vendedor</DialogTitle>
             <DialogDescription>
-              {branchEditSeller
-                ? `Asigna la sucursal de ${branchEditSeller.name} en el CRM al cerrar negocios.`
-                : "Selecciona la sucursal del vendedor."}
+              Corrige nombre o sucursal de plantilla. Si tiene acceso al CRM con el mismo nombre y
+              sucursal, también se sincroniza automáticamente.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="staff-branch-edit">Sucursal</Label>
-            <Select
-              value={branchEditBranchId || BRANCH_NONE_VALUE}
-              onValueChange={setBranchEditBranchId}
-              disabled={branches.length === 0 && branchEditBranchId === BRANCH_NONE_VALUE}
-            >
-              <SelectTrigger id="staff-branch-edit" className="w-full">
-                <SelectValue placeholder="Selecciona sucursal" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={BRANCH_NONE_VALUE}>Todas las sucursales</SelectItem>
-                {branches.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="staff-name-edit">Nombre completo</Label>
+              <Input
+                id="staff-name-edit"
+                value={branchEditFullName}
+                onChange={(e) => setBranchEditFullName(e.target.value)}
+                placeholder="Ej: Juan Pérez"
+                autoComplete="off"
+                maxLength={120}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staff-branch-edit">Sucursal</Label>
+              <Select
+                value={branchEditBranchId || BRANCH_NONE_VALUE}
+                onValueChange={setBranchEditBranchId}
+                disabled={branches.length === 0 && branchEditBranchId === BRANCH_NONE_VALUE}
+              >
+                <SelectTrigger id="staff-branch-edit" className="w-full">
+                  <SelectValue placeholder="Selecciona sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BRANCH_NONE_VALUE}>Todas las sucursales</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setBranchEditOpen(false)}>
@@ -1062,10 +1113,10 @@ export default function VendorManagement() {
             </Button>
             <Button
               type="button"
-              onClick={handleSaveStaffBranch}
-              disabled={updateStaffBranchMutation.isPending || !canEditStaffBranch}
+              onClick={handleSaveStaffProfile}
+              disabled={updateStaffProfileMutation.isPending || !canEditStaffBranch}
             >
-              {updateStaffBranchMutation.isPending ? "Guardando…" : "Guardar"}
+              {updateStaffProfileMutation.isPending ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>

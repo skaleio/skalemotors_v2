@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
@@ -115,54 +114,46 @@ export function CrmTeamPerformanceBar({
 
   if (!enabled) return null;
 
+  const scoreLabel =
+    loadingEngagement || stats.activeVendorCount === 0
+      ? loadingEngagement
+        ? "…"
+        : "—"
+      : `${stats.teamActivityAvg}%`;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="outline"
           className={cn(
-            "h-auto min-h-10 w-full sm:w-auto sm:min-w-[220px] sm:max-w-[320px] justify-start gap-2 px-3 py-2",
+            "flex h-10 w-full sm:w-52 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm",
+            "hover:bg-accent hover:text-accent-foreground focus:outline-none",
             className,
           )}
           aria-label="Desempeño por actividad en CRM"
         >
-          <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1 text-left">
-            <div className="flex items-center justify-between gap-2 text-[11px]">
-              <span className="font-medium truncate">Desempeño CRM</span>
-              {loadingEngagement ? (
-                <Loader2 className="h-3 w-3 animate-spin shrink-0 text-muted-foreground" />
-              ) : (
-                <span
-                  className={cn(
-                    "tabular-nums font-semibold shrink-0",
-                    stats.teamActivityAvg >= 55 && "text-emerald-600 dark:text-emerald-400",
-                    stats.teamActivityAvg < 30 && "text-amber-600 dark:text-amber-400",
-                  )}
-                >
-                  {stats.activeVendorCount > 0 ? `${stats.teamActivityAvg}%` : "—"}
-                </span>
-              )}
-            </div>
-            {!loadingEngagement && stats.activeVendorCount > 0 ? (
-              <Progress
-                value={stats.teamActivityAvg}
-                className={cn(
-                  "h-1.5 mt-1 transition-all duration-300",
-                  stats.teamActivityAvg >= 55 && "[&>div]:bg-emerald-500",
-                  stats.teamActivityAvg < 30 && "[&>div]:bg-amber-500",
-                  stats.teamStaleLeads > 0 && stats.teamActivityAvg < 55 && "[&>div]:bg-amber-500",
-                )}
-              />
+          <span className="flex min-w-0 items-center gap-2">
+            <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">Desempeño CRM</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            {loadingEngagement ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : (
-              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                {loadingEngagement ? "Calculando…" : "Sin vendedores con leads"}
-              </p>
+              <span
+                className={cn(
+                  "tabular-nums font-semibold",
+                  stats.teamActivityAvg >= 55 && "text-emerald-600 dark:text-emerald-400",
+                  stats.teamActivityAvg < 30 && "text-amber-600 dark:text-amber-400",
+                )}
+              >
+                {scoreLabel}
+              </span>
             )}
-          </div>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground opacity-70" />
-        </Button>
+            <ChevronDown className="h-4 w-4 opacity-50" />
+          </span>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(100vw-2rem,22rem)] p-0">
         <div className="border-b px-3 py-2.5">
