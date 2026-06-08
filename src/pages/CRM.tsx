@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
-import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
+import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
@@ -1006,6 +1006,7 @@ export default function CRM() {
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
   const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const leadNotesRef = useRef<LeadNotesSectionHandle>(null);
   const [pipelineMoveNotice, setPipelineMoveNotice] = useState<CrmPipelineMoveNotice | null>(null);
   const pipelineMoveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1100,6 +1101,14 @@ export default function CRM() {
 
     setIsUpdating(true);
     try {
+      if (leadNotesRef.current?.hasPendingDraft()) {
+        const noteOk = await leadNotesRef.current.savePendingDraft();
+        if (!noteOk) {
+          setIsUpdating(false);
+          return;
+        }
+      }
+
       const updates: Record<string, unknown> = isEditingForm
         ? {
             full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
@@ -1132,6 +1141,7 @@ export default function CRM() {
         return current.map((lead) => (lead.id === updated.id ? { ...lead, ...updated } : lead));
       });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["seller-engagement"] });
       if (isEditingForm) {
         setEditingLead(updated as Lead);
         setIsEditingForm(false);
@@ -1340,6 +1350,7 @@ export default function CRM() {
           return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
         });
         queryClient.invalidateQueries({ queryKey: ["leads"] });
+        queryClient.invalidateQueries({ queryKey: ["seller-engagement"] });
         if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
         setLandedLeadId(leadId);
         landHighlightTimerRef.current = setTimeout(() => {
@@ -2151,6 +2162,14 @@ export default function CRM() {
                     localOnly
                     onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
                   />
+                  <LeadNotesSection
+                    ref={leadNotesRef}
+                    leadId={editingLead.id}
+                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                    branchId={editingLead.branch_id ?? user?.branch_id}
+                    legacyNotes={editingLead.notes}
+                    askConfirm={askConfirm}
+                  />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-email">Correo</Label>
@@ -2225,12 +2244,6 @@ export default function CRM() {
                     onChange={(transmision) => setEditForm((f) => ({ ...f, transmision }))}
                     disabled={isUpdating}
                   />
-                  <LeadNotesSection
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                  />
                   <div className="grid gap-2">
                     <Label htmlFor="crm-edit-assignee">Seguimiento (vendedor)</Label>
                     <Select
@@ -2295,6 +2308,14 @@ export default function CRM() {
                     onChange={(next) =>
                       setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
                     }
+                  />
+                  <LeadNotesSection
+                    ref={leadNotesRef}
+                    leadId={editingLead.id}
+                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                    branchId={editingLead.branch_id ?? user?.branch_id}
+                    legacyNotes={editingLead.notes}
+                    askConfirm={askConfirm}
                   />
                   {(() => {
                     const rut = editingLead.rut?.trim();
@@ -2409,12 +2430,6 @@ export default function CRM() {
                       )}
                     </div>
                   )}
-                  <LeadNotesSection
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                  />
                   <div>
                     <p className="text-sm text-muted-foreground">Vendedor asignado (seguimiento)</p>
                     <p className="text-base flex items-center gap-2">

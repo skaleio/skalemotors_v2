@@ -1,4 +1,4 @@
-import { Car, CheckCircle, Clock, Info, UserPlus, type LucideIcon } from "lucide-react";
+import { Car, CheckCircle, Clock, FileText, Info, UserPlus, type LucideIcon } from "lucide-react";
 
 export type NotificationEventKey =
   | "lead_sold"
@@ -6,6 +6,7 @@ export type NotificationEventKey =
   | "vehicle_status_changed"
   | "lead_contactado"
   | "lead_assigned"
+  | "lead_note_added"
   | "lead_stale"
   | "consignacion_created"
   | "consignacion_stale"
@@ -77,6 +78,15 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventMeta[] = [
     iconClass: "text-pink-500",
     description: "Un admin te asignó un lead",
     roles: ["vendedor"],
+  },
+  {
+    key: "lead_note_added",
+    label: "Notas en leads",
+    short: "Notas",
+    icon: FileText,
+    iconClass: "text-violet-500",
+    description: "Un vendedor agregó una nota de seguimiento a un lead",
+    roles: ["admin"],
   },
   {
     key: "lead_stale",

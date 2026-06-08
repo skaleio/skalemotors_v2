@@ -14,7 +14,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDevice } from "@/contexts/DeviceContext";
-import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
+import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, FileText, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
 import { usePreloadUserAvatar } from "@/hooks/usePreloadUserAvatar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -162,6 +162,8 @@ export function TopBar() {
         return <Info className="h-5 w-5 text-blue-500" />;
       case 'lead_assigned':
         return <UserPlus className="h-5 w-5 text-pink-500" />;
+      case 'lead_note_added':
+        return <FileText className="h-5 w-5 text-violet-500" />;
       case 'lead':
         return <Info className="h-5 w-5 text-pink-500" />;
       case 'appointment':
