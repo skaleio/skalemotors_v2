@@ -4,7 +4,9 @@ import { useMfaGate } from "@/hooks/useMfaGate";
 import { useToast } from "@/hooks/use-toast";
 import {
   isPathBlockedForPhotographer,
+  isPathLockedForVendor,
   isPhotographerRole,
+  isVendorRole,
   postAuthHomeForRole,
 } from "@/lib/appRoles";
 import { type AppPermission, hasPermission, isFinancePermission } from "@/lib/rbac";
@@ -90,6 +92,10 @@ export default function ProtectedRoute({ children, requiredRole, requiredPermiss
 
   if (isPhotographerRole(user.role) && isPathBlockedForPhotographer(location.pathname)) {
     return <Navigate to="/app/consignaciones" replace />;
+  }
+
+  if (isVendorRole(user.role) && isPathLockedForVendor(location.pathname)) {
+    return <Navigate to={postAuthHomeForRole(user.role)} replace />;
   }
 
   if (requiredRole && !requiredRole.includes(user.role)) {

@@ -31,7 +31,7 @@ export default function SupportChat({ isOpen, onClose, platform }: SupportChatPr
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[600px] max-h-[80vh] shadow-2xl">
+    <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 w-[calc(100vw-2rem)] max-w-[380px] h-[min(600px,70vh)] max-h-[70vh] shadow-2xl md:bottom-6 md:right-6 md:h-[600px] md:max-h-[80vh]">
       <Card className="h-full flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
           <div className="flex items-center gap-2">

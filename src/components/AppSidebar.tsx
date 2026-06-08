@@ -21,6 +21,7 @@ import {
   Keyboard,
   LayoutDashboard,
   ListChecks,
+  Lock,
   LogOut,
   MessageCircle,
   MoreVertical,
@@ -68,73 +69,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { isPhotographerRole, isVendorRole } from "@/lib/appRoles";
+import {
+  getSidebarCategoriesForRole,
+  isSidebarItemLocked,
+  MENU_CATEGORIES,
+  SETTINGS_CATEGORY,
+  shouldShowSettingsCategory,
+} from "@/lib/appSidebarMenu";
 import { cn } from "@/lib/utils";
 
-const menuCategories = [
-  {
-    title: "Dashboard",
-    icon: LayoutDashboard,
-    items: [
-      { title: "Dashboard Principal", url: "/app", icon: LayoutDashboard },
-      { title: "Dashboard Ejecutivo", url: "/app/executive", icon: BarChart3 },
-    ]
-  },
-  {
-    title: "CRM & Leads",
-    icon: Target,
-    items: [
-      { title: "CRM", url: "/app/crm", icon: Target },
-      { title: "WhatsApp", url: "/app/whatsapp", icon: MessageCircle },
-      { title: "Leads", url: "/app/leads", icon: Users },
-      { title: "Citas", url: "/app/appointments", icon: Calendar },
-      { title: "Informe diario", url: "/app/tasks", icon: ListChecks },
-      { title: "Redes sociales", url: "/app/redes-sociales", icon: Share2 },
-    ]
-  },
-  {
-    title: "Inventario & Vehículos",
-    icon: Car,
-    items: [
-      { title: "Consignaciones", url: "/app/consignaciones", icon: ClipboardList },
-      { title: "Álbumes", url: "/app/albums", icon: Camera },
-      { title: "Tasación", url: "/app/tasacion", icon: Calculator },
-    ]
-  },
-  {
-    title: "Documentos",
-    icon: FileText,
-    items: [
-      { title: "Documentos", url: "/app/documents", icon: FileText },
-      { title: "Contratos de Venta", url: "/app/documents/venta", icon: FileText },
-      { title: "Contratos de Consignación", url: "/app/documents/consignacion", icon: ScrollText },
-    ]
-  },
-  {
-    title: "Finanzas",
-    icon: DollarSign,
-    items: [
-      { title: "Gastos / Ingresos", url: "/app/finance", icon: Receipt },
-      { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
-      { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
-      { title: "Ventas", url: "/app/sales", icon: TrendingUp },
-      { title: "Distribución de Salarios", url: "/app/salary-distribution", icon: PieChart },
-      { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
-      { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },
-      { title: "Calculadora Financiera", url: "/app/financial-calculator", icon: Calculator },
-    ]
-  },
-];
-
-const settingsCategory = {
-  title: "Sistema",
-  icon: Settings,
-  items: [
-    { title: "Configuración", url: "/app/settings", icon: Settings },
-    { title: "Mi Web", url: "/app/website", icon: Globe },
-    { title: "Integraciones", url: "/app/integrations", icon: Plug },
-    { title: "Usuarios", url: "/app/users", icon: UserCog },
-  ]
-};
+const menuCategories = MENU_CATEGORIES;
+const settingsCategory = SETTINGS_CATEGORY;
 
 const ALL_CATEGORY_KEYS = [
   "Dashboard", "CRM & Leads", "Inventario & Vehículos", "Documentos", "Finanzas", "Sistema",
@@ -143,6 +88,8 @@ const ALL_CATEGORY_KEYS = [
 const itemBaseCls = "group w-full flex items-center gap-2.5 h-8 px-2.5 text-[13px] rounded-md transition-colors";
 const itemInactiveCls = "text-muted-foreground hover:text-foreground hover:bg-accent/50";
 const itemActiveCls = "text-accent-foreground bg-accent font-medium";
+const itemLockedCls =
+  "cursor-not-allowed opacity-55 text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground/70";
 
 const PIN_STORAGE_KEY = "skale-sidebar-pinned";
 const HOVER_CLOSE_DELAY_MS = 200;
@@ -218,38 +165,10 @@ export function AppSidebar() {
   /** Overlay activo: sidebar flotando sobre el contenido (no en flow). */
   const isOverlay = !isMobile && !pinned && hovering;
 
-  const categoriesToShow = useMemo(() => {
-    if (isPhotographerOnly) {
-      return [
-        {
-          title: "Mi trabajo",
-          icon: Car,
-          items: [
-            { title: "Inventario", url: "/app/consignaciones", icon: Car },
-            { title: "Álbumes", url: "/app/albums", icon: Camera },
-            { title: "Precios web", url: "/app/website", icon: Globe },
-            { title: "Tareas pendientes", url: "/app/mis-tareas", icon: ListChecks },
-          ],
-        },
-      ];
-    }
-    if (isVendorOnly) {
-      return menuCategories
-        .map((c) => {
-          if (c.title === "CRM & Leads") {
-            const items = c.items.filter((item) => item.url !== "/app/ranking");
-            return { ...c, items };
-          }
-          if (c.title === "Inventario & Vehículos") {
-            const items = c.items.filter((item) => item.url === "/app/consignaciones");
-            return items.length ? { ...c, items } : null;
-          }
-          return null;
-        })
-        .filter((c): c is (typeof menuCategories)[number] => c !== null);
-    }
-    return menuCategories;
-  }, [isVendorOnly, isPhotographerOnly]);
+  const categoriesToShow = useMemo(
+    () => getSidebarCategoriesForRole(user?.role),
+    [user?.role],
+  );
 
   const findCategoryForPath = (path: string): string | null => {
     const basePath = path.split('?')[0];
@@ -269,7 +188,7 @@ export function AppSidebar() {
       }
     }
 
-    if (isFieldRoleOnly) return null;
+    if (!shouldShowSettingsCategory(user?.role)) return null;
 
     if (settingsCategory.items.some(item => {
       const itemBasePath = item.url.split('?')[0];
@@ -367,8 +286,9 @@ export function AppSidebar() {
   }, [queryClient, user?.role]);
 
   const renderItem = (item: { title: string; url: string; icon: typeof LayoutDashboard }) => {
-    const active = isActive(item.url);
-    const cls = cn(itemBaseCls, active ? itemActiveCls : itemInactiveCls);
+    const isItemLocked = isSidebarItemLocked(item.url, user?.role);
+    const active = !isItemLocked && isActive(item.url);
+    const cls = cn(itemBaseCls, isItemLocked ? itemLockedCls : active ? itemActiveCls : itemInactiveCls);
     const isLeadsItem = item.url === "/app/leads";
     const isRedesItem = item.url === "/app/redes-sociales";
     const prefetchNav =
@@ -376,10 +296,41 @@ export function AppSidebar() {
 
     const content = (
       <>
-        <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-        <span className="truncate">{item.title}</span>
+        <item.icon
+          className={cn(
+            "h-4 w-4 shrink-0",
+            isItemLocked
+              ? "text-muted-foreground/50"
+              : active
+                ? "text-primary"
+                : "text-muted-foreground group-hover:text-foreground",
+          )}
+        />
+        <span className="truncate flex-1">{item.title}</span>
+        {isItemLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" /> : null}
       </>
     );
+
+    if (isItemLocked) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              role="button"
+              aria-disabled="true"
+              tabIndex={-1}
+              className={cls}
+              onClick={(event) => event.preventDefault()}
+            >
+              {content}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-[220px] text-xs">
+            {item.title} está restringido. Pide acceso a administración.
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
 
     if (item.url.includes('?')) {
       return (

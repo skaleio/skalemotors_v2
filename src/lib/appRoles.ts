@@ -37,8 +37,15 @@ export function canEditVehiclePhotos(role: string | undefined | null): boolean {
   return isPhotographerRole(role) || (!hidesInventoryFinancials(role) && !!role);
 }
 
+/** Roles con home comercial en `/app` (métricas personales + tareas + avisos). */
+export const SALES_DASHBOARD_ROLES = new Set<string>([VENDOR_ROLE, "jefe_sucursal"]);
+
+export function isSalesDashboardRole(role: string | undefined | null): boolean {
+  return !!role && SALES_DASHBOARD_ROLES.has(role);
+}
+
 export function postAuthHomeForRole(role: string | undefined): string {
-  if (role === VENDOR_ROLE) return "/app/crm";
+  if (isSalesDashboardRole(role)) return "/app";
   if (role === PHOTOGRAPHER_ROLE) return "/app/consignaciones";
   return "/app";
 }
@@ -65,6 +72,28 @@ export const PHOTOGRAPHER_BLOCKED_PATH_PREFIXES = [
   "/app/integrations",
   "/app/users",
 ] as const;
+
+/** Rutas visibles en sidebar pero bloqueadas para vendedor (solo admin/gerencia). */
+export const VENDOR_LOCKED_PATH_PREFIXES = [
+  "/app/whatsapp",
+  "/app/redes-sociales",
+] as const;
+
+export function isPathLockedForVendor(pathname: string): boolean {
+  const base = pathname.split("?")[0];
+  return VENDOR_LOCKED_PATH_PREFIXES.some(
+    (p) => base === p || base.startsWith(`${p}/`),
+  );
+}
+
+export function isVendorSidebarItemLocked(
+  url: string,
+  role: string | undefined | null,
+): boolean {
+  if (!isVendorRole(role)) return false;
+  const base = url.split("?")[0];
+  return base === "/app/whatsapp" || base === "/app/redes-sociales";
+}
 
 export function isPathBlockedForPhotographer(pathname: string): boolean {
   const base = pathname.split("?")[0];

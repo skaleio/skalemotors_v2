@@ -15,7 +15,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 
 // Import estático para evitar "Failed to fetch dynamically imported module" en producción (chunk 404 tras deploy)
-import Dashboard from "./pages/Dashboard";
+import RoleHome from "./pages/RoleHome";
 const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Leads = lazy(() => import("./pages/Leads"));
@@ -74,17 +74,17 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-<ThemeProvider>
-        <DeviceProvider>
+    <ThemeProvider>
+      <DeviceProvider>
         <AuthProvider>
-        <ShortcutsPreferencesProvider>
-        <ChatProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Suspense fallback={<DashboardLoader message="Cargando..." />}>
-            <Routes>
+          <ShortcutsPreferencesProvider>
+            <ChatProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <Suspense fallback={<DashboardLoader message="Cargando..." />}>
+                    <Routes>
               {/* Rutas públicas */}
               <Route path="/" element={<Landing />} />
               <Route path="/landing" element={<Landing />} />
@@ -114,7 +114,7 @@ const App = () => (
               <Route path="/app" element={
                 <ProtectedRoute>
                   <Layout>
-                    <Dashboard />
+                    <RoleHome />
                   </Layout>
                 </ProtectedRoute>
               } />
@@ -371,14 +371,14 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />
-            </Routes>
-            </Suspense>
-          </BrowserRouter>
-          </TooltipProvider>
-        </ChatProvider>
-        </ShortcutsPreferencesProvider>
-      </AuthProvider>
-        </DeviceProvider>
+                    </Routes>
+                  </Suspense>
+                </BrowserRouter>
+              </TooltipProvider>
+            </ChatProvider>
+          </ShortcutsPreferencesProvider>
+        </AuthProvider>
+      </DeviceProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

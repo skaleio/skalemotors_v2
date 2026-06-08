@@ -4,6 +4,7 @@ import { Trophy } from "lucide-react";
 import { SellerPerformanceBar } from "@/components/SellerPerformanceBar";
 import { SellerSalesGoalBar } from "@/components/SellerSalesGoalBar";
 import { useAuth } from "@/contexts/AuthContext";
+import { isSalesDashboardRole } from "@/lib/appRoles";
 import { useTenantSalesGoal } from "@/hooks/useTenantSalesGoal";
 import { useSalesRanking } from "@/hooks/useSalesRanking";
 import { findEngagementForUser, useSellerEngagement } from "@/hooks/useSellerEngagement";
@@ -28,13 +29,13 @@ export function SidebarSalesRanking({ collapsed }: Props) {
   const { user } = useAuth();
   const { goal: tenantGoal, isLoading: loadingGoal } = useTenantSalesGoal();
   const { data: engagementRows, isLoading: loadingEngagement } = useSellerEngagement({
-    enabled: !!user && user.role === "vendedor",
+    enabled: !!user && isSalesDashboardRole(user.role),
   });
   const { data, isLoading: loadingRanking } = useSalesRanking("month", user?.branch_id ?? null, {
     enabled: !!user,
   });
 
-  if (!user || user.role !== "vendedor") return null;
+  if (!user || !isSalesDashboardRole(user.role)) return null;
   if (collapsed) return null;
 
   const rows = data?.rows ?? [];

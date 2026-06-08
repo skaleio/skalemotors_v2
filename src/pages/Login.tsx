@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAal, listFactors } from '@/lib/services/mfa'
+import { postAuthHomeForRole } from '@/lib/appRoles'
 import { schedulePostAuthChunkPrefetch } from '@/lib/postAuthChunkPrefetch'
 import { isFastAuthDev } from '@/lib/authTimings'
 import { MFA_GATE_ENABLED, roleRequiresMfa } from '@/lib/mfaPolicy'
@@ -79,12 +80,7 @@ export default function Login() {
   useEffect(() => {
     if (user && !authLoading && !localLoading && !loginAttempted) {
       const from = (location.state as { from?: RouterLocation } | null)?.from
-      const defaultPath =
-        user.role === "vendedor"
-          ? "/app/crm"
-          : user.role === "fotografo"
-            ? "/app/consignaciones"
-            : "/app"
+      const defaultPath = postAuthHomeForRole(user.role)
       const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
       navigate(to, { replace: true })
     }
@@ -112,12 +108,7 @@ export default function Login() {
       } else {
         setFailedAttempts(0)
         const from = (location.state as { from?: RouterLocation } | null)?.from
-        const defaultPath =
-          role === "vendedor"
-            ? "/app/crm"
-            : role === "fotografo"
-              ? "/app/consignaciones"
-              : "/app"
+        const defaultPath = postAuthHomeForRole(role)
         const to = from?.pathname ? `${from.pathname}${from.search || ""}${from.hash || ""}` : defaultPath
         if (MFA_GATE_ENABLED && !isFastAuthDev()) {
           try {

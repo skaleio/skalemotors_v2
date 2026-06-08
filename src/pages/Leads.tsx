@@ -30,7 +30,7 @@ import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
 import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
-import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
+import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { toast } from "@/hooks/use-toast";
 import { useConsignaciones } from "@/hooks/useConsignaciones";
@@ -2298,17 +2298,10 @@ function LeadsImpl({ user }: { user: User }) {
                   footnote="Sincronizado con Citas · edita el lead para cambiar fecha o motivo"
                 />
               ) : null}
-              <div className="rounded-md border bg-muted/30 px-3 py-2.5">
-                <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
-                <ContactAttemptsBar
-                  leadId={detailsLead.id}
-                  value={(detailsLead as { contact_attempts?: number }).contact_attempts ?? 0}
-                  showLabel={false}
-                />
-                <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna en el CRM.
-                </p>
-              </div>
+              <CrmLeadContactTrackingBlock
+                leadId={detailsLead.id}
+                value={(detailsLead as { contact_attempts?: number }).contact_attempts ?? 0}
+              />
               {(() => {
                 const rut = detailsLead.rut?.trim();
                 const email = detailsLead.email?.trim();

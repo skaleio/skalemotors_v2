@@ -12,6 +12,8 @@ import {
 import { navigateFromNotification } from "@/lib/notificationNavigation";
 import { formatDistanceToNow } from "date-fns";
 import { es as esLocale } from "date-fns/locale";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useDevice } from "@/contexts/DeviceContext";
 import { Bell, Car, Check, CheckCircle, ChevronDown, Clock, Command, Info, Loader2, Moon, Search, Sun, UserPlus, Users, X } from "lucide-react";
 import { usePreloadUserAvatar } from "@/hooks/usePreloadUserAvatar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -43,6 +45,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 export function TopBar() {
   usePreloadUserAvatar();
+  const { isMobileDevice, isReady } = useDevice();
+  const isMobileViewport = useIsMobile();
+  const showMobileShell = (isReady && isMobileDevice) || isMobileViewport;
   const navigate = useNavigate();
   const location = useLocation();
   const { navigateWithLoading } = useNavigationWithLoading();
@@ -179,39 +184,8 @@ export function TopBar() {
     navigateFromNotification(notification, navigateWithLoading);
   };
 
-  return (
-    <header className="relative h-14 flex items-center border-b border-border bg-background/80 backdrop-blur-sm px-3 md:px-5 gap-3">
-      {/* Izquierda: hamburguesa + logo mobile + breadcrumb desktop */}
-      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-        <SidebarTrigger className="h-8 w-8 shrink-0" />
-
-        {/* Branding (mobile) */}
-        <button
-          onClick={() => navigate('/app')}
-          className="skale-logo text-sm md:hidden whitespace-nowrap top-bar-logo"
-          aria-label="Ir al dashboard"
-        >
-          SKALEMOTORS
-        </button>
-
-        {/* Breadcrumb (desktop) */}
-        <AppBreadcrumb className="hidden md:flex" />
-      </div>
-
-      {/* Centro: logo SKALEMOTORS con glow rosa y pulso suave (visible md+). */}
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block z-0">
-        <button
-          type="button"
-          onClick={() => navigate('/app')}
-          className="skale-logo top-bar-logo animate-pulse pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
-          aria-label="Ir al dashboard"
-        >
-          SKALEMOTORS
-        </button>
-      </div>
-
-      {/* Derecha: search + acción rápida + notificaciones + tema + usuario */}
-      <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+  const rightActions = (
+    <>
         {/* Search trigger — solo ícono lupa, abre dialog modal */}
         <Button
           type="button"
@@ -554,7 +528,45 @@ export function TopBar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+    </>
+  );
+
+  if (showMobileShell) {
+    return (
+      <header className="relative z-20 flex h-14 items-center justify-between gap-4 border-b border-border bg-background/80 pl-2 pr-2 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => navigate("/app")}
+          className="skale-logo top-bar-logo shrink-0 text-sm"
+          aria-label="Ir al dashboard"
+        >
+          SKALEMOTORS
+        </button>
+
+        <div className="flex shrink-0 items-center gap-0.5">{rightActions}</div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="relative flex h-14 items-center gap-3 border-b border-border bg-background/80 px-3 backdrop-blur-sm md:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+        <SidebarTrigger className="h-8 w-8 shrink-0" />
+        <AppBreadcrumb className="hidden md:flex" />
       </div>
+
+      <div className="pointer-events-none absolute left-1/2 top-1/2 z-0 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+        <button
+          type="button"
+          onClick={() => navigate("/app")}
+          className="skale-logo top-bar-logo pointer-events-auto animate-pulse cursor-pointer transition-opacity hover:opacity-80"
+          aria-label="Ir al dashboard"
+        >
+          SKALEMOTORS
+        </button>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 md:gap-2">{rightActions}</div>
     </header>
   );
 }

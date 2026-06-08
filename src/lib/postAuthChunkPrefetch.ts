@@ -1,12 +1,12 @@
-import { PHOTOGRAPHER_ROLE, VENDOR_ROLE } from "@/lib/appRoles";
 import { scheduleWhenIdle } from "@/lib/scheduleIdle";
+import { isSalesDashboardRole, PHOTOGRAPHER_ROLE } from "@/lib/appRoles";
 
 /** Precarga el chunk de la ruta post-login más probable según rol (idle, no bloquea auth). */
 export function schedulePostAuthChunkPrefetch(role: string | undefined | null): () => void {
   return scheduleWhenIdle(
     () => {
-      if (role === VENDOR_ROLE) {
-        void import("@/pages/CRM").catch(() => {});
+      if (isSalesDashboardRole(role)) {
+        void import("@/pages/SalesDashboard").catch(() => {});
         return;
       }
       if (role === PHOTOGRAPHER_ROLE) {

@@ -17,6 +17,8 @@ import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/
 import { LeadNotesSection } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
+import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
+import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import {
@@ -248,6 +250,7 @@ function buildCrmLeadEditForm(lead: Lead) {
     transmision: leadTransmissionForForm(lead.transmision),
     status: safePipelineSelectValue(lead.status),
     assigned_to: lead.assigned_to ?? null,
+    contact_attempts: lead.contact_attempts ?? 0,
   };
 }
 
@@ -728,6 +731,7 @@ export default function CRM() {
     status: "contactado",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
+    contact_attempts: 0,
   });
 
   const crmAssigneeQuery = useBranchSellersOptionsFromUser(user, {
@@ -1110,8 +1114,16 @@ export default function CRM() {
             transmision: leadTransmissionForSave(editForm.transmision),
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
+            contact_attempts: editForm.contact_attempts,
           }
         : { status: crmStageToDbStatus(leadStatus) };
+
+      if (
+        isEditingForm
+        && editForm.contact_attempts > (editingLead.contact_attempts ?? 0)
+      ) {
+        updates.last_contact_at = new Date().toISOString();
+      }
 
       const updated = await leadService.update(editingLead.id, updates as any);
 
@@ -1648,6 +1660,14 @@ export default function CRM() {
               </SelectContent>
             </Select>
           )}
+          {canSupervise && (
+            <CrmTeamPerformanceBar
+              leads={leads}
+              vendors={vendorList}
+              enabled={canSupervise}
+              onSelectVendor={(vendorId) => setSupervisedVendorId(vendorId)}
+            />
+          )}
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -2125,6 +2145,12 @@ export default function CRM() {
                       </div>
                     </div>
                   </div>
+                  <CrmLeadContactTrackingBlock
+                    leadId={editingLead.id}
+                    value={editForm.contact_attempts}
+                    localOnly
+                    onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
+                  />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-email">Correo</Label>
@@ -2229,20 +2255,6 @@ export default function CRM() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="rounded-md border bg-muted/30 px-3 py-2.5">
-                    <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
-                    <ContactAttemptsBar
-                      leadId={editingLead.id}
-                      value={editingLead.contact_attempts ?? 0}
-                      showLabel={false}
-                      onChange={(next) =>
-                        setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
-                      }
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna.
-                    </p>
-                  </div>
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select
@@ -2277,6 +2289,13 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
+                  <CrmLeadContactTrackingBlock
+                    leadId={editingLead.id}
+                    value={editingLead.contact_attempts ?? 0}
+                    onChange={(next) =>
+                      setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
+                    }
+                  />
                   {(() => {
                     const rut = editingLead.rut?.trim();
                     const email = editingLead.email?.trim();
@@ -2423,20 +2442,6 @@ export default function CRM() {
                           </>
                         );
                       })()}
-                    </p>
-                  </div>
-                  <div className="rounded-md border bg-muted/30 px-3 py-2.5">
-                    <p className="text-sm text-muted-foreground mb-1.5">Intentos de contacto</p>
-                    <ContactAttemptsBar
-                      leadId={editingLead.id}
-                      value={editingLead.contact_attempts ?? 0}
-                      showLabel={false}
-                      onChange={(next) =>
-                        setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
-                      }
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Meta: 3 contactos. Al llegar a 3 el lead baja al final de su columna.
                     </p>
                   </div>
                   <div className="grid gap-2 pt-2 border-t">

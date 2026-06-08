@@ -8,9 +8,10 @@ import {
 } from "./appRoles";
 
 describe("appRoles", () => {
-  it("redirige fotografo a inventario", () => {
+  it("redirige fotografo a consignaciones y vendedor a inicio comercial", () => {
     expect(postAuthHomeForRole("fotografo")).toBe("/app/consignaciones");
-    expect(postAuthHomeForRole("vendedor")).toBe("/app/crm");
+    expect(postAuthHomeForRole("vendedor")).toBe("/app");
+    expect(postAuthHomeForRole("jefe_sucursal")).toBe("/app");
   });
 
   it("oculta precio solo para vendedor; fotografo puede ver precio", () => {

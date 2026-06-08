@@ -5,6 +5,7 @@ import { PageRestore } from "@/components/PageRestore";
 import { PageLoader } from "@/components/PageLoader";
 import { GlobalQuickActions } from "@/components/GlobalQuickActions";
 import FloatingChatButton from "@/components/FloatingChatButton";
+import { MobileBottomNav, MOBILE_BOTTOM_NAV_OFFSET_CLASS } from "@/components/MobileBottomNav";
 import SupportChat from "@/components/SupportChat";
 import { LoginAlertsDialog } from "@/components/LoginAlertsDialog";
 import { PrefetchLeads } from "@/components/PrefetchLeads";
@@ -14,6 +15,7 @@ import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useChat } from "@/contexts/ChatContext";
 import { useDevice } from "@/contexts/DeviceContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSessionInactivity } from "@/hooks/useSessionInactivity";
 import { useSellerPresence } from "@/hooks/useSellerPresence";
 
@@ -26,6 +28,7 @@ export function Layout({ children }: LayoutProps) {
   const isLandingPage = location.pathname === '/landing' || location.pathname === '/';
   const { isChatOpen, openChat, closeChat } = useChat();
   const { isMobileDevice, isReady } = useDevice();
+  const isMobileViewport = useIsMobile();
   
   // Inicializar atajos globales
   useGlobalShortcuts();
@@ -53,6 +56,7 @@ export function Layout({ children }: LayoutProps) {
   }
   
   const isMobileLayout = isReady && isMobileDevice;
+  const showBottomNav = isMobileLayout || isMobileViewport;
 
   return (
     <SidebarProvider>
@@ -73,18 +77,25 @@ export function Layout({ children }: LayoutProps) {
           <header className="shrink-0">
             <TopBar />
           </header>
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-muted/20 p-4 min-w-0 md:p-6">
+          <main
+            className={
+              showBottomNav
+                ? `min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-muted/20 p-4 min-w-0 ${MOBILE_BOTTOM_NAV_OFFSET_CLASS}`
+                : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-muted/20 p-4 min-w-0 md:p-6"
+            }
+          >
             <PageRestore>
               {children}
             </PageRestore>
           </main>
         </div>
       </div>
+      {showBottomNav ? <MobileBottomNav /> : null}
       <PageLoader />
       <GlobalQuickActions />
-      
-      {/* Chat de soporte flotante global */}
-      <FloatingChatButton onClick={openChat} />
+
+      {/* Chat flotante solo en desktop; en mobile va en TopBar */}
+      {!showBottomNav ? <FloatingChatButton onClick={openChat} /> : null}
       <SupportChat
         isOpen={isChatOpen}
         onClose={closeChat}

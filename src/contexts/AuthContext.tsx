@@ -51,6 +51,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Lectura opcional del contexto (providers internos que pueden montarse antes del árbol completo). */
+export function useAuthContext(): AuthContextType | undefined {
+  return useContext(AuthContext);
+}
+
 interface AuthProviderProps {
   children: ReactNode;
 }

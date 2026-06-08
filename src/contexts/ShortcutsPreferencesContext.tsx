@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuthContext } from "@/contexts/AuthContext";
 import {
   fetchShortcutPreferences,
   saveShortcutPreferences,
@@ -21,7 +21,8 @@ interface ShortcutsPreferencesContextType {
 const ShortcutsPreferencesContext = createContext<ShortcutsPreferencesContextType | undefined>(undefined);
 
 export function ShortcutsPreferencesProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const auth = useAuthContext();
+  const user = auth?.user;
   const [shortcuts, setShortcuts] = useState<ShortcutsMap>(() => ({ ...DEFAULT_SHORTCUTS }));
   const [shortcutsEnabled, setShortcutsEnabledState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);

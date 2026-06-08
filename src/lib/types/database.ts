@@ -1045,6 +1045,7 @@ export interface Database {
           last_contact_at: string | null
           next_follow_up: string | null
           contact_attempts: number
+          calls_made: number
           uso_principal: string | null
           pasajeros_filas: string | null
           transmision: string | null
@@ -1087,6 +1088,7 @@ export interface Database {
           last_contact_at?: string | null
           next_follow_up?: string | null
           contact_attempts?: number
+          calls_made?: number
           uso_principal?: string | null
           pasajeros_filas?: string | null
           transmision?: string | null
@@ -1129,6 +1131,7 @@ export interface Database {
           last_contact_at?: string | null
           next_follow_up?: string | null
           contact_attempts?: number
+          calls_made?: number
           uso_principal?: string | null
           pasajeros_filas?: string | null
           transmision?: string | null

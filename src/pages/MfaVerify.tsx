@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { StaticLoginBackground } from "@/components/StaticLoginBackground";
 import { challengeAndVerify, listFactors } from "@/lib/services/mfa";
 import { useAuth } from "@/contexts/AuthContext";
+import { postAuthHomeForRole } from "@/lib/appRoles";
 
 export default function MfaVerify() {
   const navigate = useNavigate();
@@ -28,11 +29,7 @@ export default function MfaVerify() {
 
   const from =
     (location.state as { from?: string } | null)?.from ??
-    (user?.role === "vendedor"
-      ? "/app/crm"
-      : user?.role === "fotografo"
-        ? "/app/consignaciones"
-        : "/app");
+    postAuthHomeForRole(user?.role);
 
   async function submit() {
     if (!factor) {
