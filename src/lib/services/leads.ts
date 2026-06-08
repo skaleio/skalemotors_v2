@@ -118,6 +118,25 @@ export const leadService = {
     return data as Lead[]
   },
 
+  /** Resumen liviano para seguimiento AM/PM de vendedores (solo asignados, sin papelera). */
+  async listActiveAssignedSummary() {
+    const { data, error } = await supabase
+      .from('leads')
+      .select(`
+        id,
+        full_name,
+        status,
+        assigned_to,
+        assigned_user:users!leads_assigned_to_fkey(id, full_name, email, crm_color)
+      `)
+      .is('deleted_at', null)
+      .not('assigned_to', 'is', null)
+      .order('updated_at', { ascending: false })
+
+    if (error) throw error
+    return data ?? []
+  },
+
   /**
    * Leads que pueden estar buscando este vehículo: `preferred_vehicle_id`, o texto en marca/interés/preferencias.
    * No filtra por estado; la UI puede ordenar priorizando pipeline.

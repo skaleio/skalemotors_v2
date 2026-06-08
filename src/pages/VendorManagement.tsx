@@ -10,7 +10,7 @@ import { useSellerEngagement } from "@/hooks/useSellerEngagement";
 import { resolveEngagementForSeller } from "@/lib/sellerEngagement";
 import { useTenantSalesGoal } from "@/hooks/useTenantSalesGoal";
 import { resolveMonthlySalesGoal } from "@/lib/sellerPerformance";
-import { DollarSign, Pencil, Plus, Search, Target, Trash2, User, Users } from "lucide-react";
+import { DollarSign, ClipboardCheck, Pencil, Plus, Search, Target, Trash2, User, Users } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -84,6 +84,8 @@ const USERS_PAGE_ROLES = new Set(["admin", "jefe_jefe", "gerente", "jefe_sucursa
 
 const TENANT_GOAL_EDIT_ROLES = new Set(["admin", "jefe_jefe"]);
 
+const SELLER_FOLLOW_UP_ROLES = new Set(["admin", "jefe_jefe"]);
+
 /** Ven toda la plantilla del tenant (p. ej. rotar vendedores entre sucursales). */
 const TENANT_WIDE_STAFF_VIEW_ROLES = new Set(["admin", "jefe_jefe", "gerente"]);
 
@@ -106,6 +108,7 @@ export default function VendorManagement() {
   const canManageStaff = user?.role ? STAFF_ROLES_MANAGE.has(user.role) : false;
   const canOpenUsersPage = user?.role ? USERS_PAGE_ROLES.has(user.role) : false;
   const canEditTenantGoal = user?.role ? TENANT_GOAL_EDIT_ROLES.has(user.role) : false;
+  const canOpenSellerFollowUp = user?.role ? SELLER_FOLLOW_UP_ROLES.has(user.role) : false;
   const canEditStaffBranch = user?.role ? BRANCH_EDIT_ROLES.has(user.role) : false;
   const viewAllTenantStaff = user?.role ? TENANT_WIDE_STAFF_VIEW_ROLES.has(user.role) : false;
 
@@ -590,6 +593,14 @@ export default function VendorManagement() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canOpenSellerFollowUp ? (
+            <Button type="button" variant="outline" asChild>
+              <Link to="/app/vendors/seguimiento">
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+                Seguimiento
+              </Link>
+            </Button>
+          ) : null}
           {canOpenUsersPage ? (
             <Button variant="outline" asChild>
               <Link to="/app/users">Accesos CRM (correo y contraseña)</Link>

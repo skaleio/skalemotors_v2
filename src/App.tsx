@@ -22,6 +22,7 @@ const Leads = lazy(() => import("./pages/Leads"));
 const LeadsBoard = lazy(() => import("./pages/LeadsBoard"));
 const SalesManagement = lazy(() => import("./pages/SalesManagement"));
 const VendorManagement = lazy(() => import("./pages/VendorManagement"));
+const SellerFollowUp = lazy(() => import("./pages/SellerFollowUp"));
 const SalespersonRanking = lazy(() => import("./pages/SalespersonRanking"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Appointments = lazy(() => import("./pages/Appointments"));
@@ -185,6 +186,13 @@ const App = () => (
                 <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <VendorManagement />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/vendors/seguimiento" element={
+                <ProtectedRoute requiredRole={['admin', 'jefe_jefe']}>
+                  <Layout>
+                    <SellerFollowUp />
                   </Layout>
                 </ProtectedRoute>
               } />

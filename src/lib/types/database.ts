@@ -1345,6 +1345,82 @@ export interface Database {
           updated_at?: string
         }
       }
+      seller_follow_up_checks: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          follow_up_date: string
+          seller_user_id: string
+          period: string
+          checked: boolean
+          checked_by: string | null
+          checked_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          follow_up_date: string
+          seller_user_id: string
+          period: string
+          checked?: boolean
+          checked_by?: string | null
+          checked_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          follow_up_date?: string
+          seller_user_id?: string
+          period?: string
+          checked?: boolean
+          checked_by?: string | null
+          checked_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      seller_follow_up_notes: {
+        Row: {
+          id: string
+          tenant_id: string
+          branch_id: string | null
+          follow_up_date: string
+          seller_user_id: string
+          note: string
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          branch_id?: string | null
+          follow_up_date: string
+          seller_user_id: string
+          note?: string
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          follow_up_date?: string
+          seller_user_id?: string
+          note?: string
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       notifications: {
         Row: {
           id: string
