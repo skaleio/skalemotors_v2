@@ -103,7 +103,14 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     const notesNewestFirst = useMemo(() => [...notes].reverse(), [notes]);
 
     const legacyTrimmed = legacyNotes?.trim() ?? "";
-    const showLegacyFallback = !isLoading && notes.length === 0 && legacyTrimmed.length > 0;
+    const legacyAlreadyInNotes = useMemo(
+      () =>
+        legacyTrimmed.length > 0 &&
+        notes.some((n) => n.body.trim() === legacyTrimmed),
+      [notes, legacyTrimmed],
+    );
+    const showLegacyFallback =
+      !isLoading && legacyTrimmed.length > 0 && !legacyAlreadyInNotes;
 
     useEffect(() => {
       setDraft("");
@@ -132,6 +139,24 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
 
         setIsSaving(true);
         try {
+          const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
+          const appended: typeof notes = [...cached];
+
+          const migrateLegacy =
+            legacyTrimmed.length > 0 &&
+            !appended.some((n) => n.body.trim() === legacyTrimmed);
+
+          if (migrateLegacy) {
+            const legacyRow = await leadNoteService.create({
+              leadId,
+              body: legacyTrimmed,
+              tenantId,
+              branchId: branchId ?? user?.branch_id ?? null,
+              createdBy: null,
+            });
+            appended.push(legacyRow);
+          }
+
           const created = await leadNoteService.create({
             leadId,
             body: trimmed,
@@ -139,11 +164,12 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             branchId: branchId ?? user?.branch_id ?? null,
             createdBy: user?.id ?? null,
           });
-          queryClient.setQueryData(queryKey, (current: typeof notes | undefined) => [
-            ...(current ?? []),
-            created,
-          ]);
+          appended.push(created);
+
+          queryClient.setQueryData(queryKey, appended);
           setDraft("");
+          cancelEdit();
+          await queryClient.refetchQueries({ queryKey });
           invalidate();
           return true;
         } catch (err) {
@@ -154,7 +180,19 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
           setIsSaving(false);
         }
       },
-      [tenantId, leadId, branchId, user?.branch_id, user?.id, queryClient, queryKey, invalidate],
+      [
+        tenantId,
+        leadId,
+        branchId,
+        user?.branch_id,
+        user?.id,
+        queryClient,
+        queryKey,
+        notes,
+        legacyTrimmed,
+        invalidate,
+        cancelEdit,
+      ],
     );
 
     const handleSaveNote = useCallback(async () => {
@@ -249,8 +287,9 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             disabled={isSaving}
           />
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Pulsa <span className="font-medium">Guardar nota</span> o{" "}
-            <span className="font-medium">Guardar cambios</span> del lead para registrar lo escrito.
+            Cada guardado agrega una nota nueva; las anteriores no se modifican. Usa{" "}
+            <span className="font-medium">Guardar nota</span> o{" "}
+            <span className="font-medium">Guardar cambios</span> del lead.
           </p>
           {draft.trim() ? (
             <Button
@@ -311,7 +350,7 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" size="sm" onClick={() => void handleUpdateNote()} disabled={isSaving || !editDraft.trim()}>
                       {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Guardar cambios
+                      Guardar edición
                     </Button>
                     <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={cancelEdit}>
                       Cancelar
