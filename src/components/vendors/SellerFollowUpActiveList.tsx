@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import {
@@ -10,7 +9,7 @@ import {
   getLeadCrmStageKey,
 } from "@/lib/crmPipeline";
 import { cn } from "@/lib/utils";
-import { Briefcase, ChevronDown, Mail, UserRound } from "lucide-react";
+import { Briefcase, CheckCircle2, ChevronDown, Mail, Moon, Sun, UserRound } from "lucide-react";
 import { useState } from "react";
 
 export type SellerFollowUpLeadPreview = {
@@ -64,7 +63,52 @@ function LeadPreviewRow({ lead }: { lead: SellerFollowUpLeadPreview }) {
   );
 }
 
-function SellerFollowUpSellerCard({ seller }: { seller: SellerFollowUpActiveSeller }) {
+export type SellerFollowUpCheckState = { am: boolean; pm: boolean };
+
+function FollowUpStatusBadge({ checks }: { checks: SellerFollowUpCheckState }) {
+  if (checks.am && checks.pm) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 gap-1 border-emerald-500/40 bg-emerald-500/15 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+      >
+        <CheckCircle2 className="h-3 w-3" />
+        Seguimiento list
+      </Badge>
+    );
+  }
+  if (checks.am) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 gap-1 border-amber-500/30 bg-amber-500/10 text-[10px] font-semibold text-amber-800 dark:text-amber-200"
+      >
+        <Sun className="h-3 w-3" />
+        AM ✓
+      </Badge>
+    );
+  }
+  if (checks.pm) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 gap-1 border-indigo-500/30 bg-indigo-500/10 text-[10px] font-semibold text-indigo-800 dark:text-indigo-200"
+      >
+        <Moon className="h-3 w-3" />
+        PM ✓
+      </Badge>
+    );
+  }
+  return null;
+}
+
+function SellerFollowUpSellerCard({
+  seller,
+  checks,
+}: {
+  seller: SellerFollowUpActiveSeller;
+  checks?: SellerFollowUpCheckState;
+}) {
   const [expanded, setExpanded] = useState(false);
   const accent = resolveAssigneeBorderColor({
     userId: seller.id,
@@ -103,13 +147,16 @@ function SellerFollowUpSellerCard({ seller }: { seller: SellerFollowUpActiveSell
                 </p>
               ) : null}
             </div>
-            <Badge
-              variant="secondary"
-              className="shrink-0 gap-1 tabular-nums bg-primary/10 text-primary hover:bg-primary/10"
-            >
-              <Briefcase className="h-3 w-3" />
-              {seller.leads.length}
-            </Badge>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {checks ? <FollowUpStatusBadge checks={checks} /> : null}
+              <Badge
+                variant="secondary"
+                className="gap-1 tabular-nums bg-primary/10 text-primary hover:bg-primary/10"
+              >
+                <Briefcase className="h-3 w-3" />
+                {seller.leads.length}
+              </Badge>
+            </div>
           </div>
 
           <ul className="mt-2.5 space-y-1.5">
@@ -163,12 +210,17 @@ type SellerFollowUpActiveListProps = {
   sellers: SellerFollowUpActiveSeller[];
   loading?: boolean;
   maxHeightClass?: string;
+  /** Checks del día seleccionado en calendario (seller id → AM/PM). */
+  checkMap?: Map<string, SellerFollowUpCheckState> | null;
+  followUpDateLabel?: string | null;
 };
 
 export function SellerFollowUpActiveList({
   sellers,
   loading = false,
   maxHeightClass = "max-h-[min(520px,60vh)]",
+  checkMap = null,
+  followUpDateLabel = null,
 }: SellerFollowUpActiveListProps) {
   const totalLeads = sellers.reduce((sum, s) => sum + s.leads.length, 0);
 
@@ -219,13 +271,34 @@ export function SellerFollowUpActiveList({
         </div>
       </div>
 
-      <ScrollArea className={cn("pr-3", maxHeightClass)}>
-        <ul className="space-y-2.5">
+      {followUpDateLabel ? (
+        <p className="text-xs text-muted-foreground capitalize">
+          Estado de seguimiento · {followUpDateLabel}
+        </p>
+      ) : null}
+
+      <div
+        className={cn(
+          "overflow-y-auto overscroll-contain pr-2",
+          maxHeightClass,
+        )}
+      >
+        <ul className="space-y-2.5 pb-1">
           {sellers.map((seller) => (
-            <SellerFollowUpSellerCard key={seller.id} seller={seller} />
+            <SellerFollowUpSellerCard
+              key={seller.id}
+              seller={seller}
+              checks={checkMap?.get(seller.id)}
+            />
           ))}
         </ul>
-      </ScrollArea>
+      </div>
+
+      {sellers.length > 3 ? (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Desplázate para ver más vendedores
+        </p>
+      ) : null}
     </div>
   );
 }

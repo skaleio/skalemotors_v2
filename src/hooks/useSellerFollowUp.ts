@@ -199,5 +199,45 @@ export function useSaveSellerFollowUpNote(month: Date) {
       void queryClient.invalidateQueries({ queryKey: notesKey })
       void queryClient.invalidateQueries({ queryKey: ['seller-follow-up', 'notes'] })
     },
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: notesKey })
+      const previous = queryClient.getQueryData<SellerFollowUpNoteRow[]>(notesKey)
+      const trimmed = vars.note.trim()
+      const now = new Date().toISOString()
+
+      queryClient.setQueryData<SellerFollowUpNoteRow[]>(notesKey, (prev) => {
+        const rows = [...(prev ?? [])]
+        const idx = rows.findIndex(
+          (r) =>
+            r.follow_up_date === vars.followUpDate &&
+            r.seller_user_id === vars.sellerUserId,
+        )
+        if (!trimmed) {
+          if (idx >= 0) rows.splice(idx, 1)
+          return rows
+        }
+        const patch: SellerFollowUpNoteRow = {
+          id: idx >= 0 ? rows[idx].id : `optimistic-note-${vars.sellerUserId}`,
+          tenant_id: user?.tenant_id ?? '',
+          branch_id: user?.branch_id ?? null,
+          follow_up_date: vars.followUpDate,
+          seller_user_id: vars.sellerUserId,
+          note: trimmed,
+          updated_by: user?.id ?? null,
+          created_at: idx >= 0 ? rows[idx].created_at : now,
+          updated_at: now,
+        }
+        if (idx >= 0) rows[idx] = patch
+        else rows.push(patch)
+        return rows
+      })
+
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(notesKey, context.previous)
+      }
+    },
   })
 }

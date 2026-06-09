@@ -40,7 +40,6 @@ import {
   CRM_STAGE_PILL_CLASS,
   type CrmStageKey,
   crmStageToDbStatus,
-  filterLeadsForCrmCeoView,
   getLeadCrmStageKey,
   isLeadVisibleInCrmKanban,
   leadBelongsToCrmStage,
@@ -57,7 +56,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -70,7 +69,6 @@ type LeadWithAssignee = Lead & {
 };
 
 const CRM_UNASSIGNED_VALUE = "__crm_sin_asignar__";
-const CRM_VIEW_CEO = "__ceo__";
 const CRM_VIEW_GLOBAL = "__all__";
 
 const CLOSE_DEAL_PAYMENT_METHODS = [
@@ -209,25 +207,6 @@ const getConsignacionLabel = (tags: unknown): string | null => {
   if (!label || label === "sin_etiqueta") return null;
   return label;
 };
-
-/** Filas de datos del lead para mostrar en la tarjeta del pipeline (sin abrir el diálogo). */
-function leadPipelinePreviewRows(lead: LeadWithAssignee): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = [];
-  const add = (label: string, raw?: string | null) => {
-    const v = typeof raw === "string" ? raw.trim() : "";
-    if (v) rows.push({ label, value: v });
-  };
-  add("Correo", lead.email);
-  add("RUT", lead.rut);
-  add("Vehículo", lead.vehicle_interest || getTagValue(lead.tags, VEHICULO_TAG_PREFIX));
-  add("Región", lead.region || getTagValue(lead.tags, REGION_TAG_PREFIX));
-  add("Financ./Contado", lead.payment_type);
-  add("Presupuesto", lead.budget);
-  add("Pie", lead.pie_disponible);
-  add("Cuotas mens.", lead.cuotas_mensuales);
-  add("Transmisión", lead.transmision);
-  return rows;
-}
 
 function buildTagsWithVehicle(tags: unknown, vehicle: string): string[] {
   const current = normalizeTags(tags).filter((tag) => !tag.startsWith(VEHICULO_TAG_PREFIX));
@@ -384,7 +363,6 @@ const LeadCard = memo(function LeadCard({
   /** Solo admin / supervisión: etiqueta con vendedor asignado en la esquina. */
   showAssigneeBadge?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
@@ -444,7 +422,6 @@ const LeadCard = memo(function LeadCard({
       }}
       onClick={(e) => {
         const t = e.target as HTMLElement;
-        if (t.closest("[data-crm-card-expand-toggle]")) return;
         if (t.closest("[data-crm-card-open-lead]")) return;
         handleCardOpen();
       }}
@@ -538,69 +515,8 @@ const LeadCard = memo(function LeadCard({
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden />
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 shrink-0 gap-0.5 px-2 text-[11px] font-medium"
-          data-crm-card-expand-toggle
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          aria-expanded={expanded}
-        >
-          {expanded ? (
-            <>
-              Ocultar
-              <ChevronUp className="h-3.5 w-3.5 opacity-80" aria-hidden />
-            </>
-          ) : (
-            <>
-              Ver datos
-              <ChevronDown className="h-3.5 w-3.5 opacity-80" aria-hidden />
-            </>
-          )}
-        </Button>
         </div>
       </div>
-      {expanded ? (
-        <>
-          {(() => {
-            const previewRows = leadPipelinePreviewRows(lead);
-            const notesPreview = lead.notes?.trim() ?? "";
-            if (previewRows.length === 0 && !notesPreview) return null;
-            return (
-              <div className="mt-2 space-y-1 rounded-md border border-border/45 bg-muted/25 px-2 py-1.5 text-[11px] leading-snug">
-                {previewRows.map((row) => (
-                  <div key={row.label} className="grid grid-cols-[minmax(0,5.25rem)_1fr] gap-x-2 items-start">
-                    <span className="text-muted-foreground shrink-0">{row.label}</span>
-                    <span className="min-w-0 break-words text-foreground/90" title={row.value}>
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-                {notesPreview ? (
-                  <div className="mt-1 border-t border-border/35 pt-1.5">
-                    <span className="text-muted-foreground">Nota</span>
-                    <p className="mt-0.5 text-foreground/90 line-clamp-3 whitespace-pre-wrap break-words" title={notesPreview}>
-                      {notesPreview}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })()}
-          {showAssigneeBadge && !socio && assigneeFullName && (
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              {assigneeBorder ? (
-                <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border" style={{ backgroundColor: assigneeBorder }} />
-              ) : null}
-              <span className="truncate">
-                Seguimiento: {assigneeFullName}
-              </span>
-            </div>
-          )}
       {label && styles && (
         <div className="mt-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
@@ -625,15 +541,13 @@ const LeadCard = memo(function LeadCard({
           )}
         </div>
       )}
-        </>
-      ) : null}
     </div>
   );
 });
 
 const CAN_SUPERVISE = new Set(["admin", "gerente", "jefe_jefe", "jefe_sucursal", "financiero"]);
-/** Vista CEO / global: delegación de leads nuevos sin vendedor (rol CEO del tenant). */
-const CAN_USE_CRM_CEO_VIEW = new Set(["admin", "jefe_jefe"]);
+/** Vista global del CRM (todos los leads del tenant visibles para el rol). */
+const CAN_USE_CRM_GLOBAL_VIEW = new Set(["admin", "jefe_jefe"]);
 
 export default function CRM() {
   const { user } = useAuth();
@@ -660,20 +574,14 @@ export default function CRM() {
 
   const [showPapeleraDialog, setShowPapeleraDialog] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [isEmptyingPapelera, setIsEmptyingPapelera] = useState(false);
 
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
-  const canUseCeoView = !!user?.role && CAN_USE_CRM_CEO_VIEW.has(user.role);
-  const [crmWideView, setCrmWideView] = useState<"ceo" | "global">("ceo");
+  const canUseGlobalView = !!user?.role && CAN_USE_CRM_GLOBAL_VIEW.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
 
-  const isCeoView = useMemo(
-    () => canUseCeoView && !supervisedVendorId && crmWideView === "ceo",
-    [canUseCeoView, supervisedVendorId, crmWideView],
-  );
-
   const crmSupervisorSelectValue =
-    supervisedVendorId ??
-    (canUseCeoView ? (crmWideView === "ceo" ? CRM_VIEW_CEO : CRM_VIEW_GLOBAL) : undefined);
+    supervisedVendorId ?? (canUseGlobalView ? CRM_VIEW_GLOBAL : undefined);
 
   const vendorListQuery = useBranchSellersOptionsFromUser(user, {
     roles: ["vendedor"],
@@ -865,6 +773,55 @@ export default function CRM() {
     [queryClient, refetch, refetchPapelera],
   );
 
+  const handleEmptyPapelera = useCallback(async () => {
+    if (papeleraLeads.length === 0) return;
+    const count = papeleraLeads.length;
+    const ok = await askConfirm({
+      title: "¿Vaciar la papelera?",
+      description: `Se eliminarán permanentemente ${count} lead${count === 1 ? "" : "s"}. Esta acción no se puede deshacer.`,
+      confirmLabel: "Vaciar papelera",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setIsEmptyingPapelera(true);
+    try {
+      const { requested, deleted } = await leadService.hardDeleteFromTrash(
+        papeleraLeads.map((lead) => lead.id),
+      );
+      queryClient.invalidateQueries({ queryKey: ["leads", "deleted"] });
+      await refetchPapelera();
+      if (deleted === 0) {
+        toast({
+          title: "No se pudo vaciar",
+          description: "No tienes permiso para eliminar estos leads o ya no están en la papelera.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (deleted < requested) {
+        toast({
+          title: "Papelera vaciada parcialmente",
+          description: `Se eliminaron ${deleted} de ${requested} leads. Algunos no se pudieron borrar por permisos.`,
+        });
+        return;
+      }
+      toast({
+        title: "Papelera vaciada",
+        description: `Se eliminaron ${deleted} lead${deleted === 1 ? "" : "s"} de forma permanente.`,
+      });
+    } catch (error) {
+      console.error("Error vaciando papelera:", error);
+      toast({
+        title: "Error al vaciar",
+        description: error instanceof Error ? error.message : "No se pudo vaciar la papelera.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEmptyingPapelera(false);
+    }
+  }, [papeleraLeads, askConfirm, queryClient, refetchPapelera]);
+
   const startEditing = useCallback(() => {
     if (!editingLead) return;
     setEditForm(buildCrmLeadEditForm(editingLead));
@@ -960,20 +917,17 @@ export default function CRM() {
       isLeadVisibleInCrmKanban(lead, visibleCancelledIds),
     );
 
-    const viewLeads =
-      isCeoView ? filterLeadsForCrmCeoView(kanbanLeads) : kanbanLeads;
-
     // 4) Aplicar búsqueda por nombre / teléfono / correo sobre ese subconjunto.
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return viewLeads;
-    return viewLeads.filter((lead) => {
+    if (!q) return kanbanLeads;
+    return kanbanLeads.filter((lead) => {
       const name = (lead.full_name || "").toLowerCase();
       const phone = (lead.phone || "").replace(/\D/g, "");
       const phoneQuery = q.replace(/\D/g, "");
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [scopedLeads, searchQuery, supervisedVendorId, isCeoView]);
+  }, [scopedLeads, searchQuery, supervisedVendorId]);
 
   const leadsByStage = useMemo(() => {
     const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;
@@ -1585,15 +1539,6 @@ export default function CRM() {
           </Button>
         </div>
       )}
-      {isCeoView && (
-        <div className="flex items-center gap-3 rounded-lg border border-cyan-500/70 bg-cyan-50 px-4 py-2.5 dark:bg-cyan-950/30 dark:border-cyan-600">
-          <Target className="h-4 w-4 text-cyan-700 dark:text-cyan-300 shrink-0" />
-          <span className="text-sm font-medium text-cyan-900 dark:text-cyan-100 flex-1">
-            <span className="font-bold">Vista CEO</span> — en{" "}
-            <span className="font-semibold">NUEVO</span> solo ves leads sin vendedor. Al asignar, salen de esta columna.
-          </span>
-        </div>
-      )}
       {supervisedVendorId && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-400 bg-blue-50 px-4 py-2.5 dark:bg-blue-950/30 dark:border-blue-600">
           <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -1604,11 +1549,8 @@ export default function CRM() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
-            onClick={() => {
-              setSupervisedVendorId(null);
-              setCrmWideView("ceo");
-            }}
-            title="Volver a vista CEO"
+            onClick={() => setSupervisedVendorId(null)}
+            title="Volver a vista global"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -1630,14 +1572,8 @@ export default function CRM() {
             <Select
               value={crmSupervisorSelectValue ?? ""}
               onValueChange={(val) => {
-                if (val === CRM_VIEW_CEO) {
-                  setSupervisedVendorId(null);
-                  setCrmWideView("ceo");
-                  return;
-                }
                 if (val === CRM_VIEW_GLOBAL) {
                   setSupervisedVendorId(null);
-                  setCrmWideView("global");
                   return;
                 }
                 setSupervisedVendorId(val);
@@ -1648,13 +1584,12 @@ export default function CRM() {
                 <SelectValue placeholder="Ver CRM de vendedor…" />
               </SelectTrigger>
               <SelectContent>
-                {canUseCeoView ? (
+                {canUseGlobalView ? (
                   <>
-                    <SelectItem value={CRM_VIEW_CEO}>Vista CEO</SelectItem>
                     <SelectItem value={CRM_VIEW_GLOBAL}>Vista global</SelectItem>
+                    {vendorList.length > 0 ? <SelectSeparator /> : null}
                   </>
                 ) : null}
-                {canUseCeoView && vendorList.length > 0 ? <SelectSeparator /> : null}
                 {vendorList.length > 0 ? (
                   <>
                     <SelectGroup>
@@ -1665,7 +1600,6 @@ export default function CRM() {
                         </SelectItem>
                       ))}
                     </SelectGroup>
-                    {canUseCeoView ? <SelectSeparator /> : null}
                   </>
                 ) : null}
               </SelectContent>
@@ -1900,9 +1834,7 @@ export default function CRM() {
                 </CardTitle>
                 {stage.key === "nuevo" ? (
                   <CardDescription className="text-[11px] pt-1 text-cyan-700/80 dark:text-cyan-300/80">
-                    {isCeoView
-                      ? "Solo leads sin vendedor asignado. Al delegar, desaparecen de aquí."
-                      : "Leads recién ingresados, sin contacto aún."}
+                    Leads recién ingresados, sin contacto aún.
                   </CardDescription>
                 ) : null}
                 {stage.key === "negocio_cerrado" ? (
@@ -2573,7 +2505,7 @@ export default function CRM() {
                       variant="outline"
                       size="sm"
                       onClick={() => void handleRestoreLead(lead.id)}
-                      disabled={restoringId !== null}
+                      disabled={restoringId !== null || isEmptyingPapelera}
                       className="shrink-0 gap-1.5"
                     >
                       {restoringId === lead.id ? (
@@ -2588,8 +2520,25 @@ export default function CRM() {
               </ul>
             )}
           </div>
-          <DialogFooter className="shrink-0 border-t pt-4">
-            <Button variant="outline" onClick={() => setShowPapeleraDialog(false)}>
+          <DialogFooter className="shrink-0 border-t pt-4 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            {papeleraLeads.length > 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => void handleEmptyPapelera()}
+                disabled={isEmptyingPapelera || restoringId !== null || loadingPapelera}
+                className="w-full sm:w-auto gap-1.5"
+              >
+                {isEmptyingPapelera ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Vaciar papelera
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button variant="outline" onClick={() => setShowPapeleraDialog(false)} className="w-full sm:w-auto">
               Cerrar
             </Button>
           </DialogFooter>

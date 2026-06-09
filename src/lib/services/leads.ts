@@ -303,6 +303,20 @@ export const leadService = {
     if (error) throw error
   },
 
+  /** Borrado permanente de leads que ya están en papelera (deleted_at NOT NULL). */
+  async hardDeleteFromTrash(ids: string[]) {
+    const uniqueIds = [...new Set(ids.filter(Boolean))]
+    if (uniqueIds.length === 0) return { requested: 0, deleted: 0 }
+
+    const { data, error } = await supabase.rpc('purge_leads_from_trash', {
+      p_lead_ids: uniqueIds,
+    })
+
+    if (error) throw error
+    const deleted = typeof data === 'number' ? data : Number(data) || 0
+    return { requested: uniqueIds.length, deleted }
+  },
+
   // Agregar actividad a un lead
   async addActivity(leadId: string, activity: LeadActivityInsert) {
     const { data, error } = await supabase

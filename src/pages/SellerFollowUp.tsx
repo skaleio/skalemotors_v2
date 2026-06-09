@@ -192,6 +192,12 @@ export default function SellerFollowUp() {
     saveNote.mutate(
       { followUpDate: selectedDateKey, sellerUserId, note },
       {
+        onSuccess: () => {
+          toast({
+            title: "Nota guardada",
+            description: "La nota quedó registrada para este vendedor y fecha.",
+          });
+        },
         onError: (err) => {
           toast({
             title: "No se pudo guardar la nota",
@@ -248,6 +254,7 @@ export default function SellerFollowUp() {
               mode="single"
               selected={selectedDate ?? undefined}
               onSelect={handleDaySelect}
+              onDayClick={handleDaySelect}
               month={calendarMonth}
               onMonthChange={setCalendarMonth}
               locale={es}
@@ -275,13 +282,17 @@ export default function SellerFollowUp() {
             <CardDescription>
               {initialPageLoading
                 ? "Cargando plantilla y leads…"
-                : `${sellersWithLeads.length} vendedor${sellersWithLeads.length === 1 ? "" : "es"} con leads asignados.`}
+                : selectedDate
+                  ? `${sellersWithLeads.length} vendedor${sellersWithLeads.length === 1 ? "" : "es"} · seguimiento del ${format(selectedDate, "d 'de' MMMM", { locale: es })}`
+                  : `${sellersWithLeads.length} vendedor${sellersWithLeads.length === 1 ? "" : "es"} con leads asignados.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <SellerFollowUpActiveList
               sellers={sellersWithLeads}
               loading={initialPageLoading}
+              checkMap={selectedDateKey ? dayCheckMap : null}
+              followUpDateLabel={selectedDate ? followUpDateLabel : null}
             />
             {loadingMonthChecks ? null : (
               <p className="mt-4 text-xs text-muted-foreground">
@@ -297,7 +308,8 @@ export default function SellerFollowUp() {
           <DialogHeader className="shrink-0 border-b px-6 py-4">
             <DialogTitle>Seguimiento diario</DialogTitle>
             <DialogDescription>
-              Marca AM/PM y agrega una nota por vendedor. Los cambios se guardan automáticamente.
+              Marca AM/PM por vendedor (se guarda al instante). Usa{" "}
+              <span className="font-medium">Guardar nota</span> para persistir las notas del día.
             </DialogDescription>
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col px-6 py-4">

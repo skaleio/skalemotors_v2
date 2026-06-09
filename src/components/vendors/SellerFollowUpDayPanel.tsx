@@ -224,20 +224,35 @@ function SellerDayCard({
             id={`note-${seller.id}`}
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
-            onBlur={() => {
-              if (noteDraft.trim() !== savedNote.trim()) {
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
                 onSaveNote(seller.id, noteDraft);
               }
             }}
             placeholder="Ej: Llamó a 2 leads, falta retomar cotización de Juan…"
             className="min-h-[72px] resize-y bg-background text-sm"
           />
-          {savingNote ? (
-            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Guardando nota…
-            </p>
-          ) : savedNote.trim() ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={savingNote}
+              onClick={() => onSaveNote(seller.id, noteDraft)}
+            >
+              {savingNote ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Guardando…
+                </>
+              ) : (
+                "Guardar nota"
+              )}
+            </Button>
+            <span className="text-[10px] text-muted-foreground">Ctrl+Enter</span>
+          </div>
+          {!savingNote && savedNote.trim() && noteDraft.trim() === savedNote.trim() ? (
             <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
               Nota guardada
             </p>

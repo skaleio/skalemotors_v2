@@ -1,0 +1,1863 @@
+{
+  "name": "MIAMI MOTORS WhatsApp - Lead progresivo Skale",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "NOT-HESSEN",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        848
+      ],
+      "id": "d320b12e-c04b-4b3c-9862-433208bf0c5d",
+      "name": "Webhook",
+      "webhookId": "f4e40524-b8b1-477f-af39-f62af4a710e8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5ca21b41-5e9c-4547-a67c-bec453cd1b61",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.type }}",
+              "rightValue": "unsupported",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        848
+      ],
+      "id": "d605e1ad-6a92-49d0-9ae6-dcb311dcf406",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "52beca97-7371-460a-8437-60cb7efb4b87",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.from }}",
+              "rightValue": "+56936509894",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        544,
+        1760
+      ],
+      "id": "69471cb8-b27a-41b3-90b6-89c28935c4ce",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8d2db18d-e422-404c-bacd-e0dddbdca1a3",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.type }}",
+              "rightValue": "reaction",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "b4ecee07-97b6-4181-82e6-1549aa6457da",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.type }}",
+              "rightValue": "edit",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1360,
+        2608
+      ],
+      "id": "b0bab017-e428-4501-bdf6-b8d9590ab1f6",
+      "name": "If3"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        2720
+      ],
+      "id": "2cfdbf4f-815d-44cb-8a30-d534b7a62fde",
+      "name": "No Operation, do nothing3"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "whatsapp.inbound",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "6a2931d1-1d20-4909-a6f6-d0ae8f856bfa"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "inbound"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7fc07a81-339a-466f-8a4b-0a08e01b6634",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "whatsapp.smb.message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "outbound whatsapp app"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1712,
+        2496
+      ],
+      "id": "76077bf3-0a1a-4a56-a1f1-4d48cfb5aaaf",
+      "name": "Switch3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b3cb9be6-a007-4490-aa2f-05642bf3814c",
+              "leftValue": "={{ $json.Id.toString() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        2336
+      ],
+      "id": "13048daf-c93a-483d-bd08-0350cbbb5eaf",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d0929078-001c-4f6d-be05-80112926418a",
+                    "leftValue": "={{ $('Webhook').item.json.body.whatsappInboundMessage.type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "IMAGEN"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "de238e75-95ba-448d-8c66-1177b3851439",
+                    "leftValue": "={{ $('Webhook').item.json.body.whatsappInboundMessage.type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AUDIO"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "TEXTO"
+        }
+      },
+      "id": "66a44d8f-df95-4073-a2d4-94057da570e4",
+      "name": "Identifica el tipo de mensaje",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        2480,
+        2320
+      ],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "text": "Haz una descripcion breve de la imagen.",
+        "imageUrls": "={{ $('Webhook').item.json.body.whatsappInboundMessage.image.link }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        2736,
+        2160
+      ],
+      "id": "86abfa46-9c6c-4e34-a80f-8b1a6ea072e1",
+      "name": "OpenAI2",
+      "credentials": {
+        "openAiApi": {
+          "id": "0V3YuLeeujWOkOgd",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "64aa1afa-9e65-473b-be21-5be4e3909970",
+              "name": "text",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2960,
+        2160
+      ],
+      "id": "8b1131f6-1799-4858-9257-de111d6b2149",
+      "name": "Edit Fields6"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Webhook').item.json.body.whatsappInboundMessage.audio.link }}",
+        "options": {}
+      },
+      "id": "237aeb29-f533-4c6a-8cb7-e21439bc7880",
+      "name": "Download Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2736,
+        2336
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "67ec393b-cc48-422f-9efa-fd4c4c666b97",
+      "name": "Transcripción del audio",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        2960,
+        2336
+      ],
+      "typeVersion": 1.5,
+      "credentials": {
+        "openAiApi": {
+          "id": "0V3YuLeeujWOkOgd",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2736,
+        2528
+      ],
+      "id": "276dbaff-6cb3-473c-b64d-f9aa09dbce3b",
+      "name": "Wait2",
+      "webhookId": "d2dbaf38-4ba4-4029-8eba-523aa4e236da"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ed3fa21f-bc92-42b6-bc9e-9d93013d3467",
+              "name": "text",
+              "value": "={{ $('Webhook').item.json.body.whatsappInboundMessage.text.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2960,
+        2528
+      ],
+      "id": "6e1d5625-029c-4db1-88ca-177a9dd5ba24",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "30b5a785-25e8-4015-8b0b-573017d33b7e",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3200,
+        2336
+      ],
+      "id": "eb8b2513-1914-4053-b824-8051ff3b8e9b",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5ca21b41-5e9c-4547-a67c-bec453cd1b61",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3376,
+        2160
+      ],
+      "id": "6ba6dbc7-b074-4d8b-a0ce-973dbb94cb6f",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "messageData": "={{ $json.text }}",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        3616,
+        2176
+      ],
+      "id": "81a1649b-cdcb-4bce-990c-7ef89ae55bd3",
+      "name": "Redis7",
+      "credentials": {
+        "redis": {
+          "id": "YHYYVDtbpzfZBtux",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 120
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3776,
+        2336
+      ],
+      "id": "12abcec5-4d32-43db-8913-b7e80f39dea7",
+      "name": "Wait6",
+      "webhookId": "c2321417-9d46-4d7e-8ecc-f296672b0fa1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "mensajes",
+        "key": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        3936,
+        2112
+      ],
+      "id": "d59b7f42-7d21-4b58-af59-912446698d71",
+      "name": "Redis6",
+      "credentials": {
+        "redis": {
+          "id": "YHYYVDtbpzfZBtux",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8a313a41-eadc-4ada-bc2a-feff79845de9",
+              "leftValue": "={{ $json.mensajes.last() }}",
+              "rightValue": "={{ $('Edit Fields1').item.json.text }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4112,
+        2320
+      ],
+      "id": "b7e5f894-092f-4819-b4ea-86a7f572b76f",
+      "name": "If6"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d5f82380-4858-4361-908e-98e45c98f092",
+              "name": "response",
+              "value": "={{ $('Redis6').item.json.mensajes.join(' ') }}",
+              "type": "string"
+            },
+            {
+              "id": "b3db797c-6f2b-4232-8e0c-021bc8e299ca",
+              "name": "phone",
+              "value": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4304,
+        2096
+      ],
+      "id": "81e71222-46f9-4696-9778-b5fce00bb775",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        2304
+      ],
+      "id": "63fc081b-0379-4f48-a96e-2bd80b9b03a4",
+      "name": "Redis9",
+      "credentials": {
+        "redis": {
+          "id": "YHYYVDtbpzfZBtux",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4320,
+        2448
+      ],
+      "id": "47d8f89b-6458-4c03-942f-fde7fb043da7",
+      "name": "No Operation, do nothing2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4ad15127-8bec-471e-af5d-89f882c588da",
+              "leftValue": "={{ $json.items[0].tags }}",
+              "rightValue": "bot_desactivado",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            },
+            {
+              "id": "919e5540-25da-4859-92a2-1f2ba2465294",
+              "leftValue": "={{ $json.items[0].customAttributes[0].value }}",
+              "rightValue": "off",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4672,
+        2080
+      ],
+      "id": "c407ae55-3ff7-4dc6-a7f3-ba148aa016d8",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_chat_histories",
+          "mode": "list",
+          "cachedResultName": "n8n_chat_histories"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $json.items[0].phoneNumber }}",
+            "message": "={\n  \"type\": \"human\",\n  \"content\": \"mensaje usuario:{{ $('Edit Fields2').item.json.response }}\",\n  \"additional_kwargs\": {},\n  \"response_metadata\": {}\n}"
+          },
+          "matchingColumns": [
+            "session_id"
+          ],
+          "schema": [
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5072,
+        1920
+      ],
+      "id": "e26999ac-4ebe-47c0-99f7-ba744c9cdd39",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "6ryypMqs5DizYTLN",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "809ca3ba-3efa-46be-9d66-c75ca7745d1a",
+              "name": "session_key",
+              "value": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4960,
+        2272
+      ],
+      "id": "d4884c9e-ddeb-4cdc-8075-069ad09311a5",
+      "name": "Edit Fields5"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "lead_state",
+        "key": "={{ 'lead_status:' + $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        5168,
+        2272
+      ],
+      "id": "a1b2c3d4-redis-get-estado",
+      "name": "CONSULTAR ESTADO LEAD",
+      "credentials": {
+        "redis": {
+          "id": "YHYYVDtbpzfZBtux",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Edit Fields2').item.json.response }}\n\nEstado previo del lead (JSON):\n{{ $json.lead_state || '{}' }}",
+        "options": {
+          "systemMessage": "ROL\nEres el Asistente Virtual de Miami Motors 🤖. Filtras leads de WhatsApp para la promoción del estanque lleno. NO agendas citas: al cerrar, un vendedor humano llama al cliente.\n\nENTRADA CADA TURNO\n1. Mensaje actual del cliente (texto, audio transcrito, imagen descrita, o intención de agendar aunque el tipo sea \"unsupported\").\n2. Bloque \"Estado previo del lead (JSON)\": datos ya recolectados en Redis/CRM. DEBES conservarlos y solo agregar o corregir con información nueva del cliente.\n\nSALIDA OBLIGATORIA CADA TURNO\nSiempre termina tu respuesta con UN objeto JSON válido (sin markdown, sin ```) con EXACTAMENTE estos campos:\n\n{\n  \"reply_message\": \"\",\n  \"full_name\": null,\n  \"phone\": null,\n  \"city\": null,\n  \"payment_method\": null,\n  \"pie\": null,\n  \"purchase_time\": null,\n  \"budget\": null,\n  \"ready_for_sales\": false,\n  \"route\": null,\n  \"lead_status\": null,\n  \"confidence_level\": null,\n  \"mensaje_mike\": \"\"\n}\n\nDEFINICIÓN DE CADA CAMPO (para Message a model y CRM)\n- reply_message: ÚNICO texto que verá el cliente en WhatsApp en ESTE turno. Cordial, profesional, UNA pregunta o respuesta. No incluyas el JSON aquí.\n- full_name: nombre y apellido del cliente. null si aún no lo dijo. NO uses \"name\".\n- phone: solo si el cliente entrega otro número de contacto (solo dígitos). Si no, null (el sistema usa el WhatsApp).\n- city: ciudad o comuna. Ejemplos: \"La Serena\", \"Coquimbo\", \"Ovalle\". null si falta.\n- payment_method: EXACTAMENTE uno de: \"al contado\" | \"dando un pie\" | null. No uses otras frases.\n- pie: monto numérico en CLP (sin puntos, sin \"$\") si payment_method es \"dando un pie\". null si es al contado o no mencionó monto.\n- purchase_time: cuándo compraría o cuándo puede visitar. Ej: \"esta semana\", \"el sábado\", \"mañana en la tarde\". null si falta.\n- budget: presupuesto numérico en CLP si lo menciona. null si no.\n- ready_for_sales: true solo al cerrar el flujo (ver reglas). false mientras sigues preguntando.\n- route: \"ventas\" solo si ready_for_sales es true; si no, null.\n- lead_status: \"lead_calificado\" solo si ready_for_sales es true; si no, null.\n- confidence_level: \"alto\" si ready_for_sales; \"medio\" si faltan datos opcionales; \"bajo\" al inicio; null si no aplica.\n- mensaje_mike: resumen multilínea para el equipo de ventas. SOLO cuando ready_for_sales es true. Si sigues filtrando, debe ser \"\".\n\nFORMATO OBLIGATORIO DE mensaje_mike (etiquetas exactas, una por línea):\nNombre: \nTelefono: \nCiudad: \nMétodo de pago: \nPie: \nFecha aproximada de compra: \nPresupuesto: \nObservación: \n\nDeja la línea vacía después de \":\" si no tienes el dato. No inventes valores.\n\nORDEN DE PREGUNTAS (UNA por mensaje; salta las que ya tengas en estado previo)\n1. city\n2. payment_method (al contado o dando un pie)\n3. pie (solo si payment_method = \"dando un pie\")\n4. full_name\n5. purchase_time\n6. budget (opcional; pregunta si ya tienes los críticos 1-5)\n\nSALUDO INICIAL\nSi es primer mensaje, mensaje tipo \"Hola! Quiero agendar mi visita.\", o mensaje unexpected con intención de agendar:\nreply_message debe saludar con la promoción del estanque y preguntar ciudad si city es null.\nEjemplo: \"Hola! Bienvenido a Miami Motors, así es! Solo por esta semana en la compra de tu próximo vehículo, te regalaremos el estanque lleno. ¿Eres de La Serena o de otra ciudad?\"\n\nCIERRE — ready_for_sales = true cuando:\na) Tienes los datos críticos: city, payment_method, full_name, purchase_time (y pie si payment_method = \"dando un pie\"), O\nb) El cliente indica cierre directo: \"iré más tarde\", \"en la tarde\", \"voy hoy\", \"llámenme\", etc.\n\nAl cerrar:\n- reply_message: \"Perfecto, te llamaremos desde Miami Motors para confirmar tu cita 🫵🏻🩷\"\n- ready_for_sales: true, route: \"ventas\", lead_status: \"lead_calificado\", confidence_level: \"alto\"\n- mensaje_mike: completo con todo lo recolectado\n\nDICOM\nSi el cliente menciona DICOM, en reply_message explica que puede postular con RUT de familiar sin DICOM y evaluación bancaria. NO cierres solo por DICOM; sigue filtrando si faltan datos.\n\nPREGUNTAS FRECUENTES\n- ¿Compran vehículos? / ¿Reciben en parte de pago? → pedir fotos y: Año, Motor, Dueños, Llaves, Kilometraje, Extras.\n- Crédito directo → financiamiento con 30% y 40% de pie.\n- ¿Catálogo? → \"Todo nuestro stock actualizado lo puedes ver aquí: https://www.instagram.com/miamimotors_chile/\"\n- Horario: \"Estamos abiertos de 9:00 AM a 19:00 PM.\"\n- Ubicación: \"Estamos ubicados en el Auto Shopping Mall Puertas del Mar.\"\n\nFUERA DE CONTEXTO\nreply_message: \"Solo puedo ayudar con consultas relacionadas a Miami Motors y la promoción de esta semana.\"\n\nREGLAS DE MERGE (CRÍTICO para insert progresivo en CRM)\n- Lee el estado previo JSON y copia todos los campos ya conocidos a tu salida.\n- Actualiza solo lo que el cliente dijo en este turno.\n- Nunca borres un dato que ya existía salvo corrección explícita del cliente.\n- Nunca inventes datos: usa null, \"\" o líneas vacías en mensaje_mike.\n- Nunca repitas una pregunta si el campo ya tiene valor.\n\nTHINK INTERNO (antes de responder)\n1. ¿Qué campos faltan según estado previo + mensaje actual?\n2. ¿Hay intención de cierre rápido?\n3. ¿Cuál es la ÚNICA pregunta de este turno?\n4. Arma reply_message y luego el JSON con estado acumulado completo.\n\nREGLA FINAL\nCada turno = reply_message humano + JSON completo. El JSON alimenta Message a model y el HTTP que guarda el lead en Skale Motors turno a turno.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        5376,
+        2272
+      ],
+      "id": "bf85344b-3fa9-4e15-bc63-5a7019d524b8",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        5248,
+        2528
+      ],
+      "id": "4b62d871-12c7-4dee-9d61-ec5cb64e4b3c",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "0V3YuLeeujWOkOgd",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        5376,
+        2608
+      ],
+      "id": "175c19f7-c8bf-463f-a971-67dfbf0cf11d",
+      "name": "Postgres Chat Memory2",
+      "credentials": {
+        "postgres": {
+          "id": "6ryypMqs5DizYTLN",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Úsalo antes de responder: verifica qué datos faltan (city, payment_method, name, purchase_time, budget) y si corresponde cierre rápido."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        5520,
+        2656
+      ],
+      "id": "6af1f971-815a-4826-872a-f02a8009bd37",
+      "name": "Think2"
+    },
+    {
+      "parameters": {
+        "description": "Tienes que usarlo siempre y cuando te pidan y hablen de stock de vehiculos o sobre alguno en especifico y tienes que dar el que piden",
+        "workflowId": {
+          "__rl": true,
+          "value": "GOlrTHp9IspP5Pw6fIs-o",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/GOlrTHp9IspP5Pw6fIs-o",
+          "cachedResultName": "CONSULTA STOCK HESSEN"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [
+            "vehicle_query"
+          ],
+          "schema": [
+            {
+              "id": "vehicle_query",
+              "displayName": "vehicle_query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        5664,
+        2576
+      ],
+      "id": "128d9700-f531-42a1-87aa-27a56471e0cf",
+      "name": "CONSULTA STOCK HESSEN1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Extrae y normaliza el JSON del agente. Combina con estado previo si el agente omitió campos ya conocidos.\n\nSalida del agente:\n{{ $('AI Agent').item.json.output }}\n\nEstado previo Redis:\n{{ $('CONSULTAR ESTADO LEAD').item.json.lead_state || '{}' }}\n\nTeléfono WhatsApp (usar si phone null): {{ $('Webhook').item.json.body.whatsappInboundMessage.from }}"
+            },
+            {
+              "role": "system",
+              "content": "Eres un normalizador JSON para el CRM Skale Motors. Recibes la salida del agente (texto humano + JSON embebido) y el estado previo Redis. Devuelve SOLO un JSON válido según el schema. Sin markdown.\n\nReglas:\n1. reply_message: único texto que verá el cliente en WhatsApp en ESTE turno. Extráelo del agente; no incluyas el JSON.\n2. MERGE: copia TODOS los campos del estado previo Redis si el agente no los repitió en su JSON.\n3. full_name: usa full_name, nunca \"name\".\n4. payment_method: exactamente \"al contado\", \"dando un pie\" o null.\n5. phone: solo dígitos chilenos; si viene null en agente y estado previo, usa el teléfono WhatsApp del input.\n6. pie y budget: number o null (sin puntos ni símbolos).\n7. ready_for_sales: true solo si el agente cerró O el cliente pidió cierre directo (ir más tarde, en la tarde, hoy).\n8. Si ready_for_sales es false: route=null, lead_status=null, confidence_level=\"bajo\" o \"medio\", mensaje_mike=\"\".\n9. Si ready_for_sales es true: route=\"ventas\", lead_status=\"lead_calificado\", confidence_level=\"alto\", mensaje_mike con etiquetas:\n   Nombre:\n   Telefono:\n   Ciudad:\n   Método de pago:\n   Pie:\n   Fecha aproximada de compra:\n   Presupuesto:\n   Observación:\n10. No inventes datos. No agregues campos extra.\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_schema",
+              "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply_message\": { \"type\": \"string\" },\n    \"full_name\": { \"type\": [\"string\", \"null\"] },\n    \"phone\": { \"type\": [\"string\", \"null\"] },\n    \"city\": { \"type\": [\"string\", \"null\"] },\n    \"payment_method\": { \"type\": [\"string\", \"null\"], \"enum\": [\"al contado\", \"dando un pie\", null] },\n    \"pie\": { \"type\": [\"number\", \"null\"] },\n    \"purchase_time\": { \"type\": [\"string\", \"null\"] },\n    \"budget\": { \"type\": [\"number\", \"null\"] },\n    \"ready_for_sales\": { \"type\": \"boolean\" },\n    \"route\": { \"type\": [\"string\", \"null\"], \"enum\": [\"ventas\", null] },\n    \"lead_status\": { \"type\": [\"string\", \"null\"], \"enum\": [\"lead_calificado\", null] },\n    \"confidence_level\": { \"type\": [\"string\", \"null\"], \"enum\": [\"alto\", \"medio\", \"bajo\", null] },\n    \"mensaje_mike\": { \"type\": \"string\" }\n  },\n  \"required\": [\n    \"reply_message\",\n    \"full_name\",\n    \"phone\",\n    \"city\",\n    \"payment_method\",\n    \"pie\",\n    \"purchase_time\",\n    \"budget\",\n    \"ready_for_sales\",\n    \"route\",\n    \"lead_status\",\n    \"confidence_level\",\n    \"mensaje_mike\"\n  ],\n  \"additionalProperties\": false\n}"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        5600,
+        2272
+      ],
+      "id": "92a6519a-2068-446f-bd8e-ee6fea933677",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "0V3YuLeeujWOkOgd",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const waFrom = $('Webhook').item.json.body.whatsappInboundMessage.from;\n\nlet prev = {};\ntry {\n  const raw = $('CONSULTAR ESTADO LEAD').first().json.lead_state;\n  if (raw) prev = JSON.parse(raw);\n} catch {}\n\nlet model = $input.first().json.output?.[0]?.content?.[0]?.text ?? $input.first().json;\nif (typeof model === 'string') {\n  try { model = JSON.parse(model); } catch {}\n}\n\nfunction pick(...vals) {\n  for (const v of vals) {\n    if (v !== undefined && v !== null && String(v).trim() !== '') return v;\n  }\n  return null;\n}\n\nfunction digits(v) {\n  if (!v) return null;\n  const d = String(v).replace(/\\D/g, '');\n  return d || null;\n}\n\nconst phone = digits(pick(model.phone, waFrom, prev.phone));\n\nconst merged = {\n  reply_message: pick(model.reply_message, prev.reply_message) || 'Hola! Bienvenido a Miami Motors.',\n  full_name: pick(model.full_name, prev.full_name),\n  phone,\n  city: pick(model.city, prev.city),\n  payment_method: pick(model.payment_method, prev.payment_method),\n  pie: model.pie != null && model.pie !== '' ? Number(model.pie) : (prev.pie != null ? Number(prev.pie) : null),\n  purchase_time: pick(model.purchase_time, prev.purchase_time),\n  budget: model.budget != null && model.budget !== '' ? Number(model.budget) : (prev.budget != null ? Number(prev.budget) : null),\n  ready_for_sales: model.ready_for_sales === true || prev.ready_for_sales === true,\n  route: pick(model.route, prev.route),\n  lead_status: pick(model.lead_status, prev.lead_status),\n  confidence_level: pick(model.confidence_level, prev.confidence_level),\n  mensaje_mike: pick(model.mensaje_mike, prev.last_mensaje_mike) || '',\n  mike_sent: prev.mike_sent === true,\n  lead_id: prev.lead_id || null,\n};\n\nreturn [{ json: merged }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5824,
+        2272
+      ],
+      "id": "e600a55a-ca62-424b-b2b4-c0b1ba1dc67d",
+      "name": "MERGE Y NORMALIZAR"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://skalemotors-v2.vercel.app/api/n8n-lead-ingest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n  const o = $('MERGE Y NORMALIZAR').item.json;\n  const phone = $('Webhook').item.json.body.whatsappInboundMessage.from;\n  const body = { source: 'whatsapp', update_existing: true, phone };\n  if (o.full_name) body.full_name = o.full_name;\n  if (o.city) body.region = o.city;\n  if (o.payment_method) body.payment_type = o.payment_method;\n  if (o.budget != null && !Number.isNaN(o.budget)) body.budget = String(o.budget);\n  if (o.pie != null && !Number.isNaN(o.pie)) body.pie_disponible = String(o.pie);\n  if (o.mensaje_mike) {\n    body.mensaje_mike = o.mensaje_mike;\n    body.chat_summary = o.mensaje_mike;\n  }\n  if (o.purchase_time) body.notes = 'Fecha estimada de compra: ' + o.purchase_time;\n  if (o.ready_for_sales === true) body.status = 'interesado';\n  return body;\n})() }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "GUARDAR LEAD PROGRESIVO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6048,
+        2272
+      ],
+      "id": "8ed269c1-3912-41fd-9ff0-f0d7f318826c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cw4criaEes5STZaD",
+          "name": "MIAMI SKALE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const merged = $('MERGE Y NORMALIZAR').item.json;\nconst res = $input.first().json;\nconst api = res.body ?? res;\nconst leadId = api?.data?.id ?? merged.lead_id ?? null;\n\nconst state = {\n  lead_id: leadId,\n  mike_sent: merged.ready_for_sales ? true : merged.mike_sent,\n  sent_at: merged.ready_for_sales && !merged.mike_sent ? new Date().toISOString() : null,\n  full_name: merged.full_name,\n  city: merged.city,\n  payment_method: merged.payment_method,\n  pie: merged.pie,\n  purchase_time: merged.purchase_time,\n  budget: merged.budget,\n  ready_for_sales: merged.ready_for_sales,\n  last_mensaje_mike: merged.mensaje_mike || '',\n  last_route: merged.route || 'validacion',\n  reply_message: merged.reply_message,\n  phone: merged.phone,\n};\n\nreturn [{ json: { ...merged, lead_id: leadId, redis_payload: JSON.stringify(state) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6272,
+        2272
+      ],
+      "id": "f1e2d3c4-preparar-redis",
+      "name": "PREPARAR REDIS"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'lead_status:' + $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "value": "={{ $json.redis_payload }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        6496,
+        2272
+      ],
+      "id": "437f715f-f8d0-4fbc-a650-f1a19cfa4369",
+      "name": "GUARDAR ESTADO REDIS",
+      "credentials": {
+        "redis": {
+          "id": "YHYYVDtbpzfZBtux",
+          "name": "Hessen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "lead-ready",
+                    "leftValue": "={{ $('PREPARAR REDIS').item.json.ready_for_sales }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  },
+                  {
+                    "id": "lead-msg",
+                    "leftValue": "={{ $('PREPARAR REDIS').item.json.mensaje_mike }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LEAD"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "validacion",
+                    "leftValue": "={{ $('PREPARAR REDIS').item.json.ready_for_sales }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "VALIDACION"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        6720,
+        2272
+      ],
+      "id": "b2a02dd2-8aa8-4791-8671-ae2ef36772dc",
+      "name": "Switch Lead o Validación"
+    },
+    {
+      "parameters": {
+        "toNumber": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "text": "={{ $('PREPARAR REDIS').item.json.reply_message }}"
+      },
+      "type": "n8n-nodes-ycloud-whatsapp-api.YCloudWhatsApp",
+      "typeVersion": 1,
+      "position": [
+        6944,
+        2160
+      ],
+      "id": "65f39571-5279-4ef0-baa1-d3a6b6dba0a8",
+      "name": "ENVIAR MENSAJE VALIDACION",
+      "credentials": {
+        "YCloudApi": {
+          "id": "43eHmDkOFiwtwiTC",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toNumber": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}",
+        "text": "={{ $('PREPARAR REDIS').item.json.reply_message }}"
+      },
+      "type": "n8n-nodes-ycloud-whatsapp-api.YCloudWhatsApp",
+      "typeVersion": 1,
+      "position": [
+        6944,
+        2384
+      ],
+      "id": "85e87dba-e8c6-497a-ac57-0533e0a98d56",
+      "name": "ENVIAR MENSAJE CIERRE",
+      "credentials": {
+        "YCloudApi": {
+          "id": "43eHmDkOFiwtwiTC",
+          "name": "HESSEN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "be35ec6d-787b-4348-b371-1187d0c3f3d5",
+              "leftValue": "={{ $json.body.whatsappMessage.type }}",
+              "rightValue": "revoke",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1984,
+        2784
+      ],
+      "id": "d8a601e5-ca1d-4118-9ab1-fc7c02999ec7",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        2688
+      ],
+      "id": "3714ed65-b099-4e15-bfbd-9f8d1cecc68e",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_chat_histories",
+          "mode": "list",
+          "cachedResultName": "n8n_chat_histories"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $json.body.whatsappMessage.to }}",
+            "message": "={\n  \"type\": \"ai\",\n  \"content\": {{ JSON.stringify($json.body.whatsappMessage.text.body) }},\n  \"additional_kwargs\": {},\n  \"response_metadata\": {}\n}\n\n"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2208,
+        2960
+      ],
+      "id": "3249aa35-ed2b-4d23-b4ec-35d697688d36",
+      "name": "Insertar Mensaje Asistente1",
+      "credentials": {
+        "postgres": {
+          "id": "QHabwYTdvoyK2OCD",
+          "name": "MIAMI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.ycloud.com/v2/contact/contacts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter.phoneNumber",
+              "value": "={{ $('Webhook').item.json.body.whatsappMessage.to }}"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "13638f676b8dbe3a2e348df5ab318217"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2416,
+        2960
+      ],
+      "id": "61c0583b-3b2d-45ea-94e7-44c9c856488e",
+      "name": "filtrar contacto1"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.ycloud.com/v2/contact/contacts/{{ $('Insertar Mensaje Asistente1').item.json.session_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "13638f676b8dbe3a2e348df5ab318217"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"tags\": [\n    \"bot_desactivado\"\n  ],\n  \"customAttributes\": [\n    {\n      \"name\": \"estado_bot\",\n      \"value\": [\n        \"off\"\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2608,
+        2960
+      ],
+      "id": "1ef2939b-5e37-42aa-9135-dfbdce75dbeb",
+      "name": "desactivar_bot2"
+    },
+    {
+      "parameters": {
+        "url": "https://api.ycloud.com/v2/contact/contacts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter.phoneNumber",
+              "value": "={{ $('Webhook').item.json.body.whatsappInboundMessage.from }}"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "13638f676b8dbe3a2e348df5ab318217"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        4512,
+        2080
+      ],
+      "id": "yc-contact-lookup-inbound",
+      "name": "filtrar contacto inbound"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [],
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [],
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Switch3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch3": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Identifica el tipo de mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Identifica el tipo de mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identifica el tipo de mensaje": {
+      "main": [
+        [
+          {
+            "node": "OpenAI2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields6": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio": {
+      "main": [
+        [
+          {
+            "node": "Transcripción del audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcripción del audio": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Redis7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis7": {
+      "main": [
+        [
+          {
+            "node": "Wait6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait6": {
+      "main": [
+        [
+          {
+            "node": "Redis6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis6": {
+      "main": [
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Redis9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis9": {
+      "main": [
+        [
+          {
+            "node": "filtrar contacto inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filtrar contacto inbound": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields5": {
+      "main": [
+        [
+          {
+            "node": "CONSULTAR ESTADO LEAD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONSULTAR ESTADO LEAD": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory2": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think2": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "MERGE Y NORMALIZAR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MERGE Y NORMALIZAR": {
+      "main": [
+        [
+          {
+            "node": "GUARDAR LEAD PROGRESIVO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GUARDAR LEAD PROGRESIVO": {
+      "main": [
+        [
+          {
+            "node": "PREPARAR REDIS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PREPARAR REDIS": {
+      "main": [
+        [
+          {
+            "node": "GUARDAR ESTADO REDIS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GUARDAR ESTADO REDIS": {
+      "main": [
+        [
+          {
+            "node": "Switch Lead o Validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Lead o Validación": {
+      "main": [
+        [
+          {
+            "node": "ENVIAR MENSAJE CIERRE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ENVIAR MENSAJE VALIDACION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insertar Mensaje Asistente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar Mensaje Asistente1": {
+      "main": [
+        [
+          {
+            "node": "filtrar contacto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filtrar contacto1": {
+      "main": [
+        [
+          {
+            "node": "desactivar_bot2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d1fbf0fdb1f83cf69b5a238631b088a3755c8fecfe2e7b96903d5ec3fbd7e72d"
+  }
+}
