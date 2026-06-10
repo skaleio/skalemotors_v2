@@ -69,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const envKey = process.env.N8N_LEAD_INGEST_API_KEY?.trim() || undefined;
     const auth = await resolveIngestKey(supabase, providedKey, body.branch_id, envKey);
-    if (!auth.ok) {
+    if (auth.ok === false) {
       return res.status(auth.status).json({ ok: false, error: auth.error });
     }
 

@@ -161,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // H14: rate-limit por IP.
   const ip = getClientIp(req);
   const rl = checkRateLimit(ip);
-  if (!rl.ok) {
+  if (rl.ok === false) {
     res.setHeader("Retry-After", String(rl.retryAfter));
     return res.status(429).json({ error: "Too many requests" });
   }

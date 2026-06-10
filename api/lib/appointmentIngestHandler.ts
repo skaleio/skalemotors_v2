@@ -151,7 +151,7 @@ export type AppointmentIngestResult =
             calendar_user_resolved_via?: string;
           };
     }
-  | { ok: false; status: number; body: { ok: false; error: string; lead_id?: string } };
+  | { ok: false; status: number; body: { ok: false; error: string; lead_id?: string; hint?: string; received_keys?: string[] } };
 
 export async function processAppointmentIngest(
   supabase: SupabaseClient,
@@ -218,7 +218,7 @@ export async function processAppointmentIngest(
   const tenantId = branch.tenant_id as string;
 
   const assigneeResolution = await resolveAssigneeForBranch(supabase, branchId, tenantId, body);
-  if (!assigneeResolution.ok) {
+  if (assigneeResolution.ok === false) {
     return {
       ok: false,
       status: assigneeResolution.status,
