@@ -9,8 +9,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   processAppointmentIngest,
   type AppointmentIngestPayload,
-} from "./lib/appointmentIngestHandler";
-import { maybeCreateAppointmentAfterIngest } from "./lib/landingBookingHandler";
+} from "./_lib/appointmentIngestHandler";
+import { maybeCreateAppointmentAfterIngest } from "./_lib/landingBookingHandler";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

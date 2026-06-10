@@ -1,14 +1,14 @@
 {
   "functions": {
     "api/appointment-ingest.ts": {
-      "includeFiles": "api/lib/**",
+      "includeFiles": "api/_lib/**",
       "maxDuration": 30
     },
     "api/n8n-lead-ingest.ts": {
-      "includeFiles": "api/lib/**"
+      "includeFiles": "api/_lib/**"
     },
     "api/landing-booking.ts": {
-      "includeFiles": "api/lib/**"
+      "includeFiles": "api/_lib/**"
     }
   },
   "rewrites": [

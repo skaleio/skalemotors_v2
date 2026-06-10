@@ -3,10 +3,10 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-import { processAppointmentIngest, type AppointmentIngestPayload } from "./lib/appointmentIngestHandler";
-import { loadIdempotentResponse, storeIdempotentResponse } from "./lib/ingestIdempotency";
-import { getIngestAllowedOrigin, resolveIngestKey } from "./lib/leadIngestAuth";
-import { normalizeIngestBody } from "./lib/parseIngestBody";
+import { processAppointmentIngest, type AppointmentIngestPayload } from "./_lib/appointmentIngestHandler";
+import { loadIdempotentResponse, storeIdempotentResponse } from "./_lib/ingestIdempotency";
+import { getIngestAllowedOrigin, resolveIngestKey } from "./_lib/leadIngestAuth";
+import { normalizeIngestBody } from "./_lib/parseIngestBody";
 
 interface VercelRequest {
   method?: string;

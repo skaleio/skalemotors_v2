@@ -5,8 +5,8 @@ import {
   createLandingBookingSupabase,
   processLandingBooking,
   type LandingBookingPayload,
-} from "./lib/landingBookingHandler";
-import { resolveLandingIngestKey } from "./lib/resolveLandingIngestKey";
+} from "./_lib/landingBookingHandler";
+import { resolveLandingIngestKey } from "./_lib/resolveLandingIngestKey";
 
 interface VercelRequest {
   method?: string;
