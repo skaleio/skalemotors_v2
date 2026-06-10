@@ -10,11 +10,14 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 const STAGE_BAR_CLASS: Record<CrmStageKey, string> = {
+  nuevo: "from-cyan-500 to-cyan-400",
   contactado: "from-blue-500 to-blue-400",
+  agendado: "from-sky-500 to-sky-400",
   negociando: "from-orange-500 to-amber-400",
   en_espera: "from-violet-500 to-violet-400",
   para_cierre: "from-emerald-500 to-emerald-400",
   negocio_cerrado: "from-red-600 to-rose-500",
+  cancelado: "from-rose-500 to-rose-400",
 };
 
 function friendlyStageLabel(label: string): string {

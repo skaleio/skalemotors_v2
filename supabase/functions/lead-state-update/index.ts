@@ -52,7 +52,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const VALID_PIPELINE_STATUSES = new Set([
   "nuevo", "contactado", "interesado", "cotizando",
-  "negociando", "en_espera", "para_cierre", "vendido", "perdido", "cancelado",
+  "agendado", "negociando", "en_espera", "para_cierre", "vendido", "perdido", "cancelado",
 ]);
 
 Deno.serve(async (req: Request): Promise<Response> => {

@@ -76,8 +76,6 @@ const INVERSOR_COLORS: Record<(typeof INVERSOR_OPCIONES)[number], string> = {
   Antonio: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
-const INVERSORES_A_DEVOLVER = ["Jota", "Mike", "Ronald", "Antonio"] as const;
-
 /** Inversor cuyos gastos son de la empresa: no se devuelven. */
 const INVERSOR_EMPRESA = "HessenMotors";
 
@@ -87,6 +85,15 @@ const POZO_HESSEN_INVERSOR = "Pozo Hessen";
 /** Nombre de inversor mostrado y usado en reglas: prioriza `inversor_name` en fila (evita que un `inversor_id` con otro `full_name` oculte "Pozo Hessen"). */
 function nombreInversorGasto(g: GastoEmpresaWithInversor): string {
   return (g.inversor_name || g.inversor?.full_name || "").trim();
+}
+
+/** Etiqueta visible en UI (los valores en BD pueden seguir siendo legacy tipo HessenMotors / Pozo Hessen). */
+function etiquetaInversorUI(nombre: string): string {
+  const n = nombre.trim();
+  if (!n || n === "—") return "—";
+  if (n.toLowerCase() === POZO_HESSEN_INVERSOR.toLowerCase()) return "Pozo";
+  if (n.toLowerCase() === INVERSOR_EMPRESA.toLowerCase()) return "Empresa";
+  return n;
 }
 
 function esGastoPozoHessen(g: GastoEmpresaWithInversor): boolean {
@@ -260,7 +267,6 @@ export default function Finance() {
   const [gastosHessenAllTime, setGastosHessenAllTime] = useState<GastoEmpresaWithInversor[]>([]);
   const [pozoHessenLoading, setPozoHessenLoading] = useState(false);
   const [pendientesCardModalOpen, setPendientesCardModalOpen] = useState(false);
-  const [devolucionInversorModal, setDevolucionInversorModal] = useState<(typeof INVERSORES_A_DEVOLVER)[number] | null>(null);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseTypeRow[]>([]);
   const [etiquetasModalOpen, setEtiquetasModalOpen] = useState(false);
   const [editEtiquetaId, setEditEtiquetaId] = useState<string | null>(null);
@@ -548,21 +554,6 @@ export default function Finance() {
   const totalIngresosPendientes = ingresosPendientes.reduce((sum, i) => sum + Number(i.amount), 0);
   // Balance empresa: solo gastos HessenMotors restan. Jota/Mike/Ronald/Antonio son plata del socio (no afectan balance).
   const balance = totalIngresos - totalGastosBalance;
-
-  const aDevolverPorInversor: Record<(typeof INVERSORES_A_DEVOLVER)[number], number> = {
-    Jota: gastos
-      .filter((g) => displayInversor(g) === "Jota" && !(g.devolucion ?? false))
-      .reduce((sum, g) => sum + Number(g.amount), 0),
-    Mike: gastos
-      .filter((g) => displayInversor(g) === "Mike" && !(g.devolucion ?? false))
-      .reduce((sum, g) => sum + Number(g.amount), 0),
-    Ronald: gastos
-      .filter((g) => displayInversor(g) === "Ronald" && !(g.devolucion ?? false))
-      .reduce((sum, g) => sum + Number(g.amount), 0),
-    Antonio: gastos
-      .filter((g) => displayInversor(g) === "Antonio" && !(g.devolucion ?? false))
-      .reduce((sum, g) => sum + Number(g.amount), 0),
-  };
 
   // Modal "Gastos por etiqueta y fecha": filtrado por etiqueta e inversor, orden por fecha (más reciente primero), agrupado por fecha
   const gastosParaModal =
@@ -983,7 +974,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastos)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {gastosSinPozoHessen.length} gasto{gastosSinPozoHessen.length !== 1 ? "s" : ""} · solo HessenMotors resta del balance
+              {gastosSinPozoHessen.length} gasto{gastosSinPozoHessen.length !== 1 ? "s" : ""} · solo gastos empresa restan del balance
             </p>
           </CardContent>
         </Card>
@@ -1017,7 +1008,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(balance)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Ingresos − Gastos HessenMotors (socios no cuentan)
+              Ingresos − Gastos de la empresa (socios no cuentan)
             </p>
             {balance < 0 && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -1059,7 +1050,7 @@ export default function Finance() {
           onClick={() => setHessenModalOpen(true)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gasto Total HessenMotors</CardTitle>
+            <CardTitle className="text-sm font-medium">Gasto Total</CardTitle>
             <Receipt className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -1067,7 +1058,7 @@ export default function Finance() {
               {loading ? "…" : formatCurrency(totalGastosHessenMotors)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Solo gastos de HessenMotors · {gastosHessenMotors.length} gasto{gastosHessenMotors.length !== 1 ? "s" : ""}
+              Gastos de la empresa · {gastosHessenMotors.length} gasto{gastosHessenMotors.length !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
@@ -1093,7 +1084,7 @@ export default function Finance() {
           onClick={() => setPozoHessenModalOpen(true)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pozo Hessen</CardTitle>
+            <CardTitle className="text-sm font-medium">Pozo</CardTitle>
             <Building2 className="h-4 w-4 text-violet-500" />
           </CardHeader>
           <CardContent>
@@ -1101,46 +1092,10 @@ export default function Finance() {
               {pozoHessenLoading ? "…" : formatCurrency(pozoHessenDisponible)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Ahorro Empresa + ingresos &quot;Ahorro pozo&quot; − gastos Pozo Hessen (mismo mes que arriba)
+              Ahorro Empresa + ingresos &quot;Ahorro pozo&quot; − gastos del pozo (mismo mes que arriba)
             </p>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold">A devolver por inversor</h2>
-        <p className="text-sm text-muted-foreground">
-          Monto a devolver según gastos no devueltos (devolución = No).
-        </p>
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          {INVERSORES_A_DEVOLVER.map((nombre) => {
-            const monto = aDevolverPorInversor[nombre];
-            const colorClass = INVERSOR_COLORS[nombre];
-            return (
-              <Card
-                key={nombre}
-                className="cursor-pointer transition-colors hover:bg-muted/50"
-                onClick={() => setDevolucionInversorModal(nombre)}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
-                      {nombre}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-600">
-                    {loading ? "…" : formatCurrency(monto)}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    A devolver a {nombre}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
       </div>
 
       <Card>
@@ -1150,7 +1105,7 @@ export default function Finance() {
             Gastos / Ingresos
           </CardTitle>
           <CardDescription>
-            Solo ingresos y gastos cargados manualmente. Las ventas en Ventas no se agregan aquí; cargar ganancias/comisiones manualmente en &quot;Nuevo Ingreso&quot; para evitar duplicados. Balance = Ingresos realizados − Gastos HessenMotors. Los gastos de Jota/Mike/Ronald/Antonio son inversión del bolsillo del socio (no restan balance).
+            Solo ingresos y gastos cargados manualmente. Las ventas en Ventas no se agregan aquí; cargar ganancias/comisiones manualmente en &quot;Nuevo Ingreso&quot; para evitar duplicados. Balance = Ingresos realizados − Gastos de la empresa. Los gastos de socios/inversores no restan balance salvo los marcados como empresa.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1202,7 +1157,7 @@ export default function Finance() {
                 <SelectItem value="all">Todos los inversores</SelectItem>
                 {INVERSOR_OPCIONES.map((nombre) => (
                   <SelectItem key={nombre} value={nombre}>
-                    {nombre}
+                    {etiquetaInversorUI(nombre)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1297,12 +1252,12 @@ export default function Finance() {
                                 : null;
                               return badgeClass ? (
                                 <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                                  {name}
+                                  {etiquetaInversorUI(name)}
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1 text-muted-foreground">
                                   <User className="h-3.5 w-3.5" />
-                                  {name}
+                                  {etiquetaInversorUI(name)}
                                 </span>
                               );
                             })()}
@@ -1550,10 +1505,10 @@ export default function Finance() {
               />
               <div className="grid gap-1 leading-snug">
                 <Label htmlFor="descuenta-pozo-hessen" className="text-sm font-medium cursor-pointer">
-                  Descontar del Pozo Hessen
+                  Descontar del Pozo
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Si está marcado, el gasto se guarda como inversor Pozo Hessen y se resta del pozo del mes de la fecha del gasto (no del balance). También puedes elegir &quot;Pozo Hessen&quot; en Inversor.
+                  Si está marcado, el gasto se descuenta del pozo del mes de la fecha del gasto (no del balance). También puedes elegir &quot;Pozo&quot; en Inversor.
                 </p>
               </div>
             </div>
@@ -1623,7 +1578,7 @@ export default function Finance() {
             <DialogDescription>
               {editingIngresoId
                 ? "Modifica monto, descripción, etiqueta, fecha o estado de pago."
-                : "Elige la etiqueta: «Pagos de miami» (u otras) suman al balance al marcar Realizado; «Ahorro pozo» suma al Pozo Hessen del mes, no al balance."}
+                : "Elige la etiqueta: «Pagos de miami» (u otras) suman al balance al marcar Realizado; «Ahorro pozo» suma al pozo del mes, no al balance."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitIngreso} className="space-y-4">
@@ -1690,7 +1645,7 @@ export default function Finance() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 <span className="font-medium">{INGRESO_ETIQUETA_PAGOS_MIAMI}</span> y <span className="font-medium">Hessen Motors</span> → balance (con Realizado).{" "}
-                <span className="font-medium">{INGRESO_ETIQUETA_AHORRO_POZO}</span> → Pozo Hessen del mes (con Realizado), no al balance.
+                <span className="font-medium">{INGRESO_ETIQUETA_AHORRO_POZO}</span> → pozo del mes (con Realizado), no al balance.
               </p>
             </div>
             <div className="space-y-2">
@@ -1710,7 +1665,7 @@ export default function Finance() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Realizado: si la etiqueta es &quot;Ahorro pozo&quot; suma al Pozo Hessen del mes; en caso contrario suma al balance y a Total ingresos.
+                Realizado: si la etiqueta es &quot;Ahorro pozo&quot; suma al pozo del mes; en caso contrario suma al balance y a Total ingresos.
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -1760,7 +1715,7 @@ export default function Finance() {
                     <span className="text-muted-foreground">Descripción</span>
                     <span className="break-words">{detailMovimiento.data.description || "—"}</span>
                     <span className="text-muted-foreground">Inversor</span>
-                    <span>{displayInversor(detailMovimiento.data)}</span>
+                    <span>{etiquetaInversorUI(displayInversor(detailMovimiento.data))}</span>
                     <span className="text-muted-foreground">Devolución</span>
                     <span>
                       {(displayInversor(detailMovimiento.data) === INVERSOR_EMPRESA || esGastoPozoHessen(detailMovimiento.data)) ? (
@@ -1878,7 +1833,7 @@ export default function Finance() {
                 <SelectItem value="all">Todos los inversores</SelectItem>
                 {INVERSOR_OPCIONES.map((nombre) => (
                   <SelectItem key={nombre} value={nombre}>
-                    {nombre}
+                    {etiquetaInversorUI(nombre)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1939,7 +1894,7 @@ export default function Finance() {
                                 </p>
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                   <User className="h-3.5 w-3.5 shrink-0" />
-                                  {name}
+                                  {etiquetaInversorUI(name)}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   {name === INVERSOR_EMPRESA ? (
@@ -2067,7 +2022,7 @@ export default function Finance() {
               Devoluciones pendientes (sin devolver)
             </DialogTitle>
             <DialogDescription>
-              Gastos sin devolver (excluye HessenMotors y Pozo Hessen: no se devuelven). Ordenados por fecha (más reciente primero).
+              Gastos sin devolver (excluye empresa y pozo: no se devuelven). Ordenados por fecha (más reciente primero).
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -2095,7 +2050,7 @@ export default function Finance() {
                 <SelectItem value="all">Todos los inversores</SelectItem>
                 {INVERSOR_OPCIONES.map((nombre) => (
                   <SelectItem key={nombre} value={nombre}>
-                    {nombre}
+                    {etiquetaInversorUI(nombre)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2175,12 +2130,12 @@ export default function Finance() {
                             <div className="flex flex-wrap items-center gap-2">
                               {badgeClass ? (
                                 <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                                  {name}
+                                  {etiquetaInversorUI(name)}
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1 text-muted-foreground text-xs">
                                   <User className="h-3.5 w-3.5" />
-                                  {name}
+                                  {etiquetaInversorUI(name)}
                                 </span>
                               )}
                             </div>
@@ -2218,10 +2173,10 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5 text-red-500" />
-              Gastos HessenMotors
+              Gastos de la empresa
             </DialogTitle>
             <DialogDescription>
-              Lista de gastos de HessenMotors (empresa). Ordenados por fecha (más reciente primero).
+              Lista de gastos de la empresa. Ordenados por fecha (más reciente primero).
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -2246,7 +2201,7 @@ export default function Finance() {
               <div className="py-12 text-center text-muted-foreground">Cargando…</div>
             ) : gastosHessenMotors.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
-                No hay gastos de HessenMotors.
+                No hay gastos de la empresa.
               </div>
             ) : (() => {
               const hessenFiltrados =
@@ -2309,7 +2264,7 @@ export default function Finance() {
                 <Card className="mt-4 bg-muted/60">
                   <CardContent className="py-3 px-4 flex items-center justify-between">
                     <span className="font-semibold text-muted-foreground">
-                      Total HessenMotors
+                      Total empresa
                       {filterHessenEtiqueta !== "all" ? ` (${getExpenseTypeLabel(filterHessenEtiqueta)})` : ""}
                     </span>
                     <span className="font-bold text-red-600">-{formatCurrency(totalHessenFiltrado)}</span>
@@ -2339,7 +2294,7 @@ export default function Finance() {
               Total gastos
             </DialogTitle>
             <DialogDescription>
-              Todos los gastos del mes (no incluye Pozo Hessen). Ordenados por fecha (más reciente primero). Solo los de HessenMotors restan del balance; el resto es inversión de socios.
+              Todos los gastos del mes (no incluye el pozo). Ordenados por fecha (más reciente primero). Solo los de la empresa restan del balance; el resto es inversión de socios.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -2367,7 +2322,7 @@ export default function Finance() {
                 <SelectItem value="all">Todos</SelectItem>
                 {INVERSOR_OPCIONES.map((nombre) => (
                   <SelectItem key={nombre} value={nombre}>
-                    {nombre}
+                    {etiquetaInversorUI(nombre)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2378,7 +2333,7 @@ export default function Finance() {
               <div className="py-12 text-center text-muted-foreground">Cargando…</div>
             ) : gastosDelMes.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
-                No hay gastos este mes (Pozo Hessen se muestra aparte).
+                No hay gastos este mes (el pozo se muestra aparte).
               </div>
             ) : (() => {
               const gastosFiltradosModal =
@@ -2448,7 +2403,7 @@ export default function Finance() {
                                   : ""
                               }`}
                             >
-                              {displayInversor(g)}
+                              {etiquetaInversorUI(displayInversor(g))}
                             </span>
                           </div>
                           <div className="flex items-center justify-between pt-2 border-t">
@@ -2574,7 +2529,7 @@ export default function Finance() {
               Balance
             </DialogTitle>
             <DialogDescription>
-              Balance = Ingresos realizados (etiqueta cuenta) − Gastos HessenMotors. Los gastos de inversores Jota/Mike/Ronald/Antonio son inversión del bolsillo del socio y no tocan el balance (solo alimentan "A Devolver"). Los gastos Pozo Hessen descuentan del Pozo, no del balance. Los ingresos pendientes no suman hasta marcarlos realizados.
+              Balance = Ingresos realizados (etiqueta cuenta) − Gastos de la empresa. Los gastos de socios/inversores no restan balance. Los gastos del pozo descuentan del pozo, no del balance. Los ingresos pendientes no suman hasta marcarlos realizados.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4 py-2">
@@ -2592,7 +2547,7 @@ export default function Finance() {
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Gastos HessenMotors</p>
+                  <p className="text-sm font-medium text-muted-foreground">Gastos de la empresa</p>
                   <p className="text-xs text-muted-foreground">{gastosParaBalance.length} gasto{gastosParaBalance.length !== 1 ? "s" : ""} · solo estos restan del balance</p>
                 </div>
                 <span className="text-lg font-bold text-red-600">
@@ -2602,7 +2557,7 @@ export default function Finance() {
               <div className="flex items-center justify-between rounded-lg border-2 border-primary/30 px-4 py-3 bg-muted/50">
                 <div>
                   <p className="text-sm font-semibold">Balance</p>
-                  <p className="text-xs text-muted-foreground">Ingresos − Gastos HessenMotors</p>
+                  <p className="text-xs text-muted-foreground">Ingresos − Gastos de la empresa</p>
                 </div>
                 <span className={`text-xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-destructive"}`}>
                   {loading ? "…" : formatCurrency(balance)}
@@ -2702,7 +2657,7 @@ export default function Finance() {
                                 <Badge variant="secondary" className="text-xs">{getExpenseTypeLabel(g.expense_type)}</Badge>
                               </TableCell>
                               <TableCell className="text-xs">
-                                {displayInversor(g)}
+                                {etiquetaInversorUI(displayInversor(g))}
                               </TableCell>
                               <TableCell className="text-right font-medium text-red-600 text-sm">
                                 -{formatCurrency(Number(g.amount))}
@@ -2724,10 +2679,10 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-violet-500" />
-              Pozo Hessen
+              Pozo
             </DialogTitle>
 <DialogDescription>
-              Pozo del mes ({selectedPeriod.month}/{selectedPeriod.year}): Ahorro Empresa del mes + ingresos con etiqueta &quot;Ahorro pozo&quot; realizados en el mes, menos gastos con inversor Pozo Hessen en el mes (gastos con fecha anterior al 01/03/2026 no cuentan).
+              Pozo del mes ({selectedPeriod.month}/{selectedPeriod.year}): Ahorro Empresa del mes + ingresos con etiqueta &quot;Ahorro pozo&quot; realizados en el mes, menos gastos del pozo en el mes (gastos con fecha anterior al 01/03/2026 no cuentan).
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4">
@@ -2751,8 +2706,8 @@ export default function Finance() {
             </div>
             <div className="rounded-lg border bg-muted/40 px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos Pozo Hessen (este mes)</p>
-                <p className="text-xs text-muted-foreground">Gastos con inversor Pozo Hessen con fecha en {selectedPeriod.month}/{selectedPeriod.year} y ≥ 01/03/2026</p>
+                <p className="text-sm font-medium text-muted-foreground">Menos: Gastos del pozo (este mes)</p>
+                <p className="text-xs text-muted-foreground">Gastos del pozo con fecha en {selectedPeriod.month}/{selectedPeriod.year} y ≥ 01/03/2026</p>
               </div>
               <span className="text-lg font-bold text-red-600">
                 {pozoHessenLoading ? "…" : formatCurrency(totalGastosHessenAllTime)}
@@ -2761,7 +2716,7 @@ export default function Finance() {
             <div className="rounded-lg border-2 border-primary/30 bg-muted/50 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Pozo disponible</p>
-                <p className="text-xs text-muted-foreground">Ahorro Empresa + ingresos Ahorro pozo − gastos Pozo Hessen (este mes)</p>
+                <p className="text-xs text-muted-foreground">Ahorro Empresa + ingresos Ahorro pozo − gastos del pozo (este mes)</p>
               </div>
               <span className={`text-xl font-bold ${pozoHessenDisponible >= 0 ? "text-violet-600" : "text-red-600"}`}>
                 {pozoHessenLoading || loading ? "…" : formatCurrency(pozoHessenDisponible)}
@@ -2812,12 +2767,12 @@ export default function Finance() {
                 <Receipt className="h-4 w-4 text-red-500" />
                 Gastos que se descuentan del pozo ({gastosHessenAllTime.length})
               </h4>
-              <p className="text-xs text-muted-foreground">Solo gastos con inversor Pozo Hessen en el mes seleccionado (y fecha ≥ 01/03/2026).</p>
+              <p className="text-xs text-muted-foreground">Solo gastos del pozo en el mes seleccionado (y fecha ≥ 01/03/2026).</p>
               <div className="rounded-md border overflow-hidden">
                 {pozoHessenLoading ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">Cargando…</div>
                 ) : gastosHessenAllTime.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos Pozo Hessen en este mes.</div>
+                  <div className="py-6 text-center text-sm text-muted-foreground">No hay gastos del pozo en este mes.</div>
                 ) : (
                   <div className="max-h-64 overflow-auto">
                     <Table>
@@ -2849,108 +2804,8 @@ export default function Finance() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              El pozo del mes sube con el reparto en Distribución de salarios (Ahorro Empresa) y con ingresos manuales etiquetados &quot;Ahorro pozo&quot; (Realizado). &quot;Pagos de miami&quot; y otras etiquetas suman al balance, no al pozo. Los ingresos con etiqueta Hessen Motors no suman al pozo salvo que uses explícitamente &quot;Ahorro pozo&quot;.
+              El pozo del mes sube con el reparto en Distribución de salarios (Ahorro Empresa) y con ingresos manuales etiquetados &quot;Ahorro pozo&quot; (Realizado). Otras etiquetas de ingreso suman al balance, no al pozo.
             </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={devolucionInversorModal !== null} onOpenChange={(open) => !open && setDevolucionInversorModal(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${devolucionInversorModal ? INVERSOR_COLORS[devolucionInversorModal] : ""}`}>
-                {devolucionInversorModal ?? ""}
-              </span>
-              Gastos a devolver
-            </DialogTitle>
-            <DialogDescription>
-              {devolucionInversorModal
-                ? `Gastos de ${devolucionInversorModal} sin devolver (devolución = No). Ordenados por fecha (más reciente primero).`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            {!devolucionInversorModal ? null : loading ? (
-              <div className="py-12 text-center text-muted-foreground">Cargando…</div>
-            ) : (() => {
-              const gastosInversor = gastos.filter(
-                (g) => displayInversor(g) === devolucionInversorModal && !(g.devolucion ?? false)
-              );
-              const totalInversor = gastosInversor.reduce((sum, g) => sum + Number(g.amount), 0);
-              const ordenados = [...gastosInversor].sort((a, b) =>
-                b.expense_date.localeCompare(a.expense_date)
-              );
-              return ordenados.length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground">
-                  No hay gastos pendientes de devolver para {devolucionInversorModal}.
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {ordenados.map((g) => (
-                      <Card key={g.id} className="overflow-hidden">
-                        <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-start justify-between gap-2">
-                          <Badge variant="secondary">{getExpenseTypeLabel(g.expense_type)}</Badge>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => {
-                                handleEdit(g);
-                                setDevolucionInversorModal(null);
-                                setDialogOpen(true);
-                              }}
-                              title="Editar gasto"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => {
-                                setDeleteConfirmId(g.id);
-                                setDevolucionInversorModal(null);
-                              }}
-                              title="Eliminar gasto"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="px-4 pb-4 pt-0 space-y-2">
-                          <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem]">
-                            {g.description || "—"}
-                          </p>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3.5 w-3.5 shrink-0" />
-                            {formatDate(g.expense_date)}
-                          </div>
-                          <div className="flex items-center justify-between pt-2 border-t">
-                            <span className="text-xs text-muted-foreground">Monto</span>
-                            <span className="font-medium text-red-600">
-                              -{formatCurrency(Number(g.amount))}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                  <Card className="mt-4 bg-muted/60">
-                    <CardContent className="py-3 px-4 flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">
-                        Total a devolver a {devolucionInversorModal}
-                      </span>
-                      <span className="font-bold text-red-600">
-                        -{formatCurrency(totalInversor)}
-                      </span>
-                    </CardContent>
-                  </Card>
-                </>
-              );
-            })()}
           </div>
         </DialogContent>
       </Dialog>

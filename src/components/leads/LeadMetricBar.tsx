@@ -49,6 +49,8 @@ export interface LeadMetricBarProps {
   showLabel?: boolean;
   /** Solo actualiza estado local (modo edición del diálogo); persiste al guardar el formulario. */
   localOnly?: boolean;
+  /** Contorno negro en cada segmento (mejor contraste en el diálogo del lead). */
+  bordered?: boolean;
   onChange?: (next: number) => void;
 }
 
@@ -60,6 +62,7 @@ export function LeadMetricBar({
   size = "md",
   showLabel = true,
   localOnly = false,
+  bordered = false,
   onChange,
 }: LeadMetricBarProps) {
   const meta = FIELD_META[field];
@@ -154,7 +157,8 @@ export function LeadMetricBar({
               className={cn(
                 pillHeight,
                 pillWidth,
-                "rounded-full transition-all duration-200 ease-out",
+                "rounded-full transition-all duration-200 ease-out box-border",
+                bordered && "border-2 border-black",
                 filled ? `${color.filled} ${color.hover} scale-100` : "bg-muted hover:bg-muted-foreground/40 scale-95",
                 !localOnly && pending && "opacity-60 cursor-wait",
               )}

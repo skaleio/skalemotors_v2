@@ -25,6 +25,7 @@ export function CrmLeadContactTrackingBlock({
         leadId={leadId}
         value={value}
         showLabel={false}
+        bordered
         localOnly={localOnly}
         onChange={onChange}
       />

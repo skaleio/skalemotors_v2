@@ -40,6 +40,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 import {
   CRM_MOVABLE_STAGE_KEYS,
+  CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
   CRM_STAGE_BORDER_CLASS,
   CRM_STAGE_DOT_CLASS,
@@ -74,6 +75,7 @@ const CONSIGNACION_TAG_PREFIX = "consignacion:";
 const VEHICULO_TAG_PREFIX = "vehiculo:";
 const REGION_TAG_PREFIX = "region:";
 const MARCA_TAG_PREFIX = "marca:";
+const MODELO_TAG_PREFIX = "modelo:";
 const NEW_LEAD_PATH = "/leads?new=true";
 
 const normalizeTags = (tags: unknown) => {
@@ -287,7 +289,7 @@ const pipelineStyleFor = (stage: CrmStageKey): PipelineStatusStyle => ({
 });
 
 const PIPELINE_STYLES: Record<CrmStageKey, PipelineStatusStyle> = Object.fromEntries(
-  (["nuevo", "contactado", "negociando", "en_espera", "para_cierre", "negocio_cerrado", "cancelado"] as const).map(
+  (["nuevo", "contactado", "agendado", "en_espera", "negociando", "para_cierre", "negocio_cerrado", "cancelado"] as const).map(
     (key) => [key, pipelineStyleFor(key)],
   ),
 ) as Record<CrmStageKey, PipelineStatusStyle>;
@@ -328,11 +330,16 @@ function isClosedLeadStatus(status?: string | null): boolean {
   return s === "vendido" || s === "perdido";
 }
 
-/** Estado para el formulario de edición (pipeline o cerrado). */
+/** Estado para el formulario de edición (clave de columna pipeline o perdido). */
 function statusForEditForm(status?: string | null): string {
   const s = (status || "").toLowerCase();
-  if (s === "vendido" || s === "perdido" || s === "cancelado") return s;
-  return getLeadPipelineStage(status);
+  if (s === "perdido") return "perdido";
+  return safePipelineSelectValue(status);
+}
+
+function pipelineSelectValueForForm(status: string): string {
+  if (status.trim().toLowerCase() === "perdido") return "perdido";
+  return safePipelineSelectValue(status);
 }
 
 const DEFAULT_PIPELINE_STYLE = PIPELINE_STYLES.contactado;
@@ -685,6 +692,7 @@ function LeadsImpl({ user }: { user: User }) {
     status: "nuevo",
     make: "",
     vehicle: "",
+    model: "",
     region: "",
     payment_type: "",
     budget: "",
@@ -718,6 +726,7 @@ function LeadsImpl({ user }: { user: User }) {
     status: "contactado",
     make: "",
     vehicle: "",
+    model: "",
     region: "",
     payment_type: "",
     budget: "",
@@ -883,10 +892,11 @@ function LeadsImpl({ user }: { user: User }) {
     const nuevo = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "nuevo").length;
     const cancelado = openLeads.filter((lead) => getLeadStatusBucket(lead.status) === "cancelado").length;
     const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
+    const agendado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "agendado").length;
     const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
     const enEspera = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "en_espera").length;
     const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
-    return { total, nuevo, contactado, negociando, enEspera, paraCierre, cancelado };
+    return { total, nuevo, contactado, agendado, negociando, enEspera, paraCierre, cancelado };
   }, [leads]);
 
   const {
@@ -977,6 +987,7 @@ function LeadsImpl({ user }: { user: User }) {
       status: "nuevo",
       make: "",
       vehicle: "",
+      model: "",
       region: "",
       payment_type: "",
       budget: "",
@@ -1152,6 +1163,8 @@ function LeadsImpl({ user }: { user: User }) {
           Teléfono: sanitizeForSpreadsheet(formatChilePhoneForDisplay(lead.phone) || lead.phone || ""),
           Email: sanitizeForSpreadsheet(lead.email || ""),
           Tipo: sanitizeForSpreadsheet(tipoOrigen),
+          Marca: sanitizeForSpreadsheet(getTagValue(tags, MARCA_TAG_PREFIX) || ""),
+          Modelo: sanitizeForSpreadsheet(getTagValue(tags, MODELO_TAG_PREFIX) || ""),
           Vehículo: sanitizeForSpreadsheet(vehiculo),
           Región: sanitizeForSpreadsheet(region),
           "Financiamiento/Contado": sanitizeForSpreadsheet(lead.payment_type || ""),
@@ -1239,6 +1252,9 @@ function LeadsImpl({ user }: { user: User }) {
       if (formState.make.trim()) {
         tags.push(`${MARCA_TAG_PREFIX}${formState.make.trim()}`);
       }
+      if (formState.model.trim()) {
+        tags.push(`${MODELO_TAG_PREFIX}${formState.model.trim()}`);
+      }
 
       const created = await leadService.create({
         full_name: toTitleCase(formState.full_name.trim()),
@@ -1325,6 +1341,7 @@ function LeadsImpl({ user }: { user: User }) {
       email: lead.email || "",
       status: statusForEditForm(lead.status),
       make: getTagValue(tags, MARCA_TAG_PREFIX),
+      model: getTagValue(tags, MODELO_TAG_PREFIX),
       vehicle: isConsignacion
         ? consignacionVehicle || getTagValue(tags, VEHICULO_TAG_PREFIX)
         : getTagValue(tags, VEHICULO_TAG_PREFIX),
@@ -1358,7 +1375,7 @@ function LeadsImpl({ user }: { user: User }) {
         phone: normalizePhoneWithChilePrefix(editForm.phone) || "sin_telefono",
         email: editForm.email.trim() ? editForm.email.trim() : null,
         rut: editForm.rut.trim() ? editForm.rut.trim() : null,
-        status: editForm.status as any,
+        status: crmStageToDbStatus(editForm.status) as Lead["status"],
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
         budget: editForm.budget.trim() ? editForm.budget.trim() : null,
@@ -1377,6 +1394,9 @@ function LeadsImpl({ user }: { user: User }) {
       nextTags = nextTags.filter((t) => !t.startsWith(MARCA_TAG_PREFIX));
       const trimmedMake = editForm.make.trim();
       if (trimmedMake) nextTags = [...nextTags, `${MARCA_TAG_PREFIX}${trimmedMake}`];
+      nextTags = nextTags.filter((t) => !t.startsWith(MODELO_TAG_PREFIX));
+      const trimmedModel = editForm.model.trim();
+      if (trimmedModel) nextTags = [...nextTags, `${MODELO_TAG_PREFIX}${trimmedModel}`];
       updates.tags = nextTags as any;
 
       const updated = await leadService.update(editingLead.id, updates);
@@ -1634,11 +1654,14 @@ function LeadsImpl({ user }: { user: User }) {
               <DropdownMenuItem onSelect={() => handleExportLeads("contactado")}>
                 {PIPELINE_STATUS_LABELS.contactado}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("negociando")}>
-                {PIPELINE_STATUS_LABELS.negociando}
+              <DropdownMenuItem onSelect={() => handleExportLeads("agendado")}>
+                {PIPELINE_STATUS_LABELS.agendado}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleExportLeads("en_espera")}>
                 {PIPELINE_STATUS_LABELS.en_espera}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportLeads("negociando")}>
+                {PIPELINE_STATUS_LABELS.negociando}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleExportLeads("para_cierre")}>
                 {PIPELINE_STATUS_LABELS.para_cierre}
@@ -1655,7 +1678,7 @@ function LeadsImpl({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
         <Card className="border-l-4 border-slate-400">
           <CardHeader className="pb-2">
             <CardDescription>Leads total</CardDescription>
@@ -1674,16 +1697,22 @@ function LeadsImpl({ user }: { user: User }) {
             <CardTitle className="text-2xl text-blue-600">{leadStats.contactado}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-orange-500">
+        <Card className="border-l-4 border-sky-500">
           <CardHeader className="pb-2">
-            <CardDescription>NEGOCIANDO</CardDescription>
-            <CardTitle className="text-2xl text-orange-600">{leadStats.negociando}</CardTitle>
+            <CardDescription>AGENDADO</CardDescription>
+            <CardTitle className="text-2xl text-sky-700 dark:text-sky-300">{leadStats.agendado}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-l-4 border-violet-500">
           <CardHeader className="pb-2">
             <CardDescription>EN ESPERA</CardDescription>
             <CardTitle className="text-2xl text-violet-700">{leadStats.enEspera}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-orange-500">
+          <CardHeader className="pb-2">
+            <CardDescription>NEGOCIANDO</CardDescription>
+            <CardTitle className="text-2xl text-orange-600">{leadStats.negociando}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="border-l-4 border-emerald-500">
@@ -1852,6 +1881,16 @@ function LeadsImpl({ user }: { user: User }) {
                 value={formState.make}
                 onChange={(value) => setFormState({ ...formState, make: value })}
                 placeholder="Selecciona o escribe la marca"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead_model">Modelo</Label>
+              <Input
+                id="lead_model"
+                value={formState.model}
+                onChange={(e) => setFormState({ ...formState, model: e.target.value })}
+                placeholder="Ej: Corolla, Ranger, 208…"
+                autoComplete="off"
               />
             </div>
             <div className="grid gap-2">
@@ -2091,6 +2130,16 @@ function LeadsImpl({ user }: { user: User }) {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="edit_lead_model">Modelo</Label>
+              <Input
+                id="edit_lead_model"
+                value={editForm.model}
+                onChange={(e) => setEditForm({ ...editForm, model: e.target.value })}
+                placeholder="Ej: Corolla, Ranger, 208…"
+                autoComplete="off"
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="edit_lead_vehicle">Vehiculo</Label>
               <Select
                 value={editVehicleValue}
@@ -2230,16 +2279,20 @@ function LeadsImpl({ user }: { user: User }) {
             />
             <div className="grid gap-2">
               <Label>Estado</Label>
-              <Select value={editForm.status} onValueChange={(value) => setEditForm({ ...editForm, status: value })}>
+              <Select
+                value={pipelineSelectValueForForm(editForm.status)}
+                onValueChange={(value) => setEditForm((f) => ({ ...f, status: value }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries({ ...PIPELINE_STATUS_LABELS, ...CLOSED_STATUS_LABELS }).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
+                  {CRM_PIPELINE_STAGES.map((stage) => (
+                    <SelectItem key={stage.key} value={stage.key}>
+                      {PIPELINE_STATUS_LABELS[stage.key]}
                     </SelectItem>
                   ))}
+                  <SelectItem value="perdido">{CLOSED_STATUS_LABELS.perdido}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2332,6 +2385,8 @@ function LeadsImpl({ user }: { user: User }) {
               {(() => {
                 const tags = normalizeTags(detailsLead.tags);
                 const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
+                const makeLabel = getTagValue(tags, MARCA_TAG_PREFIX) || null;
+                const modelLabel = getTagValue(tags, MODELO_TAG_PREFIX) || null;
                 let vehicleLabel: string | null = null;
                 if (isConsignacion) {
                   const consignacion = consignacionByLeadId.get(detailsLead.id);
@@ -2343,10 +2398,18 @@ function LeadsImpl({ user }: { user: User }) {
                     || getTagValue(tags, VEHICULO_TAG_PREFIX)
                     || null;
                 }
-                return vehicleLabel ? (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Vehículo</p>
-                    <p className="text-base">{vehicleLabel}</p>
+                const vehicleFields: Array<{ label: string; value: string }> = [];
+                if (makeLabel) vehicleFields.push({ label: "Marca", value: makeLabel });
+                if (modelLabel) vehicleFields.push({ label: "Modelo", value: modelLabel });
+                if (vehicleLabel) vehicleFields.push({ label: "Vehículo", value: vehicleLabel });
+                return vehicleFields.length ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {vehicleFields.map((f) => (
+                      <div key={f.label}>
+                        <p className="text-sm text-muted-foreground">{f.label}</p>
+                        <p className="text-base">{f.value}</p>
+                      </div>
+                    ))}
                   </div>
                 ) : null;
               })()}

@@ -283,8 +283,20 @@ export default function Users() {
       toast({ title: "Completa el formulario", variant: "destructive" });
       return;
     }
-    if (newPassword.length < 8) {
-      toast({ title: "Contraseña corta", description: "Mínimo 8 caracteres.", variant: "destructive" });
+    if (newPassword.length < 10) {
+      toast({ title: "Contraseña corta", description: "Mínimo 10 caracteres.", variant: "destructive" });
+      return;
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      toast({ title: "Contraseña débil", description: "Debe incluir al menos una minúscula.", variant: "destructive" });
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      toast({ title: "Contraseña débil", description: "Debe incluir al menos una mayúscula.", variant: "destructive" });
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      toast({ title: "Contraseña débil", description: "Debe incluir al menos un número.", variant: "destructive" });
       return;
     }
     createVendorMutation.mutate({

@@ -159,8 +159,9 @@ export function CrmTeamPerformanceBar({
         <div className="border-b px-3 py-2.5">
           <p className="text-sm font-semibold">Actividad en CRM</p>
           <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-            La barra sube al mover leads, agregar notas o marcar contactos. Baja si hay leads
-            abiertos sin movimiento hace más de 48 h (últimos {CRM_ACTIVITY_WINDOW_DAYS} días).
+            La barra sube cuando el vendedor mueve leads en el pipeline, agrega notas o marca
+            contactos. Asignar o delegar un lead no suma %. Baja si hay leads abiertos sin
+            actividad hace más de 48 h (últimos {CRM_ACTIVITY_WINDOW_DAYS} días).
           </p>
         </div>
         {loadingEngagement ? (

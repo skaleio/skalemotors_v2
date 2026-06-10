@@ -15,6 +15,7 @@ const ALLOWED_LEAD_STATUSES = new Set<string>([
   'contactado',
   'interesado',
   'cotizando',
+  'agendado',
   'negociando',
   'en_espera',
   'vendido',

@@ -69,17 +69,30 @@ describe("crmPipeline", () => {
     expect(isLeadVisibleInCrmKanban(leads[6], visible)).toBe(true);
   });
 
-  it("mantiene orden del embudo con en_espera entre negociando y para_cierre", () => {
+  it("mantiene orden del embudo con agendado y negociando después de en_espera", () => {
     const keys = CRM_PIPELINE_STAGES.map((s) => s.key);
     expect(keys).toEqual([
       "nuevo",
       "contactado",
-      "negociando",
+      "agendado",
       "en_espera",
+      "negociando",
       "para_cierre",
       "negocio_cerrado",
       "cancelado",
     ]);
+  });
+
+  it("mapea agendado a su columna", () => {
+    expect(getLeadCrmStageKey("agendado")).toBe("agendado");
+    expect(crmStageToDbStatus("agendado")).toBe("agendado");
+  });
+
+  it("reconoce claves de columna del pipeline en selects del formulario", () => {
+    expect(getLeadCrmStageKey("negocio_cerrado")).toBe("negocio_cerrado");
+    expect(safePipelineSelectValue("negocio_cerrado")).toBe("negocio_cerrado");
+    expect(crmStageToDbStatus("negocio_cerrado")).toBe("vendido");
+    expect(crmStageToDbStatus("perdido")).toBe("perdido");
   });
 
   it("safePipelineSelectValue alinea select con columna", () => {

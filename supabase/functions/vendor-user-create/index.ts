@@ -72,29 +72,34 @@ async function handler(req: Request): Promise<Response> {
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
-  const anonKey = getEnv("SUPABASE_ANON_KEY");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? getEnv("SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     const missing = [
       !supabaseUrl && "SUPABASE_URL",
-      !anonKey && "SUPABASE_ANON_KEY",
       !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
     ].filter(Boolean).join(", ");
     console.error(`[vendor-user-create] Missing env vars: ${missing}`);
     return jsonResponse(req,500, { ok: false, error: "Missing Supabase env vars" });
   }
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData?.user) {
-    return jsonResponse(req,401, { ok: false, error: "Invalid auth" });
+  const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!jwt) {
+    return jsonResponse(req, 401, { ok: false, error: "Missing auth" });
   }
 
+  // verify_jwt:false — validar manualmente con service role (JWT ES256 del proyecto).
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
+  if (userErr || !userData?.user) {
+    console.error("[vendor-user-create] getUser error:", userErr?.message);
+    return jsonResponse(req, 401, {
+      ok: false,
+      error: "Sesión inválida o expirada. Cierra sesión y vuelve a entrar.",
+    });
+  }
 
   const { data: callerRow, error: callerErr } = await admin
     .from("users")

@@ -188,6 +188,31 @@ function safeEventStatus(s: string | undefined): Event["status"] {
   return "programada";
 }
 
+type AppointmentLeadOption = {
+  id: string;
+  full_name: string;
+  phone?: string | null;
+  preferred_vehicle_id?: string | null;
+  assigned_to?: string | null;
+};
+
+function buildAppointmentFieldsFromLead(
+  lead: AppointmentLeadOption,
+  vehicleIds: Set<string>,
+): Partial<Pick<Event, "title" | "clientPhone" | "vehicleId" | "userId">> {
+  const patch: Partial<Pick<Event, "title" | "clientPhone" | "vehicleId" | "userId">> = {
+    title: lead.full_name?.trim() || "",
+    clientPhone: (lead.phone || "").trim(),
+  };
+  if (lead.preferred_vehicle_id && vehicleIds.has(lead.preferred_vehicle_id)) {
+    patch.vehicleId = lead.preferred_vehicle_id;
+  }
+  if (lead.assigned_to) {
+    patch.userId = lead.assigned_to;
+  }
+  return patch;
+}
+
 function safeDate(value: string | null | undefined): Date | null {
   if (value == null) return null;
   const d = new Date(value);
@@ -457,6 +482,26 @@ export default function Appointments() {
       clientPhone: event.clientPhone || "",
       description: event.description || "",
     });
+  };
+
+  const vehicleIds = useMemo(() => new Set(vehicles.map((v) => v.id)), [vehicles]);
+
+  const handleAppointmentLeadChange = (value: string) => {
+    const leadId = value === "none" ? "" : value;
+    if (!leadId) {
+      setFormData((prev) => ({ ...prev, leadId: "" }));
+      return;
+    }
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) {
+      setFormData((prev) => ({ ...prev, leadId }));
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      leadId,
+      ...buildAppointmentFieldsFromLead(lead, vehicleIds),
+    }));
   };
 
   const resolveAssigneeUserId = (raw: string | undefined | null) => {
@@ -1380,6 +1425,31 @@ export default function Appointments() {
             </div>
           ) : (
           <div className="space-y-4 py-4">
+            <div className="space-y-2 rounded-lg border border-border/80 bg-muted/25 p-3">
+              <Label htmlFor="appointment-lead">Lead</Label>
+              <Select
+                value={formData.leadId || "none"}
+                onValueChange={handleAppointmentLeadChange}
+              >
+                <SelectTrigger id="appointment-lead">
+                  <SelectValue placeholder="Buscar lead del CRM…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin lead (carga manual)</SelectItem>
+                  {leads.map((lead) => (
+                    <SelectItem key={lead.id} value={lead.id}>
+                      {lead.full_name}
+                      {lead.phone ? ` · ${lead.phone}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Elegí un lead primero: se completan automáticamente nombre, teléfono, vehículo de
+                interés y vendedor asignado. Podés editarlos después.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="title">Nombre de la persona *</Label>
@@ -1404,6 +1474,28 @@ export default function Appointments() {
                   }
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vehículo (opcional)</Label>
+              <Select
+                value={formData.vehicleId || "none"}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, vehicleId: value === "none" ? "" : value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un vehículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin vehículo</SelectItem>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.make} {vehicle.model} {vehicle.year ? vehicle.year : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {openedFromSlot ? (
@@ -1539,58 +1631,6 @@ export default function Appointments() {
                   <SelectItem value="cancelada">Cancelada</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Lead (opcional)</Label>
-                <Select
-                  value={formData.leadId || "none"}
-                  onValueChange={(value) => {
-                    const leadId = value === "none" ? "" : value;
-                    const lead = leadId ? leads.find((l) => l.id === leadId) : null;
-                    setFormData({
-                      ...formData,
-                      leadId,
-                      clientPhone: lead?.phone?.trim() || formData.clientPhone || "",
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un lead" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin lead</SelectItem>
-                    {leads.map((lead) => (
-                      <SelectItem key={lead.id} value={lead.id}>
-                        {lead.full_name} {lead.phone ? `(${lead.phone})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Vehículo (opcional)</Label>
-                <Select
-                  value={formData.vehicleId || "none"}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, vehicleId: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un vehículo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin vehículo</SelectItem>
-                    {vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.make} {vehicle.model} {vehicle.year ? vehicle.year : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             {canDelegate ? (

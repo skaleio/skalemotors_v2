@@ -18,6 +18,7 @@ import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
+import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
 import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
@@ -50,6 +51,13 @@ import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSegui
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { filterLeadsForVendorView, leadsAssignedToForQuery } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
+import {
+  formatLeadScheduleDisplayLine,
+  parseCrmLeadQuickAppointmentMotive,
+  pickActiveCrmLeadQuickAppointment,
+  type AppointmentRow,
+} from "@/lib/crmLeadQuickAppointment";
+import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
@@ -60,6 +68,7 @@ import { CheckCircle2, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Tar
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { format, parseISO } from "date-fns";
 import { Link, useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
@@ -385,6 +394,7 @@ const LeadCard = memo(function LeadCard({
     return (
       stage === "nuevo"
       || stage === "contactado"
+      || stage === "agendado"
       || stage === "negociando"
       || stage === "en_espera"
       || stage === "para_cierre"
@@ -559,7 +569,7 @@ export default function CRM() {
 
   const queryClient = useQueryClient();
   const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
-  const { leads, loading, error: leadsError, refetch } = useLeads({
+  const { leads, loading, isFetching, error: leadsError, refetch } = useLeads({
     branchId: user?.branch_id ?? undefined,
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
@@ -571,6 +581,14 @@ export default function CRM() {
     enabled: !!user,
     staleTime: 1 * 60 * 1000,
   });
+
+  const handleRefreshCrm = useCallback(async () => {
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ["seller-engagement"] }),
+      queryClient.invalidateQueries({ queryKey: ["leads", "deleted"] }),
+    ]);
+  }, [refetch, queryClient]);
 
   const [showPapeleraDialog, setShowPapeleraDialog] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -996,6 +1014,13 @@ export default function CRM() {
     [],
   );
 
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleLead, setScheduleLead] = useState<Lead | null>(null);
+  const [scheduleDayKey, setScheduleDayKey] = useState<string | null>(null);
+  const [scheduleMotive, setScheduleMotive] = useState("");
+  const [scheduleAppointmentId, setScheduleAppointmentId] = useState<string | null>(null);
+  const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
+
   const [showCloseDealDialog, setShowCloseDealDialog] = useState(false);
   const [closeDealLead, setCloseDealLead] = useState<Lead | null>(null);
   const [closeDealVehicle, setCloseDealVehicle] = useState("");
@@ -1016,6 +1041,36 @@ export default function CRM() {
     setCloseDealSellerKey("");
     setCloseDealPrice("");
     setCloseDealSellerOptions([]);
+  }, []);
+
+  const closeScheduleDialog = useCallback(() => {
+    setShowScheduleDialog(false);
+    setScheduleLead(null);
+    setScheduleDayKey(null);
+    setScheduleMotive("");
+    setScheduleAppointmentId(null);
+  }, []);
+
+  const openScheduleForLead = useCallback(async (lead: Lead) => {
+    setScheduleLead(lead);
+    setShowScheduleDialog(true);
+    try {
+      const rows = await appointmentService.getAll({ leadId: lead.id });
+      const appt = pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
+      if (appt) {
+        setScheduleDayKey(format(parseISO(appt.scheduled_at), "yyyy-MM-dd"));
+        setScheduleMotive(parseCrmLeadQuickAppointmentMotive(appt.description));
+        setScheduleAppointmentId(appt.id);
+      } else {
+        setScheduleDayKey(null);
+        setScheduleMotive("");
+        setScheduleAppointmentId(null);
+      }
+    } catch {
+      setScheduleDayKey(null);
+      setScheduleMotive("");
+      setScheduleAppointmentId(null);
+    }
   }, []);
 
   const openCloseDealForLead = useCallback(
@@ -1043,6 +1098,11 @@ export default function CRM() {
       && currentStageKey !== "negocio_cerrado"
     ) {
       openCloseDealForLead(editingLead);
+      return;
+    }
+
+    if (targetStageKey === "agendado" && currentStageKey !== "agendado") {
+      void openScheduleForLead(editingLead);
       return;
     }
 
@@ -1124,6 +1184,7 @@ export default function CRM() {
     closeEditDialog,
     askConfirm,
     openCloseDealForLead,
+    openScheduleForLead,
   ]);
 
   useEffect(() => {
@@ -1283,6 +1344,12 @@ export default function CRM() {
         return;
       }
 
+      if (stageKey === "agendado") {
+        void openScheduleForLead(lead);
+        setDraggingLeadId(null);
+        return;
+      }
+
       if (stageKey === "cancelado") {
         setDraggingLeadId(null);
         const ok = await askConfirm(cancelLeadConfirmOptions(lead.full_name?.trim() || "Sin nombre"));
@@ -1329,8 +1396,98 @@ export default function CRM() {
         setDraggingLeadId(null);
       }
     },
-    [leads, filteredLeads, queryClient, openCloseDealForLead, showPipelineMoveNotice, askConfirm],
+    [leads, filteredLeads, queryClient, openCloseDealForLead, openScheduleForLead, showPipelineMoveNotice, askConfirm],
   );
+
+  const handleConfirmSchedule = useCallback(async () => {
+    if (!scheduleLead || !user) return;
+    if (!scheduleDayKey?.trim()) {
+      toast({
+        title: "Falta la fecha",
+        description: "Selecciona el día de la cita en el calendario.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const leadId = scheduleLead.id;
+    const previousStatus = scheduleLead.status ?? null;
+    setIsSubmittingSchedule(true);
+    setMovingLeadId(leadId);
+
+    queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+      if (!Array.isArray(current)) return current;
+      return current.map((l: Lead) => (l.id === leadId ? { ...l, status: "agendado" } : l));
+    });
+
+    try {
+      await appointmentService.upsertCrmLeadQuickAppointment({
+        leadId,
+        leadDisplayName: scheduleLead.full_name ?? "Lead",
+        tenantId: scheduleLead.tenant_id ?? user.tenant_id ?? null,
+        branchId: scheduleLead.branch_id ?? user.branch_id ?? null,
+        userId: scheduleLead.assigned_to ?? user.id ?? null,
+        existingId: scheduleAppointmentId,
+        dayKey: scheduleDayKey,
+        motive: scheduleMotive,
+      });
+
+      const updated = await leadService.update(leadId, { status: "agendado" });
+
+      if (editingLead?.id === leadId) {
+        setEditingLead((prev) => (prev ? { ...prev, ...updated } : prev));
+        setEditForm((f) => ({ ...f, status: "agendado" }));
+        setLeadStatus("agendado");
+      }
+
+      queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
+        if (!Array.isArray(current)) return current;
+        return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
+      });
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      await queryClient.invalidateQueries({ queryKey: ["crmLeadQuickAppointment", leadId] });
+      await queryClient.invalidateQueries({ queryKey: ["leads"] });
+      await queryClient.invalidateQueries({ queryKey: ["seller-engagement"] });
+
+      showPipelineMoveNotice(scheduleLead, previousStatus, "agendado");
+      if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
+      setLandedLeadId(leadId);
+      landHighlightTimerRef.current = setTimeout(() => {
+        setLandedLeadId(null);
+        landHighlightTimerRef.current = null;
+      }, 700);
+
+      closeScheduleDialog();
+      toast({
+        title: "Cita agendada",
+        description: `${formatLeadScheduleDisplayLine(
+          new Date(`${scheduleDayKey}T10:00:00`).toISOString(),
+          scheduleMotive,
+        )} · visible en Citas`,
+      });
+    } catch (err) {
+      console.error("[CRM] handleConfirmSchedule", err);
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast({
+        title: "No se pudo agendar la cita",
+        description: describeSupabaseError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingSchedule(false);
+      setMovingLeadId(null);
+    }
+  }, [
+    scheduleLead,
+    scheduleDayKey,
+    scheduleMotive,
+    scheduleAppointmentId,
+    user,
+    editingLead?.id,
+    queryClient,
+    closeScheduleDialog,
+    showPipelineMoveNotice,
+  ]);
 
   const handleConfirmCloseDeal = useCallback(async () => {
     if (!closeDealLead) return;
@@ -1627,6 +1784,17 @@ export default function CRM() {
           <Button
             variant="outline"
             size="icon"
+            onClick={() => void handleRefreshCrm()}
+            disabled={loading || isFetching}
+            title="Actualizar leads del CRM"
+            aria-label="Actualizar lista de leads del CRM"
+            className="shrink-0"
+          >
+            <RotateCcw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => setShowPapeleraDialog(true)}
             title="Ver papelera — leads eliminados del pipeline"
             aria-label="Ver papelera de leads eliminados"
@@ -1905,6 +2073,58 @@ export default function CRM() {
           );
         })}
       </div>
+
+      <Dialog
+        open={showScheduleDialog}
+        onOpenChange={(open) => {
+          if (!open && !isSubmittingSchedule) closeScheduleDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Agendar cita</DialogTitle>
+            <DialogDescription>
+              {scheduleLead
+                ? `Programa la visita o llamada para ${scheduleLead.full_name || "este lead"}. La cita quedará en el módulo Citas.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {scheduleLead && (
+            <LeadCrmQuickAppointmentPicker
+              id="crm-schedule-day"
+              dayKey={scheduleDayKey}
+              motive={scheduleMotive}
+              onDayChange={setScheduleDayKey}
+              onMotiveChange={setScheduleMotive}
+              disabled={isSubmittingSchedule}
+            />
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeScheduleDialog}
+              disabled={isSubmittingSchedule}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmSchedule()}
+              disabled={isSubmittingSchedule || !scheduleDayKey}
+            >
+              {isSubmittingSchedule ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando…
+                </>
+              ) : (
+                "Confirmar cita"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={showCloseDealDialog}
@@ -2203,7 +2423,7 @@ export default function CRM() {
                   <div className="grid gap-2 pt-2 border-t">
                     <Label>Estado en el pipeline</Label>
                     <Select
-                      value={safePipelineSelectValue(editForm.status)}
+                      value={editForm.status}
                       onValueChange={(v) => {
                         setEditForm((f) => ({ ...f, status: v }));
                         setLeadStatus(v);

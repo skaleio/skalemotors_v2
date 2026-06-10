@@ -71,15 +71,22 @@ function parseTs(iso: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Última señal de actividad sobre el lead (movimiento, edición o contacto). */
-export function leadLastActivityAt(lead: CrmLeadActivityInput): number | null {
+/**
+ * Última actividad real del vendedor sobre el lead.
+ * Excluye `updated_at` (asignación/delegación admin no cuenta como actividad).
+ */
+export function vendorLeadActivityAt(lead: CrmLeadActivityInput): number | null {
   const candidates = [
     parseTs(lead.status_changed_at),
-    parseTs(lead.updated_at),
     parseTs(lead.last_contact_at),
   ].filter((t): t is number => t != null);
   if (candidates.length === 0) return null;
   return Math.max(...candidates);
+}
+
+/** @deprecated Usar vendorLeadActivityAt — updated_at incluía asignaciones admin. */
+export function leadLastActivityAt(lead: CrmLeadActivityInput): number | null {
+  return vendorLeadActivityAt(lead);
 }
 
 function countContactTouchesInWindow(
@@ -90,8 +97,6 @@ function countContactTouchesInWindow(
   if (attempts <= 0) return 0;
   const lastContact = parseTs(lead.last_contact_at);
   if (lastContact != null && lastContact >= windowStartMs) return 1;
-  const lastActivity = leadLastActivityAt(lead);
-  if (lastActivity != null && lastActivity >= windowStartMs) return 1;
   return 0;
 }
 
@@ -100,7 +105,7 @@ function countContactTouchesInWindow(
  *
  * Modelo de score (0–100):
  * + hasta 36 pts — leads trabajados en ventana (toques recientes)
- * + hasta 24 pts — movimientos de pipeline (RPC o leads actualizados)
+ * + hasta 24 pts — movimientos de pipeline (cambio de estado en ventana; no asignaciones)
  * + hasta 20 pts — notas en leads
  * + hasta 12 pts — actividades registradas
  * + hasta 8 pts  — semáforos de contacto marcados en ventana
@@ -147,18 +152,15 @@ export function computeVendorCrmActivityScore(input: {
     const open = isOpenLead(lead.status);
     if (open) openLeads += 1;
 
-    const lastAt = leadLastActivityAt(lead);
+    const lastAt = vendorLeadActivityAt(lead);
     const touchedInWindow = lastAt != null && lastAt >= windowStartMs;
     if (touchedInWindow) {
       recentTouches += 1;
-      const statusChanged = parseTs(lead.status_changed_at);
-      const updated = parseTs(lead.updated_at);
-      if (
-        (statusChanged != null && statusChanged >= windowStartMs)
-        || (updated != null && updated >= windowStartMs)
-      ) {
-        pipelineMovesFromLeads += 1;
-      }
+    }
+
+    const statusChanged = parseTs(lead.status_changed_at);
+    if (statusChanged != null && statusChanged >= windowStartMs) {
+      pipelineMovesFromLeads += 1;
     }
 
     if (open && (lastAt == null || lastAt < staleStartMs)) {
