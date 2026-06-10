@@ -7,6 +7,8 @@ node_modules
 dist
 dist-ssr
 build
+.next
+apps/vitrina/.next
 *.local
 
 # Logs
@@ -87,3 +89,4 @@ __pycache__/
 
 # Supabase CLI (caché local; no versionar)
 supabase/.temp/
+.vercel

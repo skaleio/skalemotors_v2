@@ -1,9 +1,0 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/lead/route": "app/api/lead/route.js",
-  "/robots.txt/route": "app/robots.txt/route.js",
-  "/sitemap.xml/route": "app/sitemap.xml/route.js",
-  "/page": "app/page.js",
-  "/vehiculo/[id]/page": "app/vehiculo/[id]/page.js",
-  "/vehiculos/page": "app/vehiculos/page.js"
-}

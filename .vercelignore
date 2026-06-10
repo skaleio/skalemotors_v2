@@ -1,0 +1,4 @@
+# Vitrina es un proyecto Next.js aparte (apps/vitrina/vercel.json).
+# No debe mezclarse con el deploy Vite de skalemotors-v2: cada ruta .next
+# cuenta como Serverless Function y el plan Hobby tiene límite de 12.
+apps/vitrina
