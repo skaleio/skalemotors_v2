@@ -46,6 +46,15 @@ export function leadsAssignedToForQuery(role: string | undefined, userId: string
   return undefined;
 }
 
+/** Vendedor: no filtrar por sucursal en query — RLS + assigned_to ya acotan; evita ocultar delegaciones cross-branch. */
+export function leadsBranchIdForQuery(
+  role: string | undefined,
+  branchId: string | null | undefined,
+): string | undefined {
+  if (role === "vendedor") return undefined;
+  return branchId ?? undefined;
+}
+
 export function shouldApplyVendorLeadScope(role: string | undefined): boolean {
   return role === "vendedor";
 }

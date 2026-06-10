@@ -33,7 +33,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import {
   CAN_SUPERVISE_APPOINTMENTS,
   filterAppointmentsForCalendarView,
@@ -331,7 +331,7 @@ export default function Appointments() {
   );
 
   const { leads } = useLeads({
-    branchId: user?.branch_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });

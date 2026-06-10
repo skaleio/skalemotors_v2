@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import type { Database } from "@/lib/types/database";
 import { Plus } from "lucide-react";
 import { memo, useMemo } from "react";
@@ -54,7 +54,7 @@ const LeadCard = memo(({ lead }: { lead: Lead }) => {
 export default function LeadsBoard() {
   const { user } = useAuth();
   const { leads, loading } = useLeads({
-    branchId: user?.branch_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });

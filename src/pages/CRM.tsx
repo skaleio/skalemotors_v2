@@ -49,7 +49,11 @@ import {
 } from "@/lib/crmPipeline";
 import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
-import { filterLeadsForVendorView, leadsAssignedToForQuery } from "@/lib/leadsScope";
+import {
+  filterLeadsForVendorView,
+  leadsAssignedToForQuery,
+  leadsBranchIdForQuery,
+} from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
 import {
   formatLeadScheduleDisplayLine,
@@ -570,7 +574,7 @@ export default function CRM() {
   const queryClient = useQueryClient();
   const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
   const { leads, loading, isFetching, error: leadsError, refetch } = useLeads({
-    branchId: user?.branch_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });

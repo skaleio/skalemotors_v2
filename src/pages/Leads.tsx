@@ -58,7 +58,7 @@ import {
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { supabase, type User } from "@/lib/supabase";
@@ -662,7 +662,7 @@ function LeadsImpl({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const { shortcutsEnabled } = useShortcutsPreferences();
   const { leads, loading, isFetching, refetch } = useLeads({
-    branchId: user?.branch_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });

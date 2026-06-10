@@ -44,7 +44,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { useVehicles } from "@/hooks/useVehicles";
 import { consignacionesService } from "@/lib/services/consignaciones";
 import { vehiclePhotosService } from "@/lib/services/vehiclePhotos";
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { supabase } from "@/lib/supabase";
 import {
@@ -586,7 +586,7 @@ export default function Consignaciones() {
   });
 
   const { leads } = useLeads({
-    branchId: user?.branch_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
   });

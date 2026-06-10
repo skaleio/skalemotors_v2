@@ -3,6 +3,7 @@ import {
   filterLeadsForVendorView,
   isLeadInCeoDelegationPool,
   isLeadVisibleToVendor,
+  leadsBranchIdForQuery,
   vendorLeadScopeOrFilter,
 } from "./leadsScope";
 
@@ -39,5 +40,10 @@ describe("leadsScope", () => {
   it("vendorLeadScopeOrFilter incluye asignados y propios sin asignar", () => {
     expect(vendorLeadScopeOrFilter(vendorId)).toContain(`assigned_to.eq.${vendorId}`);
     expect(vendorLeadScopeOrFilter(vendorId)).toContain(`created_by.eq.${vendorId}`);
+  });
+
+  it("leadsBranchIdForQuery omite sucursal para vendedor", () => {
+    expect(leadsBranchIdForQuery("vendedor", "branch-1")).toBeUndefined();
+    expect(leadsBranchIdForQuery("admin", "branch-1")).toBe("branch-1");
   });
 });

@@ -1,4 +1,4 @@
-import { leadsAssignedToForQuery } from "@/lib/leadsScope";
+import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { leadService } from "@/lib/services/leads";
 import { vehicleService } from "@/lib/services/vehicles";
 import { useQuery } from "@tanstack/react-query";
@@ -78,6 +78,7 @@ export function useGlobalSearch({
   const trimmed = debouncedQuery.trim();
   const shouldFetch = enabled && trimmed.length >= MIN_QUERY_LEN;
   const assignedTo = leadsAssignedToForQuery(role, userId);
+  const leadsBranchId = leadsBranchIdForQuery(role, branchId);
 
   const vehiclesQuery = useQuery({
     queryKey: ["global-search", "vehicles", branchId, trimmed],
@@ -96,10 +97,10 @@ export function useGlobalSearch({
   });
 
   const leadsQuery = useQuery({
-    queryKey: ["global-search", "leads", branchId, assignedTo, trimmed],
+    queryKey: ["global-search", "leads", leadsBranchId, assignedTo, trimmed],
     queryFn: () =>
       leadService.getAll({
-        branchId,
+        branchId: leadsBranchId,
         assignedTo,
         search: trimmed,
         limit: RESULT_LIMIT,
