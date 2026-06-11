@@ -46,6 +46,13 @@ import {
   resolveDelegatableSellersScope,
   useBranchSellersOptionsFromUser,
 } from "@/lib/delegatableSellersScope";
+import {
+  buildAppointmentWritePayload,
+  formatAppointmentSaveError,
+  resolveAppointmentAssigneeId,
+  resolveAppointmentTimes,
+  resolveWritableAppointmentId,
+} from "@/lib/appointmentWrite";
 import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import type { Database } from "@/lib/types/database";
@@ -162,6 +169,9 @@ export function CrmLeadScheduleAppointmentDialog({
   /** Selección visual del calendario; se limpia al volver atrás para permitir re-clic en el mismo día. */
   const [calendarSelected, setCalendarSelected] = useState<Date | undefined>();
   const [existingAppointmentId, setExistingAppointmentId] = useState<string | null>(null);
+  const [existingAppointmentOwnerUserId, setExistingAppointmentOwnerUserId] = useState<
+    string | null
+  >(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
@@ -200,6 +210,7 @@ export function CrmLeadScheduleAppointmentDialog({
     setDayKey(null);
     setCalendarSelected(undefined);
     setExistingAppointmentId(null);
+    setExistingAppointmentOwnerUserId(null);
     setForm(null);
     setStartTimeStr("10:00");
     setEndTimeStr("11:00");
@@ -224,6 +235,7 @@ export function CrmLeadScheduleAppointmentDialog({
           setDayKey(key);
           setCalendarSelected(parse(key, "yyyy-MM-dd", new Date()));
           setExistingAppointmentId(appt.id);
+          setExistingAppointmentOwnerUserId(appt.user_id ?? null);
         }
       } catch {
         if (!cancelled) {
@@ -270,6 +282,11 @@ export function CrmLeadScheduleAppointmentDialog({
             vendorUserId: user?.id ?? null,
           });
 
+      if (appt) {
+        setExistingAppointmentId(appt.id);
+        setExistingAppointmentOwnerUserId(appt.user_id ?? null);
+      }
+
       if (isVendor && user?.id) {
         nextForm.userId = user.id;
       } else if (!nextForm.userId && user?.id) {
@@ -292,15 +309,13 @@ export function CrmLeadScheduleAppointmentDialog({
   const handleSave = async () => {
     if (!lead || !user || !form || !dayKey) return;
 
-    let startDate = form.start;
-    let endDate = form.end;
-    const startParsed = parseTimeInput(startTimeStr);
-    const endParsed = parseTimeInput(endTimeStr);
-    if (startParsed) startDate = setTimeOnDate(startDate, startParsed);
-    if (endParsed) endDate = setTimeOnDate(startDate, endParsed);
-    if (endDate.getTime() <= startDate.getTime()) {
-      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-    }
+    const { start: startDate, end: endDate } = resolveAppointmentTimes({
+      day: form.start,
+      startTimeStr,
+      endTimeStr,
+      fallbackStart: form.start,
+      fallbackEnd: form.end,
+    });
 
     if (!form.title.trim()) {
       toast({
@@ -311,61 +326,79 @@ export function CrmLeadScheduleAppointmentDialog({
       return;
     }
 
-    const assigneeId = isVendor
-      ? (user.id ?? null)
-      : canDelegate
-        ? (form.userId?.trim() || null)
-        : (user.id ?? null);
+    const assigneeId = resolveAppointmentAssigneeId({
+      user,
+      isVendor,
+      canDelegate,
+      formUserId: form.userId,
+    });
     const assigneeSeller = assigneeId
       ? delegatableSellers.find((s) => s.id === assigneeId)
       : null;
 
-    const durationMinutes = Math.max(
-      15,
-      Math.round((endDate.getTime() - startDate.getTime()) / 60_000),
-    );
+    const writableAppointmentId = resolveWritableAppointmentId({
+      existingId: existingAppointmentId,
+      existingOwnerUserId: existingAppointmentOwnerUserId,
+      currentUserId: user.id ?? null,
+      isVendor,
+    });
 
     const previousStatus = lead.status ?? null;
     setIsSaving(true);
 
     try {
-      const payload = {
-        title: form.title.trim(),
-        description: form.description.trim() || null,
+      const payload = buildAppointmentWritePayload({
+        title: form.title,
+        description: form.description,
         type: form.type,
         status: form.status,
-        scheduled_at: startDate.toISOString(),
-        end_at: endDate.toISOString(),
-        duration_minutes: durationMinutes,
-        lead_id: lead.id,
-        vehicle_id: form.vehicleId?.trim() || null,
-        client_phone: form.clientPhone.trim() || null,
-        user_id: assigneeId,
-        branch_id: assigneeSeller?.branch_id ?? lead.branch_id ?? user.branch_id ?? null,
-        tenant_id: lead.tenant_id ?? user.tenant_id ?? null,
-      };
+        start: startDate,
+        end: endDate,
+        leadId: lead.id,
+        vehicleId: form.vehicleId,
+        clientPhone: form.clientPhone,
+        assigneeId,
+        assigneeSeller,
+        tenantId: lead.tenant_id ?? user.tenant_id,
+        fallbackBranchId: user.branch_id,
+        leadBranchId: lead.branch_id,
+      });
 
-      if (existingAppointmentId) {
-        await appointmentService.update(existingAppointmentId, payload);
+      if (writableAppointmentId) {
+        await appointmentService.update(writableAppointmentId, payload);
       } else {
         await appointmentService.create(payload);
       }
 
-      const updated = await leadService.update(lead.id, { status: "agendado" });
+      let updatedLead = lead;
+      try {
+        updatedLead = await leadService.update(lead.id, { status: "agendado" });
+      } catch (leadErr) {
+        console.error("[CrmLeadScheduleAppointmentDialog] lead status", leadErr);
+        toast({
+          title: "Cita guardada",
+          description:
+            "La cita quedó en Citas, pero no se pudo mover el lead a Agendado. Recarga el tablero.",
+        });
+        onScheduled?.(lead, previousStatus);
+        resetState();
+        onOpenChange(false);
+        return;
+      }
 
       toast({
         title: "Cita agendada",
         description: `${formatAppointmentDayLabel(startDate)} · visible en Citas`,
       });
 
-      onScheduled?.(updated, previousStatus);
+      onScheduled?.(updatedLead, previousStatus);
       resetState();
       onOpenChange(false);
     } catch (err) {
       console.error("[CrmLeadScheduleAppointmentDialog] save", err);
       toast({
         title: "No se pudo guardar la cita",
-        description: err instanceof Error ? err.message : "Intenta de nuevo.",
+        description: formatAppointmentSaveError(err),
         variant: "destructive",
       });
     } finally {

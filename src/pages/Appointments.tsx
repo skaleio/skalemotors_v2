@@ -50,7 +50,18 @@ import {
   resolveAppointmentSupervisionVendorScope,
   resolveSupervisedAppointmentQueryFilters,
 } from "@/lib/appointmentCalendarScope";
-import { parseTimeInput, safeFormatTime, setTimeOnDate } from "@/lib/appointmentDateTime";
+import {
+  parseTimeInput,
+  safeFormatTime,
+  setTimeOnDate,
+} from "@/lib/appointmentFormTime";
+import {
+  buildAppointmentWritePayload,
+  defaultAppointmentTimesForDay,
+  formatAppointmentSaveError,
+  resolveAppointmentAssigneeId,
+  resolveAppointmentTimes,
+} from "@/lib/appointmentWrite";
 import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -610,10 +621,11 @@ export default function Appointments() {
     setSelectedEvent(null);
     setDialogMode("create");
     setOpenedFromSlot(true);
+    const { start: slotStart, end: slotEnd } = defaultAppointmentTimesForDay(startOfDay(start));
     setFormData({
       title: "",
-      start,
-      end,
+      start: slotStart,
+      end: slotEnd,
       type: "meeting",
       status: "programada",
       leadId: "",
@@ -622,6 +634,8 @@ export default function Appointments() {
       clientPhone: "",
       description: "",
     });
+    setStartTimeStr(safeFormatTime(slotStart) || "10:00");
+    setEndTimeStr(safeFormatTime(slotEnd) || "11:00");
     setIsDialogOpen(true);
   };
 
@@ -630,17 +644,25 @@ export default function Appointments() {
   };
 
   const handleSaveEvent = async () => {
-    let startDate = formData.start && !isNaN(formData.start.getTime()) ? formData.start : null;
-    let endDate = formData.end && !isNaN(formData.end.getTime()) ? formData.end : null;
-    if (openedFromSlot && startDate) {
-      const startParsed = parseTimeInput(startTimeStr);
-      const endParsed = parseTimeInput(endTimeStr);
-      if (startParsed) startDate = setTimeOnDate(startDate, startParsed);
-      if (endParsed) endDate = setTimeOnDate(startDate, endParsed);
-      if (endDate && startDate && endDate.getTime() <= startDate.getTime()) {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-      }
-    }
+    const dayBase =
+      formData.start && !isNaN(formData.start.getTime())
+        ? startOfDay(formData.start)
+        : startOfDay(new Date());
+
+    const { start: startDate, end: endDate } = openedFromSlot
+      ? resolveAppointmentTimes({
+          day: dayBase,
+          startTimeStr,
+          endTimeStr,
+          fallbackStart: formData.start,
+          fallbackEnd: formData.end,
+        })
+      : {
+          start:
+            formData.start && !isNaN(formData.start.getTime()) ? formData.start : null,
+          end: formData.end && !isNaN(formData.end.getTime()) ? formData.end : null,
+        };
+
     if (!formData.title?.trim() || !startDate || !endDate) {
       toast({
         title: "Error",
@@ -652,31 +674,31 @@ export default function Appointments() {
 
     try {
       setIsSaving(true);
-      const assigneeId = canDelegate
-        ? resolveAssigneeUserId(formData.userId)
-        : user?.id ?? null;
+      const assigneeId = resolveAppointmentAssigneeId({
+        user: user ?? {},
+        isVendor: user?.role === "vendedor",
+        canDelegate,
+        formUserId: formData.userId,
+      });
       const assigneeSeller = assigneeId
         ? delegatableSellers.find((s) => s.id === assigneeId)
         : null;
 
-      const payload = {
-        title: formData.title.trim(),
-        description: formData.description?.trim() || null,
+      const payload = buildAppointmentWritePayload({
+        title: formData.title,
+        description: formData.description,
         type: formData.type || "meeting",
         status: formData.status || "programada",
-        scheduled_at: startDate.toISOString(),
-        end_at: endDate.toISOString(),
-        lead_id: formData.leadId ? formData.leadId : null,
-        vehicle_id: formData.vehicleId ? formData.vehicleId : null,
-        client_phone: formData.clientPhone?.trim() || null,
-        user_id: assigneeId,
-        branch_id: assigneeSeller?.branch_id ?? user?.branch_id ?? null,
-        tenant_id: user?.tenant_id ?? null,
-      } as Parameters<typeof appointmentService.update>[1] & {
-        title: string;
-        scheduled_at: string;
-        end_at: string;
-      };
+        start: startDate,
+        end: endDate,
+        leadId: formData.leadId,
+        vehicleId: formData.vehicleId,
+        clientPhone: formData.clientPhone,
+        assigneeId,
+        assigneeSeller,
+        tenantId: user?.tenant_id,
+        fallbackBranchId: user?.branch_id,
+      });
 
       if (selectedEvent) {
         await appointmentService.update(selectedEvent.id, payload);
@@ -722,8 +744,8 @@ export default function Appointments() {
     } catch (error) {
       console.error("Error al guardar evento:", error);
       toast({
-        title: "Error",
-        description: "Hubo un problema al guardar el evento",
+        title: "No se pudo guardar la cita",
+        description: formatAppointmentSaveError(error),
         variant: "destructive",
       });
     } finally {
