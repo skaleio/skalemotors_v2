@@ -35,6 +35,17 @@ function coerceLeadStatus(status: unknown, fallback: string): string {
   return fallback
 }
 
+/** Columna renombrada a `contact_state`; descartar payloads viejos o cacheados. */
+const DEPRECATED_LEAD_WRITE_KEYS = ['contact_urgency'] as const
+
+function sanitizeLeadWritePayload<T extends LeadInsert | LeadUpdate>(payload: T): T {
+  const next = { ...payload } as T & Record<string, unknown>
+  for (const key of DEPRECATED_LEAD_WRITE_KEYS) {
+    delete next[key]
+  }
+  return next as T
+}
+
 export const leadService = {
   // Buscar un lead por contacto (telefono/email) y sucursal
   async findByContact(params: { branchId?: string | null; phone?: string | null; email?: string | null }) {
@@ -258,10 +269,10 @@ export const leadService = {
 
   // Crear un nuevo lead
   async create(lead: LeadInsert) {
-    const row: LeadInsert = {
+    const row: LeadInsert = sanitizeLeadWritePayload({
       ...lead,
       status: coerceLeadStatus(lead.status, 'nuevo') as LeadInsert['status'],
-    }
+    })
     const { data, error } = await supabase
       .from('leads')
       .insert(row)
@@ -278,7 +289,7 @@ export const leadService = {
 
   // Actualizar un lead
   async update(id: string, updates: LeadUpdate) {
-    const payload: LeadUpdate = { ...updates }
+    const payload: LeadUpdate = sanitizeLeadWritePayload({ ...updates })
     if (Object.prototype.hasOwnProperty.call(payload, 'status') && payload.status !== undefined) {
       payload.status = coerceLeadStatus(payload.status, 'nuevo') as LeadUpdate['status']
     }
