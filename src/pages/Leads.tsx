@@ -61,7 +61,9 @@ import {
 } from "@/lib/crmLeadQuickAppointment";
 import {
   canSetLeadContactState,
+  contactStateClearPatch,
   contactStateToPriority,
+  shouldClearContactStateOnVendorExitNuevo,
   type LeadContactState,
 } from "@/lib/leadContactState";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
@@ -960,24 +962,37 @@ function LeadsImpl({ user }: { user: User }) {
     if (leadBelongsToCrmStage(currentLead.status, targetStage)) return;
 
     const nextStatus = crmStageToDbStatus(targetStage);
+    const clearContactState = shouldClearContactStateOnVendorExitNuevo(
+      user?.role,
+      currentLead.status,
+      nextStatus,
+    );
 
     // Optimistic update para evitar el doble intento
     queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
       if (!Array.isArray(current)) return current;
       return current.map((lead) =>
-        lead.id === leadId ? { ...lead, status: nextStatus } : lead
+        lead.id === leadId
+          ? {
+              ...lead,
+              status: nextStatus,
+              ...(clearContactState ? contactStateClearPatch() : {}),
+            }
+          : lead,
       );
     });
 
     try {
-      await leadService.update(leadId, { status: nextStatus as Lead["status"] });
+      const statusUpdates: Record<string, unknown> = { status: nextStatus };
+      if (clearContactState) Object.assign(statusUpdates, contactStateClearPatch());
+      await leadService.update(leadId, statusUpdates as any);
       queryClient.invalidateQueries({ queryKey: ["leads"] });
     } catch (error: any) {
       console.error("Error actualizando estado del lead:", error);
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({ variant: "destructive", title: "Error", description: error?.message || "No se pudo actualizar el estado del lead." });
     }
-  }, [leads, queryClient]);
+  }, [leads, queryClient, user?.role]);
 
   const vehicleLabel = formState.vehicle.trim();
 

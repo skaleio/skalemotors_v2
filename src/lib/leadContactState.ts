@@ -1,3 +1,5 @@
+import { getLeadCrmStageKey } from "@/lib/crmPipeline";
+
 export type LeadContactState = "prioridad" | "interesado" | "filtrar";
 
 export const LEAD_CONTACT_STATE_OPTIONS: LeadContactState[] = [
@@ -42,6 +44,60 @@ export function contactStateToPriority(state: LeadContactState): "baja" | "media
   return "media";
 }
 
+/** Roles que siempre ven la etiqueta si existe (supervisión / admin). */
+const CONTACT_STATE_SUPERVISOR_ROLES = new Set([
+  "admin",
+  "gerente",
+  "jefe_jefe",
+  "jefe_sucursal",
+  "financiero",
+]);
+
 export function canSetLeadContactState(role: string | null | undefined): boolean {
   return role === "admin";
+}
+
+/** Admin siempre; vendedor solo después de salir de Nuevo. */
+export function canAssignLeadContactState(
+  role: string | null | undefined,
+  leadStatus: string | null | undefined,
+): boolean {
+  if (canSetLeadContactState(role)) return true;
+  if (role === "vendedor") {
+    return getLeadCrmStageKey(leadStatus) !== "nuevo";
+  }
+  return false;
+}
+
+/** Vendedor ve la etiqueta del admin solo mientras el lead está en Nuevo. */
+export function shouldShowLeadContactStateBadge(
+  lead: { status?: string | null; contact_state?: string | null },
+  viewerRole: string | null | undefined,
+): boolean {
+  if (!parseLeadContactState(lead.contact_state)) return false;
+  if (viewerRole && CONTACT_STATE_SUPERVISOR_ROLES.has(viewerRole)) return true;
+  if (viewerRole === "vendedor") {
+    return getLeadCrmStageKey(lead.status) === "nuevo";
+  }
+  return Boolean(parseLeadContactState(lead.contact_state));
+}
+
+/** Al mover fuera de Nuevo, el vendedor pierde la etiqueta delegada y califica de nuevo. */
+export function shouldClearContactStateOnVendorExitNuevo(
+  actorRole: string | null | undefined,
+  fromStatus: string | null | undefined,
+  toStatus: string | null | undefined,
+): boolean {
+  if (actorRole !== "vendedor") return false;
+  return (
+    getLeadCrmStageKey(fromStatus) === "nuevo"
+    && getLeadCrmStageKey(toStatus) !== "nuevo"
+  );
+}
+
+export function contactStateClearPatch(): {
+  contact_state: null;
+  priority: "media";
+} {
+  return { contact_state: null, priority: "media" };
 }

@@ -53,8 +53,12 @@ import {
 } from "@/lib/crmPipeline";
 import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
 import {
+  canAssignLeadContactState,
   canSetLeadContactState,
+  contactStateClearPatch,
   contactStateToPriority,
+  shouldClearContactStateOnVendorExitNuevo,
+  shouldShowLeadContactStateBadge,
   type LeadContactState,
 } from "@/lib/leadContactState";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
@@ -360,6 +364,7 @@ const LeadCard = memo(function LeadCard({
   onExternalDrop,
   justLanded,
   showAssigneeBadge = false,
+  showContactStateBadge = true,
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
@@ -374,6 +379,8 @@ const LeadCard = memo(function LeadCard({
   justLanded?: boolean;
   /** Solo admin / supervisión: etiqueta con vendedor asignado en la esquina. */
   showAssigneeBadge?: boolean;
+  /** Etiqueta de calificación (vendedor: solo en columna Nuevo). */
+  showContactStateBadge?: boolean;
 }) {
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
@@ -385,7 +392,8 @@ const LeadCard = memo(function LeadCard({
   const assigneeName = assigneeCornerLabel(lead);
   const assigneeFullName = assigneeDisplayName(lead);
   const cornerAssigneeLabel = showAssigneeBadge && assigneeName ? assigneeName : null;
-  const hasContactState = lead.contact_state != null && lead.contact_state !== "";
+  const hasContactState =
+    showContactStateBadge && lead.contact_state != null && lead.contact_state !== "";
   const assigneeBorder = socio
     ? null
     : resolveAssigneeBorderColor({
@@ -481,7 +489,9 @@ const LeadCard = memo(function LeadCard({
           {socio}
         </span>
       ) : null}
-      <LeadContactStateBadge value={lead.contact_state} variant="corner" />
+      {showContactStateBadge ? (
+        <LeadContactStateBadge value={lead.contact_state} variant="corner" />
+      ) : null}
       <div
         className={cn(
           "font-medium truncate",
@@ -1080,12 +1090,16 @@ export default function CRM() {
         }
       }
 
+      const nextDbStatus = crmStageToDbStatus(
+        (isEditingForm ? editForm.status : leadStatus) as CrmStageKey,
+      );
+
       const updates: Record<string, unknown> = isEditingForm
         ? {
             full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
             phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
             email: editForm.email.trim() || null,
-            status: crmStageToDbStatus(editForm.status),
+            status: nextDbStatus,
             region: editForm.region.trim() || null,
             payment_type: editForm.payment_type.trim() || null,
             budget: editForm.budget.trim() || null,
@@ -1095,16 +1109,22 @@ export default function CRM() {
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
             contact_attempts: editForm.contact_attempts,
-            ...(canSetContactState
-              ? {
-                  contact_state: editForm.contact_state,
-                  ...(editForm.contact_state != null
-                    ? { priority: contactStateToPriority(editForm.contact_state) }
-                    : {}),
-                }
-              : {}),
           }
-        : { status: crmStageToDbStatus(leadStatus) };
+        : { status: nextDbStatus };
+
+      if (
+        shouldClearContactStateOnVendorExitNuevo(user?.role, editingLead.status, nextDbStatus)
+      ) {
+        Object.assign(updates, contactStateClearPatch());
+      } else if (
+        isEditingForm
+        && canAssignLeadContactState(user?.role, editForm.status)
+      ) {
+        updates.contact_state = editForm.contact_state;
+        if (editForm.contact_state != null) {
+          updates.priority = contactStateToPriority(editForm.contact_state);
+        }
+      }
 
       if (
         isEditingForm
@@ -1147,6 +1167,7 @@ export default function CRM() {
     editForm,
     queryClient,
     closeEditDialog,
+    user?.role,
     askConfirm,
     openCloseDealForLead,
     openScheduleForLead,
@@ -1324,13 +1345,27 @@ export default function CRM() {
       const nextStatus = crmStageToDbStatus(stageKey) as Lead["status"];
       const previousStatus = lead.status;
       setMovingLeadId(leadId);
+      const clearContactState = shouldClearContactStateOnVendorExitNuevo(
+        user?.role,
+        previousStatus,
+        nextStatus,
+      );
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
-        return current.map((l: Lead) => (l.id === leadId ? { ...l, status: nextStatus } : l));
+        return current.map((l: Lead) => {
+          if (l.id !== leadId) return l;
+          return {
+            ...l,
+            status: nextStatus,
+            ...(clearContactState ? contactStateClearPatch() : {}),
+          };
+        });
       });
 
       try {
-        const updated = await leadService.update(leadId, { status: nextStatus });
+        const dropUpdates: Record<string, unknown> = { status: nextStatus };
+        if (clearContactState) Object.assign(dropUpdates, contactStateClearPatch());
+        const updated = await leadService.update(leadId, dropUpdates as any);
         queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
           if (!Array.isArray(current)) return current;
           return current.map((l) => (l.id === updated.id ? { ...l, ...updated } : l));
@@ -1361,7 +1396,7 @@ export default function CRM() {
         setDraggingLeadId(null);
       }
     },
-    [leads, filteredLeads, queryClient, openCloseDealForLead, openScheduleForLead, showPipelineMoveNotice, askConfirm],
+    [leads, filteredLeads, queryClient, openCloseDealForLead, openScheduleForLead, showPipelineMoveNotice, askConfirm, user?.role],
   );
 
   const handleLeadScheduled = useCallback(
@@ -1965,6 +2000,7 @@ export default function CRM() {
                           key={lead.id}
                           lead={lead}
                           showAssigneeBadge={canSupervise}
+                          showContactStateBadge={shouldShowLeadContactStateBadge(lead, user?.role)}
                           draggable={!loading && movingLeadId !== lead.id}
                           isDragging={draggingLeadId === lead.id}
                           justLanded={landedLeadId === lead.id}
@@ -2237,11 +2273,27 @@ export default function CRM() {
                       disabled={isUpdating}
                       onChange={(next) => setEditForm((f) => ({ ...f, contact_state: next }))}
                     />
-                  ) : editingLead.contact_state ? (
+                  ) : shouldShowLeadContactStateBadge(
+                    {
+                      status: crmStageToDbStatus(editForm.status as CrmStageKey),
+                      contact_state: editForm.contact_state,
+                    },
+                    user?.role,
+                  ) ? (
                     <div className="grid gap-1.5">
-                      <p className="text-sm text-muted-foreground">Etiqueta de calificación</p>
-                      <LeadContactStateBadge value={editingLead.contact_state} />
+                      <p className="text-sm text-muted-foreground">Prioridad asignada por el equipo</p>
+                      <LeadContactStateBadge value={editForm.contact_state} />
+                      <p className="text-[11px] text-muted-foreground">
+                        Al mover el lead a otra etapa podrás calificarlo según tu llamada.
+                      </p>
                     </div>
+                  ) : canAssignLeadContactState(user?.role, editForm.status) ? (
+                    <LeadContactStateSelect
+                      value={editForm.contact_state}
+                      localOnly
+                      disabled={isUpdating}
+                      onChange={(next) => setEditForm((f) => ({ ...f, contact_state: next }))}
+                    />
                   ) : null}
                   <LeadNotesSection
                     ref={leadNotesRef}
@@ -2400,11 +2452,30 @@ export default function CRM() {
                         )
                       }
                     />
-                  ) : editingLead.contact_state ? (
+                  ) : shouldShowLeadContactStateBadge(editingLead, user?.role) ? (
                     <div className="grid gap-1.5">
-                      <p className="text-sm text-muted-foreground">Etiqueta de calificación</p>
+                      <p className="text-sm text-muted-foreground">Prioridad asignada por el equipo</p>
                       <LeadContactStateBadge value={editingLead.contact_state} />
+                      <p className="text-[11px] text-muted-foreground">
+                        Visible solo en Nuevo. Muévelo de etapa para calificarlo tú según la llamada.
+                      </p>
                     </div>
+                  ) : canAssignLeadContactState(user?.role, editingLead.status) ? (
+                    <LeadContactStateSelect
+                      leadId={editingLead.id}
+                      value={editingLead.contact_state}
+                      onChange={(next) =>
+                        setEditingLead((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                contact_state: next,
+                                ...(next ? { priority: contactStateToPriority(next) } : {}),
+                              }
+                            : prev,
+                        )
+                      }
+                    />
                   ) : null}
                   <CrmLeadContactTrackingBlock
                     leadId={editingLead.id}

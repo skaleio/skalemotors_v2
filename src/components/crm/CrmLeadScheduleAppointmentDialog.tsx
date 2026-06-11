@@ -47,6 +47,10 @@ import {
   useBranchSellersOptionsFromUser,
 } from "@/lib/delegatableSellersScope";
 import {
+  contactStateClearPatch,
+  shouldClearContactStateOnVendorExitNuevo,
+} from "@/lib/leadContactState";
+import {
   buildAppointmentWritePayload,
   formatAppointmentSaveError,
   resolveAppointmentAssigneeId,
@@ -382,7 +386,11 @@ export function CrmLeadScheduleAppointmentDialog({
 
       let updatedLead = lead;
       try {
-        updatedLead = await leadService.update(lead.id, { status: "agendado" });
+        const scheduleLeadUpdates: Record<string, unknown> = { status: "agendado" };
+        if (shouldClearContactStateOnVendorExitNuevo(user?.role, previousStatus, "agendado")) {
+          Object.assign(scheduleLeadUpdates, contactStateClearPatch());
+        }
+        updatedLead = await leadService.update(lead.id, scheduleLeadUpdates as any);
       } catch (leadErr) {
         console.error("[CrmLeadScheduleAppointmentDialog] lead status", leadErr);
         toast({
