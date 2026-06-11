@@ -16,9 +16,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { LeadContactUrgencyBadge } from "@/components/leads/LeadContactUrgencyBadge";
+import { LeadContactUrgencyPicker } from "@/components/leads/LeadContactUrgencyPicker";
+import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
-import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
+import { CrmLeadScheduleAppointmentDialog } from "@/components/crm/CrmLeadScheduleAppointmentDialog";
 import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
 import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
@@ -48,6 +51,7 @@ import {
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
 import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
+import { contactUrgencyToPriority } from "@/lib/leadContactUrgency";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import {
   filterLeadsForVendorView,
@@ -55,13 +59,6 @@ import {
   leadsBranchIdForQuery,
 } from "@/lib/leadsScope";
 import { notifyDealClosed } from "@/lib/notifications/dealClosed";
-import {
-  formatLeadScheduleDisplayLine,
-  parseCrmLeadQuickAppointmentMotive,
-  pickActiveCrmLeadQuickAppointment,
-  type AppointmentRow,
-} from "@/lib/crmLeadQuickAppointment";
-import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { supabase } from "@/lib/supabase";
@@ -72,7 +69,6 @@ import { CheckCircle2, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Tar
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { format, parseISO } from "date-fns";
 import { Link, useLocation } from "react-router-dom";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
@@ -243,6 +239,7 @@ function buildCrmLeadEditForm(lead: Lead) {
     status: safePipelineSelectValue(lead.status),
     assigned_to: lead.assigned_to ?? null,
     contact_attempts: lead.contact_attempts ?? 0,
+    contact_urgency: lead.contact_urgency ?? null,
   };
 }
 
@@ -350,7 +347,6 @@ function cancelLeadConfirmOptions(leadName: string): ConfirmOptions {
 const LeadCard = memo(function LeadCard({
   lead,
   onClick,
-  onEditClick,
   draggable,
   isDragging,
   onDragStart,
@@ -362,8 +358,6 @@ const LeadCard = memo(function LeadCard({
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
-  /** Si existe (p. ej. vendedor), el lápiz abre directo en modo edición. */
-  onEditClick?: () => void;
   draggable?: boolean;
   isDragging?: boolean;
   onDragStart?: (e: DragEvent) => void;
@@ -434,16 +428,12 @@ const LeadCard = memo(function LeadCard({
       onDrop={(e) => {
         onExternalDrop?.(e);
       }}
-      onClick={(e) => {
-        const t = e.target as HTMLElement;
-        if (t.closest("[data-crm-card-open-lead]")) return;
-        handleCardOpen();
-      }}
+      onClick={handleCardOpen}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardOpen()}
       aria-grabbed={isDragging ? true : undefined}
       title={draggable ? "Arrastra a otra columna o haz clic para abrir" : undefined}
       className={cn(
-        "group relative rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
+        "relative rounded-lg border bg-card px-3 py-2 text-sm shadow-sm",
         assigneeBorder && "border-l-[3px]",
         "transition-[transform,opacity,box-shadow,ring] duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
@@ -483,53 +473,27 @@ const LeadCard = memo(function LeadCard({
           {socio}
         </span>
       ) : null}
-      <div className={cn("font-medium", (cornerAssigneeLabel || socio) && "pr-[4.75rem]")}>
-        {lead.full_name || "Sin nombre"}
+      <div className={cn("flex items-start justify-between gap-2", (cornerAssigneeLabel || socio) && "pr-[4.75rem]")}>
+        <div className="min-w-0 font-medium truncate">{lead.full_name || "Sin nombre"}</div>
+        <LeadContactUrgencyBadge value={lead.contact_urgency} className="shrink-0" />
       </div>
       <div className="text-muted-foreground text-[13px]">
         {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
       </div>
-      <div className="mt-1.5 flex items-end justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {showContactAttemptsSemaforo ? (
-            <ContactAttemptsBar
-              leadId={lead.id}
-              value={lead.contact_attempts ?? 0}
-              size="sm"
-              showLabel={false}
-            />
-          ) : (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Contactos {attempts}/3
-            </span>
-          )}
-        </div>
-        <div
-          className={cn(
-            "flex shrink-0 items-center gap-1 transition-opacity duration-200",
-            "pointer-events-none opacity-0",
-            "group-hover:pointer-events-auto group-hover:opacity-100",
-            "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
-            "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
-          )}
-        >
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          data-crm-card-open-lead
-          onClick={(e) => {
-            e.stopPropagation();
-            if (Date.now() - lastDragEndRef.current < 400) return;
-            (onEditClick ?? onClick)();
-          }}
-          aria-label={onEditClick ? "Editar lead" : "Abrir ficha del lead"}
-          title={onEditClick ? "Editar datos del lead" : "Abrir ficha para ver o editar datos"}
-        >
-          <Pencil className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-        </div>
+      <LeadDelegationAdminBlock lead={lead} variant="inline" className="mt-1" />
+      <div className="mt-1.5">
+        {showContactAttemptsSemaforo ? (
+          <ContactAttemptsBar
+            leadId={lead.id}
+            value={lead.contact_attempts ?? 0}
+            size="sm"
+            showLabel={false}
+          />
+        ) : (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            Contactos {attempts}/3
+          </span>
+        )}
       </div>
       {label && styles && (
         <div className="mt-2">
@@ -662,6 +626,7 @@ export default function CRM() {
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
     contact_attempts: 0,
+    contact_urgency: null as number | null,
   });
 
   const crmAssigneeQuery = useBranchSellersOptionsFromUser(user, {
@@ -704,17 +669,18 @@ export default function CRM() {
   }, []);
 
   const openEditDialog = useCallback((lead: LeadWithAssignee, opts?: { editMode?: boolean }) => {
-    setEditingLead(lead);
-    const status = safePipelineSelectValue(lead.status);
+    const fresh = (leads.find((l) => l.id === lead.id) ?? lead) as LeadWithAssignee;
+    setEditingLead(fresh);
+    const status = safePipelineSelectValue(fresh.status);
     setLeadStatus(status);
     if (opts?.editMode) {
-      setEditForm(buildCrmLeadEditForm(lead));
+      setEditForm(buildCrmLeadEditForm(fresh));
       setIsEditingForm(true);
     } else {
-    setIsEditingForm(false);
+      setIsEditingForm(false);
     }
     setShowEditDialog(true);
-  }, []);
+  }, [leads]);
 
   const closeEditDialog = useCallback(() => {
     setShowEditDialog(false);
@@ -850,11 +816,6 @@ export default function CRM() {
     setLeadStatus(safePipelineSelectValue(editingLead.status));
     setIsEditingForm(true);
   }, [editingLead]);
-
-  const openLeadForVendorEdit = useCallback(
-    (lead: LeadWithAssignee) => openEditDialog(lead, { editMode: true }),
-    [openEditDialog],
-  );
 
   const stages = CRM_PIPELINE_STAGES;
 
@@ -1020,10 +981,6 @@ export default function CRM() {
 
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [scheduleLead, setScheduleLead] = useState<Lead | null>(null);
-  const [scheduleDayKey, setScheduleDayKey] = useState<string | null>(null);
-  const [scheduleMotive, setScheduleMotive] = useState("");
-  const [scheduleAppointmentId, setScheduleAppointmentId] = useState<string | null>(null);
-  const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
 
   const [showCloseDealDialog, setShowCloseDealDialog] = useState(false);
   const [closeDealLead, setCloseDealLead] = useState<Lead | null>(null);
@@ -1050,31 +1007,11 @@ export default function CRM() {
   const closeScheduleDialog = useCallback(() => {
     setShowScheduleDialog(false);
     setScheduleLead(null);
-    setScheduleDayKey(null);
-    setScheduleMotive("");
-    setScheduleAppointmentId(null);
   }, []);
 
-  const openScheduleForLead = useCallback(async (lead: Lead) => {
+  const openScheduleForLead = useCallback((lead: Lead) => {
     setScheduleLead(lead);
     setShowScheduleDialog(true);
-    try {
-      const rows = await appointmentService.getAll({ leadId: lead.id });
-      const appt = pickActiveCrmLeadQuickAppointment(rows as AppointmentRow[]);
-      if (appt) {
-        setScheduleDayKey(format(parseISO(appt.scheduled_at), "yyyy-MM-dd"));
-        setScheduleMotive(parseCrmLeadQuickAppointmentMotive(appt.description));
-        setScheduleAppointmentId(appt.id);
-      } else {
-        setScheduleDayKey(null);
-        setScheduleMotive("");
-        setScheduleAppointmentId(null);
-      }
-    } catch {
-      setScheduleDayKey(null);
-      setScheduleMotive("");
-      setScheduleAppointmentId(null);
-    }
   }, []);
 
   const openCloseDealForLead = useCallback(
@@ -1142,6 +1079,10 @@ export default function CRM() {
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
             contact_attempts: editForm.contact_attempts,
+            contact_urgency: editForm.contact_urgency,
+            ...(editForm.contact_urgency != null
+              ? { priority: contactUrgencyToPriority(editForm.contact_urgency) }
+              : {}),
           }
         : { status: crmStageToDbStatus(leadStatus) };
 
@@ -1403,40 +1344,11 @@ export default function CRM() {
     [leads, filteredLeads, queryClient, openCloseDealForLead, openScheduleForLead, showPipelineMoveNotice, askConfirm],
   );
 
-  const handleConfirmSchedule = useCallback(async () => {
-    if (!scheduleLead || !user) return;
-    if (!scheduleDayKey?.trim()) {
-      toast({
-        title: "Falta la fecha",
-        description: "Selecciona el día de la cita en el calendario.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const leadId = scheduleLead.id;
-    const previousStatus = scheduleLead.status ?? null;
-    setIsSubmittingSchedule(true);
-    setMovingLeadId(leadId);
-
-    queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
-      if (!Array.isArray(current)) return current;
-      return current.map((l: Lead) => (l.id === leadId ? { ...l, status: "agendado" } : l));
-    });
-
-    try {
-      await appointmentService.upsertCrmLeadQuickAppointment({
-        leadId,
-        leadDisplayName: scheduleLead.full_name ?? "Lead",
-        tenantId: scheduleLead.tenant_id ?? user.tenant_id ?? null,
-        branchId: scheduleLead.branch_id ?? user.branch_id ?? null,
-        userId: scheduleLead.assigned_to ?? user.id ?? null,
-        existingId: scheduleAppointmentId,
-        dayKey: scheduleDayKey,
-        motive: scheduleMotive,
-      });
-
-      const updated = await leadService.update(leadId, { status: "agendado" });
+  const handleLeadScheduled = useCallback(
+    async (updated: Lead, previousStatus: string | null) => {
+      const leadId = updated.id;
+      const sourceLead = scheduleLead;
+      setMovingLeadId(leadId);
 
       if (editingLead?.id === leadId) {
         setEditingLead((prev) => (prev ? { ...prev, ...updated } : prev));
@@ -1453,7 +1365,9 @@ export default function CRM() {
       await queryClient.invalidateQueries({ queryKey: ["leads"] });
       await queryClient.invalidateQueries({ queryKey: ["seller-engagement"] });
 
-      showPipelineMoveNotice(scheduleLead, previousStatus, "agendado");
+      if (sourceLead) {
+        showPipelineMoveNotice(sourceLead, previousStatus, "agendado");
+      }
       if (landHighlightTimerRef.current) clearTimeout(landHighlightTimerRef.current);
       setLandedLeadId(leadId);
       landHighlightTimerRef.current = setTimeout(() => {
@@ -1462,36 +1376,10 @@ export default function CRM() {
       }, 700);
 
       closeScheduleDialog();
-      toast({
-        title: "Cita agendada",
-        description: `${formatLeadScheduleDisplayLine(
-          new Date(`${scheduleDayKey}T10:00:00`).toISOString(),
-          scheduleMotive,
-        )} · visible en Citas`,
-      });
-    } catch (err) {
-      console.error("[CRM] handleConfirmSchedule", err);
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast({
-        title: "No se pudo agendar la cita",
-        description: describeSupabaseError(err),
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmittingSchedule(false);
       setMovingLeadId(null);
-    }
-  }, [
-    scheduleLead,
-    scheduleDayKey,
-    scheduleMotive,
-    scheduleAppointmentId,
-    user,
-    editingLead?.id,
-    queryClient,
-    closeScheduleDialog,
-    showPipelineMoveNotice,
-  ]);
+    },
+    [scheduleLead, editingLead?.id, queryClient, closeScheduleDialog, showPipelineMoveNotice],
+  );
 
   const handleConfirmCloseDeal = useCallback(async () => {
     if (!closeDealLead) return;
@@ -2056,7 +1944,6 @@ export default function CRM() {
                         onDragStart={(e) => handleLeadDragStart(e, lead.id)}
                         onDragEnd={handleLeadDragEnd}
                         onClick={() => openEditDialog(lead)}
-                        onEditClick={user?.role === "vendedor" ? () => openLeadForVendorEdit(lead) : undefined}
                         onExternalDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -2078,57 +1965,15 @@ export default function CRM() {
         })}
       </div>
 
-      <Dialog
+      <CrmLeadScheduleAppointmentDialog
         open={showScheduleDialog}
         onOpenChange={(open) => {
-          if (!open && !isSubmittingSchedule) closeScheduleDialog();
+          if (!open) closeScheduleDialog();
+          else setShowScheduleDialog(true);
         }}
-      >
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Agendar cita</DialogTitle>
-            <DialogDescription>
-              {scheduleLead
-                ? `Programa la visita o llamada para ${scheduleLead.full_name || "este lead"}. La cita quedará en el módulo Citas.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {scheduleLead && (
-            <LeadCrmQuickAppointmentPicker
-              id="crm-schedule-day"
-              dayKey={scheduleDayKey}
-              motive={scheduleMotive}
-              onDayChange={setScheduleDayKey}
-              onMotiveChange={setScheduleMotive}
-              disabled={isSubmittingSchedule}
-            />
-          )}
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeScheduleDialog}
-              disabled={isSubmittingSchedule}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleConfirmSchedule()}
-              disabled={isSubmittingSchedule || !scheduleDayKey}
-            >
-              {isSubmittingSchedule ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando…
-                </>
-              ) : (
-                "Confirmar cita"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        lead={scheduleLead}
+        onScheduled={(updated, previousStatus) => void handleLeadScheduled(updated, previousStatus)}
+      />
 
       <Dialog
         open={showCloseDealDialog}
@@ -2270,6 +2115,15 @@ export default function CRM() {
                     assigned_user?: { full_name?: string | null; email?: string | null } | null;
                   }).assigned_user?.full_name ?? null}
                   leadBranchId={editingLead.branch_id}
+                  onDelegated={(updated) => {
+                    const row = updated as LeadWithAssignee;
+                    setEditingLead((prev) =>
+                      prev?.id === updated.id
+                        ? { ...prev, ...updated, assigned_user: row.assigned_user ?? prev.assigned_user }
+                        : prev,
+                    );
+                    void queryClient.invalidateQueries({ queryKey: ["leads"] });
+                  }}
                 />
               <Button
                 type="button"
@@ -2317,6 +2171,12 @@ export default function CRM() {
                     value={editForm.contact_attempts}
                     localOnly
                     onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
+                  />
+                  <LeadContactUrgencyPicker
+                    value={editForm.contact_urgency}
+                    localOnly
+                    disabled={isUpdating}
+                    onChange={(next) => setEditForm((f) => ({ ...f, contact_urgency: next }))}
                   />
                   <LeadNotesSection
                     ref={leadNotesRef}
@@ -2448,6 +2308,7 @@ export default function CRM() {
                 </>
               ) : (
                 <>
+                  <LeadDelegationAdminBlock lead={editingLead as LeadWithAssignee} />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">Nombre</p>
@@ -2458,6 +2319,15 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
+                  <LeadContactUrgencyPicker
+                    leadId={editingLead.id}
+                    value={editingLead.contact_urgency}
+                    onChange={(next) =>
+                      setEditingLead((prev) =>
+                        prev ? { ...prev, contact_urgency: next, priority: contactUrgencyToPriority(next) } : prev,
+                      )
+                    }
+                  />
                   <CrmLeadContactTrackingBlock
                     leadId={editingLead.id}
                     value={editingLead.contact_attempts ?? 0}

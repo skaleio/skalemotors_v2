@@ -1,3 +1,12 @@
+import { AppointmentDateTimeField } from "@/components/appointments/AppointmentDateTimeField";
+import {
+  appointmentDialogContentClass,
+  appointmentDialogFooterClass,
+  appointmentDialogScrollClass,
+  appointmentFormDateBannerClass,
+  appointmentFormSectionClass,
+  appointmentFormShellClass,
+} from "@/components/appointments/appointmentFormStyles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +50,7 @@ import {
   resolveAppointmentSupervisionVendorScope,
   resolveSupervisedAppointmentQueryFilters,
 } from "@/lib/appointmentCalendarScope";
+import { parseTimeInput, safeFormatTime, setTimeOnDate } from "@/lib/appointmentDateTime";
 import { appointmentService } from "@/lib/services/appointments";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -219,38 +229,6 @@ function safeDate(value: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function safeFormatDateTime(d: Date | undefined | null): string {
-  if (!d || isNaN(d.getTime())) return "";
-  return format(d, "yyyy-MM-dd'T'HH:mm", { locale: es });
-}
-
-/** Formato HH:mm para mostrar/editar hora (24h). */
-function safeFormatTime(d: Date | undefined | null): string {
-  if (!d || isNaN(d.getTime())) return "";
-  return format(d, "HH:mm");
-}
-
-/** Parsea texto escrito por el usuario a "HH:mm" (24h). Acepta "16", "16:00", "16:30", "1630". */
-function parseTimeInput(input: string): string | null {
-  const t = input.trim().replace(/,/, ".");
-  if (!t) return null;
-  const withColon = t.includes(":") ? t : t.replace(/(\d{1,2})(\d{2})?$/, (_, h, m) => (m ? `${h}:${m}` : `${h}:00`));
-  const [hStr, mStr] = withColon.split(":");
-  const h = parseInt(hStr ?? "0", 10);
-  const m = Math.min(59, parseInt(mStr ?? "0", 10) || 0);
-  if (h < 0 || h > 23 || Number.isNaN(h)) return null;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-/** Actualiza solo la hora de una fecha (mantiene el día). timeStr en formato HH:mm. */
-function setTimeOnDate(date: Date, timeStr: string): Date {
-  const parsed = parseTimeInput(timeStr) ?? "00:00";
-  const [h = 0, m = 0] = parsed.split(":").map(Number);
-  const out = new Date(date);
-  out.setHours(h, m, 0, 0);
-  return out;
-}
-
 export default function Appointments() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -258,6 +236,8 @@ export default function Appointments() {
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppointmentId = searchParams.get("id");
   const handledDeepLinkRef = useRef<string | null>(null);
+  const appointmentDialogRef = useRef<HTMLDivElement | null>(null);
+  const [appointmentDialogEl, setAppointmentDialogEl] = useState<HTMLDivElement | null>(null);
 
   const role = user?.role;
   const tenantId = user?.tenant_id ?? undefined;
@@ -1026,8 +1006,8 @@ export default function Appointments() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="border-b">
+        <Card className="lg:col-span-2 overflow-hidden">
+          <CardHeader className="border-b shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -1049,9 +1029,10 @@ export default function Appointments() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div style={{ height: "600px" }}>
+          <CardContent className="pt-6 pb-0">
+            <div className="skale-appointments-calendar-shell h-[580px] min-h-[480px] overflow-hidden">
               <BigCalendar
+                className="skale-appointments-calendar h-full"
                 localizer={localizer}
                 events={calendarEvents}
                 startAccessor="start"
@@ -1083,6 +1064,90 @@ export default function Appointments() {
               />
             </div>
           </CardContent>
+
+          <Collapsible open={cancelledSectionOpen} onOpenChange={setCancelledSectionOpen}>
+            <div className="border-t border-border/80 bg-card">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                      <span className="text-base font-semibold">Citas canceladas</span>
+                      <Badge variant="secondary" className="text-[10px] h-5">
+                        {cancelledEvents.length}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      No aparecen en el calendario. Abrí este apartado para ver fecha y horario.
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                      cancelledSectionOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="border-t border-border/60 px-6 pt-4 pb-6">
+                  {cancelledEvents.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <p className="text-sm font-medium text-foreground">Sin citas canceladas</p>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                        Cuando canceles una visita, va a quedar registrada acá con su horario original.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {cancelledEvents.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => openEventView(event)}
+                          className="w-full rounded-lg border border-border/80 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/50"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex min-w-[72px] flex-col items-start gap-0.5 pt-0.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                {format(event.start, "EEE d MMM", { locale: es })}
+                              </span>
+                              <span className="skale-num text-sm font-semibold tabular-nums text-destructive/90">
+                                {format(event.start, "HH:mm")} – {format(event.end, "HH:mm")}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`event-dot ${eventTypeClass[event.type]} opacity-60`} />
+                                <span className="text-xs text-muted-foreground">
+                                  {eventTypeLabels[event.type]}
+                                </span>
+                                <Badge variant="destructive" className="text-[10px] h-5">
+                                  Cancelada
+                                </Badge>
+                              </div>
+                              <p className="truncate text-sm font-medium">{event.title}</p>
+                              {event.clientName ? (
+                                <p className="truncate text-xs text-muted-foreground">{event.clientName}</p>
+                              ) : null}
+                              {event.assigneeName ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {event.assigneeName}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         </Card>
 
         {/* Upcoming Events */}
@@ -1158,90 +1223,6 @@ export default function Appointments() {
         </Card>
       </div>
 
-      <Collapsible open={cancelledSectionOpen} onOpenChange={setCancelledSectionOpen}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left transition-colors hover:bg-muted/40"
-            >
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                  <span className="text-base font-semibold">Citas canceladas</span>
-                  <Badge variant="secondary" className="text-[10px] h-5">
-                    {cancelledEvents.length}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  No aparecen en el calendario. Abrí este apartado para ver fecha y horario.
-                </p>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-                  cancelledSectionOpen && "rotate-180",
-                )}
-              />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="border-t pt-4 pb-6">
-              {cancelledEvents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-sm font-medium text-foreground">Sin citas canceladas</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                    Cuando canceles una visita, va a quedar registrada acá con su horario original.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {cancelledEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={() => openEventView(event)}
-                      className="w-full rounded-lg border border-border/80 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex min-w-[72px] flex-col items-start gap-0.5 pt-0.5">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            {format(event.start, "EEE d MMM", { locale: es })}
-                          </span>
-                          <span className="skale-num text-sm font-semibold tabular-nums text-destructive/90">
-                            {format(event.start, "HH:mm")} – {format(event.end, "HH:mm")}
-                          </span>
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`event-dot ${eventTypeClass[event.type]} opacity-60`} />
-                            <span className="text-xs text-muted-foreground">
-                              {eventTypeLabels[event.type]}
-                            </span>
-                            <Badge variant="destructive" className="text-[10px] h-5">
-                              Cancelada
-                            </Badge>
-                          </div>
-                          <p className="truncate text-sm font-medium">{event.title}</p>
-                          {event.clientName ? (
-                            <p className="truncate text-xs text-muted-foreground">{event.clientName}</p>
-                          ) : null}
-                          {event.assigneeName ? (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {event.assigneeName}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
       {/* Event Dialog */}
       <Dialog
         open={isDialogOpen}
@@ -1250,7 +1231,14 @@ export default function Appointments() {
           else setIsDialogOpen(true);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          ref={(el) => {
+            appointmentDialogRef.current = el;
+            setAppointmentDialogEl(el ?? null);
+          }}
+          className={appointmentDialogContentClass}
+        >
+          <div className={appointmentDialogScrollClass}>
           <DialogHeader>
             <DialogTitle>
               {dialogMode === "day-pick"
@@ -1283,7 +1271,7 @@ export default function Appointments() {
                     key={event.id}
                     type="button"
                     onClick={() => openEventView(event)}
-                    className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent/40"
+                    className="flex w-full items-start gap-3 rounded-2xl border border-border/60 p-3 text-left transition-colors hover:bg-accent/40"
                   >
                     <span className="skale-num shrink-0 text-sm font-semibold tabular-nums">
                       {format(event.start, "HH:mm")}
@@ -1342,7 +1330,7 @@ export default function Appointments() {
                 </div>
               </div>
               {(selectedEvent.clientName || selectedEvent.clientPhone) && (
-                <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                <div className="rounded-2xl border border-border/50 bg-muted/25 p-4 space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Cliente / lead
                   </p>
@@ -1363,7 +1351,7 @@ export default function Appointments() {
                   <p className="text-base">{selectedEvent.vehicleInfo}</p>
                 </div>
               ) : null}
-              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+              <div className="rounded-2xl border border-border/50 bg-muted/25 p-4 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <UserCheck className="h-3.5 w-3.5" />
                   Vendedor asignado
@@ -1417,15 +1405,15 @@ export default function Appointments() {
               {selectedEvent.description?.trim() ? (
                 <div>
                   <p className="text-sm text-muted-foreground">Motivo / notas</p>
-                  <p className="text-base whitespace-pre-wrap rounded-md border bg-muted/20 p-3">
+                  <p className="text-base whitespace-pre-wrap rounded-2xl border border-border/50 bg-muted/20 p-4">
                     {selectedEvent.description.trim()}
                   </p>
                 </div>
               ) : null}
             </div>
           ) : (
-          <div className="space-y-4 py-4">
-            <div className="space-y-2 rounded-lg border border-border/80 bg-muted/25 p-3">
+          <div className={appointmentFormShellClass}>
+            <div className={appointmentFormSectionClass}>
               <Label htmlFor="appointment-lead">Lead</Label>
               <Select
                 value={formData.leadId || "none"}
@@ -1500,11 +1488,14 @@ export default function Appointments() {
 
             {openedFromSlot ? (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Fecha: {formData.start && !isNaN(formData.start.getTime())
-                    ? format(formData.start, "EEEE d 'de' MMMM yyyy", { locale: es })
-                    : "—"}
-                </p>
+                <div className={appointmentFormDateBannerClass}>
+                  <p className="text-xs font-medium text-muted-foreground">Fecha</p>
+                  <p className="text-sm font-semibold capitalize">
+                    {formData.start && !isNaN(formData.start.getTime())
+                      ? format(formData.start, "EEEE d 'de' MMMM yyyy", { locale: es })
+                      : "—"}
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="start-time">Hora Inicio * (24h, ej. 16:00)</Label>
@@ -1563,30 +1554,55 @@ export default function Appointments() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start">Fecha y Hora Inicio *</Label>
-                  <Input
-                    id="start"
-                    type="datetime-local"
-                    value={safeFormatDateTime(formData.start)}
-                    onChange={(e) =>
-                      setFormData({ ...formData, start: new Date(e.target.value) })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="end">Fecha y Hora Fin *</Label>
-                  <Input
-                    id="end"
-                    type="datetime-local"
-                    value={safeFormatDateTime(formData.end)}
-                    onChange={(e) =>
-                      setFormData({ ...formData, end: new Date(e.target.value) })
-                    }
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <AppointmentDateTimeField
+                  id="start"
+                  label="Fecha y hora inicio *"
+                  value={
+                    formData.start && !isNaN(formData.start.getTime())
+                      ? formData.start
+                      : undefined
+                  }
+                  portalContainer={appointmentDialogEl}
+                  onChange={(start) => {
+                    setFormData((prev) => {
+                      const prevEnd =
+                        prev.end && !isNaN(prev.end.getTime())
+                          ? prev.end
+                          : new Date(start.getTime() + 60 * 60 * 1000);
+                      return {
+                        ...prev,
+                        start,
+                        end:
+                          prevEnd.getTime() <= start.getTime()
+                            ? new Date(start.getTime() + 60 * 60 * 1000)
+                            : prevEnd,
+                      };
+                    });
+                  }}
+                />
+                <AppointmentDateTimeField
+                  id="end"
+                  label="Fecha y hora fin *"
+                  value={
+                    formData.end && !isNaN(formData.end.getTime()) ? formData.end : undefined
+                  }
+                  portalContainer={appointmentDialogEl}
+                  onChange={(end) => {
+                    setFormData((prev) => {
+                      const prevStart =
+                        prev.start && !isNaN(prev.start.getTime()) ? prev.start : end;
+                      return {
+                        ...prev,
+                        end,
+                        start:
+                          prevStart.getTime() >= end.getTime()
+                            ? new Date(end.getTime() - 60 * 60 * 1000)
+                            : prevStart,
+                      };
+                    });
+                  }}
+                />
               </div>
             )}
 
@@ -1686,8 +1702,9 @@ export default function Appointments() {
             </div>
           </div>
           )}
+          </div>
 
-          <DialogFooter className="flex items-center justify-between gap-2">
+          <DialogFooter className={appointmentDialogFooterClass}>
             {dialogMode === "day-pick" ? (
               <Button variant="outline" className="ml-auto" onClick={closeAppointmentDialog}>
                 Cerrar

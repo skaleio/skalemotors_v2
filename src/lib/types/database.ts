@@ -1028,7 +1028,9 @@ export interface Database {
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority: 'baja' | 'media' | 'alta'
+          contact_urgency: number | null
           assigned_to: string | null
+          assigned_at: string | null
           crm_seguimiento_socio: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id: string | null
           created_by: string | null
@@ -1071,7 +1073,9 @@ export interface Database {
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority?: 'baja' | 'media' | 'alta'
+          contact_urgency?: number | null
           assigned_to?: string | null
+          assigned_at?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id?: string | null
           created_by?: string | null
@@ -1114,7 +1118,9 @@ export interface Database {
           source?: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
           status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority?: 'baja' | 'media' | 'alta'
+          contact_urgency?: number | null
           assigned_to?: string | null
+          assigned_at?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
           closed_by_staff_id?: string | null
           created_by?: string | null

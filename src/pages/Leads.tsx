@@ -27,8 +27,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShortcutsPreferences } from "@/contexts/ShortcutsPreferencesContext";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
+import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
 import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
+import { LeadContactUrgencyPicker } from "@/components/leads/LeadContactUrgencyPicker";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
@@ -57,6 +59,7 @@ import {
   pickActiveCrmLeadQuickAppointment,
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
+import { contactUrgencyToPriority } from "@/lib/leadContactUrgency";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
@@ -703,6 +706,7 @@ function LeadsImpl({ user }: { user: User }) {
     reminderEnabled: false,
     reminderDueDate: "",
     reminderPriority: "today" as "urgent" | "today" | "later",
+    contact_urgency: null as number | null,
   });
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -738,6 +742,7 @@ function LeadsImpl({ user }: { user: User }) {
     citaDayKey: null as string | null,
     citaMotivo: "",
     crmQuickAppointmentId: null as string | null,
+    contact_urgency: null as number | null,
   });
   const editCitaSyncedRef = useRef(false);
 
@@ -998,6 +1003,7 @@ function LeadsImpl({ user }: { user: User }) {
       reminderEnabled: false,
       reminderDueDate: tomorrow,
       reminderPriority: "today",
+      contact_urgency: null,
     });
   };
 
@@ -1261,7 +1267,10 @@ function LeadsImpl({ user }: { user: User }) {
         phone: normalizedCreatePhone,
         status: formState.status as any,
         source: formState.phone.trim() ? "telefono" : "otro",
-        priority: "media",
+        priority: formState.contact_urgency != null
+          ? contactUrgencyToPriority(formState.contact_urgency)
+          : "media",
+        contact_urgency: formState.contact_urgency,
         tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id,
         assigned_to: user.role === "vendedor" ? user.id : null,
@@ -1356,6 +1365,7 @@ function LeadsImpl({ user }: { user: User }) {
       citaDayKey: null,
       citaMotivo: "",
       crmQuickAppointmentId: null,
+      contact_urgency: lead.contact_urgency ?? null,
     });
     setShowEditDialog(true);
   }, [consignacionByLeadId]);
@@ -1383,7 +1393,11 @@ function LeadsImpl({ user }: { user: User }) {
         cuotas_mensuales: editForm.cuotas_mensuales.trim() ? editForm.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(editForm.transmision),
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
+        contact_urgency: editForm.contact_urgency,
       };
+      if (editForm.contact_urgency != null) {
+        updates.priority = contactUrgencyToPriority(editForm.contact_urgency);
+      }
 
       // Preservar/actualizar tag marca:X aparte (no lo maneja buildTagsWithVehicleAndOrigin).
       let nextTags = buildTagsWithVehicleAndOrigin(
@@ -1874,6 +1888,12 @@ function LeadsImpl({ user }: { user: User }) {
                 />
               </div>
             </div>
+            <LeadContactUrgencyPicker
+              value={formState.contact_urgency}
+              localOnly
+              disabled={isCreating}
+              onChange={(next) => setFormState({ ...formState, contact_urgency: next })}
+            />
             <div className="grid gap-2">
               <Label htmlFor="lead_make">Marca</Label>
               <VehicleMakeCombobox
@@ -2102,6 +2122,12 @@ function LeadsImpl({ user }: { user: User }) {
                 />
               </div>
             </div>
+            <LeadContactUrgencyPicker
+              value={editForm.contact_urgency}
+              localOnly
+              disabled={isUpdating}
+              onChange={(next) => setEditForm({ ...editForm, contact_urgency: next })}
+            />
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_email">Correo</Label>
               <Input
@@ -2318,6 +2344,11 @@ function LeadsImpl({ user }: { user: User }) {
           </DialogHeader>
           {detailsLead ? (
             <div className="flex-1 space-y-4 overflow-y-auto min-h-0 py-1 -mx-1 px-1">
+              <LeadDelegationAdminBlock
+                lead={detailsLead as Lead & {
+                  assigned_user?: { full_name?: string | null; email?: string | null } | null;
+                }}
+              />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Nombre</p>

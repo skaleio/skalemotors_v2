@@ -22,6 +22,8 @@ type LeadCrmQuickAppointmentPickerProps = {
   onMotiveChange: (motive: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Calendario mes (1–31) visible de inmediato; usado al arrastrar a AGENDADO en CRM. */
+  calendarLayout?: "popover" | "inline";
 };
 
 export function LeadCrmQuickAppointmentPicker({
@@ -32,8 +34,10 @@ export function LeadCrmQuickAppointmentPicker({
   onMotiveChange,
   disabled,
   className,
+  calendarLayout = "popover",
 }: LeadCrmQuickAppointmentPickerProps) {
   const [open, setOpen] = useState(false);
+  const inlineCalendar = calendarLayout === "inline";
 
   const selected =
     dayKey && /^\d{4}-\d{2}-\d{2}$/.test(dayKey)
@@ -61,52 +65,86 @@ export function LeadCrmQuickAppointmentPicker({
 
       <div className="relative flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold tracking-tight text-zinc-100">Seguimiento programado</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500">Fecha + motivo · sincroniza con Citas</p>
+          <p className="text-sm font-semibold tracking-tight text-zinc-100">
+            {inlineCalendar ? "Elige el día de la cita" : "Seguimiento programado"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">
+            {inlineCalendar
+              ? "Mismo calendario que en Citas · clic en el día 1–31"
+              : "Fecha + motivo · sincroniza con Citas"}
+          </p>
         </div>
         <CalendarDays className="h-5 w-5 shrink-0 text-amber-500/90" aria-hidden />
       </div>
 
-      <div className="relative grid grid-cols-1 gap-4 sm:grid-cols-[11.5rem_minmax(0,1fr)] sm:items-end">
-        <div className="grid gap-2">
-          <Label htmlFor={id} className="text-xs font-medium text-zinc-400">
-            Fecha
-          </Label>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                id={id}
-                type="button"
-                className={cn(
-                  "h-10 w-full justify-center gap-2 rounded-xl border-0 font-medium shadow-md transition-all",
-                  hasDate
-                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                    : "border border-zinc-700/80 bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-white",
-                )}
-              >
-                <Pencil className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                {dateLabel ?? "Elegir fecha"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className={leadSchedulePopoverContentClass}
-              align="start"
-              sideOffset={8}
-            >
-              <LeadScheduleCalendar
-                mode="single"
-                locale={es}
-                selected={selected}
-                onSelect={(d) => {
-                  if (!d) return;
-                  onDayChange(format(d, "yyyy-MM-dd"));
-                  setOpen(false);
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+      {inlineCalendar ? (
+        <div
+          className={cn(
+            "relative mx-auto w-full max-w-[19.5rem] overflow-hidden rounded-2xl",
+            leadSchedulePopoverContentClass,
+            "border border-white/10",
+          )}
+        >
+          <LeadScheduleCalendar
+            mode="single"
+            locale={es}
+            selected={selected}
+            onSelect={(d) => {
+              if (!d) return;
+              onDayChange(format(d, "yyyy-MM-dd"));
+            }}
+            initialFocus
+          />
         </div>
+      ) : null}
+
+      <div
+        className={cn(
+          "relative grid grid-cols-1 gap-4",
+          !inlineCalendar && "sm:grid-cols-[11.5rem_minmax(0,1fr)] sm:items-end",
+        )}
+      >
+        {!inlineCalendar ? (
+          <div className="grid gap-2">
+            <Label htmlFor={id} className="text-xs font-medium text-zinc-400">
+              Fecha
+            </Label>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id={id}
+                  type="button"
+                  className={cn(
+                    "h-10 w-full justify-center gap-2 rounded-xl border-0 font-medium shadow-md transition-all",
+                    hasDate
+                      ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                      : "border border-zinc-700/80 bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-white",
+                  )}
+                >
+                  <Pencil className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                  {dateLabel ?? "Elegir fecha"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className={leadSchedulePopoverContentClass}
+                align="start"
+                sideOffset={8}
+              >
+                <LeadScheduleCalendar
+                  mode="single"
+                  locale={es}
+                  selected={selected}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    onDayChange(format(d, "yyyy-MM-dd"));
+                    setOpen(false);
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : null}
 
         <div className="grid min-w-0 gap-2">
           <Label htmlFor={`${id}-motivo`} className="text-xs font-medium text-zinc-400">
@@ -123,7 +161,7 @@ export function LeadCrmQuickAppointmentPicker({
               !hasDate && "cursor-not-allowed opacity-50",
             )}
             placeholder={
-              hasDate ? "Ej: Cita, volver a llamar, posible compra…" : "Elige una fecha primero"
+              hasDate ? "Ej: Cita, volver a llamar, posible compra…" : "Elige una fecha en el calendario"
             }
             maxLength={200}
           />

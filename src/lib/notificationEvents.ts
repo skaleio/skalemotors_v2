@@ -103,8 +103,8 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventMeta[] = [
     short: "Nuevas",
     icon: Car,
     iconClass: "text-indigo-500",
-    description: "Un vendedor registra una consignación nueva",
-    roles: ["admin"],
+    description: "Alta de consignación (admin: vendedor; fotógrafo: cualquier registro nuevo)",
+    roles: ["admin", "fotografo"],
   },
   {
     key: "consignacion_stale",

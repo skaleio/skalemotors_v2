@@ -194,8 +194,8 @@ export default function SellerFollowUp() {
       {
         onSuccess: () => {
           toast({
-            title: "Nota guardada",
-            description: "La nota quedó registrada para este vendedor y fecha.",
+            title: "Nota actualizada",
+            description: "Los cambios quedaron guardados para este vendedor y fecha.",
           });
         },
         onError: (err) => {
@@ -314,6 +314,7 @@ export default function SellerFollowUp() {
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
             <SellerFollowUpDayPanel
+              followUpDateKey={selectedDateKey ?? ""}
               followUpDateLabel={followUpDateLabel}
               sellers={sellersWithLeads}
               filteredSellers={filteredSellers}

@@ -43,6 +43,7 @@ function leadStatusLabel(status: string | null | undefined): string {
 }
 
 type SellerFollowUpDayPanelProps = {
+  followUpDateKey: string;
   followUpDateLabel: string;
   sellers: SellerWithLeads[];
   filteredSellers: SellerWithLeads[];
@@ -60,6 +61,7 @@ type SellerFollowUpDayPanelProps = {
 
 function SellerDayCard({
   seller,
+  followUpDateKey,
   checks,
   savedNote,
   pendingCheckKey,
@@ -68,6 +70,7 @@ function SellerDayCard({
   onSaveNote,
 }: {
   seller: SellerWithLeads;
+  followUpDateKey: string;
   checks: { am: boolean; pm: boolean };
   savedNote: string;
   pendingCheckKey: string | null;
@@ -82,10 +85,22 @@ function SellerDayCard({
     crmColor: seller.crmColor,
   });
   const completedCount = Number(checks.am) + Number(checks.pm);
+  const noteDirty = noteDraft.trim() !== savedNote.trim();
 
   useEffect(() => {
     setNoteDraft(savedNote);
-  }, [savedNote, seller.id]);
+  }, [seller.id, followUpDateKey]);
+
+  useEffect(() => {
+    if (!noteDirty) {
+      setNoteDraft(savedNote);
+    }
+  }, [savedNote, noteDirty]);
+
+  const handleSaveNote = () => {
+    if (!noteDirty || savingNote) return;
+    onSaveNote(seller.id, noteDraft);
+  };
 
   return (
     <article
@@ -224,10 +239,11 @@ function SellerDayCard({
             id={`note-${seller.id}`}
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
+            onBlur={handleSaveNote}
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                 e.preventDefault();
-                onSaveNote(seller.id, noteDraft);
+                handleSaveNote();
               }
             }}
             placeholder="Ej: Llamó a 2 leads, falta retomar cotización de Juan…"
@@ -237,24 +253,28 @@ function SellerDayCard({
             <Button
               type="button"
               size="sm"
-              variant="secondary"
-              disabled={savingNote}
-              onClick={() => onSaveNote(seller.id, noteDraft)}
+              variant={noteDirty ? "default" : "secondary"}
+              disabled={savingNote || !noteDirty}
+              onClick={handleSaveNote}
             >
               {savingNote ? (
                 <>
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   Guardando…
                 </>
+              ) : savedNote.trim() ? (
+                "Guardar cambios"
               ) : (
                 "Guardar nota"
               )}
             </Button>
-            <span className="text-[10px] text-muted-foreground">Ctrl+Enter</span>
+            <span className="text-[10px] text-muted-foreground">
+              {noteDirty ? "Cambios sin guardar" : "Ctrl+Enter · editable"}
+            </span>
           </div>
-          {!savingNote && savedNote.trim() && noteDraft.trim() === savedNote.trim() ? (
+          {!savingNote && savedNote.trim() && !noteDirty ? (
             <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-              Nota guardada
+              Nota guardada · puedes editarla cuando quieras
             </p>
           ) : null}
         </div>
@@ -264,6 +284,7 @@ function SellerDayCard({
 }
 
 export function SellerFollowUpDayPanel({
+  followUpDateKey,
   followUpDateLabel,
   sellers,
   filteredSellers,
@@ -344,6 +365,7 @@ export function SellerFollowUpDayPanel({
               <SellerDayCard
                 key={seller.id}
                 seller={seller}
+                followUpDateKey={followUpDateKey}
                 checks={checkMap.get(seller.id) ?? { am: false, pm: false }}
                 savedNote={noteMap.get(seller.id) ?? ""}
                 pendingCheckKey={pendingCheckKey}

@@ -146,6 +146,7 @@ export const sellerFollowUpService = {
         updated_by: params.updatedByUserId,
         updated_at: now,
       })
+      .eq('tenant_id', params.tenantId)
       .eq('follow_up_date', params.followUpDate)
       .eq('seller_user_id', params.sellerUserId)
       .select('*')

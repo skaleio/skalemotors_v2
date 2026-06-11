@@ -195,10 +195,6 @@ export function useSaveSellerFollowUpNote(month: Date) {
         updatedByUserId: user.id,
       })
     },
-    onSuccess: (_row, vars) => {
-      void queryClient.invalidateQueries({ queryKey: notesKey })
-      void queryClient.invalidateQueries({ queryKey: ['seller-follow-up', 'notes'] })
-    },
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: notesKey })
       const previous = queryClient.getQueryData<SellerFollowUpNoteRow[]>(notesKey)

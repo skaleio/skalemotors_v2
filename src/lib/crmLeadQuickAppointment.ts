@@ -32,6 +32,14 @@ export function pickActiveCrmLeadQuickAppointment(rows: AppointmentRow[]): Appoi
   return candidates[0];
 }
 
+/** Cita activa del lead (cualquier título), p. ej. al reabrir AGENDADO desde CRM. */
+export function pickActiveLeadAppointment(rows: AppointmentRow[]): AppointmentRow | null {
+  const candidates = rows.filter((r) => ACTIVE.has(r.status));
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+  return candidates[0];
+}
+
 /** Motivo escrito por el usuario en `appointments.description` (formatos legacy sin motivo → ""). */
 export function parseCrmLeadQuickAppointmentMotive(description: string | null | undefined): string {
   const trimmed = description?.trim() ?? "";

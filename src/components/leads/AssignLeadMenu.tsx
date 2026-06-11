@@ -13,7 +13,10 @@ import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { useBranchSellersOptionsFromUser } from "@/lib/delegatableSellersScope";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
 import { leadService } from "@/lib/services/leads";
+import type { Database } from "@/lib/types/database";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 import { Check, Loader2, UserPlus, UserX } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -23,6 +26,8 @@ interface AssignLeadMenuProps {
   assignedLabel?: string | null;
   /** @deprecated la lógica por sucursal fue removida; siempre se listan vendedores del tenant. */
   leadBranchId?: string | null;
+  /** Tras delegar, fila actualizada (incl. `assigned_at` vía trigger BD). */
+  onDelegated?: (lead: LeadRow) => void;
 }
 
 const ROLES_CAN_DELEGATE = new Set([
@@ -33,7 +38,7 @@ const ROLES_CAN_DELEGATE = new Set([
   "financiero",
 ]);
 
-function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMenuProps) {
+function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel, onDelegated }: AssignLeadMenuProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -62,8 +67,9 @@ function AssignLeadMenuBase({ leadId, assignedTo, assignedLabel }: AssignLeadMen
     mutationFn: async (vendorId: string | null) => {
       return leadService.update(leadId, { assigned_to: vendorId });
     },
-    onSuccess: (_data, vendorId) => {
+    onSuccess: (data, vendorId) => {
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      onDelegated?.(data);
       toast({
         title: vendorId ? "Lead delegado" : "Lead sin asignar",
         description: vendorId ? "El vendedor asignado ya puede ver este lead." : "Se removió la asignación del lead.",
