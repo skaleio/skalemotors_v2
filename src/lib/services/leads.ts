@@ -12,6 +12,9 @@ type LeadActivityInsert = Database['public']['Tables']['lead_activities']['Inser
 /** Debe coincidir con el CHECK leads_status_check en Postgres. */
 const ALLOWED_LEAD_STATUSES = new Set<string>([
   'nuevo',
+  'no_contesta',
+  'en_seguimiento',
+  'buscando_vehiculo',
   'contactado',
   'interesado',
   'cotizando',
@@ -375,8 +378,9 @@ export const leadService = {
     const stats = {
       total: data.length,
       nuevo: data.filter(l => l.status === 'nuevo').length,
-      contactado: data.filter(l => l.status === 'contactado').length,
-      interesado: data.filter(l => l.status === 'interesado').length,
+      en_seguimiento: data.filter(l => l.status === 'en_seguimiento' || l.status === 'contactado' || l.status === 'interesado').length,
+      no_contesta: data.filter(l => l.status === 'no_contesta').length,
+      buscando_vehiculo: data.filter(l => l.status === 'buscando_vehiculo').length,
       cotizando: data.filter(l => l.status === 'cotizando').length,
       vendido: data.filter(l => l.status === 'vendido').length,
       thisMonth: data.filter(l => new Date(l.created_at) >= thisMonth).length

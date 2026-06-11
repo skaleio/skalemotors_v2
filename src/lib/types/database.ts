@@ -1026,9 +1026,9 @@ export interface Database {
           rut: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
+          status: 'nuevo' | 'no_contesta' | 'en_seguimiento' | 'buscando_vehiculo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority: 'baja' | 'media' | 'alta'
-          contact_urgency: number | null
+          contact_state: 'prioridad' | 'interesado' | 'filtrar' | null
           assigned_to: string | null
           assigned_at: string | null
           crm_seguimiento_socio: 'Mike' | 'Antonio' | 'Jota' | null
@@ -1071,9 +1071,9 @@ export interface Database {
           rut?: string | null
           phone: string
           source: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
+          status?: 'nuevo' | 'no_contesta' | 'en_seguimiento' | 'buscando_vehiculo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority?: 'baja' | 'media' | 'alta'
-          contact_urgency?: number | null
+          contact_state?: 'prioridad' | 'interesado' | 'filtrar' | null
           assigned_to?: string | null
           assigned_at?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null
@@ -1116,9 +1116,9 @@ export interface Database {
           rut?: string | null
           phone?: string
           source?: 'web' | 'referido' | 'walk_in' | 'telefono' | 'redes_sociales' | 'evento' | 'otro'
-          status?: 'nuevo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
+          status?: 'nuevo' | 'no_contesta' | 'en_seguimiento' | 'buscando_vehiculo' | 'contactado' | 'interesado' | 'cotizando' | 'agendado' | 'negociando' | 'en_espera' | 'vendido' | 'perdido' | 'para_cierre' | 'cancelado'
           priority?: 'baja' | 'media' | 'alta'
-          contact_urgency?: number | null
+          contact_state?: 'prioridad' | 'interesado' | 'filtrar' | null
           assigned_to?: string | null
           assigned_at?: string | null
           crm_seguimiento_socio?: 'Mike' | 'Antonio' | 'Jota' | null

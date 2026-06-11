@@ -173,7 +173,8 @@ const VALID_SOURCES = [
 ] as const;
 
 const VALID_STATUSES = [
-  "nuevo", "contactado", "interesado", "cotizando",
+  "nuevo", "no_contesta", "en_seguimiento", "buscando_vehiculo",
+  "contactado", "interesado", "cotizando",
   "agendado", "negociando", "en_espera", "vendido", "perdido", "para_cierre", "cancelado",
 ] as const;
 

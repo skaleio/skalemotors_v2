@@ -4,10 +4,12 @@
 
 export type CrmStageKey =
   | "nuevo"
-  | "contactado"
-  | "agendado"
+  | "no_contesta"
+  | "en_seguimiento"
+  | "buscando_vehiculo"
   | "en_espera"
   | "negociando"
+  | "agendado"
   | "para_cierre"
   | "negocio_cerrado"
   | "cancelado";
@@ -27,14 +29,19 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
     statuses: ["nuevo"],
   },
   {
-    key: "contactado",
-    label: "CONTACTADO",
-    statuses: ["contactado", "interesado"],
+    key: "no_contesta",
+    label: "NO CONTESTA",
+    statuses: ["no_contesta"],
   },
   {
-    key: "agendado",
-    label: "AGENDADO",
-    statuses: ["agendado"],
+    key: "en_seguimiento",
+    label: "EN SEGUIMIENTO",
+    statuses: ["en_seguimiento", "contactado", "interesado"],
+  },
+  {
+    key: "buscando_vehiculo",
+    label: "BUSCANDO VEHÍCULO",
+    statuses: ["buscando_vehiculo"],
   },
   {
     key: "en_espera",
@@ -45,6 +52,11 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
     key: "negociando",
     label: "NEGOCIANDO",
     statuses: ["negociando", "cotizando"],
+  },
+  {
+    key: "agendado",
+    label: "AGENDADO",
+    statuses: ["agendado"],
   },
   {
     key: "para_cierre",
@@ -66,22 +78,29 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
 /** Máximo de leads cancelados visibles en el Kanban CRM (el resto sigue en Leads). */
 export const CRM_CANCELLED_VISIBLE_MAX = 5;
 
+/** Leads visibles por columna antes de mostrar «Ver más». */
+export const CRM_KANBAN_COLUMN_PREVIEW_MAX = 6;
+
 /** Columnas donde el usuario puede mover leads sin flujo de cierre de negocio. */
 export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerrado">[] = [
   "nuevo",
-  "contactado",
-  "agendado",
+  "no_contesta",
+  "en_seguimiento",
+  "buscando_vehiculo",
   "en_espera",
   "negociando",
+  "agendado",
   "para_cierre",
 ];
 
 export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
   nuevo: "NUEVO",
-  contactado: "CONTACTADO",
-  agendado: "AGENDADO",
-  negociando: "NEGOCIANDO",
+  no_contesta: "NO CONTESTA",
+  en_seguimiento: "EN SEGUIMIENTO",
+  buscando_vehiculo: "BUSCANDO VEHÍCULO",
   en_espera: "EN ESPERA",
+  negociando: "NEGOCIANDO",
+  agendado: "AGENDADO",
   para_cierre: "PARA CIERRE",
   negocio_cerrado: "NEGOCIO CONCRETADO",
   cancelado: "CANCELADO",
@@ -91,8 +110,12 @@ export const CRM_PIPELINE_STATUS_LABELS: Record<CrmStageKey, string> = {
 export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
   nuevo:
     "border-cyan-200/80 bg-cyan-50 text-cyan-800 dark:border-cyan-800/60 dark:bg-cyan-950/50 dark:text-cyan-200",
-  contactado:
+  no_contesta:
+    "border-slate-300/80 bg-slate-100 text-slate-800 dark:border-slate-600/60 dark:bg-slate-900/50 dark:text-slate-200",
+  en_seguimiento:
     "border-blue-200/80 bg-blue-50 text-blue-800 dark:border-blue-800/60 dark:bg-blue-950/50 dark:text-blue-200",
+  buscando_vehiculo:
+    "border-indigo-200/80 bg-indigo-50 text-indigo-800 dark:border-indigo-800/60 dark:bg-indigo-950/50 dark:text-indigo-200",
   agendado:
     "border-sky-200/80 bg-sky-50 text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200",
   negociando:
@@ -109,7 +132,9 @@ export const CRM_STAGE_PILL_CLASS: Record<CrmStageKey, string> = {
 
 export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
   nuevo: "bg-cyan-500",
-  contactado: "bg-blue-500",
+  no_contesta: "bg-slate-500",
+  en_seguimiento: "bg-blue-500",
+  buscando_vehiculo: "bg-indigo-500",
   agendado: "bg-sky-500",
   negociando: "bg-orange-500",
   en_espera: "bg-violet-500",
@@ -121,7 +146,9 @@ export const CRM_STAGE_DOT_CLASS: Record<CrmStageKey, string> = {
 /** Borde superior de columnas Kanban y acentos en tarjetas métricas. */
 export const CRM_STAGE_BORDER_CLASS: Record<CrmStageKey, string> = {
   nuevo: "border-cyan-500",
-  contactado: "border-blue-500",
+  no_contesta: "border-slate-500",
+  en_seguimiento: "border-blue-500",
+  buscando_vehiculo: "border-indigo-500",
   agendado: "border-sky-500",
   negociando: "border-orange-500",
   en_espera: "border-violet-500",
@@ -133,7 +160,9 @@ export const CRM_STAGE_BORDER_CLASS: Record<CrmStageKey, string> = {
 /** Color de texto para badges compactos en tablas. */
 export const CRM_STAGE_TEXT_CLASS: Record<CrmStageKey, string> = {
   nuevo: "text-cyan-700 dark:text-cyan-300",
-  contactado: "text-blue-700 dark:text-blue-300",
+  no_contesta: "text-slate-700 dark:text-slate-300",
+  en_seguimiento: "text-blue-700 dark:text-blue-300",
+  buscando_vehiculo: "text-indigo-700 dark:text-indigo-300",
   agendado: "text-sky-700 dark:text-sky-300",
   negociando: "text-orange-700 dark:text-orange-300",
   en_espera: "text-violet-700 dark:text-violet-300",
@@ -144,19 +173,28 @@ export const CRM_STAGE_TEXT_CLASS: Record<CrmStageKey, string> = {
 
 /** Estados activos del embudo (excluye vendido/perdido). */
 export const CRM_PIPELINE_ACTIVE_DB_STATUSES = new Set([
-  "contactado",
   "nuevo",
-  "interesado",
+  "no_contesta",
+  "en_seguimiento",
+  "buscando_vehiculo",
   "agendado",
   "negociando",
   "cotizando",
   "en_espera",
   "para_cierre",
+  "contactado",
+  "interesado",
 ]);
 
 function normalizeLeadStatus(status: string | null | undefined): string {
   return (status || "").trim().toLowerCase();
 }
+
+const STATUS_TO_STAGE = new Map<string, CrmStageKey>(
+  CRM_PIPELINE_STAGES.flatMap((stage) =>
+    stage.statuses.map((status) => [normalizeLeadStatus(status), stage.key] as const),
+  ),
+);
 
 const CRM_STAGE_KEY_SET = new Set<CrmStageKey>(CRM_PIPELINE_STAGES.map((stage) => stage.key));
 
@@ -169,20 +207,16 @@ export function getLeadCrmStageKey(status: string | null | undefined): CrmStageK
   if (CRM_STAGE_KEY_SET.has(s as CrmStageKey)) {
     return s as CrmStageKey;
   }
+  const mapped = STATUS_TO_STAGE.get(s);
+  if (mapped) return mapped;
   if (s === "cancelado") return "cancelado";
   if (s === "vendido") return "negocio_cerrado";
-  if (s === "agendado") return "agendado";
-  if (s === "negociando" || s === "cotizando") return "negociando";
-  if (s === "en_espera") return "en_espera";
-  if (s === "para_cierre") return "para_cierre";
-  if (s === "nuevo") return "nuevo";
-  if (s === "contactado" || s === "interesado") return "contactado";
-  return "contactado";
+  return "en_seguimiento";
 }
 
 /** Valor para <Select> del pipeline (clave de columna, no siempre = status DB). */
 export function safePipelineSelectValue(status: string | null | undefined): CrmStageKey {
-  return getLeadCrmStageKey(status) ?? "contactado";
+  return getLeadCrmStageKey(status) ?? "en_seguimiento";
 }
 
 export function leadBelongsToCrmStage(
@@ -197,21 +231,14 @@ export function crmStageToDbStatus(stageKey: string): string {
   if (stageKey === "negocio_cerrado") return "vendido";
   if (stageKey === "perdido") return "perdido";
   if (stageKey === "cancelado") return "cancelado";
-  if (
-    stageKey === "nuevo"
-    || stageKey === "contactado"
-    || stageKey === "agendado"
-    || stageKey === "negociando"
-    || stageKey === "en_espera"
-    || stageKey === "para_cierre"
-  ) {
+  if (CRM_STAGE_KEY_SET.has(stageKey as CrmStageKey) && stageKey !== "negocio_cerrado") {
     return stageKey;
   }
-  return "contactado";
+  return "en_seguimiento";
 }
 
 /** UI / formularios que envían clave de columna en lugar de status DB. */
-export function coerceCrmPipelineStatus(status: unknown, fallback = "contactado"): string {
+export function coerceCrmPipelineStatus(status: unknown, fallback = "en_seguimiento"): string {
   const s = typeof status === "string" ? status.trim().toLowerCase() : "";
   if (!s) return fallback;
   return crmStageToDbStatus(s);

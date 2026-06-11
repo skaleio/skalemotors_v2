@@ -16,6 +16,11 @@ import {
 describe("crmPipeline", () => {
   it("mapea estados legacy a la columna correcta", () => {
     expect(getLeadCrmStageKey("nuevo")).toBe("nuevo");
+    expect(getLeadCrmStageKey("contactado")).toBe("en_seguimiento");
+    expect(getLeadCrmStageKey("interesado")).toBe("en_seguimiento");
+    expect(getLeadCrmStageKey("en_seguimiento")).toBe("en_seguimiento");
+    expect(getLeadCrmStageKey("no_contesta")).toBe("no_contesta");
+    expect(getLeadCrmStageKey("buscando_vehiculo")).toBe("buscando_vehiculo");
     expect(getLeadCrmStageKey("cotizando")).toBe("negociando");
     expect(getLeadCrmStageKey("en_espera")).toBe("en_espera");
     expect(getLeadCrmStageKey("vendido")).toBe("negocio_cerrado");
@@ -25,7 +30,7 @@ describe("crmPipeline", () => {
 
   it("detecta pertenencia a columna por bucket, no solo por string exacto", () => {
     expect(leadBelongsToCrmStage("cotizando", "negociando")).toBe(true);
-    expect(leadBelongsToCrmStage("interesado", "contactado")).toBe(true);
+    expect(leadBelongsToCrmStage("contactado", "en_seguimiento")).toBe(true);
     expect(leadBelongsToCrmStage("negociando", "en_espera")).toBe(false);
     expect(leadBelongsToCrmStage("para_cierre", "en_espera")).toBe(false);
   });
@@ -34,7 +39,7 @@ describe("crmPipeline", () => {
     const leads = [
       { id: "1", status: "nuevo", assigned_to: null },
       { id: "2", status: "nuevo", assigned_to: "vendor-uuid" },
-      { id: "3", status: "contactado", assigned_to: "vendor-uuid" },
+      { id: "3", status: "en_seguimiento", assigned_to: "vendor-uuid" },
     ];
     expect(isLeadHiddenFromCeoNuevoColumn(leads[0])).toBe(false);
     expect(isLeadHiddenFromCeoNuevoColumn(leads[1])).toBe(true);
@@ -44,6 +49,9 @@ describe("crmPipeline", () => {
 
   it("convierte columna CRM a status DB al mover", () => {
     expect(crmStageToDbStatus("nuevo")).toBe("nuevo");
+    expect(crmStageToDbStatus("en_seguimiento")).toBe("en_seguimiento");
+    expect(crmStageToDbStatus("no_contesta")).toBe("no_contesta");
+    expect(crmStageToDbStatus("buscando_vehiculo")).toBe("buscando_vehiculo");
     expect(crmStageToDbStatus("en_espera")).toBe("en_espera");
     expect(crmStageToDbStatus("negociando")).toBe("negociando");
     expect(crmStageToDbStatus("negocio_cerrado")).toBe("vendido");
@@ -59,7 +67,7 @@ describe("crmPipeline", () => {
       { id: "4", status: "cancelado", updated_at: "2026-04-01T00:00:00Z" },
       { id: "5", status: "cancelado", updated_at: "2026-03-01T00:00:00Z" },
       { id: "6", status: "cancelado", updated_at: "2026-02-01T00:00:00Z" },
-      { id: "7", status: "contactado", updated_at: "2026-01-01T00:00:00Z" },
+      { id: "7", status: "en_seguimiento", updated_at: "2026-01-01T00:00:00Z" },
     ];
     const visible = pickCancelledLeadIdsVisibleInCrm(leads);
     expect(visible.size).toBe(5);
@@ -69,14 +77,16 @@ describe("crmPipeline", () => {
     expect(isLeadVisibleInCrmKanban(leads[6], visible)).toBe(true);
   });
 
-  it("mantiene orden del embudo con agendado y negociando después de en_espera", () => {
+  it("mantiene orden del embudo CRM actualizado", () => {
     const keys = CRM_PIPELINE_STAGES.map((s) => s.key);
     expect(keys).toEqual([
       "nuevo",
-      "contactado",
-      "agendado",
+      "no_contesta",
+      "en_seguimiento",
+      "buscando_vehiculo",
       "en_espera",
       "negociando",
+      "agendado",
       "para_cierre",
       "negocio_cerrado",
       "cancelado",
@@ -97,6 +107,7 @@ describe("crmPipeline", () => {
 
   it("safePipelineSelectValue alinea select con columna", () => {
     expect(safePipelineSelectValue("cotizando")).toBe("negociando");
+    expect(safePipelineSelectValue("contactado")).toBe("en_seguimiento");
     expect(safePipelineSelectValue("en_espera")).toBe("en_espera");
   });
 
@@ -110,7 +121,7 @@ describe("crmPipeline", () => {
     ]);
 
     expect(result.stages.find((s) => s.stageKey === "nuevo")?.count).toBe(3);
-    expect(result.stages.find((s) => s.stageKey === "contactado")?.count).toBe(2);
+    expect(result.stages.find((s) => s.stageKey === "en_seguimiento")?.count).toBe(2);
     expect(result.stages.find((s) => s.stageKey === "negociando")?.count).toBe(4);
     expect(result.stages.find((s) => s.stageKey === "negocio_cerrado")?.count).toBe(1);
     expect(result.perdidos).toBe(2);

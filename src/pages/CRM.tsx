@@ -16,8 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
-import { LeadContactUrgencyBadge } from "@/components/leads/LeadContactUrgencyBadge";
-import { LeadContactUrgencyPicker } from "@/components/leads/LeadContactUrgencyPicker";
+import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
+import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
@@ -39,6 +39,7 @@ import {
   CRM_PIPELINE_STAGES,
   CRM_PIPELINE_STATUS_LABELS,
   CRM_CANCELLED_VISIBLE_MAX,
+  CRM_KANBAN_COLUMN_PREVIEW_MAX,
   CRM_STAGE_BORDER_CLASS,
   CRM_STAGE_DOT_CLASS,
   CRM_STAGE_PILL_CLASS,
@@ -51,7 +52,11 @@ import {
   safePipelineSelectValue,
 } from "@/lib/crmPipeline";
 import { isCrmSeguimientoSocio, seguimientoSocioPillClass } from "@/lib/crmSeguimientoSocio";
-import { contactUrgencyToPriority } from "@/lib/leadContactUrgency";
+import {
+  canSetLeadContactState,
+  contactStateToPriority,
+  type LeadContactState,
+} from "@/lib/leadContactState";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import {
   filterLeadsForVendorView,
@@ -239,7 +244,7 @@ function buildCrmLeadEditForm(lead: Lead) {
     status: safePipelineSelectValue(lead.status),
     assigned_to: lead.assigned_to ?? null,
     contact_attempts: lead.contact_attempts ?? 0,
-    contact_urgency: lead.contact_urgency ?? null,
+    contact_state: lead.contact_state ?? null,
   };
 }
 
@@ -380,6 +385,7 @@ const LeadCard = memo(function LeadCard({
   const assigneeName = assigneeCornerLabel(lead);
   const assigneeFullName = assigneeDisplayName(lead);
   const cornerAssigneeLabel = showAssigneeBadge && assigneeName ? assigneeName : null;
+  const hasContactState = lead.contact_state != null && lead.contact_state !== "";
   const assigneeBorder = socio
     ? null
     : resolveAssigneeBorderColor({
@@ -391,7 +397,9 @@ const LeadCard = memo(function LeadCard({
     const stage = getLeadCrmStageKey(lead.status);
     return (
       stage === "nuevo"
-      || stage === "contactado"
+      || stage === "no_contesta"
+      || stage === "en_seguimiento"
+      || stage === "buscando_vehiculo"
       || stage === "agendado"
       || stage === "negociando"
       || stage === "en_espera"
@@ -473,9 +481,15 @@ const LeadCard = memo(function LeadCard({
           {socio}
         </span>
       ) : null}
-      <div className={cn("flex items-start justify-between gap-2", (cornerAssigneeLabel || socio) && "pr-[4.75rem]")}>
-        <div className="min-w-0 font-medium truncate">{lead.full_name || "Sin nombre"}</div>
-        <LeadContactUrgencyBadge value={lead.contact_urgency} className="shrink-0" />
+      <LeadContactStateBadge value={lead.contact_state} variant="corner" />
+      <div
+        className={cn(
+          "font-medium truncate",
+          hasContactState && "pl-[4.75rem]",
+          (cornerAssigneeLabel || socio) && "pr-[4.75rem]",
+        )}
+      >
+        {lead.full_name || "Sin nombre"}
       </div>
       <div className="text-muted-foreground text-[13px]">
         {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
@@ -563,6 +577,7 @@ export default function CRM() {
   const [isEmptyingPapelera, setIsEmptyingPapelera] = useState(false);
 
   const canSupervise = !!user?.role && CAN_SUPERVISE.has(user.role);
+  const canSetContactState = canSetLeadContactState(user?.role);
   const canUseGlobalView = !!user?.role && CAN_USE_CRM_GLOBAL_VIEW.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
 
@@ -606,9 +621,10 @@ export default function CRM() {
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedKanbanStages, setExpandedKanbanStages] = useState<Set<CrmStageKey>>(() => new Set());
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [leadStatus, setLeadStatus] = useState<string>("contactado");
+  const [leadStatus, setLeadStatus] = useState<string>("en_seguimiento");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditingForm, setIsEditingForm] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -622,11 +638,11 @@ export default function CRM() {
     cuotas_mensuales: "",
     vehicle: "",
     transmision: "",
-    status: "contactado",
+    status: "en_seguimiento",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
     contact_attempts: 0,
-    contact_urgency: null as number | null,
+    contact_state: null as LeadContactState | null,
   });
 
   const crmAssigneeQuery = useBranchSellersOptionsFromUser(user, {
@@ -846,7 +862,7 @@ export default function CRM() {
       if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       const st = (lead.status || "").toLowerCase();
-      return st === "nuevo" || st === "contactado" || st === "interesado";
+      return st === "nuevo" || st === "no_contesta" || st === "contactado" || st === "interesado";
     }).length;
     const tasaNoRespondieron = total + noRespondieron > 0
       ? Math.round((noRespondieron / (total + noRespondieron)) * 1000) / 10
@@ -1079,9 +1095,13 @@ export default function CRM() {
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
             contact_attempts: editForm.contact_attempts,
-            contact_urgency: editForm.contact_urgency,
-            ...(editForm.contact_urgency != null
-              ? { priority: contactUrgencyToPriority(editForm.contact_urgency) }
+            ...(canSetContactState
+              ? {
+                  contact_state: editForm.contact_state,
+                  ...(editForm.contact_state != null
+                    ? { priority: contactStateToPriority(editForm.contact_state) }
+                    : {}),
+                }
               : {}),
           }
         : { status: crmStageToDbStatus(leadStatus) };
@@ -1858,6 +1878,12 @@ export default function CRM() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {leadsByStage.map((stage) => {
           const style = stageStyles[stage.key];
+          const isColumnExpanded = expandedKanbanStages.has(stage.key);
+          const hasMoreThanPreview = stage.leads.length > CRM_KANBAN_COLUMN_PREVIEW_MAX;
+          const visibleLeads = isColumnExpanded || !hasMoreThanPreview
+            ? stage.leads
+            : stage.leads.slice(0, CRM_KANBAN_COLUMN_PREVIEW_MAX);
+          const hiddenLeadCount = stage.leads.length - CRM_KANBAN_COLUMN_PREVIEW_MAX;
 
           return (
             <Card
@@ -1933,30 +1959,62 @@ export default function CRM() {
                       {draggingLeadId ? "Suelta aquí" : "No hay leads en esta etapa"}
                     </p>
                   ) : (
-                    stage.leads.map((lead) => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        showAssigneeBadge={canSupervise}
-                        draggable={!loading && movingLeadId !== lead.id}
-                        isDragging={draggingLeadId === lead.id}
-                        justLanded={landedLeadId === lead.id}
-                        onDragStart={(e) => handleLeadDragStart(e, lead.id)}
-                        onDragEnd={handleLeadDragEnd}
-                        onClick={() => openEditDialog(lead)}
-                        onExternalDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.dataTransfer.dropEffect = "move";
-                          if (draggingLeadId) setDragOverStageKey(stage.key);
-                        }}
-                        onExternalDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void handleStageDrop(e, stage.key);
-                        }}
-                      />
-                    ))
+                    <>
+                      {visibleLeads.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          showAssigneeBadge={canSupervise}
+                          draggable={!loading && movingLeadId !== lead.id}
+                          isDragging={draggingLeadId === lead.id}
+                          justLanded={landedLeadId === lead.id}
+                          onDragStart={(e) => handleLeadDragStart(e, lead.id)}
+                          onDragEnd={handleLeadDragEnd}
+                          onClick={() => openEditDialog(lead)}
+                          onExternalDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.dataTransfer.dropEffect = "move";
+                            if (draggingLeadId) setDragOverStageKey(stage.key);
+                          }}
+                          onExternalDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleStageDrop(e, stage.key);
+                          }}
+                        />
+                      ))}
+                      {hasMoreThanPreview && !isColumnExpanded ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-full text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setExpandedKanbanStages((prev) => new Set(prev).add(stage.key))
+                          }
+                        >
+                          Ver más ({hiddenLeadCount})
+                        </Button>
+                      ) : null}
+                      {hasMoreThanPreview && isColumnExpanded ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-full text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setExpandedKanbanStages((prev) => {
+                              const next = new Set(prev);
+                              next.delete(stage.key);
+                              return next;
+                            })
+                          }
+                        >
+                          Ver menos
+                        </Button>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </CardContent>
@@ -2172,12 +2230,19 @@ export default function CRM() {
                     localOnly
                     onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
                   />
-                  <LeadContactUrgencyPicker
-                    value={editForm.contact_urgency}
-                    localOnly
-                    disabled={isUpdating}
-                    onChange={(next) => setEditForm((f) => ({ ...f, contact_urgency: next }))}
-                  />
+                  {canSetContactState ? (
+                    <LeadContactStateSelect
+                      value={editForm.contact_state}
+                      localOnly
+                      disabled={isUpdating}
+                      onChange={(next) => setEditForm((f) => ({ ...f, contact_state: next }))}
+                    />
+                  ) : editingLead.contact_state ? (
+                    <div className="grid gap-1.5">
+                      <p className="text-sm text-muted-foreground">Etiqueta de calificación</p>
+                      <LeadContactStateBadge value={editingLead.contact_state} />
+                    </div>
+                  ) : null}
                   <LeadNotesSection
                     ref={leadNotesRef}
                     leadId={editingLead.id}
@@ -2319,15 +2384,28 @@ export default function CRM() {
                       <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
                     </div>
                   </div>
-                  <LeadContactUrgencyPicker
-                    leadId={editingLead.id}
-                    value={editingLead.contact_urgency}
-                    onChange={(next) =>
-                      setEditingLead((prev) =>
-                        prev ? { ...prev, contact_urgency: next, priority: contactUrgencyToPriority(next) } : prev,
-                      )
-                    }
-                  />
+                  {canSetContactState ? (
+                    <LeadContactStateSelect
+                      leadId={editingLead.id}
+                      value={editingLead.contact_state}
+                      onChange={(next) =>
+                        setEditingLead((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                contact_state: next,
+                                ...(next ? { priority: contactStateToPriority(next) } : {}),
+                              }
+                            : prev,
+                        )
+                      }
+                    />
+                  ) : editingLead.contact_state ? (
+                    <div className="grid gap-1.5">
+                      <p className="text-sm text-muted-foreground">Etiqueta de calificación</p>
+                      <LeadContactStateBadge value={editingLead.contact_state} />
+                    </div>
+                  ) : null}
                   <CrmLeadContactTrackingBlock
                     leadId={editingLead.id}
                     value={editingLead.contact_attempts ?? 0}

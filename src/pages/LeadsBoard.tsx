@@ -3,6 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/hooks/useLeads";
+import {
+  CRM_PIPELINE_STAGES,
+  CRM_PIPELINE_STATUS_LABELS,
+  getLeadCrmStageKey,
+} from "@/lib/crmPipeline";
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import type { Database } from "@/lib/types/database";
 import { Plus } from "lucide-react";
@@ -59,22 +64,13 @@ export default function LeadsBoard() {
     enabled: !!user,
   });
 
-  const stages = useMemo(
-    () => [
-      { key: "nuevo", label: "Nuevo", statuses: ["nuevo"] },
-      { key: "contactado", label: "Contactado", statuses: ["contactado"] },
-      { key: "interesado", label: "Interesado", statuses: ["interesado"] },
-      { key: "cerrado", label: "Cerrado", statuses: ["vendido", "perdido"] },
-    ],
-    [],
-  );
-
   const leadsByStage = useMemo(() => {
-    return stages.map((stage) => ({
-      ...stage,
-      leads: leads.filter((lead) => stage.statuses.includes(lead.status)),
+    return CRM_PIPELINE_STAGES.map((stage) => ({
+      key: stage.key,
+      label: CRM_PIPELINE_STATUS_LABELS[stage.key],
+      leads: leads.filter((lead) => getLeadCrmStageKey(lead.status) === stage.key),
     }));
-  }, [leads, stages]);
+  }, [leads]);
 
   return (
     <div className="space-y-6">

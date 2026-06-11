@@ -30,7 +30,7 @@ import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadCrmQuickAppointmentPicker } from "@/components/crm/LeadCrmQuickAppointmentPicker";
 import { LeadScheduleEventTag } from "@/components/crm/LeadScheduleEventTag";
-import { LeadContactUrgencyPicker } from "@/components/leads/LeadContactUrgencyPicker";
+import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
 import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
@@ -59,7 +59,11 @@ import {
   pickActiveCrmLeadQuickAppointment,
   type AppointmentRow,
 } from "@/lib/crmLeadQuickAppointment";
-import { contactUrgencyToPriority } from "@/lib/leadContactUrgency";
+import {
+  canSetLeadContactState,
+  contactStateToPriority,
+  type LeadContactState,
+} from "@/lib/leadContactState";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
@@ -292,9 +296,7 @@ const pipelineStyleFor = (stage: CrmStageKey): PipelineStatusStyle => ({
 });
 
 const PIPELINE_STYLES: Record<CrmStageKey, PipelineStatusStyle> = Object.fromEntries(
-  (["nuevo", "contactado", "agendado", "en_espera", "negociando", "para_cierre", "negocio_cerrado", "cancelado"] as const).map(
-    (key) => [key, pipelineStyleFor(key)],
-  ),
+  CRM_PIPELINE_STAGES.map((stage) => [stage.key, pipelineStyleFor(stage.key)]),
 ) as Record<CrmStageKey, PipelineStatusStyle>;
 
 const CLOSED_STYLES: Record<string, PipelineStatusStyle> = {
@@ -345,7 +347,7 @@ function pipelineSelectValueForForm(status: string): string {
   return safePipelineSelectValue(status);
 }
 
-const DEFAULT_PIPELINE_STYLE = PIPELINE_STYLES.contactado;
+const DEFAULT_PIPELINE_STYLE = PIPELINE_STYLES.en_seguimiento;
 
 const getStatusMeta = (value?: string | null) => {
   const s = (value ?? "").trim().toLowerCase();
@@ -366,7 +368,7 @@ const getStatusMeta = (value?: string | null) => {
     };
   }
   return {
-    label: PIPELINE_STATUS_LABELS[stage] ?? PIPELINE_STATUS_LABELS.contactado,
+    label: PIPELINE_STATUS_LABELS[stage] ?? PIPELINE_STATUS_LABELS.en_seguimiento,
     styles: PIPELINE_STYLES[stage] ?? DEFAULT_PIPELINE_STYLE,
   };
 };
@@ -706,7 +708,7 @@ function LeadsImpl({ user }: { user: User }) {
     reminderEnabled: false,
     reminderDueDate: "",
     reminderPriority: "today" as "urgent" | "today" | "later",
-    contact_urgency: null as number | null,
+    contact_state: null as LeadContactState | null,
   });
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -727,7 +729,7 @@ function LeadsImpl({ user }: { user: User }) {
     rut: "",
     phone: "",
     email: "",
-    status: "contactado",
+    status: "en_seguimiento",
     make: "",
     vehicle: "",
     model: "",
@@ -742,7 +744,7 @@ function LeadsImpl({ user }: { user: User }) {
     citaDayKey: null as string | null,
     citaMotivo: "",
     crmQuickAppointmentId: null as string | null,
-    contact_urgency: null as number | null,
+    contact_state: null as LeadContactState | null,
   });
   const editCitaSyncedRef = useRef(false);
 
@@ -894,14 +896,14 @@ function LeadsImpl({ user }: { user: User }) {
   const leadStats = useMemo(() => {
     const total = leads.length;
     const openLeads = leads.filter((l) => !isClosedLeadStatus(l.status));
-    const nuevo = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "nuevo").length;
+    const countByStage = (key: CrmStageKey) =>
+      openLeads.filter((lead) => getLeadPipelineStage(lead.status) === key).length;
     const cancelado = openLeads.filter((lead) => getLeadStatusBucket(lead.status) === "cancelado").length;
-    const contactado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "contactado").length;
-    const agendado = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "agendado").length;
-    const negociando = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "negociando").length;
-    const enEspera = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "en_espera").length;
-    const paraCierre = openLeads.filter((lead) => getLeadPipelineStage(lead.status) === "para_cierre").length;
-    return { total, nuevo, contactado, agendado, negociando, enEspera, paraCierre, cancelado };
+    return {
+      total,
+      cancelado,
+      ...Object.fromEntries(CRM_PIPELINE_STAGES.map((s) => [s.key, countByStage(s.key)])),
+    } as { total: number; cancelado: number } & Record<CrmStageKey, number>;
   }, [leads]);
 
   const {
@@ -1003,7 +1005,7 @@ function LeadsImpl({ user }: { user: User }) {
       reminderEnabled: false,
       reminderDueDate: tomorrow,
       reminderPriority: "today",
-      contact_urgency: null,
+      contact_state: null,
     });
   };
 
@@ -1076,7 +1078,7 @@ function LeadsImpl({ user }: { user: User }) {
         }
 
         const hasExtraInfo = Boolean(region || city || rut);
-        const status = !responded ? "contactado" : hasExtraInfo ? "negociando" : "contactado";
+        const status = !responded ? "en_seguimiento" : hasExtraInfo ? "negociando" : "en_seguimiento";
 
         const tags: string[] = [];
         if (vehicle) {
@@ -1267,10 +1269,11 @@ function LeadsImpl({ user }: { user: User }) {
         phone: normalizedCreatePhone,
         status: formState.status as any,
         source: formState.phone.trim() ? "telefono" : "otro",
-        priority: formState.contact_urgency != null
-          ? contactUrgencyToPriority(formState.contact_urgency)
-          : "media",
-        contact_urgency: formState.contact_urgency,
+        priority:
+          canSetLeadContactState(user?.role) && formState.contact_state != null
+            ? contactStateToPriority(formState.contact_state)
+            : "media",
+        contact_state: canSetLeadContactState(user?.role) ? formState.contact_state : null,
         tenant_id: user.tenant_id ?? null,
         branch_id: user.branch_id,
         assigned_to: user.role === "vendedor" ? user.id : null,
@@ -1365,7 +1368,7 @@ function LeadsImpl({ user }: { user: User }) {
       citaDayKey: null,
       citaMotivo: "",
       crmQuickAppointmentId: null,
-      contact_urgency: lead.contact_urgency ?? null,
+      contact_state: lead.contact_state ?? null,
     });
     setShowEditDialog(true);
   }, [consignacionByLeadId]);
@@ -1393,11 +1396,15 @@ function LeadsImpl({ user }: { user: User }) {
         cuotas_mensuales: editForm.cuotas_mensuales.trim() ? editForm.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(editForm.transmision),
         notes: editForm.notes.trim() ? editForm.notes.trim() : null,
-        contact_urgency: editForm.contact_urgency,
+        ...(canSetLeadContactState(user?.role)
+          ? {
+              contact_state: editForm.contact_state,
+              ...(editForm.contact_state != null
+                ? { priority: contactStateToPriority(editForm.contact_state) }
+                : {}),
+            }
+          : {}),
       };
-      if (editForm.contact_urgency != null) {
-        updates.priority = contactUrgencyToPriority(editForm.contact_urgency);
-      }
 
       // Preservar/actualizar tag marca:X aparte (no lo maneja buildTagsWithVehicleAndOrigin).
       let nextTags = buildTagsWithVehicleAndOrigin(
@@ -1662,24 +1669,11 @@ function LeadsImpl({ user }: { user: User }) {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Exportar por estado</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => handleExportLeads("nuevo")}>
-                {PIPELINE_STATUS_LABELS.nuevo}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("contactado")}>
-                {PIPELINE_STATUS_LABELS.contactado}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("agendado")}>
-                {PIPELINE_STATUS_LABELS.agendado}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("en_espera")}>
-                {PIPELINE_STATUS_LABELS.en_espera}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("negociando")}>
-                {PIPELINE_STATUS_LABELS.negociando}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleExportLeads("para_cierre")}>
-                {PIPELINE_STATUS_LABELS.para_cierre}
-              </DropdownMenuItem>
+              {CRM_MOVABLE_STAGE_KEYS.map((key) => (
+                <DropdownMenuItem key={key} onSelect={() => handleExportLeads(key)}>
+                  {PIPELINE_STATUS_LABELS[key]}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuItem onSelect={() => handleExportLeads("cancelado")}>
                 {CANCELLED_STATUS_LABELS.cancelado}
               </DropdownMenuItem>
@@ -1692,55 +1686,23 @@ function LeadsImpl({ user }: { user: User }) {
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <Card className="border-l-4 border-slate-400">
           <CardHeader className="pb-2">
             <CardDescription>Leads total</CardDescription>
             <CardTitle className="text-2xl text-slate-700">{leadStats.total}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-l-4 border-cyan-500">
-          <CardHeader className="pb-2">
-            <CardDescription>NUEVO</CardDescription>
-            <CardTitle className="text-2xl text-cyan-700 dark:text-cyan-300">{leadStats.nuevo}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-blue-500">
-          <CardHeader className="pb-2">
-            <CardDescription>CONTACTADO</CardDescription>
-            <CardTitle className="text-2xl text-blue-600">{leadStats.contactado}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-sky-500">
-          <CardHeader className="pb-2">
-            <CardDescription>AGENDADO</CardDescription>
-            <CardTitle className="text-2xl text-sky-700 dark:text-sky-300">{leadStats.agendado}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-violet-500">
-          <CardHeader className="pb-2">
-            <CardDescription>EN ESPERA</CardDescription>
-            <CardTitle className="text-2xl text-violet-700">{leadStats.enEspera}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-orange-500">
-          <CardHeader className="pb-2">
-            <CardDescription>NEGOCIANDO</CardDescription>
-            <CardTitle className="text-2xl text-orange-600">{leadStats.negociando}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-emerald-500">
-          <CardHeader className="pb-2">
-            <CardDescription>PARA CIERRE</CardDescription>
-            <CardTitle className="text-2xl text-emerald-700">{leadStats.paraCierre}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-l-4 border-rose-500">
-          <CardHeader className="pb-2">
-            <CardDescription>CANCELADO</CardDescription>
-            <CardTitle className="text-2xl text-rose-700 dark:text-rose-300">{leadStats.cancelado}</CardTitle>
-          </CardHeader>
-        </Card>
+        {CRM_PIPELINE_STAGES.filter((s) => s.key !== "negocio_cerrado").map((stage) => (
+          <Card key={stage.key} className={cn("border-l-4", CRM_STAGE_BORDER_CLASS[stage.key])}>
+            <CardHeader className="pb-2">
+              <CardDescription>{stage.label}</CardDescription>
+              <CardTitle className={cn("text-2xl", CRM_STAGE_TEXT_CLASS[stage.key])}>
+                {leadStats[stage.key]}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        ))}
       </div>
 
       {/* Filters */}
@@ -1888,12 +1850,14 @@ function LeadsImpl({ user }: { user: User }) {
                 />
               </div>
             </div>
-            <LeadContactUrgencyPicker
-              value={formState.contact_urgency}
-              localOnly
-              disabled={isCreating}
-              onChange={(next) => setFormState({ ...formState, contact_urgency: next })}
-            />
+            {canSetLeadContactState(user?.role) && (
+              <LeadContactStateSelect
+                value={formState.contact_state}
+                localOnly
+                disabled={isCreating}
+                onChange={(next) => setFormState({ ...formState, contact_state: next })}
+              />
+            )}
             <div className="grid gap-2">
               <Label htmlFor="lead_make">Marca</Label>
               <VehicleMakeCombobox
@@ -2122,12 +2086,14 @@ function LeadsImpl({ user }: { user: User }) {
                 />
               </div>
             </div>
-            <LeadContactUrgencyPicker
-              value={editForm.contact_urgency}
-              localOnly
-              disabled={isUpdating}
-              onChange={(next) => setEditForm({ ...editForm, contact_urgency: next })}
-            />
+            {canSetLeadContactState(user?.role) && (
+              <LeadContactStateSelect
+                value={editForm.contact_state}
+                localOnly
+                disabled={isUpdating}
+                onChange={(next) => setEditForm({ ...editForm, contact_state: next })}
+              />
+            )}
             <div className="grid gap-2">
               <Label htmlFor="edit_lead_email">Correo</Label>
               <Input

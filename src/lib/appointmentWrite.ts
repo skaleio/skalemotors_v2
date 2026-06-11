@@ -68,13 +68,22 @@ export function resolveAppointmentAssigneeId(params: {
   isVendor: boolean;
   canDelegate: boolean;
   formUserId?: string | null;
+  /** Desde CRM: vendedor del lead si el formulario quedó sin asignar explícito. */
+  leadAssignedTo?: string | null;
 }): string | null {
-  const { user, isVendor, canDelegate, formUserId } = params;
+  const { user, isVendor, canDelegate, formUserId, leadAssignedTo } = params;
   if (isVendor) return user.id ?? null;
+
+  const formId = formUserId?.trim() ?? "";
+  const leadOwnerId = leadAssignedTo?.trim() ?? "";
+
   if (canDelegate) {
-    const trimmed = formUserId?.trim() ?? "";
-    return trimmed.length > 0 ? trimmed : user.id ?? null;
+    if (formId.length > 0) return formId;
+    if (leadOwnerId.length > 0) return leadOwnerId;
+    return user.id ?? null;
   }
+
+  if (leadOwnerId.length > 0) return leadOwnerId;
   return user.id ?? null;
 }
 

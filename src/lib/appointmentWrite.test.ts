@@ -38,6 +38,18 @@ describe("appointmentWrite", () => {
     ).toBe("seller-1");
   });
 
+  it("desde CRM usa assigned_to del lead si el formulario quedó sin vendedor", () => {
+    expect(
+      resolveAppointmentAssigneeId({
+        user: { id: "g1", role: "gerente" },
+        isVendor: false,
+        canDelegate: true,
+        formUserId: "",
+        leadAssignedTo: "seller-42",
+      }),
+    ).toBe("seller-42");
+  });
+
   it("vendedor no puede actualizar cita de otro usuario", () => {
     expect(
       resolveWritableAppointmentId({

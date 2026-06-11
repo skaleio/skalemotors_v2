@@ -51,7 +51,8 @@ type Payload = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const VALID_PIPELINE_STATUSES = new Set([
-  "nuevo", "contactado", "interesado", "cotizando",
+  "nuevo", "no_contesta", "en_seguimiento", "buscando_vehiculo",
+  "contactado", "interesado", "cotizando",
   "agendado", "negociando", "en_espera", "para_cierre", "vendido", "perdido", "cancelado",
 ]);
 

@@ -331,10 +331,20 @@ export function CrmLeadScheduleAppointmentDialog({
       isVendor,
       canDelegate,
       formUserId: form.userId,
+      leadAssignedTo: lead.assigned_to,
     });
-    const assigneeSeller = assigneeId
-      ? delegatableSellers.find((s) => s.id === assigneeId)
-      : null;
+
+    if (!assigneeId) {
+      toast({
+        title: "Falta vendedor",
+        description:
+          "Selecciona un vendedor para que la cita aparezca en su calendario de Citas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const assigneeSeller = delegatableSellers.find((s) => s.id === assigneeId) ?? null;
 
     const writableAppointmentId = resolveWritableAppointmentId({
       existingId: existingAppointmentId,
@@ -388,7 +398,9 @@ export function CrmLeadScheduleAppointmentDialog({
 
       toast({
         title: "Cita agendada",
-        description: `${formatAppointmentDayLabel(startDate)} · visible en Citas`,
+        description: assigneeSeller
+          ? `${formatAppointmentDayLabel(startDate)} · calendario de ${assigneeSeller.full_name?.trim() || "vendedor"}`
+          : `${formatAppointmentDayLabel(startDate)} · visible en Citas del vendedor asignado`,
       });
 
       onScheduled?.(updatedLead, previousStatus);
