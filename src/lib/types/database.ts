@@ -1165,6 +1165,7 @@ export interface Database {
           created_by: string | null
           created_at: string
           updated_at: string | null
+          source: string
         }
         Insert: {
           id?: string
@@ -1175,6 +1176,7 @@ export interface Database {
           created_by?: string | null
           created_at?: string
           updated_at?: string | null
+          source?: string
         }
         Update: {
           id?: string
@@ -1185,6 +1187,54 @@ export interface Database {
           created_by?: string | null
           created_at?: string
           updated_at?: string | null
+          source?: string
+        }
+      }
+      lead_notes_archive: {
+        Row: {
+          id: string
+          note_id: string
+          lead_id: string
+          tenant_id: string
+          branch_id: string | null
+          body: string
+          created_by: string | null
+          note_created_at: string
+          note_updated_at: string | null
+          source: string
+          archived_at: string
+          archive_action: string
+          archived_by: string | null
+        }
+        Insert: {
+          id?: string
+          note_id: string
+          lead_id: string
+          tenant_id: string
+          branch_id?: string | null
+          body: string
+          created_by?: string | null
+          note_created_at: string
+          note_updated_at?: string | null
+          source?: string
+          archived_at?: string
+          archive_action: string
+          archived_by?: string | null
+        }
+        Update: {
+          id?: string
+          note_id?: string
+          lead_id?: string
+          tenant_id?: string
+          branch_id?: string | null
+          body?: string
+          created_by?: string | null
+          note_created_at?: string
+          note_updated_at?: string | null
+          source?: string
+          archived_at?: string
+          archive_action?: string
+          archived_by?: string | null
         }
       }
       lead_activities: {

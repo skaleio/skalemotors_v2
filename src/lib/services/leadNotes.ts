@@ -2,6 +2,21 @@ import { supabase } from '../supabase'
 import type { Database } from '../types/database'
 
 export type LeadNote = Database['public']['Tables']['lead_notes']['Row']
+export type LeadNoteArchive = {
+  id: string
+  note_id: string
+  lead_id: string
+  tenant_id: string
+  branch_id: string | null
+  body: string
+  created_by: string | null
+  note_created_at: string
+  note_updated_at: string | null
+  source: string
+  archived_at: string
+  archive_action: string
+  archived_by: string | null
+}
 type LeadNoteInsert = Database['public']['Tables']['lead_notes']['Insert']
 type LeadNoteUpdate = Database['public']['Tables']['lead_notes']['Update']
 
@@ -15,10 +30,31 @@ export const leadNoteService = {
       .from('lead_notes')
       .select('*, author:users!created_by(id, full_name, email)')
       .eq('lead_id', leadId)
+      .eq('source', 'vendor')
       .order('created_at', { ascending: true })
 
-    if (error) throw error
+    if (error) {
+      const { data: plain, error: plainError } = await supabase
+        .from('lead_notes')
+        .select('*')
+        .eq('lead_id', leadId)
+        .eq('source', 'vendor')
+        .order('created_at', { ascending: true })
+      if (plainError) throw plainError
+      return (plain ?? []) as LeadNoteWithAuthor[]
+    }
     return data as LeadNoteWithAuthor[]
+  },
+
+  async listArchiveByLead(leadId: string) {
+    const { data, error } = await supabase
+      .from('lead_notes_archive')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('archived_at', { ascending: false })
+
+    if (error) throw error
+    return (data ?? []) as LeadNoteArchive[]
   },
 
   async create(params: {
@@ -37,6 +73,7 @@ export const leadNoteService = {
       tenant_id: params.tenantId,
       branch_id: params.branchId ?? null,
       created_by: params.createdBy ?? null,
+      source: 'vendor',
     }
 
     const { data, error } = await supabase

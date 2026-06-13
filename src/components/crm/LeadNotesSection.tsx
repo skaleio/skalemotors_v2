@@ -4,10 +4,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import { leadNoteService } from "@/lib/services/leadNotes";
+import { formatIngestSummaryLabel, hasIngestSummary } from "@/lib/leadNotesLegacy";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 function formatNoteDate(iso: string) {
@@ -92,31 +93,44 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     const [isSaving, setIsSaving] = useState(false);
     const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
+    const canDeleteNotes =
+      user?.role === "admin"
+      || user?.role === "gerente"
+      || user?.role === "jefe_jefe"
+      || user?.role === "jefe_sucursal";
+
     const queryKey = ["lead-notes", leadId] as const;
 
-    const { data: notes = [], isLoading } = useQuery({
+    const { data: notes = [], isLoading, isError, error, refetch } = useQuery({
       queryKey,
       queryFn: () => leadNoteService.listByLead(leadId),
       enabled: !!leadId,
+      retry: 2,
     });
 
     const notesNewestFirst = useMemo(() => [...notes].reverse(), [notes]);
 
-    const legacyTrimmed = legacyNotes?.trim() ?? "";
-    const legacyAlreadyInNotes = useMemo(
-      () =>
-        legacyTrimmed.length > 0 &&
-        notes.some((n) => n.body.trim() === legacyTrimmed),
-      [notes, legacyTrimmed],
-    );
-    const showLegacyFallback =
-      !isLoading && legacyTrimmed.length > 0 && !legacyAlreadyInNotes;
+    const ingestSummary = legacyNotes?.trim() ?? "";
+    const showIngestSummary = hasIngestSummary(ingestSummary);
 
     useEffect(() => {
       setDraft("");
       setEditingNoteId(null);
       setEditDraft("");
     }, [leadId]);
+
+    const errorToastShownRef = useRef(false);
+
+    useEffect(() => {
+      if (!isError) {
+        errorToastShownRef.current = false;
+        return;
+      }
+      if (errorToastShownRef.current) return;
+      errorToastShownRef.current = true;
+      console.error("[LeadNotesSection] load", error);
+      toast.error("No se pudieron cargar las notas del lead. Intenta de nuevo.");
+    }, [isError, error]);
 
     const invalidate = useCallback(() => {
       queryClient.invalidateQueries({ queryKey });
@@ -141,21 +155,6 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
         try {
           const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
           const appended: typeof notes = [...cached];
-
-          const migrateLegacy =
-            legacyTrimmed.length > 0 &&
-            !appended.some((n) => n.body.trim() === legacyTrimmed);
-
-          if (migrateLegacy) {
-            const legacyRow = await leadNoteService.create({
-              leadId,
-              body: legacyTrimmed,
-              tenantId,
-              branchId: branchId ?? user?.branch_id ?? null,
-              createdBy: null,
-            });
-            appended.push(legacyRow);
-          }
 
           const created = await leadNoteService.create({
             leadId,
@@ -189,7 +188,6 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
         queryClient,
         queryKey,
         notes,
-        legacyTrimmed,
         invalidate,
         cancelEdit,
       ],
@@ -229,7 +227,8 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
       async (noteId: string) => {
         const ok = await askConfirm({
           title: "¿Eliminar esta nota?",
-          description: "Se borrará de forma permanente. Esta acción no se puede deshacer.",
+          description:
+            "Se quitará de la vista activa, pero quedará respaldada en el historial del lead.",
           confirmLabel: "Eliminar",
           destructive: true,
         });
@@ -275,7 +274,19 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
       >
         {!askConfirmProp ? internalConfirm.ConfirmDialog : null}
 
-        <Label htmlFor={`lead-note-draft-${leadId}`}>Notas de seguimiento</Label>
+        {showIngestSummary ? (
+          <div className="space-y-1.5 rounded-md border border-dashed border-sky-500/25 bg-sky-500/5 px-3 py-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-sky-800/80 dark:text-sky-200/80">
+              {formatIngestSummaryLabel()}
+            </p>
+            <p className="text-sm whitespace-pre-wrap text-foreground">{ingestSummary}</p>
+            <p className="text-[10px] text-muted-foreground">
+              Actualizado por WhatsApp/n8n. No reemplaza tus notas de seguimiento.
+            </p>
+          </div>
+        ) : null}
+
+        <Label htmlFor={`lead-note-draft-${leadId}`}>Notas de seguimiento (vendedor)</Label>
 
         <div className="space-y-2">
           <Textarea
@@ -287,9 +298,8 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             disabled={isSaving}
           />
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Cada guardado agrega una nota nueva; las anteriores no se modifican. Usa{" "}
-            <span className="font-medium">Guardar nota</span> o{" "}
-            <span className="font-medium">Guardar cambios</span> del lead.
+            Cada guardado agrega una nota de vendedor nueva. Queda respaldada automáticamente y no la
+            pisa el chatbot.
           </p>
           {draft.trim() ? (
             <Button
@@ -308,7 +318,7 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
         <div
           className={cn(
             "max-h-48 space-y-2 overflow-y-auto rounded-md border border-border/40 bg-background/60 p-2",
-            (notes.length > 0 || showLegacyFallback) && "min-h-[3rem]",
+            (notes.length > 0) && "min-h-[3rem]",
           )}
         >
           {isLoading ? (
@@ -318,15 +328,17 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             </p>
           ) : null}
 
-          {!isLoading && notes.length === 0 && !showLegacyFallback ? (
-            <p className="px-2 py-2 text-sm text-muted-foreground">Aún no hay notas guardadas.</p>
+          {isError ? (
+            <div className="space-y-2 px-2 py-2">
+              <p className="text-sm text-destructive">Error al cargar las notas guardadas.</p>
+              <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
+                Reintentar
+              </Button>
+            </div>
           ) : null}
 
-          {showLegacyFallback ? (
-            <article className="rounded-md border border-dashed border-border/60 bg-muted/30 px-3 py-2">
-              <p className="text-sm whitespace-pre-wrap text-foreground">{legacyTrimmed}</p>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Nota anterior (sin fecha registrada)</p>
-            </article>
+          {!isLoading && !isError && notes.length === 0 ? (
+            <p className="px-2 py-2 text-sm text-muted-foreground">Aún no hay notas de seguimiento.</p>
           ) : null}
 
           {notesNewestFirst.map((note) => {
@@ -355,22 +367,24 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
                     <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={cancelEdit}>
                       Cancelar
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      disabled={isSaving || deletingNoteId === note.id}
-                      onClick={() => void handleDeleteNote(note.id)}
-                    >
-                      {deletingNoteId === note.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden />
-                          Eliminar
-                        </>
-                      )}
-                    </Button>
+                    {canDeleteNotes ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={isSaving || deletingNoteId === note.id}
+                        onClick={() => void handleDeleteNote(note.id)}
+                      >
+                        {deletingNoteId === note.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+                            Eliminar
+                          </>
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
                   <NoteTimestamps
                     createdAt={note.created_at}
@@ -399,22 +413,24 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive opacity-100 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
-                    onClick={() => void handleDeleteNote(note.id)}
-                    disabled={isSaving || deletingNoteId === note.id}
-                    aria-label="Eliminar nota"
-                    title="Eliminar nota"
-                  >
-                    {deletingNoteId === note.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                  {canDeleteNotes ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive opacity-100 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                      onClick={() => void handleDeleteNote(note.id)}
+                      disabled={isSaving || deletingNoteId === note.id}
+                      aria-label="Eliminar nota"
+                      title="Eliminar nota"
+                    >
+                      {deletingNoteId === note.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  ) : null}
                 </div>
                 <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
                 <NoteTimestamps
