@@ -81,6 +81,58 @@ export const CRM_CANCELLED_VISIBLE_MAX = 5;
 /** Leads visibles por columna antes de mostrar «Ver más». */
 export const CRM_KANBAN_COLUMN_PREVIEW_MAX = 3;
 
+export type CrmKanbanLeadSortInput = {
+  assigned_to?: string | null;
+  assigned_at?: string | null;
+  contact_attempts?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+function parseSortTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function isLeadDelegatedForKanbanSort(lead: CrmKanbanLeadSortInput): boolean {
+  return Boolean(lead.assigned_to?.trim());
+}
+
+function isLeadMaxedOutForKanbanSort(lead: CrmKanbanLeadSortInput): boolean {
+  return Math.max(0, lead.contact_attempts ?? 0) >= 3;
+}
+
+/**
+ * Orden Kanban: sin delegar arriba → delegados abajo (recién delegados al fondo).
+ * Dentro de cada grupo, leads con 3 contactos al final.
+ */
+export function compareLeadsForCrmKanbanColumn(
+  a: CrmKanbanLeadSortInput,
+  b: CrmKanbanLeadSortInput,
+  stageKey: CrmStageKey,
+): number {
+  if (stageKey === "cancelado") {
+    return parseSortTimestamp(b.updated_at) - parseSortTimestamp(a.updated_at);
+  }
+
+  const aDelegated = isLeadDelegatedForKanbanSort(a) ? 1 : 0;
+  const bDelegated = isLeadDelegatedForKanbanSort(b) ? 1 : 0;
+  if (aDelegated !== bDelegated) return aDelegated - bDelegated;
+
+  const aMaxed = isLeadMaxedOutForKanbanSort(a) ? 1 : 0;
+  const bMaxed = isLeadMaxedOutForKanbanSort(b) ? 1 : 0;
+  if (aMaxed !== bMaxed) return aMaxed - bMaxed;
+
+  if (aDelegated === 0) {
+    return parseSortTimestamp(a.created_at) - parseSortTimestamp(b.created_at);
+  }
+
+  const aAssigned = parseSortTimestamp(a.assigned_at) || parseSortTimestamp(a.created_at);
+  const bAssigned = parseSortTimestamp(b.assigned_at) || parseSortTimestamp(b.created_at);
+  return aAssigned - bAssigned;
+}
+
 /** Columnas donde el usuario puede mover leads sin flujo de cierre de negocio. */
 export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerrado">[] = [
   "nuevo",

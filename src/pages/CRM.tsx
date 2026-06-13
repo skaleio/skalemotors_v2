@@ -40,6 +40,7 @@ import {
   CRM_PIPELINE_STATUS_LABELS,
   CRM_CANCELLED_VISIBLE_MAX,
   CRM_KANBAN_COLUMN_PREVIEW_MAX,
+  compareLeadsForCrmKanbanColumn,
   CRM_STAGE_BORDER_CLASS,
   CRM_STAGE_DOT_CLASS,
   CRM_STAGE_PILL_CLASS,
@@ -560,7 +561,7 @@ export default function CRM() {
   }, [location.search]);
 
   const queryClient = useQueryClient();
-  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
   const { leads, loading, isFetching, error: leadsError, refetch } = useLeads({
     branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
@@ -939,7 +940,6 @@ export default function CRM() {
   }, [scopedLeads, searchQuery, supervisedVendorId]);
 
   const leadsByStage = useMemo(() => {
-    const maxedOut = (lead: Lead) => (lead.contact_attempts ?? 0) >= 3;
     return stages.map((stage) => ({
       ...stage,
       leads: filteredLeads
@@ -951,16 +951,7 @@ export default function CRM() {
           return true;
         })
         .slice()
-        .sort((a, b) => {
-          if (stage.key === "cancelado") {
-            const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-            const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-            return tb - ta;
-          }
-          const aMax = maxedOut(a) ? 1 : 0;
-          const bMax = maxedOut(b) ? 1 : 0;
-          return aMax - bMax;
-        }),
+        .sort((a, b) => compareLeadsForCrmKanbanColumn(a, b, stage.key)),
     }));
   }, [filteredLeads, stages, crmCalendarMonthKey]);
 
@@ -1630,7 +1621,7 @@ export default function CRM() {
 
   return (
     <div className="space-y-6">
-      {ConfirmDialog}
+      <ConfirmDialogHost />
       {leadsError && (
         <div
           className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"

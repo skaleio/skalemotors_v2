@@ -18,7 +18,7 @@ import {
 
 export function MfaEnrollSection() {
   const qc = useQueryClient();
-  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
   const [friendlyName, setFriendlyName] = useState("");
   const [pending, setPending] = useState<EnrollResult | null>(null);
   const [code, setCode] = useState("");
@@ -92,7 +92,7 @@ export function MfaEnrollSection() {
 
   return (
     <>
-      {ConfirmDialog}
+      <ConfirmDialogHost />
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">

@@ -1,4 +1,5 @@
 import { AppointmentDateTimeField } from "@/components/appointments/AppointmentDateTimeField";
+import { AppointmentsErrorBoundary } from "@/components/appointments/AppointmentsErrorBoundary";
 import {
   appointmentDialogContentClass,
   appointmentDialogFooterClass,
@@ -241,9 +242,17 @@ function safeDate(value: string | null | undefined): Date | null {
 }
 
 export default function Appointments() {
+  return (
+    <AppointmentsErrorBoundary>
+      <AppointmentsPage />
+    </AppointmentsErrorBoundary>
+  );
+}
+
+function AppointmentsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppointmentId = searchParams.get("id");
   const handledDeepLinkRef = useRef<string | null>(null);
@@ -330,7 +339,7 @@ export default function Appointments() {
     branchId: user?.branch_id ?? undefined,
     enabled: !!user,
   });
-  const { appointments, loading, isFetching, refetch } = useAppointments({
+  const { appointments, loading, isFetching, refetch, error: appointmentsError } = useAppointments({
     userId: appointmentQueryFilters.userId,
     tenantId: appointmentQueryFilters.tenantId,
     branchId: appointmentQueryFilters.branchId,
@@ -837,15 +846,21 @@ export default function Appointments() {
     let total30d = 0;
 
     for (const e of events) {
-      const inLast30 = e.start >= thirtyDaysAgo;
-      if (inLast30) total30d++;
-      if (inLast30 && e.status === "cancelada") cancelled30d++;
+      if (Number.isNaN(e.start.getTime()) || Number.isNaN(e.end.getTime())) continue;
 
-      if (e.status === "cancelada") continue;
-      if (isToday(e.start)) today++;
-      if (isWithinInterval(e.start, { start: weekStart, end: weekEnd })) thisWeek++;
-      if (e.status === "programada" && e.start >= now) pending++;
-      if (e.status === "completada" && inLast30) completed++;
+      try {
+        const inLast30 = e.start >= thirtyDaysAgo;
+        if (inLast30) total30d++;
+        if (inLast30 && e.status === "cancelada") cancelled30d++;
+
+        if (e.status === "cancelada") continue;
+        if (isToday(e.start)) today++;
+        if (isWithinInterval(e.start, { start: weekStart, end: weekEnd })) thisWeek++;
+        if (e.status === "programada" && e.start >= now) pending++;
+        if (e.status === "completada" && inLast30) completed++;
+      } catch {
+        continue;
+      }
     }
 
     const cancellationRate =
@@ -879,6 +894,17 @@ export default function Appointments() {
     }
   }, [queryClient, refetch, appointments.length]);
 
+  if (user && role === "vendedor" && !user.id) {
+    return (
+      <div className="mx-auto max-w-lg space-y-3 px-6 py-16 text-center">
+        <h1 className="text-xl font-semibold">Calendario no disponible</h1>
+        <p className="text-sm text-muted-foreground">
+          Tu sesión no tiene un usuario de vendedor válido. Cierra sesión e ingresa de nuevo.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {effectiveSupervisedVendorId ? (
@@ -897,6 +923,12 @@ export default function Appointments() {
           >
             <X className="h-4 w-4" />
           </Button>
+        </div>
+      ) : null}
+
+      {appointmentsError ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          No se pudieron cargar las citas. Usa «Actualizar» o recarga la página.
         </div>
       ) : null}
 
@@ -1819,7 +1851,7 @@ export default function Appointments() {
         </DialogContent>
       </Dialog>
 
-      {ConfirmDialog}
+      <ConfirmDialogHost />
     </div>
   );
 }

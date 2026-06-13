@@ -101,7 +101,7 @@ export function AppSidebar() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
-  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
   const currentPath = location.pathname + location.search;
   const isCollapsed = state === "collapsed";
 
@@ -386,7 +386,7 @@ export function AppSidebar() {
 
   return (
     <>
-      {ConfirmDialog}
+      <ConfirmDialogHost />
     <TooltipProvider delayDuration={300}>
       <Sidebar
         onMouseEnter={handleMouseEnter}

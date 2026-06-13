@@ -576,7 +576,7 @@ export default function Consignaciones() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [selectedRanker, setSelectedRanker] = useState<ConsignacionesAdminRankingRow | null>(null);
   const isAdminScope = user?.role === "admin" || user?.role === "jefe_jefe";
-  const { confirm: askConfirm, ConfirmDialog } = useConfirmDialog();
+  const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
 
   // Sin filtrar por sucursal al cargar: mostrar todas las consignaciones
   const { consignaciones, loading, error: consignacionesError, refetch, setConsignaciones } = useConsignaciones({
@@ -1151,7 +1151,7 @@ export default function Consignaciones() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {ConfirmDialog}
+      <ConfirmDialogHost />
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Consignaciones</h1>

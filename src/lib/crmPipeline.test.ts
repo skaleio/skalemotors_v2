@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateLeadsByCrmStage,
+  compareLeadsForCrmKanbanColumn,
   CRM_PIPELINE_STAGES,
   coerceCrmPipelineStatus,
   crmStageToDbStatus,
@@ -45,6 +46,40 @@ describe("crmPipeline", () => {
     expect(isLeadHiddenFromCeoNuevoColumn(leads[1])).toBe(true);
     expect(isLeadHiddenFromCeoNuevoColumn(leads[2])).toBe(false);
     expect(filterLeadsForCrmCeoView(leads).map((l) => l.id)).toEqual(["1", "3"]);
+  });
+
+  it("orden Kanban: sin delegar arriba, delegados abajo", () => {
+    const unassigned = { assigned_to: null, contact_attempts: 0, created_at: "2026-05-02T10:00:00Z" };
+    const unassignedOlder = { assigned_to: null, contact_attempts: 0, created_at: "2026-05-01T10:00:00Z" };
+    const delegated = {
+      assigned_to: "vendor-1",
+      assigned_at: "2026-05-03T10:00:00Z",
+      contact_attempts: 0,
+      created_at: "2026-05-01T08:00:00Z",
+    };
+    const delegatedRecent = {
+      assigned_to: "vendor-2",
+      assigned_at: "2026-05-04T10:00:00Z",
+      contact_attempts: 0,
+      created_at: "2026-05-01T09:00:00Z",
+    };
+    const maxedUnassigned = { assigned_to: null, contact_attempts: 3, created_at: "2026-05-03T12:00:00Z" };
+
+    expect(compareLeadsForCrmKanbanColumn(unassigned, delegated, "nuevo")).toBeLessThan(0);
+    expect(compareLeadsForCrmKanbanColumn(delegated, delegatedRecent, "nuevo")).toBeLessThan(0);
+    expect(compareLeadsForCrmKanbanColumn(unassignedOlder, unassigned, "nuevo")).toBeLessThan(0);
+    expect(compareLeadsForCrmKanbanColumn(unassigned, maxedUnassigned, "nuevo")).toBeLessThan(0);
+
+    const sorted = [delegatedRecent, unassigned, delegated, maxedUnassigned, unassignedOlder].sort((a, b) =>
+      compareLeadsForCrmKanbanColumn(a, b, "nuevo"),
+    );
+    expect(sorted).toEqual([unassignedOlder, unassigned, maxedUnassigned, delegated, delegatedRecent]);
+  });
+
+  it("orden cancelados: más reciente primero", () => {
+    const older = { updated_at: "2026-05-01T10:00:00Z" };
+    const newer = { updated_at: "2026-05-03T10:00:00Z" };
+    expect(compareLeadsForCrmKanbanColumn(newer, older, "cancelado")).toBeLessThan(0);
   });
 
   it("convierte columna CRM a status DB al mover", () => {

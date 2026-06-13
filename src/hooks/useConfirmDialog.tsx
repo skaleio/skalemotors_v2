@@ -53,32 +53,36 @@ export function useConfirmDialog() {
     };
   }, []);
 
-  const ConfirmDialog = state ? (
-    <AlertDialog open onOpenChange={(open) => !open && close(false)}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{state.opts.title}</AlertDialogTitle>
-          {state.opts.description && (
-            <AlertDialogDescription>{state.opts.description}</AlertDialogDescription>
-          )}
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => close(false)}>
-            {state.opts.cancelLabel ?? "Cancelar"}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => close(true)}
-            className={cn(
-              state.opts.destructive &&
-                "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-            )}
-          >
-            {state.opts.confirmLabel ?? "Confirmar"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  ) : null;
+  /** Montar siempre como `<ConfirmDialogHost />` (componente real, no JSX precalculado). */
+  const ConfirmDialogHost = useCallback(function ConfirmDialogHost() {
+    if (!state) return null;
+    return (
+      <AlertDialog open onOpenChange={(open) => !open && close(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{state.opts.title}</AlertDialogTitle>
+            {state.opts.description ? (
+              <AlertDialogDescription>{state.opts.description}</AlertDialogDescription>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => close(false)}>
+              {state.opts.cancelLabel ?? "Cancelar"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => close(true)}
+              className={cn(
+                state.opts.destructive &&
+                  "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+              )}
+            >
+              {state.opts.confirmLabel ?? "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }, [state]);
 
-  return { confirm, ConfirmDialog };
+  return { confirm, ConfirmDialogHost };
 }

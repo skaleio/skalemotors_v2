@@ -16,6 +16,9 @@ export const appointmentDialogScrollClass = cn(
   "[&_[role=combobox]]:min-h-10 [&_[role=combobox]]:rounded-xl [&_[role=combobox]]:border-border/70",
 );
 
+export const appointmentFormFooterClass =
+  "appointment-form-footer flex items-center justify-between gap-3 pt-1";
+
 export const appointmentDialogFooterClass = cn(
   appointmentFormFooterClass,
   "shrink-0 border-t border-border/50 px-6 py-4 sm:px-7",
@@ -31,5 +34,3 @@ export const appointmentFormSectionClass = cn(
 export const appointmentFormDateBannerClass = cn(
   "rounded-2xl border border-border/50 bg-muted/25 px-4 py-3",
 );
-
-export const appointmentFormFooterClass = "appointment-form-footer flex items-center justify-between gap-3 pt-1";
