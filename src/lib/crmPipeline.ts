@@ -79,7 +79,7 @@ export const CRM_PIPELINE_STAGES: readonly CrmStageDefinition[] = [
 export const CRM_CANCELLED_VISIBLE_MAX = 5;
 
 /** Leads visibles por columna antes de mostrar «Ver más». */
-export const CRM_KANBAN_COLUMN_PREVIEW_MAX = 6;
+export const CRM_KANBAN_COLUMN_PREVIEW_MAX = 3;
 
 /** Columnas donde el usuario puede mover leads sin flujo de cierre de negocio. */
 export const CRM_MOVABLE_STAGE_KEYS: readonly Exclude<CrmStageKey, "negocio_cerrado">[] = [
