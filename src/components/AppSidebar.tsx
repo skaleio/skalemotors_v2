@@ -44,6 +44,7 @@ import {
   Wallet
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStickyNotes } from "@/hooks/useStickyNotes";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ProfileAvatarImage } from "@/components/ProfileAvatarImage";
@@ -99,6 +100,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { navigateWithLoading } = useNavigationWithLoading();
+  const { addNote: addStickyNote } = useStickyNotes();
   const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
   const { confirm: askConfirm, ConfirmDialogHost } = useConfirmDialog();
@@ -626,6 +628,24 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Nueva nota flotante tipo post-it */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  addStickyNote({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                }}
+                className="shrink-0 h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+                aria-label="Nueva nota"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">Nueva nota</TooltipContent>
+          </Tooltip>
 
           {/* Pin button — al lado del avatar (desktop). En collapsed va debajo. */}
           {!isMobile && (

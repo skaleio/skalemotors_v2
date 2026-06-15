@@ -7,6 +7,7 @@ export type NotificationEventKey =
   | "lead_contactado"
   | "lead_assigned"
   | "lead_note_added"
+  | "lead_ingested"
   | "lead_stale"
   | "consignacion_created"
   | "consignacion_stale"
@@ -86,6 +87,15 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventMeta[] = [
     icon: FileText,
     iconClass: "text-violet-500",
     description: "Un vendedor agregó una nota de seguimiento a un lead",
+    roles: ["admin"],
+  },
+  {
+    key: "lead_ingested",
+    label: "Leads entrantes",
+    short: "Entrantes",
+    icon: UserPlus,
+    iconClass: "text-cyan-600",
+    description: "Nuevo lead ingresado vía n8n / WhatsApp / integraciones",
     roles: ["admin"],
   },
   {
