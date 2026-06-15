@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { STICKY_NOTES_MAX, useStickyNotes } from "@/hooks/useStickyNotes";
 import type { StickyNoteColor } from "@/lib/services/stickyNotes";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, EyeOff, Plus, StickyNote as StickyNoteIcon } from "lucide-react";
+import { Eye, EyeOff, StickyNote as StickyNoteIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { NOTE_W, StickyNote } from "./StickyNote";
@@ -82,21 +82,17 @@ export function StickyNotesLayer() {
         <motion.button
           type="button"
           aria-label="Nueva nota"
+          title="Nueva nota"
           onClick={addNote}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.94 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           className={cn(
-            "group relative flex h-14 items-center gap-2 rounded-full pl-4 pr-5",
-            "bg-gradient-to-br from-amber-300 to-amber-400 text-amber-950",
-            "shadow-xl shadow-amber-500/40 ring-1 ring-amber-600/30",
+            "flex h-11 w-11 items-center justify-center rounded-full",
+            "border border-border bg-background/90 text-foreground/70 shadow-md backdrop-blur",
+            "transition-colors hover:bg-background hover:text-foreground",
           )}
         >
-          {notes.length === 0 && (
-            <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-amber-400/70" />
-          )}
-          <StickyNoteIcon className="h-6 w-6" />
-          <span className="text-sm font-bold">Nota</span>
-          <Plus className="h-4 w-4 opacity-70" />
+          <StickyNoteIcon className="h-5 w-5" />
         </motion.button>
       </div>
     </>

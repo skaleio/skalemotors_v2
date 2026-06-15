@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { StickyNote as StickyNoteRow, StickyNoteColor } from "@/lib/services/stickyNotes";
 import { AnimatePresence, motion, useDragControls, useMotionValue } from "framer-motion";
-import { Check, GripHorizontal, Trash2, X } from "lucide-react";
+import { Check, GripHorizontal, Maximize2, Minus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export const NOTE_W = 248;
@@ -42,6 +42,7 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
   const [color, setColor] = useState<StickyNoteColor>(note.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const debounceRef = useRef<number | null>(null);
   const palette = PALETTE[color];
 
@@ -96,7 +97,8 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
     >
       <div
         className={cn(
-          "flex h-[248px] flex-col overflow-hidden rounded-sm bg-gradient-to-br shadow-[0_10px_30px_-8px_rgba(0,0,0,0.35)]",
+          "flex flex-col overflow-hidden rounded-sm bg-gradient-to-br shadow-[0_10px_30px_-8px_rgba(0,0,0,0.35)]",
+          minimized ? "h-auto" : "h-[248px]",
           palette.sheet,
           dragging && "shadow-[0_24px_50px_-12px_rgba(0,0,0,0.45)]",
         )}
@@ -105,9 +107,15 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
           onPointerDown={(e) => controls.start(e)}
           className={cn("flex cursor-grab items-center gap-1 px-2 py-1.5 active:cursor-grabbing", palette.bar)}
         >
-          <GripHorizontal className={cn("h-4 w-4 opacity-50", palette.text)} />
-          <div className="ml-auto flex items-center gap-1">
-            {COLORS.map((c) => (
+          <GripHorizontal className={cn("h-4 w-4 shrink-0 opacity-50", palette.text)} />
+          {minimized && (
+            <span className={cn("truncate text-xs font-medium", palette.text)}>
+              {content.trim() || "Nota vacía"}
+            </span>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {!minimized &&
+              COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
@@ -121,6 +129,18 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
                 )}
               />
             ))}
+            <button
+              type="button"
+              aria-label={minimized ? "Expandir nota" : "Minimizar nota"}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                if (!minimized) flush(content);
+                setMinimized((m) => !m);
+              }}
+              className={cn("rounded p-0.5 opacity-60 transition-opacity hover:opacity-100", palette.text)}
+            >
+              {minimized ? <Maximize2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+            </button>
             <AnimatePresence mode="wait" initial={false}>
               {confirmDelete ? (
                 <motion.span
@@ -164,16 +184,18 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
             </AnimatePresence>
           </div>
         </div>
-        <textarea
-          value={content}
-          onChange={(e) => handleChange(e.target.value)}
-          onBlur={() => flush(content)}
-          placeholder="Escribe algo…"
-          className={cn(
-            "flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-snug outline-none placeholder:opacity-40",
-            palette.text,
-          )}
-        />
+        {!minimized && (
+          <textarea
+            value={content}
+            onChange={(e) => handleChange(e.target.value)}
+            onBlur={() => flush(content)}
+            placeholder="Escribe algo…"
+            className={cn(
+              "flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-snug outline-none placeholder:opacity-40",
+              palette.text,
+            )}
+          />
+        )}
       </div>
     </motion.div>
   );
