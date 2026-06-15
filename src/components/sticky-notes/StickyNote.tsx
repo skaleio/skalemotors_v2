@@ -44,6 +44,7 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [entering, setEntering] = useState(Boolean(origin));
   const debounceRef = useRef<number | null>(null);
   const palette = PALETTE[color];
 
@@ -58,8 +59,8 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
     if (!origin) return;
     x.set(origin.x);
     y.set(origin.y);
-    const ax = animate(x, note.pos_x, { type: "spring", stiffness: 240, damping: 26 });
-    const ay = animate(y, note.pos_y, { type: "spring", stiffness: 240, damping: 26 });
+    const ax = animate(x, note.pos_x, { type: "spring", stiffness: 220, damping: 16 });
+    const ay = animate(y, note.pos_y, { type: "spring", stiffness: 210, damping: 14 });
     return () => {
       ax.stop();
       ay.stop();
@@ -109,18 +110,30 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
           ? { scale: 0.1, opacity: 0, rotate: 0 }
           : { scale: 0.6, opacity: 0, rotate: tiltFromId(note.id) - 6 }
       }
-      animate={{ scale: 1, opacity: 1, rotate: dragging ? 0 : tiltFromId(note.id) }}
+      animate={
+        entering
+          ? { scale: [0.1, 1.14, 0.94, 1.03, 1], opacity: [0, 1, 1, 1, 1], rotate: tiltFromId(note.id) }
+          : { scale: 1, opacity: 1, rotate: dragging ? 0 : tiltFromId(note.id) }
+      }
+      onAnimationComplete={() => setEntering(false)}
       exit={{ scale: 0.5, opacity: 0, rotate: 8, transition: { duration: 0.18 } }}
       whileDrag={{ scale: 1.05 }}
-      transition={{ type: "spring", stiffness: 320, damping: 26 }}
+      transition={
+        entering
+          ? { duration: 0.7, times: [0, 0.45, 0.68, 0.85, 1], ease: "easeOut" }
+          : { type: "spring", stiffness: 320, damping: 26 }
+      }
     >
-      <div
+      <motion.div
         className={cn(
           "flex flex-col overflow-hidden rounded-sm bg-gradient-to-br shadow-[0_10px_30px_-8px_rgba(0,0,0,0.35)]",
           minimized ? "h-auto" : "h-[248px]",
           palette.sheet,
           dragging && "shadow-[0_24px_50px_-12px_rgba(0,0,0,0.45)]",
         )}
+        initial={origin ? { borderRadius: 64 } : false}
+        animate={{ borderRadius: 4 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
       >
         <div
           onPointerDown={(e) => controls.start(e)}
@@ -215,7 +228,7 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
             )}
           />
         )}
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
