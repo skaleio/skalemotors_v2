@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { PageRestore } from "@/components/PageRestore";
 import { PageLoader } from "@/components/PageLoader";
 import { GlobalQuickActions } from "@/components/GlobalQuickActions";
+import { StickyNotesLayer } from "@/components/sticky-notes/StickyNotesLayer";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import { MobileBottomNav, MOBILE_BOTTOM_NAV_OFFSET_CLASS } from "@/components/MobileBottomNav";
 import SupportChat from "@/components/SupportChat";
@@ -93,6 +94,9 @@ export function Layout({ children }: LayoutProps) {
       {showBottomNav ? <MobileBottomNav /> : null}
       <PageLoader />
       <GlobalQuickActions />
+
+      {/* Notas flotantes tipo post-it: solo desktop (en mobile taparían la bottom nav) */}
+      {!showBottomNav ? <StickyNotesLayer /> : null}
 
       {/* Chat flotante solo en desktop; en mobile va en TopBar */}
       {!showBottomNav ? <FloatingChatButton onClick={openChat} /> : null}
