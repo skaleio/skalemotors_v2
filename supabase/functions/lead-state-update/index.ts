@@ -128,6 +128,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
+  // Rate limit por sucursal (fetch directo a PostgREST, sin supabase-js). Fail-open.
+  try {
+    const rlRes = await fetch(`${supabaseUrl}/rest/v1/rpc/check_rate_limit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": serviceRoleKey,
+        "Authorization": `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify({
+        p_identifier: `branch:${branchId}`,
+        p_route: "lead-state-update",
+        p_max: 240,
+        p_window_seconds: 60,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (rlRes.ok) {
+      const allowed = (await rlRes.json()) as boolean;
+      if (allowed === false) {
+        return jsonResponse(429, { ok: false, error: "Demasiadas solicitudes. Esperá un momento e intentá de nuevo." });
+      }
+    }
+  } catch (_) {
+    // fail-open: no bloquear tráfico legítimo ante error del RPC
+  }
+
   // UPDATE leads via PostgREST directo (sin supabase-js).
   const stateConfidence = body.state_confidence === null || body.state_confidence === undefined
     ? null
