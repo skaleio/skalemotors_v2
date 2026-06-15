@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { StickyNote as StickyNoteRow, StickyNoteColor } from "@/lib/services/stickyNotes";
-import { animate, AnimatePresence, motion, useDragControls, useMotionValue } from "framer-motion";
+import { AnimatePresence, motion, useDragControls, useMotionValue } from "framer-motion";
 import { Check, GripHorizontal, Maximize2, Minus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -37,14 +37,13 @@ interface StickyNoteProps {
 
 export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFocus }: StickyNoteProps) {
   const controls = useDragControls();
-  const x = useMotionValue(origin ? origin.x : note.pos_x);
-  const y = useMotionValue(origin ? origin.y : note.pos_y);
+  const x = useMotionValue(note.pos_x);
+  const y = useMotionValue(note.pos_y);
   const [content, setContent] = useState(note.content);
   const [color, setColor] = useState<StickyNoteColor>(note.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [entering, setEntering] = useState(Boolean(origin));
   const debounceRef = useRef<number | null>(null);
   const palette = PALETTE[color];
 
@@ -53,20 +52,6 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
     x.set(clamp(x.get(), 8, Math.max(8, viewport.w - NOTE_W)));
     y.set(clamp(y.get(), 8, Math.max(8, viewport.h - NOTE_H)));
   }, [viewport.w, viewport.h, x, y]);
-
-  // "Nace desde el +": arranca en el origen (el botón) y vuela hasta su posición.
-  useEffect(() => {
-    if (!origin) return;
-    x.set(origin.x);
-    y.set(origin.y);
-    const ax = animate(x, note.pos_x, { type: "spring", stiffness: 220, damping: 16 });
-    const ay = animate(y, note.pos_y, { type: "spring", stiffness: 210, damping: 14 });
-    return () => {
-      ax.stop();
-      ay.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const flush = (value: string) => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
@@ -105,24 +90,11 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
       }}
       style={{ x, y, zIndex: z, width: NOTE_W }}
       className="pointer-events-auto fixed left-0 top-0"
-      initial={
-        origin
-          ? { scale: 0.1, opacity: 0, rotate: 0 }
-          : { scale: 0.6, opacity: 0, rotate: tiltFromId(note.id) - 6 }
-      }
-      animate={
-        entering
-          ? { scale: [0.1, 1.14, 0.94, 1.03, 1], opacity: [0, 1, 1, 1, 1], rotate: tiltFromId(note.id) }
-          : { scale: 1, opacity: 1, rotate: dragging ? 0 : tiltFromId(note.id) }
-      }
-      onAnimationComplete={() => setEntering(false)}
+      initial={{ rotate: origin ? 0 : tiltFromId(note.id) - 6 }}
+      animate={{ rotate: dragging ? 0 : tiltFromId(note.id) }}
       exit={{ scale: 0.5, opacity: 0, rotate: 8, transition: { duration: 0.18 } }}
       whileDrag={{ scale: 1.05 }}
-      transition={
-        entering
-          ? { duration: 0.7, times: [0, 0.45, 0.68, 0.85, 1], ease: "easeOut" }
-          : { type: "spring", stiffness: 320, damping: 26 }
-      }
+      transition={{ type: "spring", stiffness: 320, damping: 26 }}
     >
       <motion.div
         className={cn(
@@ -131,9 +103,23 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
           palette.sheet,
           dragging && "shadow-[0_24px_50px_-12px_rgba(0,0,0,0.45)]",
         )}
-        initial={origin ? { borderRadius: 64 } : false}
-        animate={{ borderRadius: 4 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
+        initial={
+          origin
+            ? {
+                x: origin.x - note.pos_x,
+                y: origin.y - note.pos_y,
+                scale: 0.08,
+                opacity: 0,
+                borderRadius: 64,
+              }
+            : { scale: 0.6, opacity: 0, borderRadius: 4 }
+        }
+        animate={{ x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 4 }}
+        transition={
+          origin
+            ? { type: "spring", stiffness: 190, damping: 15 }
+            : { type: "spring", stiffness: 320, damping: 26 }
+        }
       >
         <div
           onPointerDown={(e) => controls.start(e)}
