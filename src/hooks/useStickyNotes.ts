@@ -6,7 +6,7 @@ import {
   type StickyNotePatch,
 } from "@/lib/services/stickyNotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 export const STICKY_NOTES_MAX = 30;
@@ -14,6 +14,7 @@ const NOTE_WIDTH = 248;
 const COLOR_CYCLE: StickyNoteColor[] = ["yellow", "pink", "blue", "green", "purple", "orange"];
 
 interface CreateNoteInput {
+  id: string;
   color: StickyNoteColor;
   pos_x: number;
   pos_y: number;
@@ -27,7 +28,6 @@ export function useStickyNotes() {
 
   // Origen de la animación "nace desde el +": coords en pantalla del botón disparador.
   const [spawn, setSpawn] = useState<{ id: string; x: number; y: number } | null>(null);
-  const spawnOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   const { data: notes = [], isLoading: loading } = useQuery({
     queryKey,
@@ -43,9 +43,31 @@ export function useStickyNotes() {
 
   const createNote = useMutation({
     mutationFn: (input: CreateNoteInput) => stickyNotesService.create(input),
-    onSuccess: (data) => {
-      const origin = spawnOriginRef.current;
-      if (origin) setSpawn({ id: data.id, x: origin.x, y: origin.y });
+    // Inserción optimista: la nota aparece al instante (con el id ya generado en el cliente),
+    // así el efecto de "nacer del +" arranca con el click, sin esperar al server.
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<StickyNote[]>(queryKey);
+      const now = new Date().toISOString();
+      const optimistic: StickyNote = {
+        id: input.id,
+        tenant_id: user?.tenant_id ?? "",
+        user_id: user?.id ?? "",
+        content: "",
+        color: input.color,
+        pos_x: input.pos_x,
+        pos_y: input.pos_y,
+        z_index: input.z_index,
+        created_at: now,
+        updated_at: now,
+      };
+      queryClient.setQueryData<StickyNote[]>(queryKey, (old) => [...(old ?? []), optimistic]);
+      return { previous };
+    },
+    onError: (_err, _input, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey });
     },
   });
@@ -93,12 +115,14 @@ export function useStickyNotes() {
       toast.warning(`Llegaste al máximo de ${STICKY_NOTES_MAX} notas`);
       return;
     }
-    spawnOriginRef.current = origin ?? null;
+    const id = crypto.randomUUID();
+    if (origin) setSpawn({ id, x: origin.x, y: origin.y });
     const i = notes.length;
     createNote.mutate({
+      id,
       color: COLOR_CYCLE[i % COLOR_CYCLE.length],
-      pos_x: Math.min(40 + (i % 6) * 26, Math.max(8, window.innerWidth - NOTE_WIDTH)),
-      pos_y: 120 + (i % 6) * 26,
+      pos_x: Math.min(340 + (i % 5) * 28, Math.max(8, window.innerWidth - NOTE_WIDTH)),
+      pos_y: 150 + (i % 5) * 28,
       z_index: maxZIndex + 1,
     });
   }, [notes.length, maxZIndex, createNote]);
