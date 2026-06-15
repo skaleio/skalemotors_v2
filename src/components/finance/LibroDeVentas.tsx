@@ -134,7 +134,7 @@ export function LibroDeVentas() {
           </p>
         ) : (
           <div className="max-h-[72vh] overflow-auto [scrollbar-width:thin]">
-            <table className="w-max min-w-full border-collapse text-[13px]">
+            <table className="w-max min-w-full border-separate border-spacing-0 text-[13px]">
               <thead>
                 <tr>
                   <th className={`${HEAD_IN} sticky left-0 z-30 w-[44px] text-center`}>N°</th>
@@ -170,10 +170,10 @@ export function LibroDeVentas() {
               <tbody>
                 {data.rows.map((r) => (
                   <tr key={r.id} className="group transition-colors hover:bg-muted/40">
-                    <td className={`${CELL} sticky left-0 z-10 w-[44px] bg-card text-center font-medium group-hover:bg-muted/40`}>
+                    <td className={`${CELL} sticky left-0 z-10 w-[44px] bg-card text-center font-medium group-hover:bg-accent`}>
                       {r.numero_venta ?? ""}
                     </td>
-                    <td className={`${CELL} sticky left-[44px] z-10 bg-card border-r border-border font-medium group-hover:bg-muted/40 ${FROZEN_SHADOW}`}>
+                    <td className={`${CELL} sticky left-[44px] z-10 bg-card border-r border-border font-medium group-hover:bg-accent ${FROZEN_SHADOW}`}>
                       {r.sale?.client_name ?? ""}
                     </td>
                     <td className={CELL}>{fecha(r.sale?.sale_date)}</td>
