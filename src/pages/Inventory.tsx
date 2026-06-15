@@ -602,6 +602,7 @@ export default function Inventory() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [patenteLookupLoading, setPatenteLookupLoading] = useState(false);
+  const [vehicleFormRevealed, setVehicleFormRevealed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -1040,6 +1041,7 @@ export default function Inventory() {
         transmision_display: vehicle.transmision || prev.transmision_display,
         combustible_display: vehicle.combustible || prev.combustible_display,
       }));
+      setVehicleFormRevealed(true);
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
@@ -2605,6 +2607,7 @@ export default function Inventory() {
               navigate(location.pathname, { replace: true });
             }
             setNewVehicle(createEmptyNewVehicle());
+            setVehicleFormRevealed(false);
           }
         }}
       >
@@ -2653,8 +2656,19 @@ export default function Inventory() {
                   )}
                 </Button>
               </div>
+              {!vehicleFormRevealed && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline mt-2"
+                  onClick={() => setVehicleFormRevealed(true)}
+                >
+                  Completar manualmente sin patente
+                </button>
+              )}
             </div>
 
+            {vehicleFormRevealed && (
+            <>
             <div>
               <Label htmlFor="images">Fotos del vehículo</Label>
               <div className="mt-2">
@@ -3019,6 +3033,8 @@ export default function Inventory() {
               isSaving={isSaving}
               submitLabel="Guardar vehículo"
             />
+            </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
