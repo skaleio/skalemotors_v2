@@ -6,15 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { useLibroVentas } from "@/hooks/useLibroVentas";
 import type { LibroVentaRow } from "@/lib/services/saleBreakdown";
 
@@ -41,9 +33,22 @@ function socioMonto(row: LibroVentaRow, nombre: string): number {
   return list.find((s) => s.nombre === nombre)?.monto ?? 0;
 }
 
-// Cabecera azul = se ingresa; verde = se calcula.
-const TH_IN = "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 whitespace-nowrap";
-const TH_CALC = "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 whitespace-nowrap";
+// Paleta: azul = se ingresa, verde = se calcula.
+const HEAD_BASE =
+  "sticky top-0 z-20 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide border-b";
+const HEAD_IN = `${HEAD_BASE} bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300`;
+const HEAD_CALC = `${HEAD_BASE} bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300`;
+const CELL = "whitespace-nowrap px-3 py-1.5 border-b border-border/50";
+const NUM = `${CELL} text-right tabular-nums`;
+
+function money_(n: number | null | undefined) {
+  const v = Number(n ?? 0);
+  return (
+    <span className={v < 0 ? "text-red-600 dark:text-red-400" : undefined}>
+      {money(v)}
+    </span>
+  );
+}
 
 export function LibroDeVentas() {
   const { data, isLoading, error } = useLibroVentas();
@@ -65,6 +70,7 @@ export function LibroDeVentas() {
       utilidadFinal: rows.reduce((s, r) => s + Number(r.utilidad_final_miami ?? 0), 0),
       gastoTotal: rows.reduce((s, r) => s + Number(r.gasto_total ?? 0), 0),
       gerencia: rows.reduce((s, r) => s + Number(r.comision_gerencia ?? 0), 0),
+      precioTotal: rows.reduce((s, r) => s + Number(r.precio_total ?? 0), 0),
       socios: Object.fromEntries(
         socioNombres.map((n) => [n, rows.reduce((s, r) => s + socioMonto(r, n), 0)]),
       ) as Record<string, number>,
@@ -74,127 +80,159 @@ export function LibroDeVentas() {
   const s = data?.settings;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Libro de Ventas</CardTitle>
-        <CardDescription>
-          Cada venta con su cascada completa. Columnas{" "}
-          <span className="text-blue-600 dark:text-blue-400">azules</span> se ingresan;{" "}
-          <span className="text-emerald-600 dark:text-emerald-400">verdes</span> se calculan solas.
-        </CardDescription>
+    <Card className="overflow-hidden">
+      <CardHeader className="gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-xl">Libro de Ventas</CardTitle>
+            <CardDescription className="mt-1">
+              Cada venta con su cascada completa, calculada automáticamente.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-blue-200 dark:bg-blue-900" />
+              Se ingresa
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-emerald-200 dark:bg-emerald-900" />
+              Se calcula
+            </span>
+          </div>
+        </div>
         {s && (
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>Comisión venta: {money(s.comisionVentaDefault)}</span>
-            <span>Comisión consignador: {money(s.comisionConsignadorDefault)}</span>
-            <span>Gerencia: {(s.pctGerencia * 100).toFixed(0)}%</span>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="font-normal">
+              Comisión venta {money(s.comisionVentaDefault)}
+            </Badge>
+            <Badge variant="secondary" className="font-normal">
+              Comisión consignador {money(s.comisionConsignadorDefault)}
+            </Badge>
+            <Badge variant="secondary" className="font-normal">
+              Gerencia {(s.pctGerencia * 100).toFixed(0)}%
+            </Badge>
             {s.socios.map((so) => (
-              <span key={so.nombre}>
-                {so.nombre}: {(so.pct * 100).toFixed(0)}%
-              </span>
+              <Badge key={so.nombre} variant="secondary" className="font-normal">
+                {so.nombre} {(so.pct * 100).toFixed(0)}%
+              </Badge>
             ))}
           </div>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Cargando libro…</p>
+          <p className="px-6 py-8 text-sm text-muted-foreground">Cargando libro…</p>
         ) : error ? (
-          <p className="text-sm text-destructive">No se pudo cargar el libro de ventas.</p>
+          <p className="px-6 py-8 text-sm text-destructive">
+            No se pudo cargar el libro de ventas.
+          </p>
         ) : !data?.rows.length ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="px-6 py-8 text-sm text-muted-foreground">
             Todavía no hay ventas con desglose en el libro.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className={TH_IN}>N°</TableHead>
-                  <TableHead className={TH_IN}>Fecha</TableHead>
-                  <TableHead className={TH_IN}>Cliente</TableHead>
-                  <TableHead className={TH_IN}>Vehículo</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Precio total</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Pie</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Saldo precio</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Precio consig.</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Primer pago</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Pago final</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Utilidad bruta</TableHead>
-                  <TableHead className={TH_IN}>Vendedor</TableHead>
-                  <TableHead className={TH_IN}>Consignador</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Com. venta</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Com. consig.</TableHead>
-                  <TableHead className={`${TH_IN} text-right`}>Gasto general</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Gasto total</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Util. antes ger.</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Com. gerencia</TableHead>
-                  <TableHead className={`${TH_CALC} text-right`}>Util. post ger.</TableHead>
+          <div className="max-h-[70vh] overflow-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className={`${HEAD_IN} sticky left-0 z-30 w-[44px] text-center`}>N°</th>
+                  <th className={`${HEAD_IN} sticky left-[44px] z-30 text-left border-r border-border`}>
+                    Cliente
+                  </th>
+                  <th className={`${HEAD_IN} text-left`}>Fecha</th>
+                  <th className={`${HEAD_IN} text-left`}>Vehículo</th>
+                  <th className={`${HEAD_IN} text-right`}>Precio total</th>
+                  <th className={`${HEAD_IN} text-right`}>Pie</th>
+                  <th className={`${HEAD_CALC} text-right`}>Saldo precio</th>
+                  <th className={`${HEAD_IN} text-right`}>Precio consig.</th>
+                  <th className={`${HEAD_IN} text-right`}>Primer pago</th>
+                  <th className={`${HEAD_IN} text-right`}>Pago final</th>
+                  <th className={`${HEAD_CALC} text-right`}>Utilidad bruta</th>
+                  <th className={`${HEAD_IN} text-left`}>Vendedor</th>
+                  <th className={`${HEAD_IN} text-left`}>Consignador</th>
+                  <th className={`${HEAD_IN} text-right`}>Com. venta</th>
+                  <th className={`${HEAD_IN} text-right`}>Com. consig.</th>
+                  <th className={`${HEAD_IN} text-right`}>Gasto general</th>
+                  <th className={`${HEAD_CALC} text-right`}>Gasto total</th>
+                  <th className={`${HEAD_CALC} text-right`}>Util. antes ger.</th>
+                  <th className={`${HEAD_CALC} text-right`}>Com. gerencia</th>
+                  <th className={`${HEAD_CALC} text-right`}>Util. post ger.</th>
                   {socioNombres.map((n) => (
-                    <TableHead key={n} className={`${TH_CALC} text-right`}>
+                    <th key={n} className={`${HEAD_CALC} text-right`}>
                       {n}
-                    </TableHead>
+                    </th>
                   ))}
-                  <TableHead className={`${TH_CALC} text-right`}>Utilidad final</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                  <th className={`${HEAD_CALC} text-right`}>Utilidad final</th>
+                </tr>
+              </thead>
+              <tbody>
                 {data.rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.numero_venta ?? ""}</TableCell>
-                    <TableCell className="whitespace-nowrap">{fecha(r.sale?.sale_date)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{r.sale?.client_name ?? ""}</TableCell>
-                    <TableCell className="whitespace-nowrap">{r.sale?.vehicle_description ?? ""}</TableCell>
-                    <TableCell className="text-right">{money(r.precio_total)}</TableCell>
-                    <TableCell className="text-right">{money(r.pie)}</TableCell>
-                    <TableCell className="text-right">{money(r.saldo_precio)}</TableCell>
-                    <TableCell className="text-right">{money(r.precio_consignacion)}</TableCell>
-                    <TableCell className="text-right">{money(r.primer_pago)}</TableCell>
-                    <TableCell className="text-right">{money(r.pago_final)}</TableCell>
-                    <TableCell className="text-right">{money(r.utilidad_bruta)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{r.sale?.seller_name ?? ""}</TableCell>
-                    <TableCell className="whitespace-nowrap">{r.consignador_nombre ?? ""}</TableCell>
-                    <TableCell className="text-right">{money(r.comision_venta)}</TableCell>
-                    <TableCell className="text-right">{money(r.comision_consignador)}</TableCell>
-                    <TableCell className="text-right">{money(r.gasto_general)}</TableCell>
-                    <TableCell className="text-right">{money(r.gasto_total)}</TableCell>
-                    <TableCell className="text-right">{money(r.utilidad_antes_gerencia)}</TableCell>
-                    <TableCell className="text-right">{money(r.comision_gerencia)}</TableCell>
-                    <TableCell className="text-right">{money(r.utilidad_post_gerencia)}</TableCell>
+                  <tr key={r.id} className="group transition-colors hover:bg-muted/40">
+                    <td className={`${CELL} sticky left-0 z-10 w-[44px] bg-card text-center font-medium group-hover:bg-muted/40`}>
+                      {r.numero_venta ?? ""}
+                    </td>
+                    <td className={`${CELL} sticky left-[44px] z-10 bg-card border-r border-border font-medium group-hover:bg-muted/40`}>
+                      {r.sale?.client_name ?? ""}
+                    </td>
+                    <td className={CELL}>{fecha(r.sale?.sale_date)}</td>
+                    <td className={CELL}>{r.sale?.vehicle_description ?? ""}</td>
+                    <td className={NUM}>{money_(r.precio_total)}</td>
+                    <td className={NUM}>{money_(r.pie)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.saldo_precio)}</td>
+                    <td className={NUM}>{money_(r.precio_consignacion)}</td>
+                    <td className={NUM}>{money_(r.primer_pago)}</td>
+                    <td className={NUM}>{money_(r.pago_final)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.utilidad_bruta)}</td>
+                    <td className={CELL}>{r.sale?.seller_name ?? ""}</td>
+                    <td className={CELL}>{r.consignador_nombre ?? ""}</td>
+                    <td className={NUM}>{money_(r.comision_venta)}</td>
+                    <td className={NUM}>{money_(r.comision_consignador)}</td>
+                    <td className={NUM}>{money_(r.gasto_general)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.gasto_total)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.utilidad_antes_gerencia)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.comision_gerencia)}</td>
+                    <td className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>{money_(r.utilidad_post_gerencia)}</td>
                     {socioNombres.map((n) => (
-                      <TableCell key={n} className="text-right">
-                        {money(socioMonto(r, n))}
-                      </TableCell>
+                      <td key={n} className={`${NUM} bg-emerald-50/40 dark:bg-emerald-950/20`}>
+                        {money_(socioMonto(r, n))}
+                      </td>
                     ))}
-                    <TableCell
-                      className={`text-right font-semibold ${
-                        Number(r.utilidad_final_miami ?? 0) < 0 ? "text-destructive" : "text-emerald-600"
+                    <td
+                      className={`${NUM} bg-emerald-100/70 font-semibold dark:bg-emerald-900/40 ${
+                        Number(r.utilidad_final_miami ?? 0) < 0
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-emerald-700 dark:text-emerald-300"
                       }`}
                     >
                       {money(r.utilidad_final_miami)}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colSpan={16} className="text-right font-medium">
-                    Totales
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{money(totales.gastoTotal)}</TableCell>
-                  <TableCell />
-                  <TableCell className="text-right font-medium">{money(totales.gerencia)}</TableCell>
-                  <TableCell />
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/60 font-semibold">
+                  <td className="sticky left-0 z-10 w-[44px] bg-muted px-3 py-2 text-center">∑</td>
+                  <td className="sticky left-[44px] z-10 border-r border-border bg-muted px-3 py-2">
+                    {data.rows.length} ventas
+                  </td>
+                  <td className="px-3 py-2" colSpan={2} />
+                  <td className="px-3 py-2 text-right tabular-nums">{money(totales.precioTotal)}</td>
+                  <td className="px-3 py-2" colSpan={11} />
+                  <td className="px-3 py-2 text-right tabular-nums">{money(totales.gastoTotal)}</td>
+                  <td className="px-3 py-2" />
+                  <td className="px-3 py-2 text-right tabular-nums">{money(totales.gerencia)}</td>
+                  <td className="px-3 py-2" />
                   {socioNombres.map((n) => (
-                    <TableCell key={n} className="text-right font-medium">
+                    <td key={n} className="px-3 py-2 text-right tabular-nums">
                       {money(totales.socios[n] ?? 0)}
-                    </TableCell>
+                    </td>
                   ))}
-                  <TableCell className="text-right font-semibold text-emerald-600">
+                  <td className="bg-emerald-100/80 px-3 py-2 text-right tabular-nums text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
                     {money(totales.utilidadFinal)}
-                  </TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
       </CardContent>
