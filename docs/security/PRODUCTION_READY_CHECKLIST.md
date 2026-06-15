@@ -83,3 +83,34 @@ Redeploy tras cambios.
 
 - `apikey` + `Bearer` visibles en DevTools en **tu** sesión
 - Anon key en bundle JS (diseño Supabase)
+
+## H. Hardening 2026-06-14 (branch `security/hardening-advisor-rate-limits`)
+
+Basado en el **advisor en vivo del proyecto Skale correcto** (no la auditoría 2026-05-05 que corrió contra Nomadev).
+
+### H.1 Migraciones (aplicar con `supabase db push` o MCP `apply_migration`)
+- `20260614100000_lockdown_security_definer_grants.sql` — revoca `anon`/`authenticated` en funciones SECURITY DEFINER (triggers, helpers, ops de vendedor) + cierra escalada de privilegios en `provision_tenant` y `dispatch_webhook` (solo `service_role`) + `search_path` inmutable.
+- `20260614100100_rls_formula_availability_whatsapp_creds.sql` — RLS explícita en `formula_availability_rules` y `whatsapp_inbox_credentials`.
+- `20260614100200_rate_limit_infra.sql` — tabla `edge_rate_limits` + `check_rate_limit()` + rate-limit anti-spam en `formula_book_appointment` (5/email/hora).
+- `20260614100300_perf_rls_initplan_optimize.sql` — envuelve `auth.uid()` en `(select auth.uid())` en 23 policies (mitiga DoS a escala).
+- `20260614100400_fix_formula_pii_overexposure.sql` — elimina `USING(true)` que exponía PII de alumnos/pagos Fórmula a cualquier autenticado.
+- `20260614100500_perf_fk_indexes.sql` — índices en 22 FKs.
+
+### H.2 Rate / batch limits (Edge Functions)
+Helper `supabase/functions/_shared/rateLimit.ts`. Límites aplicados:
+- `vitrina-lead`: 20/min por IP · `landing-booking`: 30/min por IP
+- `getapi-appraisal`: 30/min por usuario (protege API paga GetAPI)
+- `lead-create`: 120/min por sucursal · `lead-state-update`: 240/min por sucursal
+- RPC `formula_book_appointment`: 5/hora por email
+
+### H.3 Supabase Dashboard (lo aplica el founder — no es código)
+- [ ] **Auth → Password Protection → Pwned passwords (HaveIBeenPwned) = ON** (cierra advisor `auth_leaked_password_protection`).
+- [ ] **Auth → MFA → TOTP = habilitado** (la UI ya existe vía `mfaPolicy.ts`).
+- [ ] Confirmar Edge secrets: `ALLOWED_ORIGINS`, `STUDIO_IA_WEBHOOK_SECRET`, `LEGACY_BYPASS_EMAILS`.
+- [ ] Tras `db push`: re-correr `get_advisors` (security + performance) y confirmar que bajaron los WARN.
+
+### H.4 Smoke post-deploy
+- [ ] `formula_book_appointment` con mismo email >5 veces/hora → `RATE_LIMITED`.
+- [ ] `vitrina-lead` / `landing-booking` spameado por IP → `429`.
+- [ ] Función trigger (`archive_lead_note_change`) ya no llamable por `anon` vía `/rest/v1/rpc`.
+- [ ] Alumnos Fórmula NO visibles para un autenticado de otro tenant.
