@@ -1530,6 +1530,44 @@ export interface Database {
           created_at?: string
         }
       }
+      sticky_notes: {
+        Row: {
+          id: string
+          tenant_id: string
+          user_id: string
+          content: string
+          color: 'yellow' | 'pink' | 'blue' | 'green' | 'purple' | 'orange'
+          pos_x: number
+          pos_y: number
+          z_index: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id?: string
+          user_id?: string
+          content?: string
+          color?: 'yellow' | 'pink' | 'blue' | 'green' | 'purple' | 'orange'
+          pos_x?: number
+          pos_y?: number
+          z_index?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          user_id?: string
+          content?: string
+          color?: 'yellow' | 'pink' | 'blue' | 'green' | 'purple' | 'orange'
+          pos_x?: number
+          pos_y?: number
+          z_index?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
       marketplace_connections: {
         Row: {
           id: string
