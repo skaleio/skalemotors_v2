@@ -1,6 +1,7 @@
 /// <reference path="../_shared/edge-runtime.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 type AppraisalBody = {
   patente?: string;
@@ -130,6 +131,14 @@ Deno.serve(async (req) => {
   if (authError || !userData?.user) {
     return jsonResponse(401, { ok: false, error: "Invalid or expired token" });
   }
+
+  // Rate limit por usuario: 30/min (protege la API paga GetAPI de abuso).
+  const limited = await enforceRateLimit(
+    adminClient,
+    { identifier: `user:${userData.user.id}`, route: "getapi-appraisal", max: 30, windowSeconds: 60 },
+    corsHeaders,
+  );
+  if (limited) return limited;
 
   let body: AppraisalBody;
   try {
