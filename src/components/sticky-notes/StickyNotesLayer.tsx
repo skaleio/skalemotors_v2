@@ -83,15 +83,20 @@ export function StickyNotesLayer() {
           type="button"
           aria-label="Nueva nota"
           onClick={addNote}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.94 }}
           className={cn(
-            "group relative flex h-12 w-12 items-center justify-center rounded-full",
-            "bg-gradient-to-br from-amber-300 to-amber-400 text-amber-950 shadow-lg shadow-amber-500/30",
+            "group relative flex h-14 items-center gap-2 rounded-full pl-4 pr-5",
+            "bg-gradient-to-br from-amber-300 to-amber-400 text-amber-950",
+            "shadow-xl shadow-amber-500/40 ring-1 ring-amber-600/30",
           )}
         >
-          <StickyNoteIcon className="h-5 w-5 transition-opacity group-hover:opacity-0" />
-          <Plus className="absolute h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100" />
+          {notes.length === 0 && (
+            <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-amber-400/70" />
+          )}
+          <StickyNoteIcon className="h-6 w-6" />
+          <span className="text-sm font-bold">Nota</span>
+          <Plus className="h-4 w-4 opacity-70" />
         </motion.button>
       </div>
     </>
