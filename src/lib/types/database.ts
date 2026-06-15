@@ -548,10 +548,12 @@ export type Database = {
         Row: {
           branch_id: string | null
           carroceria: string | null
+          color: string | null
           combustible: string | null
           consignacion_price: number | null
           created_at: string | null
           created_by: string | null
+          engine_number: string | null
           fecha: string | null
           id: string
           label: string
@@ -579,10 +581,12 @@ export type Database = {
         Insert: {
           branch_id?: string | null
           carroceria?: string | null
+          color?: string | null
           combustible?: string | null
           consignacion_price?: number | null
           created_at?: string | null
           created_by?: string | null
+          engine_number?: string | null
           fecha?: string | null
           id?: string
           label?: string
@@ -610,10 +614,12 @@ export type Database = {
         Update: {
           branch_id?: string | null
           carroceria?: string | null
+          color?: string | null
           combustible?: string | null
           consignacion_price?: number | null
           created_at?: string | null
           created_by?: string | null
+          engine_number?: string | null
           fecha?: string | null
           id?: string
           label?: string
@@ -2884,6 +2890,128 @@ export type Database = {
             foreignKeyName: "salary_distribution_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_breakdown: {
+        Row: {
+          comision_consignador: number
+          comision_gerencia: number
+          comision_venta: number
+          created_at: string
+          gasto_general: number
+          gasto_total: number
+          id: string
+          pct_gerencia: number
+          pie: number
+          precio_consignacion: number
+          precio_total: number
+          saldo_precio: number
+          sale_id: string
+          socios_montos: Json
+          socios_params: Json
+          tenant_id: string
+          updated_at: string
+          utilidad_antes_gerencia: number
+          utilidad_bruta: number
+          utilidad_final_miami: number
+          utilidad_post_gerencia: number
+        }
+        Insert: {
+          comision_consignador: number
+          comision_gerencia: number
+          comision_venta: number
+          created_at?: string
+          gasto_general?: number
+          gasto_total: number
+          id?: string
+          pct_gerencia: number
+          pie?: number
+          precio_consignacion: number
+          precio_total: number
+          saldo_precio: number
+          sale_id: string
+          socios_montos?: Json
+          socios_params?: Json
+          tenant_id: string
+          updated_at?: string
+          utilidad_antes_gerencia: number
+          utilidad_bruta: number
+          utilidad_final_miami: number
+          utilidad_post_gerencia: number
+        }
+        Update: {
+          comision_consignador?: number
+          comision_gerencia?: number
+          comision_venta?: number
+          created_at?: string
+          gasto_general?: number
+          gasto_total?: number
+          id?: string
+          pct_gerencia?: number
+          pie?: number
+          precio_consignacion?: number
+          precio_total?: number
+          saldo_precio?: number
+          sale_id?: string
+          socios_montos?: Json
+          socios_params?: Json
+          tenant_id?: string
+          updated_at?: string
+          utilidad_antes_gerencia?: number
+          utilidad_bruta?: number
+          utilidad_final_miami?: number
+          utilidad_post_gerencia?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_breakdown_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: true
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_breakdown_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_cascade_settings: {
+        Row: {
+          comision_consignador_default: number
+          comision_venta_default: number
+          pct_gerencia: number
+          socios: Json
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          comision_consignador_default?: number
+          comision_venta_default?: number
+          pct_gerencia?: number
+          socios?: Json
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          comision_consignador_default?: number
+          comision_venta_default?: number
+          pct_gerencia?: number
+          socios?: Json
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_cascade_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
