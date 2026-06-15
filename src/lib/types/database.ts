@@ -2123,6 +2123,115 @@ export interface Database {
           updated_at?: string | null
         }
       }
+      sale_cascade_settings: {
+        Row: {
+          tenant_id: string
+          comision_venta_default: number
+          comision_consignador_default: number
+          pct_gerencia: number
+          socios: Json
+          updated_at: string
+        }
+        Insert: {
+          tenant_id: string
+          comision_venta_default?: number
+          comision_consignador_default?: number
+          pct_gerencia?: number
+          socios?: Json
+          updated_at?: string
+        }
+        Update: {
+          tenant_id?: string
+          comision_venta_default?: number
+          comision_consignador_default?: number
+          pct_gerencia?: number
+          socios?: Json
+          updated_at?: string
+        }
+      }
+      sale_breakdown: {
+        Row: {
+          id: string
+          sale_id: string
+          tenant_id: string
+          precio_total: number
+          pie: number
+          precio_consignacion: number
+          gasto_general: number
+          comision_venta: number
+          comision_consignador: number
+          pct_gerencia: number
+          socios_params: Json
+          saldo_precio: number
+          utilidad_bruta: number
+          gasto_total: number
+          utilidad_antes_gerencia: number
+          comision_gerencia: number
+          utilidad_post_gerencia: number
+          socios_montos: Json
+          utilidad_final_miami: number
+          numero_venta: number | null
+          primer_pago: number
+          pago_final: number
+          consignador_nombre: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          sale_id: string
+          tenant_id: string
+          precio_total: number
+          pie?: number
+          precio_consignacion: number
+          gasto_general?: number
+          comision_venta: number
+          comision_consignador: number
+          pct_gerencia: number
+          socios_params?: Json
+          saldo_precio: number
+          utilidad_bruta: number
+          gasto_total: number
+          utilidad_antes_gerencia: number
+          comision_gerencia: number
+          utilidad_post_gerencia: number
+          socios_montos?: Json
+          utilidad_final_miami: number
+          numero_venta?: number | null
+          primer_pago?: number
+          pago_final?: number
+          consignador_nombre?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          sale_id?: string
+          tenant_id?: string
+          precio_total?: number
+          pie?: number
+          precio_consignacion?: number
+          gasto_general?: number
+          comision_venta?: number
+          comision_consignador?: number
+          pct_gerencia?: number
+          socios_params?: Json
+          saldo_precio?: number
+          utilidad_bruta?: number
+          gasto_total?: number
+          utilidad_antes_gerencia?: number
+          comision_gerencia?: number
+          utilidad_post_gerencia?: number
+          socios_montos?: Json
+          utilidad_final_miami?: number
+          numero_venta?: number | null
+          primer_pago?: number
+          pago_final?: number
+          consignador_nombre?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       finance_month_summary: {
         Row: {
           id: string
