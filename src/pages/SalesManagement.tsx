@@ -172,6 +172,7 @@ export default function SalesManagement() {
   const [formExpenses, setFormExpenses] = useState<{ id: string; description: string; amount: string }[]>([]);
   // Desglose para el Libro de Ventas (cascada automática).
   const [cascadaSettings, setCascadaSettings] = useState<CascadaSettings | null>(null);
+  const [formPrecioTotal, setFormPrecioTotal] = useState("");
   const [formPrecioConsignacion, setFormPrecioConsignacion] = useState("");
   const [formLibroPie, setFormLibroPie] = useState("");
   const [formGastoGeneral, setFormGastoGeneral] = useState("");
@@ -294,7 +295,7 @@ export default function SalesManagement() {
 
   const desgloseInput = useMemo(
     () => ({
-      precioTotal: parseAmount(formSalePrice) || 0,
+      precioTotal: parseAmount(formPrecioTotal) || parseAmount(formSalePrice) || 0,
       pie: parseAmount(formLibroPie) || 0,
       precioConsignacion: parseAmount(formPrecioConsignacion) || 0,
       gastoGeneral: parseAmount(formGastoGeneral) || 0,
@@ -303,7 +304,7 @@ export default function SalesManagement() {
         ? parseAmount(formComConsignadorOverride)
         : undefined,
     }),
-    [formSalePrice, formLibroPie, formPrecioConsignacion, formGastoGeneral, formComVentaOverride, formComConsignadorOverride],
+    [formPrecioTotal, formSalePrice, formLibroPie, formPrecioConsignacion, formGastoGeneral, formComVentaOverride, formComConsignadorOverride],
   );
   const desglosePreview = useMemo(
     () => (cascadaSettings ? construirSnapshot(desgloseInput, cascadaSettings) : null),
@@ -536,7 +537,7 @@ export default function SalesManagement() {
           vehicle_id: useCustomVehicle ? null : formVehicleId.trim() || null,
           vehicle_description: useCustomVehicle ? formVehicleCustom.trim() : null,
           client_name: formClientName.trim() || null,
-          sale_price: salePrice,
+          sale_price: desgloseActivo ? desgloseInput.precioTotal : salePrice,
           down_payment: downPaymentValue,
           financing_amount: financingAmountValue,
           installments: installmentsValue,
@@ -570,6 +571,7 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["fund-management"] });
+      setFormPrecioTotal("");
       setFormPrecioConsignacion("");
       setFormLibroPie("");
       setFormGastoGeneral("");
@@ -1405,6 +1407,10 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="precio_total_libro">Precio total ($)</Label>
+                    <Input id="precio_total_libro" type="text" placeholder="Ej: 13500000" value={formPrecioTotal} onChange={(e) => setFormPrecioTotal(e.target.value)} />
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="precio_consig">Precio consignación ($)</Label>
                     <Input id="precio_consig" type="text" placeholder="Ej: 11400000" value={formPrecioConsignacion} onChange={(e) => setFormPrecioConsignacion(e.target.value)} />
