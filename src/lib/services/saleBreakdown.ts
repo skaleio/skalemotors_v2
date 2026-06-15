@@ -29,17 +29,39 @@ export const saleBreakdownService = {
     return (data as Row) ?? null
   },
 
+  // Próximo N° correlativo del libro para el tenant actual (RLS).
+  async nextNumeroVenta(): Promise<number> {
+    const { data, error } = await supabase
+      .from('sale_breakdown')
+      .select('numero_venta')
+      .order('numero_venta', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    return Number(data?.numero_venta ?? 0) + 1
+  },
+
   // Calcula la cascada y congela el snapshot de la venta (upsert por sale_id).
   async saveForSale(
     saleId: string,
     tenantId: string,
     input: SaleCascadeInput,
     settings: CascadaSettings,
+    extras?: {
+      numeroVenta?: number | null
+      consignadorNombre?: string | null
+      primerPago?: number
+      pagoFinal?: number
+    },
   ): Promise<Row> {
     const s = construirSnapshot(input, settings)
     const payload: Insert = {
       sale_id: saleId,
       tenant_id: tenantId,
+      numero_venta: extras?.numeroVenta ?? null,
+      consignador_nombre: extras?.consignadorNombre ?? null,
+      primer_pago: extras?.primerPago ?? 0,
+      pago_final: extras?.pagoFinal ?? 0,
       precio_total: s.precio_total,
       pie: s.pie,
       precio_consignacion: s.precio_consignacion,
