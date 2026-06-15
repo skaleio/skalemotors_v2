@@ -5,6 +5,9 @@ export type StickyNote = Database["public"]["Tables"]["sticky_notes"]["Row"];
 export type StickyNoteInsert = Database["public"]["Tables"]["sticky_notes"]["Insert"];
 export type StickyNoteUpdate = Database["public"]["Tables"]["sticky_notes"]["Update"];
 
+// El cliente no puede mutar columnas de ownership/identidad; las fija el server.
+export type StickyNotePatch = Omit<StickyNoteUpdate, "id" | "user_id" | "tenant_id" | "created_at" | "updated_at">;
+
 export type StickyNoteColor = "yellow" | "pink" | "blue" | "green" | "purple" | "orange";
 
 export const stickyNotesService = {
@@ -38,7 +41,7 @@ export const stickyNotesService = {
     return data as StickyNote;
   },
 
-  async update(id: string, updates: StickyNoteUpdate): Promise<StickyNote> {
+  async update(id: string, updates: StickyNotePatch): Promise<StickyNote> {
     const { data, error } = await supabase
       .from("sticky_notes")
       .update(updates)

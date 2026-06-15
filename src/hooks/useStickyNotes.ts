@@ -3,7 +3,7 @@ import {
   stickyNotesService,
   type StickyNote,
   type StickyNoteColor,
-  type StickyNoteUpdate,
+  type StickyNotePatch,
 } from "@/lib/services/stickyNotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -42,7 +42,7 @@ export function useStickyNotes() {
 
   // Optimista: posición (drag), contenido (autosave) y color se reflejan sin esperar al server.
   const updateNote = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: StickyNoteUpdate }) =>
+    mutationFn: ({ id, updates }: { id: string; updates: StickyNotePatch }) =>
       stickyNotesService.update(id, updates),
     onMutate: async ({ id, updates }) => {
       await queryClient.cancelQueries({ queryKey });

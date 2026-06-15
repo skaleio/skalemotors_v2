@@ -58,6 +58,7 @@ for update
 to authenticated
 using (
   user_id = (select auth.uid())
+  and (tenant_id = public.current_tenant_id() or public.current_is_legacy_protected())
 )
 with check (
   user_id = (select auth.uid())
@@ -71,6 +72,7 @@ for delete
 to authenticated
 using (
   user_id = (select auth.uid())
+  and (tenant_id = public.current_tenant_id() or public.current_is_legacy_protected())
 );
 
 -- ============================================================================
@@ -83,12 +85,9 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.user_id is null then
-    new.user_id := auth.uid();
-  end if;
-  if new.tenant_id is null then
-    new.tenant_id := public.current_tenant_id();
-  end if;
+  -- Ownership lo fija siempre el server; se ignora cualquier user_id/tenant_id del cliente.
+  new.user_id := auth.uid();
+  new.tenant_id := public.current_tenant_id();
   return new;
 end;
 $$;
