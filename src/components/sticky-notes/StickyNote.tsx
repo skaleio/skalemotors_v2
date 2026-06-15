@@ -40,7 +40,7 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
   const x = useMotionValue(note.pos_x);
   const y = useMotionValue(note.pos_y);
   const [content, setContent] = useState(note.content);
-  const [color, setColor] = useState<StickyNoteColor>(note.color);
+  const [color, setColor] = useState<StickyNoteColor>(note.color as StickyNoteColor);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [minimized, setMinimized] = useState(false);
