@@ -99,7 +99,6 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
       <motion.div
         className={cn(
           "flex flex-col overflow-hidden rounded-sm bg-gradient-to-br shadow-[0_10px_30px_-8px_rgba(0,0,0,0.35)]",
-          minimized ? "h-auto" : "h-[248px]",
           palette.sheet,
           dragging && "shadow-[0_24px_50px_-12px_rgba(0,0,0,0.45)]",
         )}
@@ -202,18 +201,29 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
             </AnimatePresence>
           </div>
         </div>
-        {!minimized && (
-          <textarea
-            value={content}
-            onChange={(e) => handleChange(e.target.value)}
-            onBlur={() => flush(content)}
-            placeholder="Escribe algo…"
-            className={cn(
-              "flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-snug outline-none placeholder:opacity-40",
-              palette.text,
-            )}
-          />
-        )}
+        <AnimatePresence initial={false}>
+          {!minimized && (
+            <motion.div
+              key="body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 208, opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 360, damping: 34 }, opacity: { duration: 0.18 } }}
+              className="overflow-hidden"
+            >
+              <textarea
+                value={content}
+                onChange={(e) => handleChange(e.target.value)}
+                onBlur={() => flush(content)}
+                placeholder="Escribe algo…"
+                className={cn(
+                  "h-[208px] w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-snug outline-none placeholder:opacity-40",
+                  palette.text,
+                )}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   );
