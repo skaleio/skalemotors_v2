@@ -35,11 +35,13 @@ function socioMonto(row: LibroVentaRow, nombre: string): number {
 
 // Paleta: azul = se ingresa, verde = se calcula.
 const HEAD_BASE =
-  "sticky top-0 z-20 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide border-b";
-const HEAD_IN = `${HEAD_BASE} bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300`;
-const HEAD_CALC = `${HEAD_BASE} bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300`;
-const CELL = "whitespace-nowrap px-3 py-1.5 border-b border-border/50";
+  "sticky top-0 z-20 whitespace-nowrap px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide border-b";
+const HEAD_IN = `${HEAD_BASE} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
+const HEAD_CALC = `${HEAD_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200`;
+const CELL = "whitespace-nowrap px-3 py-2 border-b border-border/60";
 const NUM = `${CELL} text-right tabular-nums`;
+// Sombra al borde derecho de las columnas congeladas (se ve al scrollear).
+const FROZEN_SHADOW = "shadow-[6px_0_8px_-6px_rgba(0,0,0,0.25)]";
 
 function money_(n: number | null | undefined) {
   const v = Number(n ?? 0);
@@ -131,12 +133,12 @@ export function LibroDeVentas() {
             Todavía no hay ventas con desglose en el libro.
           </p>
         ) : (
-          <div className="max-h-[70vh] overflow-auto">
-            <table className="w-full border-collapse text-xs">
+          <div className="max-h-[72vh] overflow-auto [scrollbar-width:thin]">
+            <table className="w-max min-w-full border-collapse text-[13px]">
               <thead>
                 <tr>
                   <th className={`${HEAD_IN} sticky left-0 z-30 w-[44px] text-center`}>N°</th>
-                  <th className={`${HEAD_IN} sticky left-[44px] z-30 text-left border-r border-border`}>
+                  <th className={`${HEAD_IN} sticky left-[44px] z-30 text-left border-r border-border ${FROZEN_SHADOW}`}>
                     Cliente
                   </th>
                   <th className={`${HEAD_IN} text-left`}>Fecha</th>
@@ -171,7 +173,7 @@ export function LibroDeVentas() {
                     <td className={`${CELL} sticky left-0 z-10 w-[44px] bg-card text-center font-medium group-hover:bg-muted/40`}>
                       {r.numero_venta ?? ""}
                     </td>
-                    <td className={`${CELL} sticky left-[44px] z-10 bg-card border-r border-border font-medium group-hover:bg-muted/40`}>
+                    <td className={`${CELL} sticky left-[44px] z-10 bg-card border-r border-border font-medium group-hover:bg-muted/40 ${FROZEN_SHADOW}`}>
                       {r.sale?.client_name ?? ""}
                     </td>
                     <td className={CELL}>{fecha(r.sale?.sale_date)}</td>
@@ -212,7 +214,7 @@ export function LibroDeVentas() {
               <tfoot>
                 <tr className="bg-muted/60 font-semibold">
                   <td className="sticky left-0 z-10 w-[44px] bg-muted px-3 py-2 text-center">∑</td>
-                  <td className="sticky left-[44px] z-10 border-r border-border bg-muted px-3 py-2">
+                  <td className={`sticky left-[44px] z-10 border-r border-border bg-muted px-3 py-2 ${FROZEN_SHADOW}`}>
                     {data.rows.length} ventas
                   </td>
                   <td className="px-3 py-2" colSpan={2} />
