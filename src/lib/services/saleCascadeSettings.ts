@@ -26,6 +26,17 @@ export const saleCascadeSettingsService = {
     return data ? rowToSettings(data as Row) : null
   },
 
+  // Settings del tenant actual sin pasar id (RLS filtra por tenant).
+  async getCurrent(): Promise<CascadaSettings | null> {
+    const { data, error } = await supabase
+      .from('sale_cascade_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    return data ? rowToSettings(data as Row) : null
+  },
+
   async upsert(tenantId: string, settings: CascadaSettings): Promise<void> {
     const { error } = await supabase.from('sale_cascade_settings').upsert({
       tenant_id: tenantId,

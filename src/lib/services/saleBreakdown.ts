@@ -9,6 +9,15 @@ import {
 type Row = Database['public']['Tables']['sale_breakdown']['Row']
 type Insert = Database['public']['Tables']['sale_breakdown']['Insert']
 
+export interface LibroVentaRow extends Row {
+  sale: {
+    client_name: string | null
+    vehicle_description: string | null
+    seller_name: string | null
+    sale_date: string | null
+  } | null
+}
+
 export const saleBreakdownService = {
   async getBySale(saleId: string): Promise<Row | null> {
     const { data, error } = await supabase
@@ -56,5 +65,17 @@ export const saleBreakdownService = {
       .single()
     if (error) throw error
     return data as Row
+  },
+
+  // Filas del Libro de Ventas del tenant actual (RLS filtra por tenant), con datos de la venta.
+  async listLibro(): Promise<LibroVentaRow[]> {
+    const { data, error } = await supabase
+      .from('sale_breakdown')
+      .select(
+        '*, sale:sales!sale_breakdown_sale_id_fkey(client_name, vehicle_description, seller_name, sale_date)',
+      )
+      .order('numero_venta', { ascending: true, nullsFirst: false })
+    if (error) throw error
+    return (data ?? []) as unknown as LibroVentaRow[]
   },
 }

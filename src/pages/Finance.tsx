@@ -42,6 +42,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { FinanceMonthSelector, getCurrentPeriod, getMonthDateRange } from "@/components/finance/FinanceMonthSelector";
+import { LibroDeVentas } from "@/components/finance/LibroDeVentas";
 import { useEnsureMonthClosed } from "@/hooks/useEnsureMonthClosed";
 import { gastosEmpresaService, type ExpenseType, type GastoEmpresaWithInversor } from "@/lib/services/gastosEmpresa";
 import { expenseTypesService, type ExpenseTypeRow } from "@/lib/services/expenseTypes";
@@ -942,6 +943,8 @@ export default function Finance() {
           </Button>
         </div>
       </div>
+
+      <LibroDeVentas />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card

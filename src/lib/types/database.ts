@@ -2170,6 +2170,10 @@ export interface Database {
           utilidad_post_gerencia: number
           socios_montos: Json
           utilidad_final_miami: number
+          numero_venta: number | null
+          primer_pago: number
+          pago_final: number
+          consignador_nombre: string | null
           created_at: string
           updated_at: string
         }
@@ -2193,6 +2197,10 @@ export interface Database {
           utilidad_post_gerencia: number
           socios_montos?: Json
           utilidad_final_miami: number
+          numero_venta?: number | null
+          primer_pago?: number
+          pago_final?: number
+          consignador_nombre?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2216,6 +2224,10 @@ export interface Database {
           utilidad_post_gerencia?: number
           socios_montos?: Json
           utilidad_final_miami?: number
+          numero_venta?: number | null
+          primer_pago?: number
+          pago_final?: number
+          consignador_nombre?: string | null
           created_at?: string
           updated_at?: string
         }
