@@ -116,7 +116,7 @@ export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFo
         animate={{ x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 4 }}
         transition={
           origin
-            ? { type: "spring", stiffness: 190, damping: 15 }
+            ? { type: "spring", stiffness: 150, damping: 18, mass: 1.1 }
             : { type: "spring", stiffness: 320, damping: 26 }
         }
       >

@@ -118,11 +118,15 @@ export function useStickyNotes() {
     const id = crypto.randomUUID();
     if (origin) setSpawn({ id, x: origin.x, y: origin.y });
     const i = notes.length;
+    // Destino: el centro de la pantalla, con una leve cascada para que varias no se solapen.
+    const cascade = (i % 5) * 26;
+    const centerX = window.innerWidth / 2 - NOTE_WIDTH / 2;
+    const centerY = window.innerHeight / 2 - 130;
     createNote.mutate({
       id,
       color: COLOR_CYCLE[i % COLOR_CYCLE.length],
-      pos_x: Math.min(340 + (i % 5) * 28, Math.max(8, window.innerWidth - NOTE_WIDTH)),
-      pos_y: 150 + (i % 5) * 28,
+      pos_x: Math.max(8, Math.min(centerX + cascade, window.innerWidth - NOTE_WIDTH - 8)),
+      pos_y: Math.max(8, centerY + cascade),
       z_index: maxZIndex + 1,
     });
   }, [notes.length, maxZIndex, createNote]);
