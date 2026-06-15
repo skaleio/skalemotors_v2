@@ -43,6 +43,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { FinanceMonthSelector, getCurrentPeriod } from "@/components/finance/FinanceMonthSelector";
 import { useSales, type SaleWithRelations } from "@/hooks/useSales";
+import { saleCascadeSettingsService } from "@/lib/services/saleCascadeSettings";
+import { saleBreakdownService } from "@/lib/services/saleBreakdown";
+import { construirSnapshot, type CascadaSettings } from "@/lib/finance/saleBreakdownSnapshot";
 import { useVehicles } from "@/hooks/useVehicles";
 import { toast } from "@/hooks/use-toast";
 import { ingresosEmpresaService } from "@/lib/services/ingresosEmpresa";
@@ -167,6 +170,17 @@ export default function SalesManagement() {
   const [formClientName, setFormClientName] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formExpenses, setFormExpenses] = useState<{ id: string; description: string; amount: string }[]>([]);
+  // Desglose para el Libro de Ventas (cascada automática).
+  const [cascadaSettings, setCascadaSettings] = useState<CascadaSettings | null>(null);
+  const [formPrecioTotal, setFormPrecioTotal] = useState("");
+  const [formPrecioConsignacion, setFormPrecioConsignacion] = useState("");
+  const [formLibroPie, setFormLibroPie] = useState("");
+  const [formGastoGeneral, setFormGastoGeneral] = useState("");
+  const [formConsignador, setFormConsignador] = useState("");
+  const [formPrimerPago, setFormPrimerPago] = useState("");
+  const [formPagoFinal, setFormPagoFinal] = useState("");
+  const [formComVentaOverride, setFormComVentaOverride] = useState("");
+  const [formComConsignadorOverride, setFormComConsignadorOverride] = useState("");
   const [vehiclePopoverOpen, setVehiclePopoverOpen] = useState(false);
   const newSaleDialogRef = useRef<HTMLDivElement>(null);
   const [newSaleDialogEl, setNewSaleDialogEl] = useState<HTMLDivElement | null>(null);
@@ -274,6 +288,30 @@ export default function SalesManagement() {
   const formExpensesTotal = formExpenses.reduce((sum, e) => sum + (Number.isNaN(parseAmount(e.amount)) ? 0 : parseAmount(e.amount)), 0);
   const formMarginNum = Number.isNaN(parseAmount(formMargin)) ? 0 : parseAmount(formMargin);
   const formNetMargin = formMarginNum - formExpensesTotal;
+
+  useEffect(() => {
+    saleCascadeSettingsService.getCurrent().then(setCascadaSettings).catch(() => {});
+  }, []);
+
+  const desgloseInput = useMemo(
+    () => ({
+      precioTotal: parseAmount(formPrecioTotal) || parseAmount(formSalePrice) || 0,
+      pie: parseAmount(formLibroPie) || 0,
+      precioConsignacion: parseAmount(formPrecioConsignacion) || 0,
+      gastoGeneral: parseAmount(formGastoGeneral) || 0,
+      comisionVenta: formComVentaOverride.trim() ? parseAmount(formComVentaOverride) : undefined,
+      comisionConsignador: formComConsignadorOverride.trim()
+        ? parseAmount(formComConsignadorOverride)
+        : undefined,
+    }),
+    [formPrecioTotal, formSalePrice, formLibroPie, formPrecioConsignacion, formGastoGeneral, formComVentaOverride, formComConsignadorOverride],
+  );
+  const desglosePreview = useMemo(
+    () => (cascadaSettings ? construirSnapshot(desgloseInput, cascadaSettings) : null),
+    [desgloseInput, cascadaSettings],
+  );
+  const desgloseActivo =
+    !!cascadaSettings && desgloseInput.precioConsignacion > 0 && desgloseInput.precioTotal > 0;
 
   const isMiamiSale = formVendor === "MIAMIMOTORS" || formStockOrigin === "MIAMIMOTORS";
 
@@ -431,12 +469,13 @@ export default function SalesManagement() {
     e.preventDefault();
     const salePriceRaw = formSalePrice.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
     const salePrice = salePriceRaw === "" ? 0 : parseFloat(salePriceRaw);
-    const margin = parseFloat(formMargin.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+    const marginManual = parseFloat(formMargin.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+    const margin = desgloseActivo && desglosePreview ? desglosePreview.utilidad_final_miami : marginManual;
     if (salePriceRaw !== "" && (Number.isNaN(salePrice) || salePrice < 0)) {
       toast({ title: "Error", description: "Monto vendido debe ser un número válido (0 o más).", variant: "destructive" });
       return;
     }
-    if (Number.isNaN(margin) || margin < 0) {
+    if (!desgloseActivo && (Number.isNaN(margin) || margin < 0)) {
       toast({ title: "Error", description: "Monto ganado debe ser un número válido.", variant: "destructive" });
       return;
     }
@@ -490,7 +529,7 @@ export default function SalesManagement() {
       .map((e) => ({ amount: parseAmount(e.amount), description: e.description.trim() || null }))
       .filter((e) => e.amount > 0);
     try {
-      await createSale({
+      const created = await createSale({
         sale: {
           seller_name: formVendor,
           branch_id: branchId ?? undefined,
@@ -498,7 +537,7 @@ export default function SalesManagement() {
           vehicle_id: useCustomVehicle ? null : formVehicleId.trim() || null,
           vehicle_description: useCustomVehicle ? formVehicleCustom.trim() : null,
           client_name: formClientName.trim() || null,
-          sale_price: salePrice,
+          sale_price: desgloseActivo ? desgloseInput.precioTotal : salePrice,
           down_payment: downPaymentValue,
           financing_amount: financingAmountValue,
           installments: installmentsValue,
@@ -513,9 +552,34 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
         },
         expenses: expensesPayload.length ? expensesPayload : undefined,
       });
+      if (desgloseActivo && created?.id && cascadaSettings) {
+        const numero = await saleBreakdownService.nextNumeroVenta();
+        await saleBreakdownService.saveForSale(
+          created.id,
+          created.tenant_id,
+          desgloseInput,
+          cascadaSettings,
+          {
+            numeroVenta: numero,
+            consignadorNombre: formConsignador.trim() || null,
+            primerPago: parseAmount(formPrimerPago) || 0,
+            pagoFinal: parseAmount(formPagoFinal) || 0,
+          },
+        );
+        queryClient.invalidateQueries({ queryKey: ["libro-ventas"] });
+      }
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["fund-management"] });
+      setFormPrecioTotal("");
+      setFormPrecioConsignacion("");
+      setFormLibroPie("");
+      setFormGastoGeneral("");
+      setFormConsignador("");
+      setFormPrimerPago("");
+      setFormPagoFinal("");
+      setFormComVentaOverride("");
+      setFormComConsignadorOverride("");
       setDialogOpen(false);
       toast({
         variant: "success",
@@ -1325,11 +1389,74 @@ sale_date: formSaleDate || format(new Date(), "yyyy-MM-dd"),
                 id="margin"
                 type="text"
                 placeholder="Ej: 1200000"
-                value={formMargin}
+                value={desgloseActivo && desglosePreview ? String(desglosePreview.utilidad_final_miami) : formMargin}
                 onChange={(e) => setFormMargin(e.target.value)}
-                required
+                readOnly={desgloseActivo}
+                required={!desgloseActivo}
               />
+              {desgloseActivo && (
+                <p className="text-xs text-emerald-600">Calculado solo desde el desglose del Libro.</p>
+              )}
             </div>
+            {cascadaSettings && (
+              <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+                <div>
+                  <Label className="font-semibold text-blue-700 dark:text-blue-300">Desglose para el Libro de Ventas</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Completá el precio de consignación para que la venta entre al Libro con su cascada calculada sola.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="precio_total_libro">Precio total ($)</Label>
+                    <Input id="precio_total_libro" type="text" placeholder="Ej: 13500000" value={formPrecioTotal} onChange={(e) => setFormPrecioTotal(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="precio_consig">Precio consignación ($)</Label>
+                    <Input id="precio_consig" type="text" placeholder="Ej: 11400000" value={formPrecioConsignacion} onChange={(e) => setFormPrecioConsignacion(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="libro_pie">Pie ($)</Label>
+                    <Input id="libro_pie" type="text" placeholder="Ej: 6000000" value={formLibroPie} onChange={(e) => setFormLibroPie(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="gasto_general">Gasto general ($)</Label>
+                    <Input id="gasto_general" type="text" placeholder="0" value={formGastoGeneral} onChange={(e) => setFormGastoGeneral(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="consignador">Consignador</Label>
+                    <Input id="consignador" type="text" placeholder="Nombre" value={formConsignador} onChange={(e) => setFormConsignador(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="primer_pago">Primer pago ($)</Label>
+                    <Input id="primer_pago" type="text" placeholder="0" value={formPrimerPago} onChange={(e) => setFormPrimerPago(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="pago_final">Pago final ($)</Label>
+                    <Input id="pago_final" type="text" placeholder="0" value={formPagoFinal} onChange={(e) => setFormPagoFinal(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="com_venta_ov">Comisión venta ($)</Label>
+                    <Input id="com_venta_ov" type="text" placeholder={String(cascadaSettings.comisionVentaDefault)} value={formComVentaOverride} onChange={(e) => setFormComVentaOverride(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="com_consig_ov">Comisión consignador ($)</Label>
+                    <Input id="com_consig_ov" type="text" placeholder={String(cascadaSettings.comisionConsignadorDefault)} value={formComConsignadorOverride} onChange={(e) => setFormComConsignadorOverride(e.target.value)} />
+                  </div>
+                </div>
+                {desgloseActivo && desglosePreview && (
+                  <div className="space-y-1 rounded-md bg-emerald-50 p-2 text-xs dark:bg-emerald-950/30">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Utilidad bruta</span><span className="tabular-nums">{formatCurrency(desglosePreview.utilidad_bruta)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Gasto total</span><span className="tabular-nums">{formatCurrency(desglosePreview.gasto_total)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Comisión gerencia</span><span className="tabular-nums">{formatCurrency(desglosePreview.comision_gerencia)}</span></div>
+                    {desglosePreview.socios_montos.map((so) => (
+                      <div key={so.nombre} className="flex justify-between"><span className="text-muted-foreground">{so.nombre}</span><span className="tabular-nums">{formatCurrency(so.monto)}</span></div>
+                    ))}
+                    <div className="flex justify-between border-t pt-1 font-semibold text-emerald-700 dark:text-emerald-300"><span>Utilidad final (ganancia)</span><span className="tabular-nums">{formatCurrency(desglosePreview.utilidad_final_miami)}</span></div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Gastos</Label>
               <p className="text-xs text-muted-foreground">Bencina, arreglos u otros gastos de la venta. Se restan de la ganancia.</p>

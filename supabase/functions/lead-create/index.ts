@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -168,6 +169,15 @@ export default async function handler(req: Request): Promise<Response> {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
+
+  // Rate limit por sucursal: 120 req/min (capa el abuso de update_existing/H6
+  // sin frenar ráfagas legítimas de la automatización n8n).
+  const limited = await enforceRateLimit(
+    supabase,
+    { identifier: `branch:${branchId}`, route: "lead-create", max: 120, windowSeconds: 60 },
+    corsHeaders,
+  );
+  if (limited) return limited;
 
   const { data: branch, error: branchError } = await supabase
     .from("branches")
