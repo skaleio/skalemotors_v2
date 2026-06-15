@@ -634,7 +634,10 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={() => addStickyNote()}
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  addStickyNote({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                }}
                 className="shrink-0 h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
                 aria-label="Nueva nota"
               >

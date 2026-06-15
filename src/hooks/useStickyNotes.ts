@@ -6,7 +6,7 @@ import {
   type StickyNotePatch,
 } from "@/lib/services/stickyNotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export const STICKY_NOTES_MAX = 30;
@@ -25,6 +25,10 @@ export function useStickyNotes() {
   const queryClient = useQueryClient();
   const queryKey = ["sticky-notes", user?.id];
 
+  // Origen de la animación "nace desde el +": coords en pantalla del botón disparador.
+  const [spawn, setSpawn] = useState<{ id: string; x: number; y: number } | null>(null);
+  const spawnOriginRef = useRef<{ x: number; y: number } | null>(null);
+
   const { data: notes = [], isLoading: loading } = useQuery({
     queryKey,
     queryFn: () => stickyNotesService.getAll(),
@@ -39,7 +43,9 @@ export function useStickyNotes() {
 
   const createNote = useMutation({
     mutationFn: (input: CreateNoteInput) => stickyNotesService.create(input),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const origin = spawnOriginRef.current;
+      if (origin) setSpawn({ id: data.id, x: origin.x, y: origin.y });
       void queryClient.invalidateQueries({ queryKey });
     },
   });
@@ -82,11 +88,12 @@ export function useStickyNotes() {
 
   const maxZIndex = notes.reduce((max, n) => Math.max(max, n.z_index ?? 0), 0);
 
-  const addNote = useCallback(() => {
+  const addNote = useCallback((origin?: { x: number; y: number }) => {
     if (notes.length >= STICKY_NOTES_MAX) {
       toast.warning(`Llegaste al máximo de ${STICKY_NOTES_MAX} notas`);
       return;
     }
+    spawnOriginRef.current = origin ?? null;
     const i = notes.length;
     createNote.mutate({
       color: COLOR_CYCLE[i % COLOR_CYCLE.length],
@@ -101,6 +108,7 @@ export function useStickyNotes() {
     loading,
     atLimit: notes.length >= STICKY_NOTES_MAX,
     maxZIndex,
+    spawn,
     addNote,
     createNote,
     updateNote,

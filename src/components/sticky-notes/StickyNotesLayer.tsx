@@ -6,7 +6,7 @@ import { StickyNote } from "./StickyNote";
 const NOTES_BASE_Z = 40;
 
 export function StickyNotesLayer() {
-  const { notes, updateNote, deleteNote, maxZIndex } = useStickyNotes();
+  const { notes, updateNote, deleteNote, maxZIndex, spawn } = useStickyNotes();
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export function StickyNotesLayer() {
             key={note.id}
             note={note}
             viewport={viewport}
+            origin={spawn?.id === note.id ? { x: spawn.x, y: spawn.y } : undefined}
             z={NOTES_BASE_Z + Math.min(rankById.get(note.id) ?? 0, 8)}
             onUpdate={(updates) => updateNote.mutate({ id: note.id, updates })}
             onDelete={() => deleteNote.mutate(note.id)}

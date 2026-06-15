@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { StickyNote as StickyNoteRow, StickyNoteColor } from "@/lib/services/stickyNotes";
-import { AnimatePresence, motion, useDragControls, useMotionValue } from "framer-motion";
+import { animate, AnimatePresence, motion, useDragControls, useMotionValue } from "framer-motion";
 import { Check, GripHorizontal, Maximize2, Minus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -29,15 +29,16 @@ interface StickyNoteProps {
   note: StickyNoteRow;
   viewport: { w: number; h: number };
   z: number;
+  origin?: { x: number; y: number };
   onUpdate: (updates: Partial<Pick<StickyNoteRow, "content" | "color" | "pos_x" | "pos_y" | "z_index">>) => void;
   onDelete: () => void;
   onFocus: () => void;
 }
 
-export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: StickyNoteProps) {
+export function StickyNote({ note, viewport, z, origin, onUpdate, onDelete, onFocus }: StickyNoteProps) {
   const controls = useDragControls();
-  const x = useMotionValue(note.pos_x);
-  const y = useMotionValue(note.pos_y);
+  const x = useMotionValue(origin ? origin.x : note.pos_x);
+  const y = useMotionValue(origin ? origin.y : note.pos_y);
   const [content, setContent] = useState(note.content);
   const [color, setColor] = useState<StickyNoteColor>(note.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -51,6 +52,20 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
     x.set(clamp(x.get(), 8, Math.max(8, viewport.w - NOTE_W)));
     y.set(clamp(y.get(), 8, Math.max(8, viewport.h - NOTE_H)));
   }, [viewport.w, viewport.h, x, y]);
+
+  // "Nace desde el +": arranca en el origen (el botón) y vuela hasta su posición.
+  useEffect(() => {
+    if (!origin) return;
+    x.set(origin.x);
+    y.set(origin.y);
+    const ax = animate(x, note.pos_x, { type: "spring", stiffness: 240, damping: 26 });
+    const ay = animate(y, note.pos_y, { type: "spring", stiffness: 240, damping: 26 });
+    return () => {
+      ax.stop();
+      ay.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const flush = (value: string) => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
@@ -89,7 +104,11 @@ export function StickyNote({ note, viewport, z, onUpdate, onDelete, onFocus }: S
       }}
       style={{ x, y, zIndex: z, width: NOTE_W }}
       className="pointer-events-auto fixed left-0 top-0"
-      initial={{ scale: 0.6, opacity: 0, rotate: tiltFromId(note.id) - 6 }}
+      initial={
+        origin
+          ? { scale: 0.1, opacity: 0, rotate: 0 }
+          : { scale: 0.6, opacity: 0, rotate: tiltFromId(note.id) - 6 }
+      }
       animate={{ scale: 1, opacity: 1, rotate: dragging ? 0 : tiltFromId(note.id) }}
       exit={{ scale: 0.5, opacity: 0, rotate: 8, transition: { duration: 0.18 } }}
       whileDrag={{ scale: 1.05 }}
