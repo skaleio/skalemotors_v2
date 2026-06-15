@@ -6,8 +6,12 @@ import {
   type StickyNotePatch,
 } from "@/lib/services/stickyNotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { toast } from "sonner";
 
 export const STICKY_NOTES_MAX = 30;
+const NOTE_WIDTH = 248;
+const COLOR_CYCLE: StickyNoteColor[] = ["yellow", "pink", "blue", "green", "purple", "orange"];
 
 interface CreateNoteInput {
   color: StickyNoteColor;
@@ -78,11 +82,26 @@ export function useStickyNotes() {
 
   const maxZIndex = notes.reduce((max, n) => Math.max(max, n.z_index ?? 0), 0);
 
+  const addNote = useCallback(() => {
+    if (notes.length >= STICKY_NOTES_MAX) {
+      toast.warning(`Llegaste al máximo de ${STICKY_NOTES_MAX} notas`);
+      return;
+    }
+    const i = notes.length;
+    createNote.mutate({
+      color: COLOR_CYCLE[i % COLOR_CYCLE.length],
+      pos_x: Math.min(40 + (i % 6) * 26, Math.max(8, window.innerWidth - NOTE_WIDTH)),
+      pos_y: 120 + (i % 6) * 26,
+      z_index: maxZIndex + 1,
+    });
+  }, [notes.length, maxZIndex, createNote]);
+
   return {
     notes: notes as StickyNote[],
     loading,
     atLimit: notes.length >= STICKY_NOTES_MAX,
     maxZIndex,
+    addNote,
     createNote,
     updateNote,
     deleteNote,

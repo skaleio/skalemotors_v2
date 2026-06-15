@@ -95,8 +95,8 @@ export function Layout({ children }: LayoutProps) {
       <PageLoader />
       <GlobalQuickActions />
 
-      {/* Notas flotantes tipo post-it: solo desktop (en mobile taparían la bottom nav) */}
-      {!showBottomNav ? <StickyNotesLayer /> : null}
+      {/* Notas flotantes tipo post-it (el disparador "+" vive en el sidebar) */}
+      <StickyNotesLayer />
 
       {/* Chat flotante solo en desktop; en mobile va en TopBar */}
       {!showBottomNav ? <FloatingChatButton onClick={openChat} /> : null}
