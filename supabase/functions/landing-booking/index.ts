@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.5.0?target=deno";
 import { getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { resolveLeadAutomationAuth } from "../_shared/leadIngestAuth.ts";
+import { enforceRateLimit, getClientIp } from "../_shared/rateLimit.ts";
 
 const LANDING_BRANCH_ID = "caca3351-cefb-4bee-93e7-1398f9eec76d";
 const LANDING_USER_ID = "f42dab10-6dcc-4f99-b169-e679eea0638d";
@@ -143,6 +144,14 @@ export default async function handler(req: Request): Promise<Response> {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
+
+  // Rate limit por IP: 30 req/min (anti-spam de reservas desde landing).
+  const limited = await enforceRateLimit(
+    supabase,
+    { identifier: getClientIp(req), route: "landing-booking", max: 30, windowSeconds: 60 },
+    cors,
+  );
+  if (limited) return limited;
 
   const { data: branch, error: branchError } = await supabase
     .from("branches")

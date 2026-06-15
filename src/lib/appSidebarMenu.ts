@@ -1,6 +1,7 @@
 import { isPhotographerRole, isVendorRole, isVendorSidebarItemLocked } from "@/lib/appRoles";
 import {
   BarChart3,
+  BookOpen,
   Calculator,
   Calendar,
   Camera,
@@ -87,6 +88,7 @@ export const MENU_CATEGORIES: SidebarMenuCategory[] = [
       { title: "Ranking Vendedores", url: "/app/ranking", icon: Trophy },
       { title: "Gestión de Fondos", url: "/app/fund-management", icon: Wallet },
       { title: "Ventas", url: "/app/sales", icon: TrendingUp },
+      { title: "Libro de Ventas", url: "/app/libro-ventas", icon: BookOpen },
       { title: "Distribución de Salarios", url: "/app/salary-distribution", icon: PieChart },
       { title: "Vendedores", url: "/app/vendors", icon: UserCheck },
       { title: "Seguimiento Financiero", url: "/app/financial-tracking", icon: DollarSign },

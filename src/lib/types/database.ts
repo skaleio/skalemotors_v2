@@ -2900,14 +2900,18 @@ export type Database = {
           comision_consignador: number
           comision_gerencia: number
           comision_venta: number
+          consignador_nombre: string | null
           created_at: string
           gasto_general: number
           gasto_total: number
           id: string
+          numero_venta: number | null
+          pago_final: number
           pct_gerencia: number
           pie: number
           precio_consignacion: number
           precio_total: number
+          primer_pago: number
           saldo_precio: number
           sale_id: string
           socios_montos: Json
@@ -2923,14 +2927,18 @@ export type Database = {
           comision_consignador: number
           comision_gerencia: number
           comision_venta: number
+          consignador_nombre?: string | null
           created_at?: string
           gasto_general?: number
           gasto_total: number
           id?: string
+          numero_venta?: number | null
+          pago_final?: number
           pct_gerencia: number
           pie?: number
           precio_consignacion: number
           precio_total: number
+          primer_pago?: number
           saldo_precio: number
           sale_id: string
           socios_montos?: Json
@@ -2946,14 +2954,18 @@ export type Database = {
           comision_consignador?: number
           comision_gerencia?: number
           comision_venta?: number
+          consignador_nombre?: string | null
           created_at?: string
           gasto_general?: number
           gasto_total?: number
           id?: string
+          numero_venta?: number | null
+          pago_final?: number
           pct_gerencia?: number
           pie?: number
           precio_consignacion?: number
           precio_total?: number
+          primer_pago?: number
           saldo_precio?: number
           sale_id?: string
           socios_montos?: Json
