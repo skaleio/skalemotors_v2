@@ -73,6 +73,7 @@ import { formatCLP } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
+import { getAppraisalByPatente } from "@/lib/services/vehicleAppraisalService";
 import { DASHBOARD_STATS_QUERY_KEY } from "@/hooks/useDashboardStats";
 import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
 import { usePagination } from "@/hooks/usePagination";
@@ -350,6 +351,8 @@ function createEmptyNewVehicle() {
     carroceria: "",
     transmision_display: "",
     combustible_display: "",
+    engine_number: "",
+    vin: "",
     publicado: false,
     price: 0,
     cost: 0,
@@ -598,6 +601,8 @@ export default function Inventory() {
   const [vehicleToSell, setVehicleToSell] = useState<Vehicle | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [patenteLookupLoading, setPatenteLookupLoading] = useState(false);
+  const [vehicleFormRevealed, setVehicleFormRevealed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -983,6 +988,8 @@ export default function Inventory() {
         cost: Number(vehicleToEdit.cost || 0),
         minDownPayment: minDownPaymentFromSalePrice(Number(vehicleToEdit.price || 0)),
         engine_size: vehicleToEdit.engine_size || "",
+        engine_number: (vehicleToEdit as any).engine_number || "",
+        vin: vehicleToEdit.vin || "",
         fuel_type: vehicleToEdit.fuel_type || "gasolina",
         transmission: vehicleToEdit.transmission || "automático",
         location: vehicleToEdit.location || "",
@@ -1011,6 +1018,39 @@ export default function Inventory() {
     }));
   };
 
+  const handleBuscarPatente = async () => {
+    const normalized = newVehicle.patente.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!/^[A-Z]{4}\d{2}$/.test(normalized)) {
+      toast({ variant: "destructive", title: "Patente inválida", description: "Formato chileno: 4 letras + 2 números (ej: ABCD12)." });
+      return;
+    }
+    setPatenteLookupLoading(true);
+    try {
+      const { vehicle } = await getAppraisalByPatente(normalized);
+      setNewVehicle((prev) => ({
+        ...prev,
+        patente: normalized,
+        make: vehicle.marca || prev.make,
+        model: vehicle.modelo || prev.model,
+        year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
+        color: vehicle.color || prev.color,
+        mileage: typeof vehicle.kilometraje === "number" ? vehicle.kilometraje : prev.mileage,
+        engine_size: vehicle.motor || prev.engine_size,
+        engine_number: vehicle.n_motor || prev.engine_number,
+        vin: vehicle.n_chasis || prev.vin,
+        transmision_display: vehicle.transmision || prev.transmision_display,
+        combustible_display: vehicle.combustible || prev.combustible_display,
+      }));
+      setVehicleFormRevealed(true);
+      toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
+      toast({ variant: "destructive", title: "No se encontró la patente", description: message });
+    } finally {
+      setPatenteLookupLoading(false);
+    }
+  };
+
   const handleCreateVehicle = async () => {
     if (!user?.branch_id) {
       toast({ variant: "destructive", title: "Sin sucursal asignada", description: "Contactá al administrador para que te asigne una sucursal." });
@@ -1035,7 +1075,7 @@ export default function Inventory() {
 
       // Crear el vehículo primero (sin imágenes)
       // Asegurar que los números sean del tipo correcto para Supabase
-      const vinToCreate = generateVin();
+      const vinToCreate = newVehicle.vin?.trim() || generateVin();
       const fallbackYear = new Date().getFullYear();
       const patenteVal = newVehicle.patente.trim() || null;
       const vehicleData = {
@@ -1048,6 +1088,7 @@ export default function Inventory() {
         fuel_type: fuelDerived,
         transmission: transDerived,
         engine_size: newVehicle.engine_size?.trim() || null,
+        engine_number: newVehicle.engine_number?.trim() || null,
         category: "consignado" as const,
         owner_name: newVehicle.owner_name?.trim() || null,
         owner_phone: newVehicle.owner_phone?.trim() || null,
@@ -1251,6 +1292,7 @@ export default function Inventory() {
         fuel_type: fuelDerived,
         transmission: transDerived,
         engine_size: newVehicle.engine_size?.trim() || null,
+        engine_number: newVehicle.engine_number?.trim() || null,
         category: "consignado" as const,
         owner_name: newVehicle.owner_name?.trim() || null,
         owner_phone: newVehicle.owner_phone?.trim() || null,
@@ -2565,6 +2607,7 @@ export default function Inventory() {
               navigate(location.pathname, { replace: true });
             }
             setNewVehicle(createEmptyNewVehicle());
+            setVehicleFormRevealed(false);
           }
         }}
       >
@@ -2577,6 +2620,55 @@ export default function Inventory() {
           </DialogHeader>
 
           <div className="space-y-6 mt-4">
+            {/* Buscar por patente: autorrellena los datos desde GetAPI */}
+            <div className="rounded-lg border bg-muted/40 p-4">
+              <Label htmlFor="patente-lookup" className="text-sm font-medium">Buscar por patente</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Ingresá la patente y traemos marca, modelo, año, color, kilometraje, N° motor y N° chasis automáticamente. Después revisás y completás lo que falte.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  id="patente-lookup"
+                  value={newVehicle.patente}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value.toUpperCase() })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleBuscarPatente();
+                    }
+                  }}
+                  placeholder="ABCD12"
+                  maxLength={6}
+                  className="uppercase"
+                  disabled={patenteLookupLoading}
+                />
+                <Button type="button" onClick={handleBuscarPatente} disabled={patenteLookupLoading}>
+                  {patenteLookupLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Buscando…
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Buscar
+                    </>
+                  )}
+                </Button>
+              </div>
+              {!vehicleFormRevealed && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline mt-2"
+                  onClick={() => setVehicleFormRevealed(true)}
+                >
+                  Completar manualmente sin patente
+                </button>
+              )}
+            </div>
+
+            {vehicleFormRevealed && (
+            <>
             <div>
               <Label htmlFor="images">Fotos del vehículo</Label>
               <div className="mt-2">
@@ -2941,6 +3033,8 @@ export default function Inventory() {
               isSaving={isSaving}
               submitLabel="Guardar vehículo"
             />
+            </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

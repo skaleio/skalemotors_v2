@@ -10,6 +10,9 @@ export interface VehicleData {
   transmision: string | null;
   fuente: string;
   kilometraje?: number | null;
+  color?: string | null;
+  n_motor?: string | null;
+  n_chasis?: string | null;
 }
 
 export interface AppraisalResult {
@@ -135,6 +138,9 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     transmision: vehicleFromApi?.transmision ?? null,
     fuente: "getapi",
     kilometraje: typeof (vehicleFromApi as any)?.kilometraje === "number" ? (vehicleFromApi as any).kilometraje : null,
+    color: vehicleFromApi?.color ?? null,
+    n_motor: vehicleFromApi?.n_motor ?? null,
+    n_chasis: vehicleFromApi?.n_chasis ?? null,
   };
 
   const appraisal: AppraisalResult = {
