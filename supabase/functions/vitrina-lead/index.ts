@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { enforceRateLimit, getClientIp } from "../_shared/rateLimit.ts";
 
 function getEnvAny(names: string[]): string | null {
   for (const name of names) {
@@ -86,6 +87,14 @@ export default async function handler(req: Request): Promise<Response> {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
+
+  // Rate limit por IP: 20 req/min (anti-spam de captura de leads).
+  const limited = await enforceRateLimit(
+    admin,
+    { identifier: getClientIp(req), route: "vitrina-lead", max: 20, windowSeconds: 60 },
+    cors,
+  );
+  if (limited) return limited;
 
   // Resolver tenant por hostname verificado
   const candidates = host.startsWith("www.") ? [host, host.slice(4)] : [host, `www.${host}`];
