@@ -92,3 +92,5 @@ export default async function handler(req: Request): Promise<Response> {
     return zernioJson(req, 500, { ok: false, error: (e as Error).message });
   }
 }
+
+Deno.serve((req) => handler(req));
