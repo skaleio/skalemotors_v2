@@ -1,4 +1,5 @@
-import { Camera, Download, Edit, Eye, Globe, Loader2, MoreHorizontal, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { Camera, Download, Edit, Eye, FileText, Globe, Loader2, MoreHorizontal, Plus, ScrollText, Search, Trash2, Users, X } from "lucide-react";
+import { documentService, type Document } from "@/lib/services/documents";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -629,6 +630,22 @@ export default function Inventory() {
   const [marketplaceConnections, setMarketplaceConnections] = useState<{ platform: MarketplacePlatform }[]>([]);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
   const [leadsMatchVehicle, setLeadsMatchVehicle] = useState<Vehicle | null>(null);
+
+  // Contratos generados por vehículo (para verlos/abrirlos desde el inventario/consignaciones).
+  const { data: vehicleDocuments = [] } = useQuery({
+    queryKey: ["inventory-vehicle-documents", user?.tenant_id],
+    queryFn: () => documentService.getAll(),
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+  const documentsByVehicle = useMemo(() => {
+    const map: Record<string, Document[]> = {};
+    for (const d of vehicleDocuments) {
+      if (!d.vehicle_id) continue;
+      (map[d.vehicle_id] ??= []).push(d);
+    }
+    return map;
+  }, [vehicleDocuments]);
 
   const branchId = user?.branch_id ?? null;
 
@@ -1912,10 +1929,63 @@ export default function Inventory() {
                       onStatusChange={(next) => handleVehicleStatusChange(vehicle, next)}
                     />
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {consignmentTypeLabels[getVehicleConsignmentType(vehicle)]}
-                    </Badge>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col gap-1.5">
+                      <Badge variant="secondary" className="w-fit">
+                        {consignmentTypeLabels[getVehicleConsignmentType(vehicle)]}
+                      </Badge>
+                      {(() => {
+                        const vdocs = documentsByVehicle[vehicle.id] ?? [];
+                        const consigDoc = vdocs.find((d) => d.type === "contrato_consignacion");
+                        const ventaDoc = vdocs.find((d) => d.type === "contrato_venta");
+                        return (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 px-2 text-xs"
+                              title={
+                                consigDoc
+                                  ? `Contrato de consignación ${consigDoc.document_number} — abrir / imprimir`
+                                  : "Generar contrato de consignación"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/app/documents/vehiculo/${vehicle.id}?tipo=consignacion`);
+                              }}
+                            >
+                              <FileText className="h-3.5 w-3.5 text-pink-600" />
+                              {consigDoc ? (
+                                <span className="font-medium text-emerald-600">✓ Consig.</span>
+                              ) : (
+                                <span className="text-muted-foreground">Consig.</span>
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 px-2 text-xs"
+                              title={
+                                ventaDoc
+                                  ? `Nota de venta ${ventaDoc.document_number} — abrir / imprimir`
+                                  : "Generar nota de venta"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/app/documents/vehiculo/${vehicle.id}?tipo=venta`);
+                              }}
+                            >
+                              <ScrollText className="h-3.5 w-3.5 text-emerald-600" />
+                              {ventaDoc ? (
+                                <span className="font-medium text-emerald-600">✓ Venta</span>
+                              ) : (
+                                <span className="text-muted-foreground">Venta</span>
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

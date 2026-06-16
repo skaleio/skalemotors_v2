@@ -259,6 +259,7 @@ export default function DocumentEditor() {
           buyer_phone: cur.buyer_phone,
           buyer_email: cur.buyer_email,
           buyer_address: cur.buyer_address,
+          down_payment: cur.down_payment,
           payment_method: cur.payment_method,
         };
       });
@@ -502,15 +503,41 @@ export default function DocumentEditor() {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Forma de pago</Label>
+                    <Label className="text-xs">Pie / abono</Label>
                     <Input
                       className="h-8 text-xs"
-                      value={vForm.payment_method}
+                      type="number"
+                      value={vForm.down_payment}
                       onChange={(e) =>
-                        setForm((f) => ({ ...(f as VentaFormState), payment_method: e.target.value }))
+                        setForm((f) => ({ ...(f as VentaFormState), down_payment: e.target.value }))
                       }
                     />
                   </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Saldo restante</span>
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(
+                      Math.max(
+                        0,
+                        (parseFloat(vForm.sale_price) || 0) - (parseFloat(vForm.down_payment) || 0)
+                      )
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <Label className="text-xs">Forma de pago</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    value={vForm.payment_method}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), payment_method: e.target.value }))
+                    }
+                  />
                 </div>
               </div>
             )}
