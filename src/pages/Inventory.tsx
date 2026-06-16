@@ -65,6 +65,7 @@ import {
 } from "@/components/inventory/VehicleStatusPicker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  canAddInventoryVehicle,
   canViewInventoryPrice,
   hidesInventoryCosts,
   isPhotographerRole,
@@ -1627,8 +1628,8 @@ export default function Inventory() {
             Gestiona consignaciones físicas y digitales en un solo lugar
           </p>
         </div>
-        {!hidesCosts && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          {!hidesCosts && (
             <Button
               variant="outline"
               onClick={() => setShowExportDialog(true)}
@@ -1637,6 +1638,8 @@ export default function Inventory() {
               <Download className="h-4 w-4 mr-2" />
               {isExporting ? "Exportando..." : "Exportar"}
             </Button>
+          )}
+          {canAddInventoryVehicle(user?.role) && (
             <Button
               onClick={() => {
                 setNewVehicle(createEmptyNewVehicle());
@@ -1647,8 +1650,8 @@ export default function Inventory() {
               <Plus className="h-4 w-4 mr-2" />
               Agregar Vehículo
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Filters */}
