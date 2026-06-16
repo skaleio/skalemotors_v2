@@ -48,7 +48,7 @@ describe("crmPipeline", () => {
     expect(filterLeadsForCrmCeoView(leads).map((l) => l.id)).toEqual(["1", "3"]);
   });
 
-  it("orden Kanban: sin delegar arriba, delegados abajo", () => {
+  it("orden Kanban: sin delegar arriba (recientes primero), delegados abajo", () => {
     const unassigned = { assigned_to: null, contact_attempts: 0, created_at: "2026-05-02T10:00:00Z" };
     const unassignedOlder = { assigned_to: null, contact_attempts: 0, created_at: "2026-05-01T10:00:00Z" };
     const delegated = {
@@ -67,13 +67,13 @@ describe("crmPipeline", () => {
 
     expect(compareLeadsForCrmKanbanColumn(unassigned, delegated, "nuevo")).toBeLessThan(0);
     expect(compareLeadsForCrmKanbanColumn(delegated, delegatedRecent, "nuevo")).toBeLessThan(0);
-    expect(compareLeadsForCrmKanbanColumn(unassignedOlder, unassigned, "nuevo")).toBeLessThan(0);
+    expect(compareLeadsForCrmKanbanColumn(unassigned, unassignedOlder, "nuevo")).toBeLessThan(0);
     expect(compareLeadsForCrmKanbanColumn(unassigned, maxedUnassigned, "nuevo")).toBeLessThan(0);
 
-    const sorted = [delegatedRecent, unassigned, delegated, maxedUnassigned, unassignedOlder].sort((a, b) =>
+    const sorted = [delegatedRecent, unassignedOlder, delegated, maxedUnassigned, unassigned].sort((a, b) =>
       compareLeadsForCrmKanbanColumn(a, b, "nuevo"),
     );
-    expect(sorted).toEqual([unassignedOlder, unassigned, maxedUnassigned, delegated, delegatedRecent]);
+    expect(sorted).toEqual([unassigned, unassignedOlder, maxedUnassigned, delegated, delegatedRecent]);
   });
 
   it("orden cancelados: más reciente primero", () => {

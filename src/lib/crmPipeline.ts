@@ -105,7 +105,8 @@ function isLeadMaxedOutForKanbanSort(lead: CrmKanbanLeadSortInput): boolean {
 
 /**
  * Orden Kanban: sin delegar arriba → delegados abajo (recién delegados al fondo).
- * Dentro de cada grupo, leads con 3 contactos al final.
+ * Sin delegar: los recién llegados primero (así un lead nuevo cae arriba de NUEVO y
+ * queda visible en el preview de la columna). Dentro de cada grupo, leads con 3 contactos al final.
  */
 export function compareLeadsForCrmKanbanColumn(
   a: CrmKanbanLeadSortInput,
@@ -125,7 +126,7 @@ export function compareLeadsForCrmKanbanColumn(
   if (aMaxed !== bMaxed) return aMaxed - bMaxed;
 
   if (aDelegated === 0) {
-    return parseSortTimestamp(a.created_at) - parseSortTimestamp(b.created_at);
+    return parseSortTimestamp(b.created_at) - parseSortTimestamp(a.created_at);
   }
 
   const aAssigned = parseSortTimestamp(a.assigned_at) || parseSortTimestamp(a.created_at);
