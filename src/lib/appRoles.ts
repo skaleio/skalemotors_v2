@@ -37,6 +37,12 @@ export function canEditVehiclePhotos(role: string | undefined | null): boolean {
   return isPhotographerRole(role) || (!hidesInventoryFinancials(role) && !!role);
 }
 
+/** Puede agregar un vehículo al inventario/consignaciones. El vendedor comercial sí puede. */
+export function canAddInventoryVehicle(role: string | undefined | null): boolean {
+  if (!role) return false;
+  return !["financiero", "servicio"].includes(role);
+}
+
 /** Roles con home comercial en `/app` (métricas personales + tareas + avisos). */
 export const SALES_DASHBOARD_ROLES = new Set<string>([VENDOR_ROLE, "jefe_sucursal"]);
 
