@@ -366,6 +366,7 @@ const LeadCard = memo(function LeadCard({
   justLanded,
   showAssigneeBadge = false,
   showContactStateBadge = true,
+  canDelegate = false,
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
@@ -382,6 +383,8 @@ const LeadCard = memo(function LeadCard({
   showAssigneeBadge?: boolean;
   /** Etiqueta de calificación (vendedor: solo en columna Nuevo). */
   showContactStateBadge?: boolean;
+  /** Admin / supervisión: delegar a vendedor desde la tarjeta. */
+  canDelegate?: boolean;
 }) {
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
@@ -506,19 +509,28 @@ const LeadCard = memo(function LeadCard({
         {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
       </div>
       <LeadDelegationAdminBlock lead={lead} variant="inline" className="mt-1" />
-      <div className="mt-1.5">
-        {showContactAttemptsSemaforo ? (
-          <ContactAttemptsBar
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          {showContactAttemptsSemaforo ? (
+            <ContactAttemptsBar
+              leadId={lead.id}
+              value={lead.contact_attempts ?? 0}
+              size="sm"
+              showLabel={false}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Contactos {attempts}/3
+            </span>
+          )}
+        </div>
+        {canDelegate ? (
+          <AssignLeadMenu
             leadId={lead.id}
-            value={lead.contact_attempts ?? 0}
-            size="sm"
-            showLabel={false}
+            assignedTo={lead.assigned_to}
+            assignedLabel={assigneeFullName}
           />
-        ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Contactos {attempts}/3
-          </span>
-        )}
+        ) : null}
       </div>
       {label && styles && (
         <div className="mt-2">
@@ -1991,6 +2003,7 @@ export default function CRM() {
                           key={lead.id}
                           lead={lead}
                           showAssigneeBadge={canSupervise}
+                          canDelegate={canSupervise}
                           showContactStateBadge={shouldShowLeadContactStateBadge(lead, user?.role)}
                           draggable={!loading && movingLeadId !== lead.id}
                           isDragging={draggingLeadId === lead.id}
