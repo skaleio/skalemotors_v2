@@ -320,17 +320,34 @@ export default function DocumentsHub() {
                                 : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Abrir contrato"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openVehicle(row.vehicle.id, "consignacion");
-                              }}
-                            >
-                              <Car className="h-4 w-4 text-pink-600" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                title="Contrato de consignación"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openVehicle(row.vehicle.id, "consignacion");
+                                }}
+                              >
+                                <Car className="h-4 w-4 text-violet-600" />
+                                Consignación
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                title="Nota de venta"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openVehicle(row.vehicle.id, "venta");
+                                }}
+                              >
+                                <FileText className="h-4 w-4 text-emerald-600" />
+                                Venta
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

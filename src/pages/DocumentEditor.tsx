@@ -21,18 +21,45 @@ import {
   consignacionFormToPreview,
   consignacionFormToUpdate,
   documentToConsignacionForm,
+  documentToVentaForm,
   emptyConsignacionForm,
+  emptyVentaForm,
+  ventaFormToInsert,
+  ventaFormToPreview,
+  ventaFormToUpdate,
   type ConsignacionFormState,
+  type VentaFormState,
 } from "@/lib/documents/mappers";
 import {
   documentTypeFromQuery,
   resolveConsignacionPrefill,
+  resolveVentaPrefill,
 } from "@/lib/documents/resolvePrefill";
 import { mergeLayoutSettings, type DocumentTemplateSettings } from "@/lib/documents/templateTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import { documentService, Document, DocumentStatus } from "@/lib/services/documents";
 import { documentTemplateService } from "@/lib/services/documentTemplates";
 import { supabase } from "@/lib/supabase";
+
+type AnyForm = ConsignacionFormState | VentaFormState;
+
+const CONSIGNACION_SECTIONS = [
+  ["consignor", "Datos del consignante"],
+  ["vehicle", "Datos del vehículo"],
+  ["consignment_details", "Detalles de la consignación"],
+  ["terms", "Términos y condiciones"],
+  ["signatures", "Firmas"],
+  ["observations", "Observaciones"],
+] as const;
+
+const VENTA_SECTIONS = [
+  ["buyer", "Datos del comprador"],
+  ["vehicle", "Datos del vehículo"],
+  ["economic", "Condiciones económicas"],
+  ["terms", "Términos y condiciones"],
+  ["signatures", "Firmas"],
+  ["observations", "Observaciones"],
+] as const;
 
 export default function DocumentEditor() {
   const { vehicleId } = useParams<{ vehicleId: string }>();
@@ -44,12 +71,17 @@ export default function DocumentEditor() {
   const docType = documentTypeFromQuery(searchParams.get("tipo"));
   const isConsignacion = docType === "contrato_consignacion";
 
-  const [form, setForm] = useState<ConsignacionFormState>(emptyConsignacionForm);
+  const [form, setForm] = useState<AnyForm>(
+    isConsignacion ? emptyConsignacionForm() : emptyVentaForm()
+  );
   const [doc, setDoc] = useState<Document | null>(null);
   const [layoutSettings, setLayoutSettings] = useState<DocumentTemplateSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [missingConsignacion, setMissingConsignacion] = useState(false);
+
+  const cForm = form as ConsignacionFormState;
+  const vForm = form as VentaFormState;
 
   const { data: issuerName } = useQuery({
     queryKey: ["branch-name", user?.branch_id],
@@ -77,11 +109,15 @@ export default function DocumentEditor() {
   );
 
   const previewDoc = useMemo((): Document => {
-    const base = consignacionFormToPreview(form, {
-      document_number: doc?.document_number ?? "BORRADOR",
-    });
+    const base = isConsignacion
+      ? consignacionFormToPreview(form as ConsignacionFormState, {
+          document_number: doc?.document_number ?? "BORRADOR",
+        })
+      : ventaFormToPreview(form as VentaFormState, {
+          document_number: doc?.document_number ?? "BORRADOR",
+        });
     return { ...base, layout_settings: effectiveLayout as unknown as Record<string, unknown> };
-  }, [form, doc?.document_number, effectiveLayout]);
+  }, [form, doc?.document_number, effectiveLayout, isConsignacion]);
 
   useEffect(() => {
     if (!vehicleId || !user) return;
@@ -96,9 +132,9 @@ export default function DocumentEditor() {
 
         if (existing) {
           setDoc(existing);
-          if (isConsignacion) {
-            setForm(documentToConsignacionForm(existing));
-          }
+          setForm(
+            isConsignacion ? documentToConsignacionForm(existing) : documentToVentaForm(existing)
+          );
           setLayoutSettings(
             (existing.layout_settings as DocumentTemplateSettings) ??
               mergeLayoutSettings(template?.settings ?? {}, null)
@@ -129,8 +165,30 @@ export default function DocumentEditor() {
             }
           } else {
             setMissingConsignacion(true);
-            setForm((f) => ({ ...f, vehicle_id: vehicleId }));
+            setForm((f) => ({ ...(f as ConsignacionFormState), vehicle_id: vehicleId }));
           }
+          return;
+        }
+
+        // Nota de venta: el vehículo siempre alcanza para autorrellenar.
+        const prefill = await resolveVentaPrefill(vehicleId, user.branch_id);
+        if (cancelled) return;
+        setForm(prefill.form);
+        const tpl = await documentTemplateService.resolveForType(docType, user.branch_id);
+        const created = await documentService.create({
+          ...ventaFormToInsert(prefill.form, {
+            branch_id: user.branch_id ?? null,
+            tenant_id: user.tenant_id ?? null,
+            created_by: user.id ?? null,
+            status: "borrador",
+          }),
+          type: docType,
+          template_id: tpl.id !== "builtin" ? tpl.id : null,
+          layout_settings: tpl.settings as unknown as Record<string, unknown>,
+        });
+        if (!cancelled) {
+          setDoc(created);
+          setLayoutSettings(tpl.settings);
         }
       } catch {
         toast.error("No se pudo cargar el documento");
@@ -149,8 +207,11 @@ export default function DocumentEditor() {
     if (!doc) return;
     setSaving(true);
     try {
+      const fields = isConsignacion
+        ? consignacionFormToUpdate(form as ConsignacionFormState)
+        : ventaFormToUpdate(form as VentaFormState);
       const updated = await documentService.update(doc.id, {
-        ...consignacionFormToUpdate(form),
+        ...fields,
         status,
         layout_settings: effectiveLayout as unknown as Record<string, unknown>,
         template_id: template && template.id !== "builtin" ? template.id : doc.template_id,
@@ -176,6 +237,35 @@ export default function DocumentEditor() {
     win.print();
   };
 
+  const handleRefresh = () => {
+    if (!vehicleId) return;
+    if (isConsignacion) {
+      void resolveConsignacionPrefill(vehicleId, user?.branch_id).then((p) => {
+        if (p) {
+          setForm(p.form);
+          toast.success("Datos actualizados desde consignación");
+        }
+      });
+      return;
+    }
+    void resolveVentaPrefill(vehicleId, user?.branch_id).then((p) => {
+      // Refresca datos del vehículo conservando lo que se haya escrito del comprador.
+      setForm((f) => {
+        const cur = f as VentaFormState;
+        return {
+          ...p.form,
+          buyer_name: cur.buyer_name,
+          buyer_rut: cur.buyer_rut,
+          buyer_phone: cur.buyer_phone,
+          buyer_email: cur.buyer_email,
+          buyer_address: cur.buyer_address,
+          payment_method: cur.payment_method,
+        };
+      });
+      toast.success("Datos del vehículo actualizados");
+    });
+  };
+
   const toggleSection = (key: keyof typeof effectiveLayout.sections, value: boolean) => {
     setLayoutSettings((prev) => {
       const base = prev ?? template?.settings ?? mergeLayoutSettings({}, null);
@@ -197,6 +287,8 @@ export default function DocumentEditor() {
     return null;
   }
 
+  const sectionList = isConsignacion ? CONSIGNACION_SECTIONS : VENTA_SECTIONS;
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <header className="border-b bg-background px-4 py-3 flex items-center justify-between gap-3 shrink-0">
@@ -206,7 +298,7 @@ export default function DocumentEditor() {
           </Button>
           <div className="min-w-0">
             <h1 className="font-semibold truncate">
-              {isConsignacion ? "Contrato de consignación" : "Contrato de venta"}
+              {isConsignacion ? "Contrato de consignación" : "Nota de venta"}
               {doc?.document_number ? ` — ${doc.document_number}` : ""}
             </h1>
             <p className="text-xs text-muted-foreground truncate">
@@ -276,74 +368,156 @@ export default function DocumentEditor() {
                 </Button>
               ))}
             </div>
-            <div className="space-y-2 border-t pt-3">
-              <p className="text-xs font-medium text-muted-foreground">Datos del contrato</p>
-              <div className="space-y-2">
-                <Label className="text-xs">Consignante</Label>
-                <Input
-                  className="h-8 text-xs"
-                  value={form.owner_name}
-                  onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))}
-                />
-                <Input
-                  className="h-8 text-xs"
-                  placeholder="RUT"
-                  value={form.owner_rut}
-                  onChange={(e) => setForm((f) => ({ ...f, owner_rut: e.target.value }))}
-                />
-                <Input
-                  className="h-8 text-xs"
-                  placeholder="Teléfono"
-                  value={form.owner_phone}
-                  onChange={(e) => setForm((f) => ({ ...f, owner_phone: e.target.value }))}
-                />
-                <Input
-                  className="h-8 text-xs"
-                  type="email"
-                  placeholder="Email"
-                  value={form.owner_email}
-                  onChange={(e) => setForm((f) => ({ ...f, owner_email: e.target.value }))}
-                />
-                <Input
-                  className="h-8 text-xs"
-                  placeholder="Dirección"
-                  value={form.owner_address}
-                  onChange={(e) => setForm((f) => ({ ...f, owner_address: e.target.value }))}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Precio sugerido</Label>
+
+            {isConsignacion ? (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Datos del consignante</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Consignante</Label>
                   <Input
                     className="h-8 text-xs"
-                    type="number"
-                    value={form.sale_price}
-                    onChange={(e) => setForm((f) => ({ ...f, sale_price: e.target.value }))}
+                    value={cForm.owner_name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ConsignacionFormState), owner_name: e.target.value }))
+                    }
                   />
-                </div>
-                <div>
-                  <Label className="text-xs">Precio mínimo</Label>
                   <Input
                     className="h-8 text-xs"
-                    type="number"
-                    value={form.min_sale_price}
-                    onChange={(e) => setForm((f) => ({ ...f, min_sale_price: e.target.value }))}
+                    placeholder="RUT"
+                    value={cForm.owner_rut}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ConsignacionFormState), owner_rut: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Teléfono"
+                    value={cForm.owner_phone}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ConsignacionFormState), owner_phone: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    type="email"
+                    placeholder="Email"
+                    value={cForm.owner_email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ConsignacionFormState), owner_email: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Dirección"
+                    value={cForm.owner_address}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ConsignacionFormState), owner_address: e.target.value }))
+                    }
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Precio sugerido</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      type="number"
+                      value={cForm.sale_price}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...(f as ConsignacionFormState), sale_price: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Precio mínimo</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      type="number"
+                      value={cForm.min_sale_price}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...(f as ConsignacionFormState),
+                          min_sale_price: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Datos del comprador</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Comprador</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    value={vForm.buyer_name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), buyer_name: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="RUT"
+                    value={vForm.buyer_rut}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), buyer_rut: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Teléfono"
+                    value={vForm.buyer_phone}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), buyer_phone: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    type="email"
+                    placeholder="Email"
+                    value={vForm.buyer_email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), buyer_email: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Dirección"
+                    value={vForm.buyer_address}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as VentaFormState), buyer_address: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Precio de venta</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      type="number"
+                      value={vForm.sale_price}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...(f as VentaFormState), sale_price: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Forma de pago</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      value={vForm.payment_method}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...(f as VentaFormState), payment_method: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               <p className="text-xs font-medium text-muted-foreground">Secciones</p>
-              {(
-                [
-                  ["consignor", "Datos del consignante"],
-                  ["vehicle", "Datos del vehículo"],
-                  ["consignment_details", "Detalles de la consignación"],
-                  ["terms", "Términos y condiciones"],
-                  ["signatures", "Firmas"],
-                  ["observations", "Observaciones"],
-                ] as const
-              ).map(([key, label]) => (
+              {sectionList.map(([key, label]) => (
                 <div key={key} className="flex items-center justify-between gap-2">
                   <Label className="text-xs font-normal">{label}</Label>
                   <Switch
@@ -358,21 +532,9 @@ export default function DocumentEditor() {
                 <Printer className="h-4 w-4" />
                 Imprimir
               </Button>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => {
-                  if (!vehicleId) return;
-                  void resolveConsignacionPrefill(vehicleId, user?.branch_id).then((p) => {
-                    if (p) {
-                      setForm(p.form);
-                      toast.success("Datos actualizados desde consignación");
-                    }
-                  });
-                }}
-              >
+              <Button variant="outline" className="w-full gap-2" onClick={handleRefresh}>
                 <RefreshCw className="h-4 w-4" />
-                Refrescar desde consignación
+                {isConsignacion ? "Refrescar desde consignación" : "Refrescar desde vehículo"}
               </Button>
               <p className="text-[10px] text-muted-foreground text-center">
                 Plantilla: {template?.name ?? "Sistema"}
