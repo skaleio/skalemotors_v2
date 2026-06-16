@@ -566,6 +566,7 @@ export default function CRM() {
     branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
+    live: true,
   });
 
   const { data: deletedLeads = [], isLoading: loadingPapelera, refetch: refetchPapelera } = useQuery({
