@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDevice } from "@/contexts/DeviceContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
 import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
@@ -183,6 +184,15 @@ function formatChilePhoneForDisplay(value?: string | null) {
     return `+56 ${number}`;
   }
   return trimmed;
+}
+
+/** Href `tel:` (E.164 chileno) para llamar desde móvil; null si no hay número válido. */
+function buildTelHref(value?: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return null;
+  const e164 = digits.startsWith("56") ? `+${digits}` : `+56${digits}`;
+  return `tel:${e164}`;
 }
 
 const labelStyles: Record<string, { dot: string; text: string }> = {
@@ -554,6 +564,7 @@ const CAN_USE_CRM_GLOBAL_VIEW = new Set(["admin", "jefe_jefe"]);
 
 export default function CRM() {
   const { user } = useAuth();
+  const { isMobileDevice } = useDevice();
   const location = useLocation();
   const vendorMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -2424,7 +2435,21 @@ export default function CRM() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Teléfono</p>
-                      <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
+                      {(() => {
+                        const display = formatChilePhoneForDisplay(editingLead.phone) || "—";
+                        const telHref = isMobileDevice ? buildTelHref(editingLead.phone) : null;
+                        return telHref ? (
+                          <a
+                            href={telHref}
+                            className="text-base text-primary underline underline-offset-2 inline-flex items-center gap-1.5"
+                          >
+                            <Phone className="h-3.5 w-3.5 shrink-0" />
+                            {display}
+                          </a>
+                        ) : (
+                          <p className="text-base">{display}</p>
+                        );
+                      })()}
                     </div>
                   </div>
                   {canSetContactState ? (
