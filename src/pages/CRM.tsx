@@ -1662,13 +1662,13 @@ export default function CRM() {
           </Button>
         </div>
       )}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between [@media(max-height:600px)]:gap-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-3xl font-bold tracking-tight [@media(max-height:600px)]:text-xl">CRM</h1>
+          <p className="text-muted-foreground mt-2 [@media(max-height:600px)]:hidden">
             Gestión de clientes y relaciones
           </p>
-          <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+          <p className="text-xs text-muted-foreground mt-1 hidden sm:block [@media(max-height:600px)]:!hidden">
             Arrastra una tarjeta a otra columna para cambiar el estado. Al mover a{" "}
             <span className="font-medium">NEGOCIO CONCRETADO</span> se pedirán datos de la venta antes de guardar.
           </p>
