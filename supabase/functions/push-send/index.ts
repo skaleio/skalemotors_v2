@@ -62,6 +62,21 @@ function getStatusFromError(err: unknown): number | null {
   return e?.response?.status ?? e?.status ?? null;
 }
 
+// Comparación en tiempo constante para evitar timing attacks contra el service key.
+function timingSafeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  if (ea.length !== eb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ea.length; i++) diff |= ea[i] ^ eb[i];
+  return diff === 0;
+}
+
+// endpoint de push = URL única por device; no loggear completo.
+function redactEndpoint(endpoint: string): string {
+  return endpoint.slice(0, 40) + "…";
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const cors = getCorsHeaders(req);
 
@@ -71,6 +86,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), {
       status: 405,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // push-send es servidor-a-servidor (solo la invoca pg_net). Un request con
+  // Origin viene de un browser → rechazar sin depender de la config de CORS.
+  if (req.headers.get("origin")) {
+    return new Response(JSON.stringify({ ok: false, error: "Forbidden" }), {
+      status: 403,
       headers: { ...cors, "Content-Type": "application/json" },
     });
   }
@@ -90,7 +114,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Auth: el Bearer debe ser el service_role key (lo manda el dispatcher).
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (bearer !== serviceKey) {
+  if (!timingSafeEqual(bearer, serviceKey)) {
     return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
       status: 401,
       headers: { ...cors, "Content-Type": "application/json" },
@@ -181,7 +205,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (status === 404 || status === 410) {
           deadEndpoints.push(sub.endpoint);
         } else {
-          console.error("[push-send] push failed:", sub.endpoint, status, err);
+          console.error("[push-send] push failed:", redactEndpoint(sub.endpoint), status);
         }
       }
     }),

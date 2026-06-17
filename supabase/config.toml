@@ -370,6 +370,11 @@ verify_jwt = false
 [functions.landing-booking]
 verify_jwt = false
 
+# push-send: la invoca el trigger pg_net con el service_role key como Bearer
+# (no un JWT de usuario). Debe ser false; la función valida el Bearer a mano.
+[functions.push-send]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
