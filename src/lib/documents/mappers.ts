@@ -128,6 +128,8 @@ export function mapVehicleToConsignacionForm(v: Vehicle): Partial<ConsignacionFo
     vehicle_patente: (v.patente ?? "").toUpperCase(),
     vehicle_km: v.mileage != null ? String(v.mileage) : "",
     vehicle_color: v.color ?? "",
+    vehicle_motor: v.engine_number ?? "",
+    vehicle_chasis: v.vin ?? "",
     sale_price: v.price != null ? String(v.price) : "",
     owner_name: v.owner_name ?? "",
     owner_phone: v.owner_phone ?? "",
