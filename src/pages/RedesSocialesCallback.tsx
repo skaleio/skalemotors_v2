@@ -7,6 +7,10 @@ import { syncZernioAccounts } from "@/lib/services/zernioApi";
 import type { ZernioScope } from "@/lib/zernio/rbac";
 import { toast } from "sonner";
 
+type OAuthResult =
+  | { type: "zernio-oauth-result"; ok: true; scope: ZernioScope; synced: number }
+  | { type: "zernio-oauth-result"; ok: false; scope: ZernioScope; error: string };
+
 export default function RedesSocialesCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -20,13 +24,32 @@ export default function RedesSocialesCallback() {
       scopeParam === "org" ? "org" : scopeParam === "personal" ? "personal" : "personal";
     sessionStorage.removeItem("zernio_connect_scope");
 
+    const opener = typeof window !== "undefined" ? window.opener : null;
+    const isPopup = !!opener && opener !== window;
+
+    const notifyOpener = (result: OAuthResult) => {
+      try {
+        opener?.postMessage(result, window.location.origin);
+      } catch {
+        /* opener cerrado o de otro origen: ignoramos, el polling del padre refresca igual */
+      }
+    };
+
     let cancelled = false;
 
     (async () => {
       try {
         const { synced } = await syncZernioAccounts(scope);
-        await queryClient.invalidateQueries({ queryKey: zernioAccountsQueryKey(scope) });
         if (cancelled) return;
+
+        if (isPopup) {
+          notifyOpener({ type: "zernio-oauth-result", ok: true, scope, synced });
+          setMessage("¡Listo! Puedes cerrar esta ventana.");
+          window.close();
+          return;
+        }
+
+        await queryClient.invalidateQueries({ queryKey: zernioAccountsQueryKey(scope) });
         const connected = searchParams.get("connected");
         if (connected) {
           toast.success(`Cuenta de ${connected} conectada.`);
@@ -39,6 +62,14 @@ export default function RedesSocialesCallback() {
       } catch (e) {
         if (cancelled) return;
         const err = (e as Error).message;
+
+        if (isPopup) {
+          notifyOpener({ type: "zernio-oauth-result", ok: false, scope, error: err });
+          setMessage(err);
+          window.close();
+          return;
+        }
+
         setMessage(err);
         toast.error(err);
         navigate(`/app/redes-sociales?tab=${scope}`, { replace: true });

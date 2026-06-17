@@ -35,7 +35,7 @@ import {
   zernioPostsQueryKey,
 } from "@/hooks/useZernioAccounts";
 import { toast } from "sonner";
-import { redirectToZernioOAuth } from "@/lib/zernio/oauth";
+import { openZernioOAuthPopup, redirectToZernioOAuth } from "@/lib/zernio/oauth";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_ACCENT: Record<string, string> = {
@@ -182,28 +182,53 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
     const platformLabel =
       ZERNIO_PLATFORMS.find((p) => p.id === platform)?.label ?? platform;
 
-    const safetyTimer = window.setTimeout(() => {
-      setConnectingPlatform((current) => {
-        if (current === platform) {
-          toast.error(
-            `No pudimos abrir ${platformLabel}. Comprueba tu conexión y vuelve a intentar.`,
-          );
-          return null;
-        }
-        return current;
-      });
-    }, 19_000);
-
     try {
       sessionStorage.setItem("zernio_connect_scope", scope);
       const redirectUrl = `${window.location.origin}/app/redes-sociales/callback`;
       const { authUrl } = await getZernioConnectUrl(scope, platform, redirectUrl);
-      redirectToZernioOAuth(authUrl);
+
+      const popup = openZernioOAuthPopup(authUrl);
+      if (!popup) {
+        // El navegador bloqueó el popup: caemos al flujo de redirección en la misma pestaña.
+        redirectToZernioOAuth(authUrl);
+        return;
+      }
+
+      let settled = false;
+      const finish = (refresh: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("message", onMessage);
+        window.clearInterval(poll);
+        setConnectingPlatform(null);
+        if (refresh) {
+          queryClient.invalidateQueries({ queryKey: zernioAccountsQueryKey(scope) });
+          queryClient.invalidateQueries({ queryKey: zernioPostsQueryKey(scope) });
+        }
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        const data = event.data as { type?: string; ok?: boolean; error?: string };
+        if (data?.type !== "zernio-oauth-result") return;
+        if (!popup.closed) popup.close();
+        if (data.ok) {
+          toast.success(`Cuenta de ${platformLabel} conectada.`);
+        } else if (data.error) {
+          toast.error(data.error);
+        }
+        finish(true);
+      };
+
+      window.addEventListener("message", onMessage);
+
+      // Si el usuario cierra el popup a mano (con o sin completar), refrescamos igual.
+      const poll = window.setInterval(() => {
+        if (popup.closed) finish(true);
+      }, 700);
     } catch (e) {
       toast.error((e as Error).message);
       setConnectingPlatform(null);
-    } finally {
-      window.clearTimeout(safetyTimer);
     }
   };
 
