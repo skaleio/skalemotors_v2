@@ -98,7 +98,10 @@ export default async function handler(req: Request): Promise<Response> {
       platforms: zernioPlatforms,
       timezone,
     };
-    if (mediaUrls.length) zernioBody.mediaUrls = mediaUrls;
+    if (mediaUrls.length) {
+      // Zernio espera mediaItems: [{ url, type }] (ver docs/guides/media-uploads).
+      zernioBody.mediaItems = mediaUrls.map((url: string) => ({ url, type: "image" }));
+    }
     if (publishNow) {
       zernioBody.publishNow = true;
     } else if (scheduledFor) {

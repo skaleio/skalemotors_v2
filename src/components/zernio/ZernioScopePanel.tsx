@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import {
 } from "@/hooks/useZernioAccounts";
 import { toast } from "sonner";
 import { openZernioOAuthPopup, redirectToZernioOAuth } from "@/lib/zernio/oauth";
+import { ZernioImageUploader } from "@/components/zernio/ZernioImageUploader";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_ACCENT: Record<string, string> = {
@@ -160,6 +161,12 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
   const [scheduledFor, setScheduledFor] = useState("");
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [composerReset, setComposerReset] = useState(0);
+
+  const handleMediaReady = useCallback((urls: string[]) => setMediaUrls(urls), []);
+  const handleMediaBusy = useCallback((busy: boolean) => setUploadingMedia(busy), []);
 
   const canConnect = scope === "org" ? canConnectOrg(user?.role) : true;
 
@@ -247,8 +254,12 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
   };
 
   const handlePublish = async (publishNow: boolean) => {
-    if (!content.trim()) {
-      toast.error("Escribe el contenido del post.");
+    if (!content.trim() && mediaUrls.length === 0) {
+      toast.error("Escribe un mensaje o agrega al menos una imagen.");
+      return;
+    }
+    if (uploadingMedia) {
+      toast.error("Espera a que terminen de subir las imágenes.");
       return;
     }
     const selected = accounts.filter((a) => selectedAccountIds.includes(a.zernio_account_id));
@@ -272,11 +283,14 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
         })),
         publishNow,
         scheduledFor: publishNow ? undefined : new Date(scheduledFor).toISOString(),
+        mediaUrls,
       });
       toast.success(publishNow ? "Publicación enviada." : "Post programado.");
       setContent("");
       setScheduledFor("");
       setSelectedAccountIds([]);
+      setMediaUrls([]);
+      setComposerReset((n) => n + 1);
       queryClient.invalidateQueries({ queryKey: zernioPostsQueryKey(scope) });
     } catch (e) {
       toast.error((e as Error).message);
@@ -450,6 +464,15 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
                 />
               </div>
               <div className="space-y-2">
+                <Label>Imágenes (opcional)</Label>
+                <ZernioImageUploader
+                  resetSignal={composerReset}
+                  disabled={publishing}
+                  onReadyChange={handleMediaReady}
+                  onBusyChange={handleMediaBusy}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor={`schedule-${scope}`}>Programar (opcional)</Label>
                 <Input
                   id={`schedule-${scope}`}
@@ -458,14 +481,21 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
                   onChange={(e) => setScheduledFor(e.target.value)}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={publishing} onClick={() => handlePublish(true)}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button disabled={publishing || uploadingMedia} onClick={() => handlePublish(true)}>
                   {publishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Publicar ahora
                 </Button>
-                <Button variant="secondary" disabled={publishing} onClick={() => handlePublish(false)}>
+                <Button
+                  variant="secondary"
+                  disabled={publishing || uploadingMedia}
+                  onClick={() => handlePublish(false)}
+                >
                   Programar
                 </Button>
+                {uploadingMedia && (
+                  <span className="text-xs text-muted-foreground">Subiendo imágenes…</span>
+                )}
               </div>
             </CardContent>
           </Card>
