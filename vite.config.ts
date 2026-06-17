@@ -51,6 +51,9 @@ export default defineConfig(({ mode }) => {
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",
+      // autoUpdate: el SW se actualiza solo (sin prompt). injectRegister null:
+      // NO inyectamos el script de registro del plugin — lo registramos a mano
+      // en src/main.tsx con registerSW(), que respeta este registerType.
       registerType: "autoUpdate",
       injectRegister: null,
       injectManifest: {
