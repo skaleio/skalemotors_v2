@@ -1,4 +1,5 @@
 import React from "react";
+import { registerSW } from "virtual:pwa-register";
 import { captureAppError, initObservability } from "@/lib/observability";
 import { setupPerformanceObservers } from "@/lib/performance";
 
@@ -100,6 +101,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 } else {
   initObservability();
   setupPerformanceObservers();
+  registerSW({ immediate: true });
   import("./index.css");
   Promise.all([
     import("react-dom/client"),
