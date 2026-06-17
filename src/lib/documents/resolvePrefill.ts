@@ -4,6 +4,7 @@ import { consignacionesService } from "@/lib/services/consignaciones";
 import { vehicleService } from "@/lib/services/vehicles";
 import { leadService } from "@/lib/services/leads";
 import {
+  emptyConsignacionForm,
   mapConsignacionToForm,
   mapVehicleToConsignacionForm,
   mapVehicleToVentaForm,
@@ -16,7 +17,7 @@ type Consignacion = Awaited<ReturnType<typeof consignacionesService.resolveForVe
 
 export interface ConsignacionPrefillResult {
   form: ConsignacionFormState;
-  consignacion: NonNullable<Consignacion>;
+  consignacion: Consignacion | null;
   vehicle: Vehicle;
   warning?: string;
 }
@@ -47,7 +48,7 @@ async function enrichOwnerFromLead(
 export async function resolveConsignacionPrefill(
   vehicleId: string,
   branchId?: string
-): Promise<ConsignacionPrefillResult | null> {
+): Promise<ConsignacionPrefillResult> {
   const vehicle = await vehicleService.getById(vehicleId);
   const consignacion = await consignacionesService.resolveForVehicle({
     vehicleId,
@@ -55,20 +56,26 @@ export async function resolveConsignacionPrefill(
     branchId,
   });
 
-  if (!consignacion) {
-    return null;
-  }
-
+  // Base siempre desde el vehículo (igual que la nota de venta); solo faltan
+  // los datos del consignante, que el vendedor completa.
   let form: ConsignacionFormState = {
+    ...emptyConsignacionForm(),
     ...mapVehicleToConsignacionForm(vehicle),
-    ...mapConsignacionToForm(consignacion),
-  } as ConsignacionFormState;
+  };
 
-  if (consignacion.motor) {
-    form = { ...form, vehicle_vin: form.vehicle_vin || consignacion.vehicle_vin || "" };
+  if (!consignacion) {
+    if (!form.min_sale_price) form.min_sale_price = form.sale_price;
+    return { form, consignacion: null, vehicle };
   }
 
-  form = await enrichOwnerFromLead(form, consignacion.lead_id);
+  // Si existe un registro de consignación, sus datos tienen prioridad.
+  form = { ...form, ...mapConsignacionToForm(consignacion) } as ConsignacionFormState;
+
+  if (consignacion.motor) form.vehicle_motor = form.vehicle_motor || consignacion.motor;
+  if (consignacion.vehicle_vin) {
+    form.vehicle_chasis = form.vehicle_chasis || consignacion.vehicle_vin;
+    form.vehicle_vin = form.vehicle_vin || consignacion.vehicle_vin;
+  }
 
   if (consignacion.consignacion_price != null && !form.min_sale_price) {
     form.min_sale_price = String(consignacion.consignacion_price);
