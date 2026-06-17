@@ -1,15 +1,21 @@
 import * as React from "react";
+import { getIsMobileDevice } from "@/lib/device";
 
 const MOBILE_BREAKPOINT = 768;
 
 /**
  * Detecta si el layout debe comportarse como móvil.
- * Se alinea con el breakpoint `md` de Tailwind (max-width: 767px).
+ * Móvil = dispositivo móvil (cualquier orientación, por user agent) o viewport angosto.
+ * Incluir el dispositivo evita que un celular en horizontal (ancho > 768px) sea tratado
+ * como escritorio (p. ej. el sidebar pasaba a fijo y tapaba el contenido).
  */
 export function useIsMobile() {
   const getMatches = () => {
     if (typeof window === "undefined") {
       return false;
+    }
+    if (getIsMobileDevice()) {
+      return true;
     }
     return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
   };
@@ -18,12 +24,12 @@ export function useIsMobile() {
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
-    const handleMediaChange = (event: MediaQueryListEvent) => {
-      setIsMobile(event.matches);
+    const handleMediaChange = () => {
+      setIsMobile(getMatches());
     };
 
     // Sync inicial por si cambia entre renders
-    setIsMobile(mql.matches);
+    setIsMobile(getMatches());
 
     if (mql.addEventListener) {
       mql.addEventListener("change", handleMediaChange);
