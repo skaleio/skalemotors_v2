@@ -60,6 +60,7 @@ import {
   contactStateClearPatch,
   contactStateToPriority,
   shouldClearContactStateOnVendorExitNuevo,
+  shouldResetContactAttemptsOnMove,
   shouldShowLeadContactStateBadge,
   type LeadContactState,
 } from "@/lib/leadContactState";
@@ -1129,6 +1130,11 @@ export default function CRM() {
         }
       }
 
+      // Mover de NUEVO a EN SEGUIMIENTO reinicia el semáforo de intentos de contacto.
+      if (shouldResetContactAttemptsOnMove(editingLead.status, nextDbStatus)) {
+        updates.contact_attempts = 0;
+      }
+
       if (
         isEditingForm
         && editForm.contact_attempts > (editingLead.contact_attempts ?? 0)
@@ -1353,6 +1359,7 @@ export default function CRM() {
         previousStatus,
         nextStatus,
       );
+      const resetAttempts = shouldResetContactAttemptsOnMove(previousStatus, nextStatus);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((l: Lead) => {
@@ -1361,6 +1368,7 @@ export default function CRM() {
             ...l,
             status: nextStatus,
             ...(clearContactState ? contactStateClearPatch() : {}),
+            ...(resetAttempts ? { contact_attempts: 0 } : {}),
           };
         });
       });
@@ -1368,6 +1376,7 @@ export default function CRM() {
       try {
         const dropUpdates: Record<string, unknown> = { status: nextStatus };
         if (clearContactState) Object.assign(dropUpdates, contactStateClearPatch());
+        if (resetAttempts) dropUpdates.contact_attempts = 0;
         const updated = await leadService.update(leadId, dropUpdates as any);
         queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
           if (!Array.isArray(current)) return current;
