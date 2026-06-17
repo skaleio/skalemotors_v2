@@ -672,6 +672,7 @@ function LeadsImpl({ user }: { user: User }) {
     branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
+    live: true,
   });
   const { consignaciones } = useConsignaciones({
     branchId: user?.branch_id ?? undefined,
