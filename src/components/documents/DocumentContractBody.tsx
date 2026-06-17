@@ -1,6 +1,7 @@
 import type { Document } from "@/lib/services/documents";
 import type { DocumentTemplate } from "@/lib/documents/templateTypes";
 import { mergeLayoutSettings } from "@/lib/documents/templateTypes";
+import { MIAMI_LOGO_DATA_URI } from "@/assets/miamiLogo";
 
 /**
  * Datos del emisor (automotora). Hoy fijos para Miami Motors; configurables por
@@ -11,7 +12,7 @@ const ISSUER = {
   rut: "",
   phone: "+56947928875",
   email: "contreras3g@gmail.com",
-  logoSrc: null as string | null,
+  logoSrc: MIAMI_LOGO_DATA_URI as string | null,
 };
 
 function formatCLP(amount: number | null | undefined): string {
@@ -95,12 +96,12 @@ export function DocumentContractBody({
     <div className={`${densityClass[density]} ${gapClass[density]} text-slate-700`}>
       {/* Encabezado: emisor a la izquierda, título y folio a la derecha */}
       <div className="flex items-start justify-between gap-6 pb-3 border-b border-slate-300">
-        <div className="flex items-start gap-3">
+        <div className="flex flex-col gap-2">
           {ISSUER.logoSrc ? (
-            <img src={ISSUER.logoSrc} alt={ISSUER.name} className="h-12 w-auto object-contain" />
+            <img src={ISSUER.logoSrc} alt={ISSUER.name} className="h-10 w-auto rounded" />
           ) : null}
           <div>
-            <p className="text-base font-bold text-slate-800">{ISSUER.name}</p>
+            <p className="text-sm font-bold text-slate-800">{ISSUER.name}</p>
             {ISSUER.rut ? <p className="text-[10px] text-slate-400">RUT: {ISSUER.rut}</p> : null}
             <p className="text-[10px] text-slate-400">Tel: {ISSUER.phone}</p>
             <p className="text-[10px] text-slate-400">{ISSUER.email}</p>

@@ -230,11 +230,28 @@ export default function DocumentEditor() {
     if (!content || !doc) return;
     const win = window.open("", "_blank", "noopener,noreferrer");
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${doc.document_number}</title>
-      <style>body{font-family:Arial,sans-serif;font-size:12px;padding:32px;color:#000}</style></head>
-      <body>${content}</body></html>`);
+    // Copiamos los estilos de la app para que el documento impreso conserve el diseño.
+    const headStyles = Array.from(
+      document.querySelectorAll('style, link[rel="stylesheet"]')
+    )
+      .map((node) => node.outerHTML)
+      .join("\n");
+    win.document.write(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${doc.document_number}</title>${headStyles}` +
+        `<style>@page{margin:14mm} body{margin:0;background:#fff;font-family:Arial,Helvetica,sans-serif}` +
+        `.doc-print{max-width:800px;margin:0 auto;padding:8px;color:#000}</style>` +
+        `</head><body><div class="doc-print">${content}</div></body></html>`
+    );
     win.document.close();
-    win.print();
+    const triggerPrint = () => {
+      win.focus();
+      win.print();
+    };
+    if (win.document.readyState === "complete") {
+      setTimeout(triggerPrint, 350);
+    } else {
+      win.onload = () => setTimeout(triggerPrint, 350);
+    }
   };
 
   const handleRefresh = () => {
