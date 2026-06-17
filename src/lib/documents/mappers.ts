@@ -14,12 +14,15 @@ export type VentaFormState = {
   vehicle_patente: string;
   vehicle_km: string;
   vehicle_color: string;
+  vehicle_motor: string;
+  vehicle_chasis: string;
   buyer_name: string;
   buyer_rut: string;
   buyer_phone: string;
   buyer_email: string;
   buyer_address: string;
   sale_price: string;
+  down_payment: string;
   payment_method: string;
   notes: string;
   lead_id: string;
@@ -60,12 +63,15 @@ export const emptyVentaForm = (): VentaFormState => ({
   vehicle_patente: "",
   vehicle_km: "",
   vehicle_color: "",
+  vehicle_motor: "",
+  vehicle_chasis: "",
   buyer_name: "",
   buyer_rut: "",
   buyer_phone: "",
   buyer_email: "",
   buyer_address: "",
   sale_price: "",
+  down_payment: "",
   payment_method: "efectivo",
   notes: "",
   lead_id: "",
@@ -107,6 +113,7 @@ export function mapVehicleToVentaForm(v: Vehicle): Partial<VentaFormState> {
     vehicle_patente: (v.patente ?? "").toUpperCase(),
     vehicle_km: v.mileage != null ? String(v.mileage) : "",
     vehicle_color: v.color ?? "",
+    vehicle_chasis: v.vin ?? "",
     sale_price: v.price != null ? String(v.price) : "",
   };
 }
@@ -171,12 +178,15 @@ export function documentToVentaForm(doc: Document): VentaFormState {
     vehicle_patente: doc.vehicle_patente ?? "",
     vehicle_km: doc.vehicle_km != null ? String(doc.vehicle_km) : "",
     vehicle_color: doc.vehicle_color ?? "",
+    vehicle_motor: doc.vehicle_motor ?? "",
+    vehicle_chasis: doc.vehicle_chasis ?? doc.vehicle_vin ?? "",
     buyer_name: doc.buyer_name ?? "",
     buyer_rut: doc.buyer_rut ?? "",
     buyer_phone: doc.buyer_phone ?? "",
     buyer_email: doc.buyer_email ?? "",
     buyer_address: doc.buyer_address ?? "",
     sale_price: doc.sale_price != null ? String(doc.sale_price) : "",
+    down_payment: doc.down_payment != null ? String(doc.down_payment) : "",
     payment_method: doc.payment_method ?? "efectivo",
     notes: doc.notes ?? "",
     lead_id: doc.lead_id ?? "",
@@ -239,6 +249,8 @@ export function ventaFormToPreview(
     vehicle_patente: form.vehicle_patente || null,
     vehicle_km: form.vehicle_km ? parseInt(form.vehicle_km, 10) : null,
     vehicle_color: form.vehicle_color || null,
+    vehicle_motor: form.vehicle_motor || null,
+    vehicle_chasis: form.vehicle_chasis || form.vehicle_vin || null,
     buyer_name: form.buyer_name || null,
     buyer_rut: form.buyer_rut || null,
     buyer_phone: form.buyer_phone || null,
@@ -250,6 +262,7 @@ export function ventaFormToPreview(
     owner_email: null,
     owner_address: null,
     sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
+    down_payment: form.down_payment ? parseFloat(form.down_payment) : null,
     commission_percentage: null,
     commission_amount: null,
     payment_method: form.payment_method || null,
@@ -332,12 +345,15 @@ export function ventaFormToInsert(
     vehicle_patente: form.vehicle_patente?.toUpperCase() || null,
     vehicle_km: form.vehicle_km ? parseInt(form.vehicle_km, 10) : null,
     vehicle_color: form.vehicle_color || null,
+    vehicle_motor: form.vehicle_motor || null,
+    vehicle_chasis: form.vehicle_chasis || form.vehicle_vin || null,
     buyer_name: form.buyer_name || null,
     buyer_rut: form.buyer_rut || null,
     buyer_phone: form.buyer_phone || null,
     buyer_email: form.buyer_email || null,
     buyer_address: form.buyer_address || null,
     sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
+    down_payment: form.down_payment ? parseFloat(form.down_payment) : null,
     payment_method: form.payment_method || null,
     notes: form.notes || null,
     lead_id: form.lead_id || null,
@@ -397,12 +413,15 @@ export function ventaFormToUpdate(form: VentaFormState): import("@/lib/services/
     vehicle_patente: form.vehicle_patente?.toUpperCase() || null,
     vehicle_km: form.vehicle_km ? parseInt(form.vehicle_km, 10) : null,
     vehicle_color: form.vehicle_color || null,
+    vehicle_motor: form.vehicle_motor || null,
+    vehicle_chasis: form.vehicle_chasis || form.vehicle_vin || null,
     buyer_name: form.buyer_name || null,
     buyer_rut: form.buyer_rut || null,
     buyer_phone: form.buyer_phone || null,
     buyer_email: form.buyer_email || null,
     buyer_address: form.buyer_address || null,
     sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
+    down_payment: form.down_payment ? parseFloat(form.down_payment) : null,
     payment_method: form.payment_method || null,
     notes: form.notes || null,
     lead_id: form.lead_id || null,

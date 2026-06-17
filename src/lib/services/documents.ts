@@ -5,6 +5,7 @@ export type Document = Database['public']['Tables']['documents']['Row'] & {
   template_id?: string | null;
   layout_settings?: Record<string, unknown> | null;
   min_sale_price?: number | null;
+  down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
 };
@@ -12,6 +13,7 @@ export type DocumentInsert = Database['public']['Tables']['documents']['Insert']
   template_id?: string | null;
   layout_settings?: Record<string, unknown> | null;
   min_sale_price?: number | null;
+  down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
 };
@@ -19,6 +21,7 @@ export type DocumentUpdate = Database['public']['Tables']['documents']['Update']
   template_id?: string | null;
   layout_settings?: Record<string, unknown> | null;
   min_sale_price?: number | null;
+  down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
 };

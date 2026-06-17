@@ -81,10 +81,26 @@ export async function resolveConsignacionPrefill(
 
 export async function resolveVentaPrefill(
   vehicleId: string,
-  _branchId?: string
+  branchId?: string
 ): Promise<VentaPrefillResult> {
   const vehicle = await vehicleService.getById(vehicleId);
   const form = mapVehicleToVentaForm(vehicle) as VentaFormState;
+  // El N° de motor (y a veces el N° de chasis) viven en la consignación del vehículo.
+  try {
+    const consignacion = await consignacionesService.resolveForVehicle({
+      vehicleId,
+      patente: vehicle.patente,
+      branchId,
+    });
+    if (consignacion) {
+      if (consignacion.motor && !form.vehicle_motor) form.vehicle_motor = consignacion.motor;
+      if (!form.vehicle_chasis) {
+        form.vehicle_chasis = consignacion.vehicle_vin ?? form.vehicle_vin ?? "";
+      }
+    }
+  } catch {
+    /* la nota de venta no depende de la consignación */
+  }
   return { form, vehicle };
 }
 
