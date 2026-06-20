@@ -198,11 +198,13 @@ Deno.serve(async (req) => {
 
     // Llamado adicional al endpoint de placa para obtener datos más detallados (especialmente kilometraje).
     let plate: GetApiPlateResponse["data"] | null = null;
+    let plateStatus = 0;
     try {
       const plateResponse = await fetch(
         `https://chile.getapi.cl/v1/vehicles/plate/${encodeURIComponent(patente)}`,
         { method: "GET", headers: getApiHeaders },
       );
+      plateStatus = plateResponse.status;
 
       if (plateResponse.ok) {
         const platePayload = (await plateResponse.json()) as GetApiPlateResponse;
@@ -214,6 +216,9 @@ Deno.serve(async (req) => {
       // Si falla el endpoint de placa, seguimos sin interrumpir el flujo.
       plate = null;
     }
+
+    // 401/403 = la key de GetAPI está rechazada/bloqueada (no es "patente inexistente").
+    const sourceAuthBlocked = [401, 403].includes(response.status) || [401, 403].includes(plateStatus);
 
     const plateModel = plate?.model ?? {};
     const plateBrand = plateModel.brand ?? {};
@@ -244,8 +249,17 @@ Deno.serve(async (req) => {
     if (mode === "vehicle") {
       const hasVehicleData = Boolean(vehicle.marca || vehicle.modelo || vehicle.n_chasis || vehicle.año);
       if (!hasVehicleData) {
+        if (sourceAuthBlocked) {
+          return jsonResponse(200, {
+            ok: false,
+            code: "SOURCE_UNAVAILABLE",
+            error:
+              "El servicio de datos por patente (GetAPI) rechazó la consulta: la API key no es válida o está bloqueada. Avisá a soporte para renovarla — no es un problema de la patente.",
+          });
+        }
         return jsonResponse(200, {
           ok: false,
+          code: "NOT_FOUND",
           error: "GetAPI no tiene datos de este vehículo para esa patente.",
         });
       }

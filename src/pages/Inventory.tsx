@@ -1063,7 +1063,7 @@ export default function Inventory() {
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
-      toast({ variant: "destructive", title: "No se encontró la patente", description: message });
+      toast({ variant: "destructive", title: "No se pudo autocompletar", description: message });
     } finally {
       setPatenteLookupLoading(false);
     }
