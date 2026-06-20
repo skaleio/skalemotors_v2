@@ -5,6 +5,38 @@ import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 type AppraisalBody = {
   patente?: string;
+  /**
+   * "appraisal" (default): requiere tasación con precio (página de Tasación).
+   * "vehicle": solo datos del vehículo para autollenar consignación/inventario;
+   * devuelve ok:true aunque GetAPI no tenga precio de tasación.
+   */
+  mode?: "appraisal" | "vehicle";
+};
+
+type GetApiVehicle = {
+  licensePlate?: string | null;
+  modelId?: string | null;
+  version?: string | null;
+  mileage?: number | null;
+  color?: string | null;
+  year?: number | null;
+  vinNumber?: string | null;
+  engineNumber?: string | null;
+  engine?: string | null;
+  fuel?: string | null;
+  transmission?: string | null;
+  doors?: number | null;
+  urlImage?: string | null;
+  model?: {
+    name?: string | null;
+    brand?: {
+      name?: string | null;
+    } | null;
+    typeVehicle?: {
+      name?: string | null;
+    } | null;
+  } | null;
+  monthRT?: string | null;
 };
 
 type GetApiAppraisalResponse = {
@@ -24,59 +56,14 @@ type GetApiAppraisalResponse = {
       banda_min?: number | null;
     } | null;
     precioRetoma?: number | null;
-    vehicle?: {
-      licensePlate?: string | null;
-      modelId?: string | null;
-      version?: string | null;
-      mileage?: number | null;
-      color?: string | null;
-      year?: number | null;
-      vinNumber?: string | null;
-      engineNumber?: string | null;
-      engine?: string | null;
-      fuel?: string | null;
-      transmission?: string | null;
-      doors?: number | null;
-      urlImage?: string | null;
-      model?: {
-        name?: string | null;
-        brand?: {
-          name?: string | null;
-        } | null;
-        typeVehicle?: {
-          name?: string | null;
-        } | null;
-      } | null;
-      monthRT?: string | null;
-    } | null;
+    vehicle?: GetApiVehicle | null;
   } | null;
 };
 
 type GetApiPlateResponse = {
   success?: boolean;
   status?: number;
-  data?: {
-    licensePlate?: string | null;
-    mileage?: number | null;
-    color?: string | null;
-    year?: number | null;
-    vinNumber?: string | null;
-    engineNumber?: string | null;
-    engine?: string | null;
-    fuel?: string | null;
-    transmission?: string | null;
-    doors?: number | null;
-    urlImage?: string | null;
-    model?: {
-      name?: string | null;
-      brand?: {
-        name?: string | null;
-      } | null;
-      typeVehicle?: {
-        name?: string | null;
-      } | null;
-    } | null;
-  } | null;
+  data?: (GetApiVehicle & { version?: string | null }) | null;
 };
 
 function jsonResponse(status: number, body: unknown) {
@@ -147,6 +134,8 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { ok: false, error: "Body JSON inválido" });
   }
 
+  const mode: "appraisal" | "vehicle" = body.mode === "vehicle" ? "vehicle" : "appraisal";
+
   const patente = normalizePatente(body.patente ?? "");
   if (!isValidChileanPatente(patente)) {
     return jsonResponse(400, {
@@ -164,58 +153,55 @@ Deno.serve(async (req) => {
     });
   }
 
+  const getApiHeaders = {
+    Accept: "application/json",
+    "X-Api-Key": apiKey,
+    Referer: "https://getapi.cl/",
+  };
+
   try {
-    const response = await fetch(`https://chile.getapi.cl/v1/vehicles/appraisal/${encodeURIComponent(patente)}`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Api-Key": apiKey,
-        Referer: "https://getapi.cl/",
-      },
-    });
+    const response = await fetch(
+      `https://chile.getapi.cl/v1/vehicles/appraisal/${encodeURIComponent(patente)}`,
+      { method: "GET", headers: getApiHeaders },
+    );
 
+    // En modo "appraisal" un error del endpoint de tasación es terminal.
+    // En modo "vehicle" seguimos: el endpoint de placa puede tener los datos.
     if (response.status === 404) {
-      return jsonResponse(200, {
-        ok: false,
-        error: "GetAPI no encontró tasación para esa patente.",
-      });
-    }
-
-    if (!response.ok) {
+      if (mode === "appraisal") {
+        return jsonResponse(200, { ok: false, error: "GetAPI no encontró tasación para esa patente." });
+      }
+    } else if (!response.ok) {
       const text = await response.text();
-      return jsonResponse(response.status, {
-        ok: false,
-        error: `GetAPI respondió con ${response.status}. Respuesta: ${text.slice(0, 500)}`,
-      });
+      if (mode === "appraisal") {
+        return jsonResponse(response.status, {
+          ok: false,
+          error: `GetAPI respondió con ${response.status}. Respuesta: ${text.slice(0, 500)}`,
+        });
+      }
     }
 
-    const payload = (await response.json()) as GetApiAppraisalResponse;
-    if (!payload?.success || !payload.data) {
-      return jsonResponse(200, {
-        ok: false,
-        error: "La API de GetAPI no devolvió una tasación válida.",
-      });
+    let payload: GetApiAppraisalResponse | null = null;
+    if (response.ok) {
+      payload = (await response.json()) as GetApiAppraisalResponse;
+      if ((!payload?.success || !payload.data) && mode === "appraisal") {
+        return jsonResponse(200, { ok: false, error: "La API de GetAPI no devolvió una tasación válida." });
+      }
     }
 
-    const fiscal = payload.data.informacionFiscal ?? {};
-    const precioUsado = payload.data.precioUsado ?? {};
-    const veh = payload.data.vehicle ?? {};
+    const data = payload?.success ? (payload.data ?? null) : null;
+    const fiscal = data?.informacionFiscal ?? {};
+    const precioUsado = data?.precioUsado ?? {};
+    const veh = data?.vehicle ?? {};
     const model = veh.model ?? {};
     const brand = model.brand ?? {};
 
-    // Llamado adicional al endpoint de placa para obtener datos más detallados (especialmente kilometraje)
+    // Llamado adicional al endpoint de placa para obtener datos más detallados (especialmente kilometraje).
     let plate: GetApiPlateResponse["data"] | null = null;
     try {
       const plateResponse = await fetch(
         `https://chile.getapi.cl/v1/vehicles/plate/${encodeURIComponent(patente)}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "X-Api-Key": apiKey,
-            Referer: "https://getapi.cl/",
-          },
-        },
+        { method: "GET", headers: getApiHeaders },
       );
 
       if (plateResponse.ok) {
@@ -225,9 +211,28 @@ Deno.serve(async (req) => {
         }
       }
     } catch {
-      // Si falla el endpoint de placa, seguimos con la tasación sin interrumpir el flujo
+      // Si falla el endpoint de placa, seguimos sin interrumpir el flujo.
       plate = null;
     }
+
+    const plateModel = plate?.model ?? {};
+    const plateBrand = plateModel.brand ?? {};
+
+    // Datos del vehículo: priorizamos placa (registro civil) y caemos a tasación.
+    const vehicle = {
+      patente,
+      marca: cleanText(brand.name ?? plateBrand.name),
+      modelo: cleanText(model.name ?? plateModel.name),
+      año: veh.year ?? fiscal.ano_info_fiscal ?? plate?.year ?? null,
+      motor: plate?.engine ?? veh.engine ?? null,
+      combustible: cleanText(plate?.fuel ?? veh.fuel),
+      transmision: cleanText(plate?.transmission ?? veh.transmission),
+      version: cleanText(veh.version ?? plate?.version),
+      kilometraje: plate?.mileage ?? veh.mileage ?? null,
+      color: cleanText(plate?.color ?? veh.color),
+      n_motor: cleanText(plate?.engineNumber ?? veh.engineNumber),
+      n_chasis: cleanText(plate?.vinNumber ?? veh.vinNumber),
+    };
 
     const baseTasacion =
       pickNumber(precioUsado.precio) ??
@@ -235,6 +240,28 @@ Deno.serve(async (req) => {
       pickNumber(precioUsado.banda_max) ??
       pickNumber(fiscal.tasacion);
 
+    // ── Modo vehicle: autollenado de consignación/inventario (no requiere precio) ──
+    if (mode === "vehicle") {
+      const hasVehicleData = Boolean(vehicle.marca || vehicle.modelo || vehicle.n_chasis || vehicle.año);
+      if (!hasVehicleData) {
+        return jsonResponse(200, {
+          ok: false,
+          error: "GetAPI no tiene datos de este vehículo para esa patente.",
+        });
+      }
+      return jsonResponse(200, {
+        ok: true,
+        vehicle: {
+          ...vehicle,
+          año: vehicle.año ?? new Date().getFullYear(),
+        },
+        fuente: "getapi",
+        precio_retoma: data?.precioRetoma ?? null,
+        tasacion_disponible: Boolean(baseTasacion),
+      });
+    }
+
+    // ── Modo appraisal: tasación completa (página de Tasación) ──
     if (!baseTasacion) {
       return jsonResponse(200, {
         ok: false,
@@ -321,22 +348,12 @@ Deno.serve(async (req) => {
       muestras: [muestra],
       uf_valor: 0,
       vehicle: {
-        patente,
-        marca: cleanText(brand.name),
-        modelo: cleanText(model.name),
-        año: veh.year ?? fiscal.ano_info_fiscal ?? plate?.year ?? new Date().getFullYear(),
-        motor: plate?.engine ?? veh.engine ?? null,
-        combustible: cleanText(plate?.fuel ?? veh.fuel),
-        transmision: cleanText(plate?.transmission ?? veh.transmission),
-        version: cleanText(veh.version ?? plate?.version),
-        kilometraje: plate?.mileage ?? veh.mileage ?? null,
-        color: cleanText(plate?.color ?? veh.color),
-        n_motor: cleanText(plate?.engineNumber ?? veh.engineNumber),
-        n_chasis: cleanText(plate?.vinNumber ?? veh.vinNumber),
+        ...vehicle,
+        año: vehicle.año ?? new Date().getFullYear(),
       },
       fuente: "getapi",
       informacion_fiscal: fiscal,
-      precio_retoma: payload.data.precioRetoma ?? null,
+      precio_retoma: data?.precioRetoma ?? null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
@@ -347,4 +364,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
