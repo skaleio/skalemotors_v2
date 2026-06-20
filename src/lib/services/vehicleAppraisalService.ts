@@ -154,10 +154,47 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
   return { vehicle, appraisal };
 }
 
-/** @deprecated Usar getAppraisalByPatente(patente) para flujo simplificado */
+/**
+ * Solo datos del vehículo por patente (consignación / alta de inventario).
+ * Usa mode:"vehicle" para que GetAPI devuelva marca/modelo/año/km/N° motor/VIN
+ * aunque NO exista precio de tasación — el flujo de consignación no lo necesita.
+ */
 export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
-  const result = await getAppraisalByPatente(patente);
-  return result.vehicle;
+  const normalizedPatente = normalizePatente(patente);
+  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  }
+
+  const { data, error } = await supabase.functions.invoke<
+    { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
+  >("getapi-appraisal", {
+    body: { patente: normalizedPatente, mode: "vehicle" },
+  });
+
+  if (error) {
+    const msg = await getEdgeErrorMessage(error);
+    throw new Error(msg ?? error.message ?? "Error al obtener los datos del vehículo.");
+  }
+
+  if (!data?.ok || !data.vehicle) {
+    throw new Error(data?.error ?? "GetAPI no devolvió datos del vehículo para esa patente.");
+  }
+
+  const vehicleFromApi = data.vehicle;
+  return {
+    patente: normalizedPatente,
+    marca: vehicleFromApi.marca ?? "",
+    modelo: vehicleFromApi.modelo ?? "",
+    año: vehicleFromApi.año ?? 0,
+    motor: vehicleFromApi.motor ?? null,
+    combustible: vehicleFromApi.combustible ?? null,
+    transmision: vehicleFromApi.transmision ?? null,
+    fuente: "getapi",
+    kilometraje: typeof vehicleFromApi.kilometraje === "number" ? vehicleFromApi.kilometraje : null,
+    color: vehicleFromApi.color ?? null,
+    n_motor: vehicleFromApi.n_motor ?? null,
+    n_chasis: vehicleFromApi.n_chasis ?? null,
+  };
 }
 
 /** @deprecated Usar getAppraisalByPatente(patente) y usar result.appraisal */

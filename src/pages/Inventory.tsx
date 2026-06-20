@@ -75,7 +75,7 @@ import { formatCLP } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
-import { getAppraisalByPatente } from "@/lib/services/vehicleAppraisalService";
+import { lookupVehicleByPatente } from "@/lib/services/vehicleAppraisalService";
 import { DASHBOARD_STATS_QUERY_KEY } from "@/hooks/useDashboardStats";
 import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
 import { usePagination } from "@/hooks/usePagination";
@@ -1044,7 +1044,7 @@ export default function Inventory() {
     }
     setPatenteLookupLoading(true);
     try {
-      const { vehicle } = await getAppraisalByPatente(normalized);
+      const vehicle = await lookupVehicleByPatente(normalized);
       setNewVehicle((prev) => ({
         ...prev,
         patente: normalized,
@@ -1063,7 +1063,7 @@ export default function Inventory() {
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
-      toast({ variant: "destructive", title: "No se encontró la patente", description: message });
+      toast({ variant: "destructive", title: "No se pudo autocompletar", description: message });
     } finally {
       setPatenteLookupLoading(false);
     }
