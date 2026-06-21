@@ -195,8 +195,17 @@ function normalizePhoneChile(value: string): string {
   return `+56 ${raw}`;
 }
 
-function toTitleCase(s: string): string {
-  return s
+// Sanea un nombre: descarta emojis/símbolos/control chars, colapsa espacios
+// y aplica Title Case. Devuelve "" si no queda nada útil.
+function sanitizeName(v: unknown, max = 200): string {
+  if (v === null || v === undefined) return "";
+  const cleaned = String(v)
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\s.'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+  return cleaned
     .toLowerCase()
     .split(" ")
     .filter(Boolean)
@@ -460,7 +469,7 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ ok: false, error: "phone is required (valid Chile format)" });
   }
 
-  const fullName = toTitleCase(pickString(body.full_name, body.nombre, parsed.nombre) || "") || "Sin nombre";
+  const fullName = sanitizeName(pickString(body.full_name, body.nombre, parsed.nombre)) || "Sin nombre";
 
   const explicitStatus =
     body.status && includes(VALID_STATUSES, body.status) ? body.status : null;

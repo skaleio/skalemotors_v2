@@ -42,8 +42,17 @@ function normalizePhoneChile(value: string): string {
   return `+56 ${raw}`;
 }
 
-function toTitleCase(s: string): string {
-  return s
+// Sanea un nombre: descarta emojis/símbolos/control chars, colapsa espacios
+// y aplica Title Case. Devuelve "" si no queda nada útil.
+function sanitizeName(v: unknown, max = 200): string {
+  if (v === null || v === undefined) return "";
+  const cleaned = String(v)
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\s.'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+  return cleaned
     .toLowerCase()
     .split(" ")
     .filter(Boolean)
@@ -115,8 +124,7 @@ export default async function handler(req: Request): Promise<Response> {
     return jsonResponse(400, { ok: false, error: "phone is required (valid Chile format)" });
   }
 
-  const fullNameRaw = body.full_name?.trim() || "";
-  const fullName = toTitleCase(fullNameRaw) || "Sin nombre";
+  const fullName = sanitizeName(body.full_name) || "Sin nombre";
 
   const explicitStatus = body.status && PIPELINE_STATUSES.includes(body.status as typeof PIPELINE_STATUSES[number])
     ? body.status
