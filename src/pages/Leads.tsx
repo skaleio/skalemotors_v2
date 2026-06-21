@@ -433,7 +433,7 @@ const LeadsTable = memo(function LeadsTable({
                 <TableHead className="hidden min-w-[100px] lg:table-cell">Región</TableHead>
                 <TableHead className="hidden min-w-[100px] xl:table-cell">Financ./Contado</TableHead>
                 <TableHead className="hidden min-w-[90px] xl:table-cell">Presupuesto</TableHead>
-                <TableHead className="min-w-[120px]">Estado</TableHead>
+                <TableHead className="min-w-[180px]">Estado</TableHead>
                 <TableHead className="hidden min-w-[80px] sm:table-cell">Fecha</TableHead>
                 <TableHead className="text-right w-[130px] shrink-0">Acciones</TableHead>
               </TableRow>
