@@ -1048,32 +1048,50 @@ export default function Inventory() {
     setPatenteLookupLoading(true);
     try {
       const vehicle = await lookupVehicleByPatente(normalized);
-      setNewVehicle((prev) => ({
-        ...prev,
-        patente: normalized,
-        make: vehicle.marca || prev.make,
-        model: vehicle.modelo || prev.model,
-        year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
-        color: vehicle.color || prev.color,
-        mileage: typeof vehicle.kilometraje === "number" ? vehicle.kilometraje : prev.mileage,
-        engine_size: vehicle.motor || prev.engine_size,
-        engine_number: vehicle.n_motor || prev.engine_number,
-        vin: vehicle.n_chasis || prev.vin,
-        transmision_display: vehicle.transmision || prev.transmision_display,
-        combustible_display: vehicle.combustible || prev.combustible_display,
-        version: vehicle.version || prev.version,
-        carroceria: vehicle.tipo_vehiculo || prev.carroceria,
-        doors:
-          typeof vehicle.puertas === "number" && vehicle.puertas > 0
-            ? vehicle.puertas
-            : prev.doors,
-        getapiExtras: {
-          mes_revision_tecnica: vehicle.mes_revision_tecnica || null,
-          tasacion_fiscal: vehicle.tasacion_fiscal ?? null,
-          codigo_sii: vehicle.codigo_sii || null,
-          foto_url: vehicle.foto_url || null,
-        },
-      }));
+      setNewVehicle((prev) => {
+        // Normalizar transmisión/combustible/carrocería de GetAPI al formato del
+        // selector y derivar los enums internos (transmission/fuel_type), para que
+        // queden seleccionados automáticamente y no como valor "anterior".
+        const transDisplay = vehicle.transmision
+          ? normalizeInventoryTransmisionDisplay(vehicle.transmision)
+          : prev.transmision_display;
+        const transMatch = INVENTORY_TRANSMISION_OPTIONS.find((o) => o.value === transDisplay);
+        const combDisplay = vehicle.combustible
+          ? normalizeInventoryCombustibleDisplay(vehicle.combustible)
+          : prev.combustible_display;
+        const combMatch = INVENTORY_COMBUSTIBLE_OPTIONS.find((o) => o.value === combDisplay);
+        const carroceriaNorm = vehicle.tipo_vehiculo
+          ? normalizeInventoryCarroceria(vehicle.tipo_vehiculo)
+          : prev.carroceria;
+        return {
+          ...prev,
+          patente: normalized,
+          make: vehicle.marca || prev.make,
+          model: vehicle.modelo || prev.model,
+          year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
+          color: vehicle.color || prev.color,
+          mileage: typeof vehicle.kilometraje === "number" ? vehicle.kilometraje : prev.mileage,
+          engine_size: vehicle.motor || prev.engine_size,
+          engine_number: vehicle.n_motor || prev.engine_number,
+          vin: vehicle.n_chasis || prev.vin,
+          transmision_display: transDisplay,
+          transmission: transMatch?.transmission ?? prev.transmission,
+          combustible_display: combDisplay,
+          fuel_type: combMatch?.fuel_type ?? prev.fuel_type,
+          version: vehicle.version || prev.version,
+          carroceria: carroceriaNorm,
+          doors:
+            typeof vehicle.puertas === "number" && vehicle.puertas > 0
+              ? vehicle.puertas
+              : prev.doors,
+          getapiExtras: {
+            mes_revision_tecnica: vehicle.mes_revision_tecnica || null,
+            tasacion_fiscal: vehicle.tasacion_fiscal ?? null,
+            codigo_sii: vehicle.codigo_sii || null,
+            foto_url: vehicle.foto_url || null,
+          },
+        };
+      });
       setVehicleFormRevealed(true);
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
     } catch (error) {
