@@ -71,7 +71,7 @@ import {
   hidesInventoryCosts,
   isPhotographerRole,
 } from "@/lib/appRoles";
-import { formatCLP } from "@/lib/format";
+import { formatCLP, formatVehicleLabel } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
@@ -1886,7 +1886,7 @@ export default function Inventory() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">
-                          {vehicle.make} {vehicle.model}
+                          {formatVehicleLabel(vehicle.make)} {formatVehicleLabel(vehicle.model)}
                         </div>
                         <div className="text-sm text-muted-foreground">{vehicle.engine_size || ""}</div>
                       </div>
