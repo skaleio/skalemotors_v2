@@ -1320,6 +1320,7 @@ export default function Inventory() {
       const fallbackYear = new Date().getFullYear();
       const patenteVal = newVehicle.patente.trim() || null;
       const updateData = {
+        vin: newVehicle.vin?.trim() || vehicleToEdit.vin,
         make: newVehicle.make.trim() || "Sin marca",
         model: newVehicle.model.trim() || "Sin modelo",
         year: newVehicle.year && Number(newVehicle.year) > 0 ? parseInt(String(newVehicle.year), 10) : fallbackYear,
@@ -3361,6 +3362,24 @@ export default function Inventory() {
                   value={newVehicle.engine_size}
                   onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
                   placeholder="Ej: 2.0, 1600 cc"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-engine_number">N° Motor</Label>
+                <Input
+                  id="edit-engine_number"
+                  value={newVehicle.engine_number}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_number: e.target.value })}
+                  placeholder="N° de motor del vehículo"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-vin">N° Chasis (VIN)</Label>
+                <Input
+                  id="edit-vin"
+                  value={newVehicle.vin}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value })}
+                  placeholder="N° de chasis / VIN"
                 />
               </div>
               <div>
