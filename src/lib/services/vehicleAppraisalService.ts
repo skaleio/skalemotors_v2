@@ -111,10 +111,14 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
   }
 
+  // Token fresco antes de invocar (evita 401 por access token vencido). Ver getAccessToken.
+  const accessToken = await getAccessToken();
+
   const { data, error } = await supabase.functions.invoke<
     AppraisalResult & { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
   >("getapi-appraisal", {
     body: { patente: normalizedPatente },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (error) {
@@ -165,10 +169,16 @@ export async function lookupVehicleByPatente(patente: string): Promise<VehicleDa
     throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
   }
 
+  // Refrescar el token antes de invocar: la Edge Function valida el JWT del usuario
+  // y rechaza con 401 si el access token del navegador está vencido. refreshSession()
+  // recupera uno fresco (o lanza mensaje claro de re-login si el refresh token murió).
+  const accessToken = await getAccessToken();
+
   const { data, error } = await supabase.functions.invoke<
     { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
   >("getapi-appraisal", {
     body: { patente: normalizedPatente, mode: "vehicle" },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (error) {
