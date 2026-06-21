@@ -222,6 +222,8 @@ Deno.serve(async (req) => {
 
     const plateModel = plate?.model ?? {};
     const plateBrand = plateModel.brand ?? {};
+    const plateType = plateModel.typeVehicle ?? {};
+    const apiType = model.typeVehicle ?? {};
 
     // Datos del vehículo: priorizamos placa (registro civil) y caemos a tasación.
     const vehicle = {
@@ -237,6 +239,13 @@ Deno.serve(async (req) => {
       color: cleanText(plate?.color ?? veh.color),
       n_motor: cleanText(plate?.engineNumber ?? veh.engineNumber),
       n_chasis: cleanText(plate?.vinNumber ?? veh.vinNumber),
+      // Campos adicionales que entrega GetAPI
+      tipo_vehiculo: cleanText(apiType.name ?? plateType.name),
+      puertas: plate?.doors ?? veh.doors ?? null,
+      mes_revision_tecnica: cleanText(plate?.monthRT ?? veh.monthRT),
+      foto_url: cleanText(plate?.urlImage ?? veh.urlImage),
+      tasacion_fiscal: pickNumber(fiscal.tasacion),
+      codigo_sii: cleanText(fiscal.codigo),
     };
 
     const baseTasacion =

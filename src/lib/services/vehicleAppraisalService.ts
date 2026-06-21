@@ -13,6 +13,13 @@ export interface VehicleData {
   color?: string | null;
   n_motor?: string | null;
   n_chasis?: string | null;
+  version?: string | null;
+  tipo_vehiculo?: string | null;
+  puertas?: number | null;
+  mes_revision_tecnica?: string | null;
+  foto_url?: string | null;
+  tasacion_fiscal?: number | null;
+  codigo_sii?: string | null;
 }
 
 export interface AppraisalResult {
@@ -204,6 +211,13 @@ export async function lookupVehicleByPatente(patente: string): Promise<VehicleDa
     color: vehicleFromApi.color ?? null,
     n_motor: vehicleFromApi.n_motor ?? null,
     n_chasis: vehicleFromApi.n_chasis ?? null,
+    version: vehicleFromApi.version ?? null,
+    tipo_vehiculo: vehicleFromApi.tipo_vehiculo ?? null,
+    puertas: typeof vehicleFromApi.puertas === "number" ? vehicleFromApi.puertas : null,
+    mes_revision_tecnica: vehicleFromApi.mes_revision_tecnica ?? null,
+    foto_url: vehicleFromApi.foto_url ?? null,
+    tasacion_fiscal: typeof vehicleFromApi.tasacion_fiscal === "number" ? vehicleFromApi.tasacion_fiscal : null,
+    codigo_sii: vehicleFromApi.codigo_sii ?? null,
   };
 }
 
