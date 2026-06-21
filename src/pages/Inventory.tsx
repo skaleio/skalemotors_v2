@@ -71,7 +71,7 @@ import {
   hidesInventoryCosts,
   isPhotographerRole,
 } from "@/lib/appRoles";
-import { formatCLP } from "@/lib/format";
+import { formatCLP, formatPatente, normalizePatente } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
@@ -991,7 +991,7 @@ export default function Inventory() {
         owner_name: vehicleToEdit.owner_name || "",
         owner_phone: vehicleToEdit.owner_phone || "",
         consignment_type: getVehicleConsignmentType(vehicleToEdit),
-        patente: vehicleToEdit.patente || "",
+        patente: formatPatente(vehicleToEdit.patente || ""),
         consignatario_staff_id: vehicleToEdit.consignatario_staff_id || "",
         carroceria: normalizeInventoryCarroceria(vehicleToEdit.carroceria ?? ""),
         transmision_display: normalizeInventoryTransmisionDisplay(
@@ -1040,7 +1040,7 @@ export default function Inventory() {
   };
 
   const handleBuscarPatente = async () => {
-    const normalized = newVehicle.patente.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const normalized = normalizePatente(newVehicle.patente);
     if (!/^[A-Z]{4}\d{2}$/.test(normalized)) {
       toast({ variant: "destructive", title: "Patente inválida", description: "Formato chileno: 4 letras + 2 números (ej: ABCD12)." });
       return;
@@ -1065,7 +1065,7 @@ export default function Inventory() {
           : prev.carroceria;
         return {
           ...prev,
-          patente: normalized,
+          patente: formatPatente(normalized),
           make: vehicle.marca || prev.make,
           model: vehicle.modelo || prev.model,
           year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
@@ -1130,7 +1130,7 @@ export default function Inventory() {
       // Asegurar que los números sean del tipo correcto para Supabase
       const vinToCreate = newVehicle.vin?.trim() || generateVin();
       const fallbackYear = new Date().getFullYear();
-      const patenteVal = newVehicle.patente.trim() || null;
+      const patenteVal = normalizePatente(newVehicle.patente) || null;
       const vehicleData = {
         vin: vinToCreate,
         make: newVehicle.make.trim() || "Sin marca",
@@ -1336,7 +1336,7 @@ export default function Inventory() {
 
       // Preparar datos de actualización
       const fallbackYear = new Date().getFullYear();
-      const patenteVal = newVehicle.patente.trim() || null;
+      const patenteVal = normalizePatente(newVehicle.patente) || null;
       const updateData = {
         vin: newVehicle.vin?.trim() || vehicleToEdit.vin,
         make: newVehicle.make.trim() || "Sin marca",
@@ -2740,15 +2740,15 @@ export default function Inventory() {
                 <Input
                   id="patente-lookup"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value.toUpperCase() })}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleBuscarPatente();
                     }
                   }}
-                  placeholder="ABCD12"
-                  maxLength={6}
+                  placeholder="AB-CD-12"
+                  maxLength={8}
                   className="uppercase"
                   disabled={patenteLookupLoading}
                 />
@@ -3009,8 +3009,9 @@ export default function Inventory() {
                 <Input
                   id="patente"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
-                  placeholder="Ej: ABCD12"
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
+                  placeholder="Ej: AB-CD-12"
+                  maxLength={8}
                 />
               </div>
               <div>
@@ -3464,8 +3465,9 @@ export default function Inventory() {
                 <Input
                   id="edit-patente"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
-                  placeholder="Ej: ABCD12"
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
+                  placeholder="Ej: AB-CD-12"
+                  maxLength={8}
                 />
               </div>
               <div>
