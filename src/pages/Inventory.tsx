@@ -355,6 +355,9 @@ function createEmptyNewVehicle() {
     combustible_display: "",
     engine_number: "",
     vin: "",
+    version: "",
+    doors: 0,
+    getapiExtras: {} as Record<string, unknown>,
     publicado: false,
     price: 0,
     cost: 0,
@@ -1058,6 +1061,18 @@ export default function Inventory() {
         vin: vehicle.n_chasis || prev.vin,
         transmision_display: vehicle.transmision || prev.transmision_display,
         combustible_display: vehicle.combustible || prev.combustible_display,
+        version: vehicle.version || prev.version,
+        carroceria: vehicle.tipo_vehiculo || prev.carroceria,
+        doors:
+          typeof vehicle.puertas === "number" && vehicle.puertas > 0
+            ? vehicle.puertas
+            : prev.doors,
+        getapiExtras: {
+          mes_revision_tecnica: vehicle.mes_revision_tecnica || null,
+          tasacion_fiscal: vehicle.tasacion_fiscal ?? null,
+          codigo_sii: vehicle.codigo_sii || null,
+          foto_url: vehicle.foto_url || null,
+        },
       }));
       setVehicleFormRevealed(true);
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
@@ -1089,6 +1104,8 @@ export default function Inventory() {
       const features = {
         drivetrain: newVehicle.drivetrain || null,
         min_down_payment: minDownPayment,
+        version: newVehicle.version?.trim() || null,
+        ...newVehicle.getapiExtras,
       };
 
       // Crear el vehículo primero (sin imágenes)
@@ -1124,6 +1141,7 @@ export default function Inventory() {
         branch_id: user.branch_id,
         ...(user.tenant_id ? { tenant_id: user.tenant_id } : {}),
         location: newVehicle.location?.trim() || null,
+        doors: newVehicle.doors ? Number(newVehicle.doors) : null,
         images: [], // Inicialmente vacío, se llenará después de subir las imágenes
         features: features as any,
       };
@@ -2697,7 +2715,7 @@ export default function Inventory() {
             <div className="rounded-lg border bg-muted/40 p-4">
               <Label htmlFor="patente-lookup" className="text-sm font-medium">Buscar por patente</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Ingresá la patente y traemos marca, modelo, año, color, kilometraje, N° motor y N° chasis automáticamente. Después revisás y completás lo que falte.
+                Ingresá la patente y traemos marca, modelo, versión, año, color, kilometraje, carrocería, puertas, N° de motor, VIN/N° de chasis, transmisión y combustible automáticamente. Después revisás y completás lo que falte.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -2866,6 +2884,46 @@ export default function Inventory() {
                   value={newVehicle.engine_size}
                   onChange={(e) => setNewVehicle({ ...newVehicle, engine_size: e.target.value })}
                   placeholder="Ej: 2.0, 1600 cc"
+                />
+              </div>
+              <div>
+                <Label htmlFor="engine_number">N° de motor</Label>
+                <Input
+                  id="engine_number"
+                  value={newVehicle.engine_number}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_number: e.target.value })}
+                  placeholder="N° de motor (desde patente)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vin">N° de chasis / VIN</Label>
+                <Input
+                  id="vin"
+                  value={newVehicle.vin}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value })}
+                  placeholder="N° de chasis / VIN (desde patente)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="version">Versión</Label>
+                <Input
+                  id="version"
+                  value={newVehicle.version}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, version: e.target.value })}
+                  placeholder="Ej: Limited, Full, XLT"
+                />
+              </div>
+              <div>
+                <Label htmlFor="doors">Puertas</Label>
+                <Input
+                  id="doors"
+                  type="text"
+                  value={newVehicle.doors || ""}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    setNewVehicle({ ...newVehicle, doors: v === "" ? 0 : parseInt(v, 10) });
+                  }}
+                  placeholder="Ej: 4"
                 />
               </div>
               <div>
