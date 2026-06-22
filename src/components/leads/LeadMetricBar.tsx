@@ -12,7 +12,7 @@ const PILL_COLORS: Record<number, { filled: string; hover: string }> = {
   3: { filled: "bg-red-500", hover: "hover:bg-red-600" },
 };
 
-export type LeadMetricField = "contact_attempts" | "calls_made";
+export type LeadMetricField = "contact_attempts" | "calls_made" | "whatsapp_attempts";
 
 const FIELD_META: Record<
   LeadMetricField,
@@ -36,7 +36,14 @@ const FIELD_META: Record<
     maxToastTitle: "Meta de llamadas",
     maxToastDescription: "Completaste las 3 llamadas registradas para este lead.",
     reorderOnMax: false,
-    touchLastContactAt: false,
+    touchLastContactAt: true,
+  },
+  whatsapp_attempts: {
+    defaultLabel: "WhatsApp enviados",
+    maxToastTitle: "Meta de WhatsApp",
+    maxToastDescription: "Completaste los 3 WhatsApp registrados para este lead.",
+    reorderOnMax: false,
+    touchLastContactAt: true,
   },
 };
 

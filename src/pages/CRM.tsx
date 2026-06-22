@@ -15,16 +15,17 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { useAuth } from "@/contexts/AuthContext";
 import { useDevice } from "@/contexts/DeviceContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
-import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
+import {
+  CrmLeadChannelTracking,
+  type CrmLeadChannelTrackingHandle,
+} from "@/components/crm/CrmLeadChannelTracking";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
-import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
 import { CrmLeadScheduleAppointmentDialog } from "@/components/crm/CrmLeadScheduleAppointmentDialog";
 import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
-import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import {
   fetchDelegatableSellers,
@@ -77,7 +78,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Mail, MessageCircle, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -259,7 +260,8 @@ function buildCrmLeadEditForm(lead: Lead) {
     transmision: leadTransmissionForForm(lead.transmision),
     status: safePipelineSelectValue(lead.status),
     assigned_to: lead.assigned_to ?? null,
-    contact_attempts: lead.contact_attempts ?? 0,
+    calls_made: lead.calls_made ?? 0,
+    whatsapp_attempts: lead.whatsapp_attempts ?? 0,
     contact_state: lead.contact_state ?? null,
   };
 }
@@ -389,7 +391,9 @@ const LeadCard = memo(function LeadCard({
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
   const lastDragEndRef = useRef(0);
-  const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
+  const callsMade = Math.max(0, Math.min(lead.calls_made ?? 0, 3));
+  const waSent = Math.max(0, Math.min(lead.whatsapp_attempts ?? 0, 3));
+  const attempts = Math.max(callsMade, waSent);
   const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
   const assigneeId = leadAssignedToId(lead);
   const assigneeName = assigneeCornerLabel(lead);
@@ -509,18 +513,14 @@ const LeadCard = memo(function LeadCard({
       </div>
       <LeadDelegationAdminBlock lead={lead} variant="inline" className="mt-1" />
       <div className="mt-1.5">
-        {showContactAttemptsSemaforo ? (
-          <ContactAttemptsBar
-            leadId={lead.id}
-            value={lead.contact_attempts ?? 0}
-            size="sm"
-            showLabel={false}
-          />
-        ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Contactos {attempts}/3
+        <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+          <span className="inline-flex items-center gap-1" title="Llamadas registradas">
+            <Phone className="h-3 w-3" aria-hidden /> {callsMade}/3
           </span>
-        )}
+          <span className="inline-flex items-center gap-1" title="WhatsApp registrados">
+            <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/3
+          </span>
+        </div>
       </div>
       {label && styles && (
         <div className="mt-2">
@@ -656,7 +656,8 @@ export default function CRM() {
     status: "en_seguimiento",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
-    contact_attempts: 0,
+    calls_made: 0,
+    whatsapp_attempts: 0,
     contact_state: null as LeadContactState | null,
   });
 
@@ -964,7 +965,8 @@ export default function CRM() {
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
   const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const leadNotesRef = useRef<LeadNotesSectionHandle>(null);
+  const callsTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
+  const whatsappTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
   const [pipelineMoveNotice, setPipelineMoveNotice] = useState<CrmPipelineMoveNotice | null>(null);
   const pipelineMoveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1077,11 +1079,13 @@ export default function CRM() {
 
     setIsUpdating(true);
     try {
-      if (leadNotesRef.current?.hasPendingDraft()) {
-        const noteOk = await leadNotesRef.current.savePendingDraft();
-        if (!noteOk) {
-          setIsUpdating(false);
-          return;
+      for (const trackingRef of [callsTrackingRef.current, whatsappTrackingRef.current]) {
+        if (trackingRef?.hasPendingDraft()) {
+          const noteOk = await trackingRef.savePendingDraft();
+          if (!noteOk) {
+            setIsUpdating(false);
+            return;
+          }
         }
       }
 
@@ -1103,7 +1107,8 @@ export default function CRM() {
             transmision: leadTransmissionForSave(editForm.transmision),
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
-            contact_attempts: editForm.contact_attempts,
+            calls_made: editForm.calls_made,
+            whatsapp_attempts: editForm.whatsapp_attempts,
           }
         : { status: nextDbStatus };
 
@@ -1123,7 +1128,10 @@ export default function CRM() {
 
       if (
         isEditingForm
-        && editForm.contact_attempts > (editingLead.contact_attempts ?? 0)
+        && (
+          editForm.calls_made > (editingLead.calls_made ?? 0)
+          || editForm.whatsapp_attempts > (editingLead.whatsapp_attempts ?? 0)
+        )
       ) {
         updates.last_contact_at = new Date().toISOString();
       }
@@ -2255,12 +2263,30 @@ export default function CRM() {
                       </div>
                     </div>
                   </div>
-                  <CrmLeadContactTrackingBlock
-                    leadId={editingLead.id}
-                    value={editForm.contact_attempts}
-                    localOnly
-                    onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
-                  />
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <CrmLeadChannelTracking
+                      ref={callsTrackingRef}
+                      channel="llamada"
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editForm.calls_made}
+                      localOnly
+                      onCounterChange={(next) => setEditForm((f) => ({ ...f, calls_made: next }))}
+                      askConfirm={askConfirm}
+                    />
+                    <CrmLeadChannelTracking
+                      ref={whatsappTrackingRef}
+                      channel="whatsapp"
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editForm.whatsapp_attempts}
+                      localOnly
+                      onCounterChange={(next) => setEditForm((f) => ({ ...f, whatsapp_attempts: next }))}
+                      askConfirm={askConfirm}
+                    />
+                  </div>
                   {canSetContactState ? (
                     <LeadContactStateSelect
                       value={editForm.contact_state}
@@ -2290,14 +2316,6 @@ export default function CRM() {
                       onChange={(next) => setEditForm((f) => ({ ...f, contact_state: next }))}
                     />
                   ) : null}
-                  <LeadNotesSection
-                    ref={leadNotesRef}
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                    askConfirm={askConfirm}
-                  />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-email">Correo</Label>
@@ -2486,21 +2504,32 @@ export default function CRM() {
                       }
                     />
                   ) : null}
-                  <CrmLeadContactTrackingBlock
-                    leadId={editingLead.id}
-                    value={editingLead.contact_attempts ?? 0}
-                    onChange={(next) =>
-                      setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
-                    }
-                  />
-                  <LeadNotesSection
-                    ref={leadNotesRef}
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                    askConfirm={askConfirm}
-                  />
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <CrmLeadChannelTracking
+                      ref={callsTrackingRef}
+                      channel="llamada"
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editingLead.calls_made ?? 0}
+                      onCounterChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, calls_made: next } : prev))
+                      }
+                      askConfirm={askConfirm}
+                    />
+                    <CrmLeadChannelTracking
+                      ref={whatsappTrackingRef}
+                      channel="whatsapp"
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editingLead.whatsapp_attempts ?? 0}
+                      onCounterChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, whatsapp_attempts: next } : prev))
+                      }
+                      askConfirm={askConfirm}
+                    />
+                  </div>
                   {(() => {
                     const rut = editingLead.rut?.trim();
                     const email = editingLead.email?.trim();
