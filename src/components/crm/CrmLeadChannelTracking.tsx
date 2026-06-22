@@ -34,6 +34,15 @@ function formatNoteDate(iso: string) {
   }
 }
 
+/** Fecha/hora actual en formato de <input type="datetime-local"> (hora local). */
+function nowLocalInput(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes(),
+  )}`;
+}
+
 export type CrmLeadChannelTrackingHandle = {
   hasPendingDraft: () => boolean;
   /** Valida y guarda el borrador pendiente. Devuelve false si la validación o el guardado fallan. */
@@ -66,7 +75,7 @@ export const CrmLeadChannelTracking = forwardRef<
   const askConfirm = askConfirmProp ?? internalConfirm.confirm;
 
   const [draft, setDraft] = useState("");
-  const [nextAction, setNextAction] = useState("");
+  const [nextAction, setNextAction] = useState(nowLocalInput);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -95,7 +104,7 @@ export const CrmLeadChannelTracking = forwardRef<
 
   useEffect(() => {
     setDraft("");
-    setNextAction("");
+    setNextAction(nowLocalInput());
     setEditingNoteId(null);
     setEditDraft("");
   }, [leadId, channel]);
@@ -148,7 +157,7 @@ export const CrmLeadChannelTracking = forwardRef<
         const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
         queryClient.setQueryData(queryKey, [...cached, created]);
         setDraft("");
-        setNextAction("");
+        setNextAction(nowLocalInput());
         cancelEdit();
         await queryClient.refetchQueries({ queryKey });
         invalidate();
@@ -287,6 +296,9 @@ export const CrmLeadChannelTracking = forwardRef<
             disabled={isSaving}
             className="max-w-[15rem]"
           />
+          <p className="text-[10px] text-muted-foreground">
+            Se pre-carga con hoy. Cámbiala si la próxima acción es a futuro.
+          </p>
         </div>
         <Button
           type="button"
