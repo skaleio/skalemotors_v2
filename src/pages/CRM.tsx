@@ -63,6 +63,7 @@ import {
   shouldShowLeadContactStateBadge,
   type LeadContactState,
 } from "@/lib/leadContactState";
+import { sanitizeName } from "@/lib/format";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import {
   filterLeadsForVendorView,
@@ -276,15 +277,6 @@ function normalizePhoneChile(value: string): string {
     return rest ? `+56 ${rest}` : "";
   }
   return `+56 ${raw}`;
-}
-
-function toTitleCase(s: string): string {
-  return s
-    .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 function formatStateUpdatedAt(iso: string | null | undefined): string {
@@ -1099,7 +1091,7 @@ export default function CRM() {
 
       const updates: Record<string, unknown> = isEditingForm
         ? {
-            full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
+            full_name: sanitizeName(editForm.full_name) || "Sin nombre",
             phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
             email: editForm.email.trim() || null,
             status: nextDbStatus,
