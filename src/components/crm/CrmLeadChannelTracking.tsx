@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LeadMetricBar } from "@/components/leads/LeadMetricBar";
@@ -14,7 +13,7 @@ import {
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
+import { Loader2, Lock, MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -34,15 +33,6 @@ function formatNoteDate(iso: string) {
   }
 }
 
-/** Fecha/hora actual en formato de <input type="datetime-local"> (hora local). */
-function nowLocalInput(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
-  )}`;
-}
-
 export type CrmLeadChannelTrackingHandle = {
   hasPendingDraft: () => boolean;
   /** Valida y guarda el borrador pendiente. Devuelve false si la validación o el guardado fallan. */
@@ -60,13 +50,34 @@ type CrmLeadChannelTrackingProps = {
   localOnly?: boolean;
   onCounterChange?: (next: number) => void;
   askConfirm?: (opts: ConfirmOptions) => Promise<boolean>;
+  /** Número de paso (1 = Llamadas, 2 = WhatsApp). */
+  step?: number;
+  /** Bloquea el registro hasta completar el paso previo. */
+  locked?: boolean;
+  /** Mensaje mostrado cuando está bloqueado. */
+  lockedHint?: string;
+  /** Reporta cuántas notas registradas tiene el canal (para encadenar los pasos). */
+  onNotesCountChange?: (count: number) => void;
 };
 
 export const CrmLeadChannelTracking = forwardRef<
   CrmLeadChannelTrackingHandle,
   CrmLeadChannelTrackingProps
 >(function CrmLeadChannelTracking(
-  { leadId, channel, tenantId, branchId, counterValue, localOnly = false, onCounterChange, askConfirm: askConfirmProp },
+  {
+    leadId,
+    channel,
+    tenantId,
+    branchId,
+    counterValue,
+    localOnly = false,
+    onCounterChange,
+    askConfirm: askConfirmProp,
+    step,
+    locked = false,
+    lockedHint,
+    onNotesCountChange,
+  },
   ref,
 ) {
   const { user } = useAuth();
@@ -75,7 +86,6 @@ export const CrmLeadChannelTracking = forwardRef<
   const askConfirm = askConfirmProp ?? internalConfirm.confirm;
 
   const [draft, setDraft] = useState("");
-  const [nextAction, setNextAction] = useState(nowLocalInput);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -103,8 +113,11 @@ export const CrmLeadChannelTracking = forwardRef<
   const notesNewestFirst = useMemo(() => [...notes].reverse(), [notes]);
 
   useEffect(() => {
+    onNotesCountChange?.(notes.length);
+  }, [notes.length, onNotesCountChange]);
+
+  useEffect(() => {
     setDraft("");
-    setNextAction(nowLocalInput());
     setEditingNoteId(null);
     setEditDraft("");
   }, [leadId, channel]);
@@ -132,8 +145,10 @@ export const CrmLeadChannelTracking = forwardRef<
   }, []);
 
   const persistNewNote = useCallback(
-    async (body: string, nextActionLocal: string): Promise<boolean> => {
-      const validation = validateChannelNote({ body, nextActionAt: nextActionLocal });
+    async (body: string): Promise<boolean> => {
+      // La fecha y hora se capturan automáticamente al registrar la nota.
+      const nowIso = new Date().toISOString();
+      const validation = validateChannelNote({ body, nextActionAt: nowIso });
       if (!validation.ok) {
         toast.error(validation.errors.join(" "));
         return false;
@@ -152,12 +167,11 @@ export const CrmLeadChannelTracking = forwardRef<
           branchId: branchId ?? user?.branch_id ?? null,
           createdBy: user?.id ?? null,
           channel,
-          nextActionAt: new Date(nextActionLocal).toISOString(),
+          nextActionAt: nowIso,
         });
         const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
         queryClient.setQueryData(queryKey, [...cached, created]);
         setDraft("");
-        setNextAction(nowLocalInput());
         cancelEdit();
         await queryClient.refetchQueries({ queryKey });
         invalidate();
@@ -174,9 +188,9 @@ export const CrmLeadChannelTracking = forwardRef<
   );
 
   const handleSaveNote = useCallback(async () => {
-    const ok = await persistNewNote(draft, nextAction);
+    const ok = await persistNewNote(draft);
     if (ok) toast.success(`Seguimiento de ${actionVerb} registrado`);
-  }, [draft, nextAction, persistNewNote, actionVerb]);
+  }, [draft, persistNewNote, actionVerb]);
 
   const handleUpdateNote = useCallback(async () => {
     if (!editingNoteId) return;
@@ -239,40 +253,57 @@ export const CrmLeadChannelTracking = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      hasPendingDraft: () => draft.trim().length > 0,
+      hasPendingDraft: () => !locked && draft.trim().length > 0,
       savePendingDraft: async () => {
-        if (!draft.trim()) return true;
-        return persistNewNote(draft, nextAction);
+        if (locked || !draft.trim()) return true;
+        return persistNewNote(draft);
       },
     }),
-    [draft, nextAction, persistNewNote],
+    [draft, locked, persistNewNote],
   );
 
   return (
     <div
-      className="grid gap-2.5 rounded-lg border border-border/50 bg-muted/15 p-3"
+      className={cn(
+        "grid gap-2.5 rounded-lg border border-border/50 bg-muted/15 p-3",
+        locked && "border-dashed",
+      )}
       onClick={(e) => e.stopPropagation()}
     >
       {!askConfirmProp ? <internalConfirm.ConfirmDialogHost /> : null}
 
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          {step ? (
+            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary">
+              {step}
+            </span>
+          ) : null}
           <ChannelIcon className="h-4 w-4" aria-hidden />
           {channelLabel}
         </p>
-        <LeadMetricBar
-          leadId={leadId}
-          field={FOLLOW_UP_CHANNEL_FIELD[channel]}
-          value={counterValue}
-          showLabel={false}
-          bordered
-          size="sm"
-          localOnly={localOnly}
-          onChange={onCounterChange}
-        />
+        <div className={cn(locked && "pointer-events-none opacity-40")}>
+          <LeadMetricBar
+            leadId={leadId}
+            field={FOLLOW_UP_CHANNEL_FIELD[channel]}
+            value={counterValue}
+            showLabel={false}
+            bordered
+            size="sm"
+            localOnly={localOnly}
+            onChange={onCounterChange}
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
+      {locked ? (
+        <p className="flex items-center gap-1.5 rounded-md border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {lockedHint ?? "Completa el paso anterior para habilitar este canal."}
+        </p>
+      ) : null}
+
+      <div className={cn("space-y-2", locked && "pointer-events-none opacity-50")}>
         <Label htmlFor={`channel-note-${channel}-${leadId}`}>
           Nota de {actionVerb} (qué ofreciste, qué conversaron, qué quedó pendiente)
         </Label>
@@ -282,30 +313,17 @@ export const CrmLeadChannelTracking = forwardRef<
           onChange={(e) => setDraft(e.target.value)}
           placeholder={`Describe la ${actionVerb} con el cliente…`}
           rows={3}
-          disabled={isSaving}
+          disabled={isSaving || locked}
         />
-        <div className="grid gap-1.5">
-          <Label htmlFor={`channel-next-${channel}-${leadId}`} className="text-[11px] text-muted-foreground">
-            Próxima acción (fecha y hora)
-          </Label>
-          <Input
-            id={`channel-next-${channel}-${leadId}`}
-            type="datetime-local"
-            value={nextAction}
-            onChange={(e) => setNextAction(e.target.value)}
-            disabled={isSaving}
-            className="max-w-[15rem]"
-          />
-          <p className="text-[10px] text-muted-foreground">
-            Se pre-carga con hoy. Cámbiala si la próxima acción es a futuro.
-          </p>
-        </div>
+        <p className="text-[10px] text-muted-foreground">
+          La fecha y hora se guardan automáticamente al registrar la nota.
+        </p>
         <Button
           type="button"
           size="sm"
           variant="secondary"
           onClick={() => void handleSaveNote()}
-          disabled={isSaving}
+          disabled={isSaving || locked}
         >
           {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
           Registrar {actionVerb}
@@ -409,11 +427,6 @@ export const CrmLeadChannelTracking = forwardRef<
                 ) : null}
               </div>
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
-              {note.next_action_at ? (
-                <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                  Próxima acción: {formatNoteDate(note.next_action_at)}
-                </p>
-              ) : null}
               <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
                 <p>
                   <span className="font-medium text-foreground/55">Registrada:</span>{" "}
