@@ -19,6 +19,7 @@ import {
   CrmLeadChannelTracking,
   type CrmLeadChannelTrackingHandle,
 } from "@/components/crm/CrmLeadChannelTracking";
+import { LeadIngestSummary } from "@/components/crm/LeadIngestSummary";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
@@ -2263,6 +2264,7 @@ export default function CRM() {
                       </div>
                     </div>
                   </div>
+                  <LeadIngestSummary notes={editingLead.notes} />
                   <div className="grid gap-3 lg:grid-cols-2">
                     <CrmLeadChannelTracking
                       ref={callsTrackingRef}
@@ -2504,6 +2506,7 @@ export default function CRM() {
                       }
                     />
                   ) : null}
+                  <LeadIngestSummary notes={editingLead.notes} />
                   <div className="grid gap-3 lg:grid-cols-2">
                     <CrmLeadChannelTracking
                       ref={callsTrackingRef}
