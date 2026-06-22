@@ -860,7 +860,7 @@ export default function CRM() {
    * Es decir: del total de leads trabajados, qué % terminó cerrado.
    */
   const metrics = useMemo(() => {
-    const base = leads.filter((lead) => {
+    const base = scopedLeads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
       if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
@@ -907,7 +907,7 @@ export default function CRM() {
       tasaAvanceNegociando,
       tasaPerdida,
     };
-  }, [leads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
+  }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
 
   const filteredLeads = useMemo(() => {
     // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).

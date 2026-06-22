@@ -11,6 +11,16 @@ export const sanitizeIntegerInput = (value: string): string => {
   return value.replace(/\D/g, "");
 };
 
+// Patente chilena: deja solo alfanumérico en mayúsculas (valor para guardar/consultar).
+export const normalizePatente = (value: string): string =>
+  value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+// Máscara de visualización en pares: "jhgf22" → "JH-GF-22".
+export const formatPatente = (value: string): string => {
+  const clean = normalizePatente(value).slice(0, 6);
+  return clean.match(/.{1,2}/g)?.join("-") ?? clean;
+};
+
 export const sanitizeDecimalInput = (value: string): string => {
   const cleaned = value.replace(/[^\d.,]/g, "");
   const normalized = cleaned.replace(/,/g, ".");

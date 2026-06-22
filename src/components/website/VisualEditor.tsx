@@ -4,6 +4,7 @@ import {
   Loader2,
   Plus,
   Save,
+  Trash2,
   Undo2,
   Upload,
 } from "lucide-react";
