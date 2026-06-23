@@ -968,8 +968,6 @@ export default function CRM() {
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callsTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
   const whatsappTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
-  /** Notas de llamada registradas: WhatsApp se habilita recién cuando hay al menos una. */
-  const [callsNotesCount, setCallsNotesCount] = useState(0);
   const [pipelineMoveNotice, setPipelineMoveNotice] = useState<CrmPipelineMoveNotice | null>(null);
   const pipelineMoveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2275,16 +2273,13 @@ export default function CRM() {
                       branchId={editingLead.branch_id ?? user?.branch_id}
                       counterValue={editForm.calls_made}
                       localOnly
-                      onCounterChange={(next) => setEditForm((f) => ({ ...f, calls_made: next }))}
-                      onNotesCountChange={setCallsNotesCount}
-                      askConfirm={askConfirm}
+                      onCounterChange={(next) => setEditForm((f) => ({ ...f, calls_made: next }))}                      askConfirm={askConfirm}
                     />
                     <CrmLeadChannelTracking
                       ref={whatsappTrackingRef}
                       channel="whatsapp"
                       step={2}
-                      locked={callsNotesCount === 0}
-                      lockedHint="Primero registra una llamada (paso 1) para habilitar WhatsApp."
+                      reminder="Recordatorio: aunque te contesten por WhatsApp, no olvides llamar también al cliente."
                       leadId={editingLead.id}
                       tenantId={editingLead.tenant_id ?? user?.tenant_id}
                       branchId={editingLead.branch_id ?? user?.branch_id}
@@ -2523,16 +2518,13 @@ export default function CRM() {
                       counterValue={editingLead.calls_made ?? 0}
                       onCounterChange={(next) =>
                         setEditingLead((prev) => (prev ? { ...prev, calls_made: next } : prev))
-                      }
-                      onNotesCountChange={setCallsNotesCount}
-                      askConfirm={askConfirm}
+                      }                      askConfirm={askConfirm}
                     />
                     <CrmLeadChannelTracking
                       ref={whatsappTrackingRef}
                       channel="whatsapp"
                       step={2}
-                      locked={callsNotesCount === 0}
-                      lockedHint="Primero registra una llamada (paso 1) para habilitar WhatsApp."
+                      reminder="Recordatorio: aunque te contesten por WhatsApp, no olvides llamar también al cliente."
                       leadId={editingLead.id}
                       tenantId={editingLead.tenant_id ?? user?.tenant_id}
                       branchId={editingLead.branch_id ?? user?.branch_id}
