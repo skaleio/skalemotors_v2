@@ -144,19 +144,14 @@ export const CrmLeadChannelTracking = forwardRef<
     setEditDraft("");
   }, []);
 
-  const persistNewNote = useCallback(
+  const createNote = useCallback(
     async (body: string): Promise<boolean> => {
-      // La fecha y hora se capturan automáticamente al registrar la nota.
-      const nowIso = new Date().toISOString();
-      const validation = validateChannelNote({ body, nextActionAt: nowIso });
-      if (!validation.ok) {
-        toast.error(validation.errors.join(" "));
-        return false;
-      }
       if (!tenantId) {
         toast.error("No se pudo identificar el tenant para guardar la nota.");
         return false;
       }
+      // La fecha y hora se capturan automáticamente al registrar la nota.
+      const nowIso = new Date().toISOString();
 
       setIsSaving(true);
       try {
@@ -185,6 +180,19 @@ export const CrmLeadChannelTracking = forwardRef<
       }
     },
     [tenantId, leadId, branchId, channel, user?.branch_id, user?.id, queryClient, queryKey, notes, invalidate, cancelEdit],
+  );
+
+  /** Registro explícito (botón): exige nota real con contexto. */
+  const persistNewNote = useCallback(
+    async (body: string): Promise<boolean> => {
+      const validation = validateChannelNote({ body, nextActionAt: new Date().toISOString() });
+      if (!validation.ok) {
+        toast.error(validation.errors.join(" "));
+        return false;
+      }
+      return createNote(body);
+    },
+    [createNote],
   );
 
   const handleSaveNote = useCallback(async () => {
@@ -254,12 +262,15 @@ export const CrmLeadChannelTracking = forwardRef<
     ref,
     () => ({
       hasPendingDraft: () => !locked && draft.trim().length > 0,
+      // Guardado al mover/guardar el lead: best-effort, NO bloquea el movimiento
+      // ni exige nota válida (la validación vive solo en el botón "Registrar").
       savePendingDraft: async () => {
         if (locked || !draft.trim()) return true;
-        return persistNewNote(draft);
+        await createNote(draft);
+        return true;
       },
     }),
-    [draft, locked, persistNewNote],
+    [draft, locked, createNote],
   );
 
   return (

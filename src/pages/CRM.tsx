@@ -1082,13 +1082,11 @@ export default function CRM() {
 
     setIsUpdating(true);
     try {
+      // Guarda notas pendientes best-effort. NUNCA bloquea el cambio de estado del
+      // lead (mover a cancelado, etc.): la nota válida solo se exige en "Registrar".
       for (const trackingRef of [callsTrackingRef.current, whatsappTrackingRef.current]) {
         if (trackingRef?.hasPendingDraft()) {
-          const noteOk = await trackingRef.savePendingDraft();
-          if (!noteOk) {
-            setIsUpdating(false);
-            return;
-          }
+          await trackingRef.savePendingDraft();
         }
       }
 
