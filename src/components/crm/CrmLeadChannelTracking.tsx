@@ -13,7 +13,7 @@ import {
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
+import { Loader2, MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -52,12 +52,8 @@ type CrmLeadChannelTrackingProps = {
   askConfirm?: (opts: ConfirmOptions) => Promise<boolean>;
   /** Número de paso (1 = Llamadas, 2 = WhatsApp). */
   step?: number;
-  /** Bloquea el registro hasta completar el paso previo. */
-  locked?: boolean;
-  /** Mensaje mostrado cuando está bloqueado. */
-  lockedHint?: string;
-  /** Reporta cuántas notas registradas tiene el canal (para encadenar los pasos). */
-  onNotesCountChange?: (count: number) => void;
+  /** Recordatorio no bloqueante mostrado arriba del composer. */
+  reminder?: string;
 };
 
 export const CrmLeadChannelTracking = forwardRef<
@@ -74,9 +70,7 @@ export const CrmLeadChannelTracking = forwardRef<
     onCounterChange,
     askConfirm: askConfirmProp,
     step,
-    locked = false,
-    lockedHint,
-    onNotesCountChange,
+    reminder,
   },
   ref,
 ) {
@@ -111,10 +105,6 @@ export const CrmLeadChannelTracking = forwardRef<
   });
 
   const notesNewestFirst = useMemo(() => [...notes].reverse(), [notes]);
-
-  useEffect(() => {
-    onNotesCountChange?.(notes.length);
-  }, [notes.length, onNotesCountChange]);
 
   useEffect(() => {
     setDraft("");
@@ -261,24 +251,21 @@ export const CrmLeadChannelTracking = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      hasPendingDraft: () => !locked && draft.trim().length > 0,
+      hasPendingDraft: () => draft.trim().length > 0,
       // Guardado al mover/guardar el lead: best-effort, NO bloquea el movimiento
       // ni exige nota válida (la validación vive solo en el botón "Registrar").
       savePendingDraft: async () => {
-        if (locked || !draft.trim()) return true;
+        if (!draft.trim()) return true;
         await createNote(draft);
         return true;
       },
     }),
-    [draft, locked, createNote],
+    [draft, createNote],
   );
 
   return (
     <div
-      className={cn(
-        "grid gap-2.5 rounded-lg border border-border/50 bg-muted/15 p-3",
-        locked && "border-dashed",
-      )}
+      className="grid gap-2.5 rounded-lg border border-border/50 bg-muted/15 p-3"
       onClick={(e) => e.stopPropagation()}
     >
       {!askConfirmProp ? <internalConfirm.ConfirmDialogHost /> : null}
@@ -293,28 +280,26 @@ export const CrmLeadChannelTracking = forwardRef<
           <ChannelIcon className="h-4 w-4" aria-hidden />
           {channelLabel}
         </p>
-        <div className={cn(locked && "pointer-events-none opacity-40")}>
-          <LeadMetricBar
-            leadId={leadId}
-            field={FOLLOW_UP_CHANNEL_FIELD[channel]}
-            value={counterValue}
-            showLabel={false}
-            bordered
-            size="sm"
-            localOnly={localOnly}
-            onChange={onCounterChange}
-          />
-        </div>
+        <LeadMetricBar
+          leadId={leadId}
+          field={FOLLOW_UP_CHANNEL_FIELD[channel]}
+          value={counterValue}
+          showLabel={false}
+          bordered
+          size="sm"
+          localOnly={localOnly}
+          onChange={onCounterChange}
+        />
       </div>
 
-      {locked ? (
+      {reminder ? (
         <p className="flex items-center gap-1.5 rounded-md border border-dashed border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
-          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {lockedHint ?? "Completa el paso anterior para habilitar este canal."}
+          <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {reminder}
         </p>
       ) : null}
 
-      <div className={cn("space-y-2", locked && "pointer-events-none opacity-50")}>
+      <div className="space-y-2">
         <Label htmlFor={`channel-note-${channel}-${leadId}`}>
           Nota de {actionVerb} (qué ofreciste, qué conversaron, qué quedó pendiente)
         </Label>
@@ -324,7 +309,7 @@ export const CrmLeadChannelTracking = forwardRef<
           onChange={(e) => setDraft(e.target.value)}
           placeholder={`Describe la ${actionVerb} con el cliente…`}
           rows={3}
-          disabled={isSaving || locked}
+          disabled={isSaving}
         />
         <p className="text-[10px] text-muted-foreground">
           La fecha y hora se guardan automáticamente al registrar la nota.
@@ -334,7 +319,7 @@ export const CrmLeadChannelTracking = forwardRef<
           size="sm"
           variant="secondary"
           onClick={() => void handleSaveNote()}
-          disabled={isSaving || locked}
+          disabled={isSaving}
         >
           {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
           Registrar {actionVerb}
