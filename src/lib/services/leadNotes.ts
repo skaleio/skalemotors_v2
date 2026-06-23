@@ -50,6 +50,30 @@ export const leadNoteService = {
     return data as LeadNoteWithAuthor[]
   },
 
+  /** Notas de vendedor previas al modelo por canal (channel IS NULL). */
+  async listLegacyByLead(leadId: string) {
+    const { data, error } = await supabase
+      .from('lead_notes')
+      .select('*, author:users!created_by(id, full_name, email)')
+      .eq('lead_id', leadId)
+      .eq('source', 'vendor')
+      .is('channel', null)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      const { data: plain, error: plainError } = await supabase
+        .from('lead_notes')
+        .select('*')
+        .eq('lead_id', leadId)
+        .eq('source', 'vendor')
+        .is('channel', null)
+        .order('created_at', { ascending: true })
+      if (plainError) throw plainError
+      return (plain ?? []) as LeadNoteWithAuthor[]
+    }
+    return data as LeadNoteWithAuthor[]
+  },
+
   async listArchiveByLead(leadId: string) {
     const { data, error } = await supabase
       .from('lead_notes_archive')
