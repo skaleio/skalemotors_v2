@@ -1929,6 +1929,7 @@ export type Database = {
       }
       lead_notes: {
         Row: {
+          attachments: Json
           body: string
           branch_id: string | null
           created_at: string
@@ -1940,6 +1941,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          attachments?: Json
           body: string
           branch_id?: string | null
           created_at?: string
@@ -1951,6 +1953,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          attachments?: Json
           body?: string
           branch_id?: string | null
           created_at?: string
@@ -1997,6 +2000,7 @@ export type Database = {
           archive_action: string
           archived_at: string
           archived_by: string | null
+          attachments: Json
           body: string
           branch_id: string | null
           created_by: string | null
@@ -2012,6 +2016,7 @@ export type Database = {
           archive_action: string
           archived_at?: string
           archived_by?: string | null
+          attachments?: Json
           body: string
           branch_id?: string | null
           created_by?: string | null
@@ -2027,6 +2032,7 @@ export type Database = {
           archive_action?: string
           archived_at?: string
           archived_by?: string | null
+          attachments?: Json
           body?: string
           branch_id?: string | null
           created_by?: string | null

@@ -5,11 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { formatIngestSummaryLabel, hasIngestSummary } from "@/lib/leadNotesLegacy";
+import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { LeadNoteAttachments } from "./LeadNoteAttachments";
 
 function formatNoteDate(iso: string) {
   try {
@@ -88,10 +90,42 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     const askConfirm = askConfirmProp ?? internalConfirm.confirm;
 
     const [draft, setDraft] = useState("");
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     const [editDraft, setEditDraft] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const previews = useMemo(
+      () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+      [selectedFiles],
+    );
+
+    useEffect(() => {
+      return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
+    }, [previews]);
+
+    const handlePickFiles = useCallback(
+      (event: React.ChangeEvent<HTMLInputElement>) => {
+        const list = Array.from(event.target.files ?? []);
+        event.target.value = ""; // permite volver a elegir el mismo archivo
+        if (!list.length) return;
+        setSelectedFiles((prev) => {
+          const { accepted, rejected } = selectValidAttachments({
+            files: list,
+            existingCount: prev.length,
+          });
+          if (rejected.length) toast.error(rejected[0].reason);
+          return accepted.length ? [...prev, ...accepted] : prev;
+        });
+      },
+      [],
+    );
+
+    const removeSelectedFile = useCallback((index: number) => {
+      setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    }, []);
 
     const canDeleteNotes =
       user?.role === "admin"
@@ -115,6 +149,7 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
 
     useEffect(() => {
       setDraft("");
+      setSelectedFiles([]);
       setEditingNoteId(null);
       setEditDraft("");
     }, [leadId]);
@@ -143,9 +178,9 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     }, []);
 
     const persistNewNote = useCallback(
-      async (body: string): Promise<boolean> => {
+      async (body: string, files: File[]): Promise<boolean> => {
         const trimmed = body.trim();
-        if (!trimmed) return true;
+        if (!trimmed && !files.length) return true;
         if (!tenantId) {
           toast.error("No se pudo identificar el tenant para guardar la nota.");
           return false;
@@ -162,11 +197,13 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             tenantId,
             branchId: branchId ?? user?.branch_id ?? null,
             createdBy: user?.id ?? null,
+            files,
           });
           appended.push(created);
 
           queryClient.setQueryData(queryKey, appended);
           setDraft("");
+          setSelectedFiles([]);
           cancelEdit();
           await queryClient.refetchQueries({ queryKey });
           invalidate();
@@ -194,9 +231,10 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     );
 
     const handleSaveNote = useCallback(async () => {
-      const ok = await persistNewNote(draft);
-      if (ok && draft.trim()) toast.success("Nota agregada");
-    }, [draft, persistNewNote]);
+      const hadContent = draft.trim().length > 0 || selectedFiles.length > 0;
+      const ok = await persistNewNote(draft, selectedFiles);
+      if (ok && hadContent) toast.success("Nota agregada");
+    }, [draft, selectedFiles, persistNewNote]);
 
     const handleUpdateNote = useCallback(async () => {
       if (!editingNoteId) return;
@@ -261,10 +299,10 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
     useImperativeHandle(
       ref,
       () => ({
-        hasPendingDraft: () => draft.trim().length > 0,
-        savePendingDraft: () => persistNewNote(draft),
+        hasPendingDraft: () => draft.trim().length > 0 || selectedFiles.length > 0,
+        savePendingDraft: () => persistNewNote(draft, selectedFiles),
       }),
-      [draft, persistNewNote],
+      [draft, selectedFiles, persistNewNote],
     );
 
     return (
@@ -272,7 +310,7 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
         className={cn("grid gap-2 rounded-lg border border-border/50 bg-muted/15 p-3", className)}
         onClick={(e) => e.stopPropagation()}
       >
-        {!askConfirmProp ? internalConfirm.ConfirmDialog : null}
+        {!askConfirmProp ? <internalConfirm.ConfirmDialogHost /> : null}
 
         {showIngestSummary ? (
           <div className="space-y-1.5 rounded-md border border-dashed border-sky-500/25 bg-sky-500/5 px-3 py-2">
@@ -301,18 +339,67 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
             Cada guardado agrega una nota de vendedor nueva. Queda respaldada automáticamente y no la
             pisa el chatbot.
           </p>
-          {draft.trim() ? (
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handlePickFiles}
+            disabled={isSaving}
+          />
+
+          {previews.length ? (
+            <div className="flex flex-wrap gap-2">
+              {previews.map((preview, index) => (
+                <div
+                  key={preview.url}
+                  className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
+                >
+                  <img
+                    src={preview.url}
+                    alt={preview.file.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedFile(index)}
+                    disabled={isSaving}
+                    className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                    aria-label={`Quitar ${preview.file.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
-              variant="secondary"
-              onClick={() => void handleSaveNote()}
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
               disabled={isSaving}
             >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Guardar nota
+              <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
+              Adjuntar imágenes
             </Button>
-          ) : null}
+            {draft.trim() || selectedFiles.length ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => void handleSaveNote()}
+                disabled={isSaving}
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Guardar nota
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div
@@ -432,7 +519,10 @@ export const LeadNotesSection = forwardRef<LeadNotesSectionHandle, LeadNotesSect
                     </Button>
                   ) : null}
                 </div>
-                <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
+                {note.body ? (
+                  <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
+                ) : null}
+                <LeadNoteAttachments attachments={note.attachmentsResolved} />
                 <NoteTimestamps
                   createdAt={note.created_at}
                   updatedAt={note.updated_at}

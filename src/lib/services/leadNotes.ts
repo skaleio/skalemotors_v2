@@ -1,5 +1,13 @@
 import { supabase } from '../supabase'
 import type { Database } from '../types/database'
+import { optimizeVehicleImageForUpload } from '../vehicleImageOptimize'
+import {
+  buildLeadNoteAttachmentPath,
+  LEAD_NOTE_ATTACHMENTS_BUCKET,
+  parseAttachments,
+  type LeadNoteAttachment,
+  type LeadNoteAttachmentWithUrl,
+} from '../leadNoteAttachments'
 
 export type LeadNote = Database['public']['Tables']['lead_notes']['Row']
 export type LeadNoteArchive = {
@@ -20,8 +28,46 @@ export type LeadNoteArchive = {
 type LeadNoteInsert = Database['public']['Tables']['lead_notes']['Insert']
 type LeadNoteUpdate = Database['public']['Tables']['lead_notes']['Update']
 
-type LeadNoteWithAuthor = LeadNote & {
+export type LeadNoteWithAuthor = LeadNote & {
   author?: { id: string; full_name: string | null; email: string | null } | null
+  /** Adjuntos con signed URL listos para mostrar (resueltos al listar). */
+  attachmentsResolved?: LeadNoteAttachmentWithUrl[]
+}
+
+const SIGNED_URL_TTL_SECONDS = 3600
+
+/** Genera signed URLs (bucket privado) en una sola llamada para varios adjuntos. */
+async function signLeadNoteAttachments(
+  attachments: LeadNoteAttachment[],
+): Promise<LeadNoteAttachmentWithUrl[]> {
+  if (!attachments.length) return []
+  const { data, error } = await supabase.storage
+    .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+    .createSignedUrls(attachments.map((a) => a.path), SIGNED_URL_TTL_SECONDS)
+  if (error) throw error
+  const urlByPath = new Map((data ?? []).map((d) => [d.path, d.signedUrl]))
+  return attachments.flatMap((a) => {
+    const url = urlByPath.get(a.path)
+    return url ? [{ ...a, url }] : []
+  })
+}
+
+/** Resuelve los adjuntos de varias notas con un solo request de signed URLs. */
+async function resolveNotesAttachments(notes: LeadNoteWithAuthor[]): Promise<LeadNoteWithAuthor[]> {
+  const parsed = notes.map((n) => parseAttachments((n as LeadNote).attachments))
+  const allPaths = parsed.flat()
+  if (!allPaths.length) {
+    return notes.map((n) => ({ ...n, attachmentsResolved: [] }))
+  }
+  const signed = await signLeadNoteAttachments(allPaths)
+  const urlByPath = new Map(signed.map((s) => [s.path, s.url]))
+  return notes.map((n, i) => ({
+    ...n,
+    attachmentsResolved: parsed[i].flatMap((a) => {
+      const url = urlByPath.get(a.path)
+      return url ? [{ ...a, url }] : []
+    }),
+  }))
 }
 
 export const leadNoteService = {
@@ -41,9 +87,9 @@ export const leadNoteService = {
         .eq('source', 'vendor')
         .order('created_at', { ascending: true })
       if (plainError) throw plainError
-      return (plain ?? []) as LeadNoteWithAuthor[]
+      return resolveNotesAttachments((plain ?? []) as LeadNoteWithAuthor[])
     }
-    return data as LeadNoteWithAuthor[]
+    return resolveNotesAttachments(data as LeadNoteWithAuthor[])
   },
 
   async listArchiveByLead(leadId: string) {
@@ -57,33 +103,83 @@ export const leadNoteService = {
     return (data ?? []) as LeadNoteArchive[]
   },
 
+  /** Optimiza y sube imágenes al bucket privado bajo {tenant}/{lead}/{note}/. */
+  async uploadAttachments(
+    files: File[],
+    ctx: { tenantId: string; leadId: string; noteId: string },
+  ): Promise<LeadNoteAttachment[]> {
+    const uploaded: LeadNoteAttachment[] = []
+    for (const file of files) {
+      const optimized = await optimizeVehicleImageForUpload(file)
+      const path = buildLeadNoteAttachmentPath({
+        tenantId: ctx.tenantId,
+        leadId: ctx.leadId,
+        noteId: ctx.noteId,
+        fileName: optimized.name,
+        mime: optimized.type,
+      })
+      const { error } = await supabase.storage
+        .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+        .upload(path, optimized, { cacheControl: '3600', upsert: false, contentType: optimized.type })
+      if (error) throw error
+      uploaded.push({ path, name: file.name, size: optimized.size, mime: optimized.type })
+    }
+    return uploaded
+  },
+
   async create(params: {
     leadId: string
     body: string
     tenantId: string
     branchId?: string | null
     createdBy?: string | null
+    files?: File[]
   }) {
     const body = params.body.trim()
-    if (!body) throw new Error('La nota no puede estar vacía.')
+    const files = params.files ?? []
+    if (!body && !files.length) throw new Error('La nota no puede estar vacía.')
 
-    const row: LeadNoteInsert = {
-      lead_id: params.leadId,
-      body,
-      tenant_id: params.tenantId,
-      branch_id: params.branchId ?? null,
-      created_by: params.createdBy ?? null,
-      source: 'vendor',
+    const noteId = crypto.randomUUID()
+    let attachments: LeadNoteAttachment[] = []
+    try {
+      if (files.length) {
+        attachments = await this.uploadAttachments(files, {
+          tenantId: params.tenantId,
+          leadId: params.leadId,
+          noteId,
+        })
+      }
+
+      const row: LeadNoteInsert = {
+        id: noteId,
+        lead_id: params.leadId,
+        body,
+        tenant_id: params.tenantId,
+        branch_id: params.branchId ?? null,
+        created_by: params.createdBy ?? null,
+        source: 'vendor',
+        attachments: attachments as never,
+      }
+
+      const { data, error } = await supabase
+        .from('lead_notes')
+        .insert(row)
+        .select('*, author:users!created_by(id, full_name, email)')
+        .single()
+
+      if (error) throw error
+      const resolved = await signLeadNoteAttachments(attachments)
+      return { ...(data as LeadNoteWithAuthor), attachmentsResolved: resolved }
+    } catch (err) {
+      // Evitar archivos huérfanos si la inserción de la nota falla.
+      if (attachments.length) {
+        await supabase.storage
+          .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+          .remove(attachments.map((a) => a.path))
+          .catch(() => {})
+      }
+      throw err
     }
-
-    const { data, error } = await supabase
-      .from('lead_notes')
-      .insert(row)
-      .select('*, author:users!created_by(id, full_name, email)')
-      .single()
-
-    if (error) throw error
-    return data as LeadNoteWithAuthor
   },
 
   async update(noteId: string, body: string) {
