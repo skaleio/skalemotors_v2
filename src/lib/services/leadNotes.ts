@@ -71,12 +71,39 @@ async function resolveNotesAttachments(notes: LeadNoteWithAuthor[]): Promise<Lea
 }
 
 export const leadNoteService = {
-  async listByLead(leadId: string) {
+  async listByLead(leadId: string, channel?: 'llamada' | 'whatsapp') {
+    let query = supabase
+      .from('lead_notes')
+      .select('*, author:users!created_by(id, full_name, email)')
+      .eq('lead_id', leadId)
+      .eq('source', 'vendor')
+    if (channel) query = query.eq('channel', channel)
+    const { data, error } = await query.order('created_at', { ascending: true })
+
+    if (error) {
+      let plainQuery = supabase
+        .from('lead_notes')
+        .select('*')
+        .eq('lead_id', leadId)
+        .eq('source', 'vendor')
+      if (channel) plainQuery = plainQuery.eq('channel', channel)
+      const { data: plain, error: plainError } = await plainQuery.order('created_at', {
+        ascending: true,
+      })
+      if (plainError) throw plainError
+      return resolveNotesAttachments((plain ?? []) as LeadNoteWithAuthor[])
+    }
+    return resolveNotesAttachments(data as LeadNoteWithAuthor[])
+  },
+
+  /** Notas de vendedor previas al modelo por canal (channel IS NULL). */
+  async listLegacyByLead(leadId: string) {
     const { data, error } = await supabase
       .from('lead_notes')
       .select('*, author:users!created_by(id, full_name, email)')
       .eq('lead_id', leadId)
       .eq('source', 'vendor')
+      .is('channel', null)
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -85,6 +112,7 @@ export const leadNoteService = {
         .select('*')
         .eq('lead_id', leadId)
         .eq('source', 'vendor')
+        .is('channel', null)
         .order('created_at', { ascending: true })
       if (plainError) throw plainError
       return resolveNotesAttachments((plain ?? []) as LeadNoteWithAuthor[])
@@ -133,6 +161,8 @@ export const leadNoteService = {
     tenantId: string
     branchId?: string | null
     createdBy?: string | null
+    channel?: 'llamada' | 'whatsapp' | null
+    nextActionAt?: string | null
     files?: File[]
   }) {
     const body = params.body.trim()
@@ -158,6 +188,8 @@ export const leadNoteService = {
         branch_id: params.branchId ?? null,
         created_by: params.createdBy ?? null,
         source: 'vendor',
+        channel: params.channel ?? null,
+        next_action_at: params.nextActionAt ?? null,
         attachments: attachments as never,
       }
 

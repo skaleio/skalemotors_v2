@@ -51,4 +51,48 @@ export const formatRUT = (rut: string): string => {
   return `${formatted}-${dv}`;
 };
 
+/** Title Case simple: cada palabra con la inicial en mayúscula. */
+export const toTitleCase = (value: string): string =>
+  value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 
+/**
+ * Sanea un nombre de persona para guardar/mostrar: descarta emojis, símbolos
+ * y caracteres de control (todo lo que no sea letra/número/espacio/`.'-`),
+ * colapsa espacios y aplica Title Case. Devuelve "" si no queda nada útil.
+ */
+export const sanitizeName = (value: string | null | undefined): string => {
+  if (!value) return "";
+  const cleaned = String(value)
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\s.'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return toTitleCase(cleaned);
+};
+
+const VEHICLE_ACRONYMS = new Set([
+  "BMW", "BYD", "GAC", "JAC", "JMC", "KIA", "MG", "DFSK", "GMC", "RAM", "DS",
+]);
+
+/**
+ * Normaliza marca/modelo de vehículo a un formato consistente preservando
+ * siglas (BMW, KIA) y códigos alfanuméricos (RAV4, CX5, X3, GLC300).
+ */
+export const formatVehicleLabel = (value: string | null | undefined): string => {
+  if (!value) return "";
+  return String(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => {
+      const upper = part.toUpperCase();
+      if (VEHICLE_ACRONYMS.has(upper)) return upper;
+      if (/\d/.test(part) || part.length <= 2) return upper;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(" ");
+};

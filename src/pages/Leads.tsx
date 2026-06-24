@@ -66,6 +66,7 @@ import {
   shouldClearContactStateOnVendorExitNuevo,
   type LeadContactState,
 } from "@/lib/leadContactState";
+import { formatVehicleLabel, sanitizeName } from "@/lib/format";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
@@ -204,14 +205,6 @@ const isTruthyResponse = (value: string) => {
   if (!normalized) return false;
   return ["si", "sí", "s", "true", "1", "respondio", "respondió", "respondio?"].includes(normalized);
 };
-
-const toTitleCase = (value: string) =>
-  value
-    .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 
 /** Quita caracteres de control que rompen el XML interno de .xlsx. */
 const sanitizeForSpreadsheet = (value: unknown): string => {
@@ -433,7 +426,7 @@ const LeadsTable = memo(function LeadsTable({
                 <TableHead className="hidden min-w-[100px] lg:table-cell">Región</TableHead>
                 <TableHead className="hidden min-w-[100px] xl:table-cell">Financ./Contado</TableHead>
                 <TableHead className="hidden min-w-[90px] xl:table-cell">Presupuesto</TableHead>
-                <TableHead className="min-w-[120px]">Estado</TableHead>
+                <TableHead className="min-w-[180px]">Estado</TableHead>
                 <TableHead className="hidden min-w-[80px] sm:table-cell">Fecha</TableHead>
                 <TableHead className="text-right w-[130px] shrink-0">Acciones</TableHead>
               </TableRow>
@@ -467,13 +460,19 @@ const LeadsTable = memo(function LeadsTable({
                   </TableCell>
                   <TableCell className="font-medium">
                     <div className="space-y-0.5">
-                      <div>{lead.full_name || "Sin nombre"}</div>
+                      <div>{sanitizeName(lead.full_name) || "Sin nombre"}</div>
                       {(() => {
                         const assignedUser = (lead as Lead & {
                           assigned_user?: { full_name?: string | null; email?: string | null } | null;
                         }).assigned_user;
                         const label = assignedUser?.full_name || assignedUser?.email;
-                        if (!label) return null;
+                        if (!label) {
+                          return (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" title="Lead sin vendedor asignado">
+                              Sin asignar
+                            </span>
+                          );
+                        }
                         return (
                           <div className="text-[11px] font-normal text-muted-foreground truncate" title={`Asignado a ${label}`}>
                             → {label}
@@ -1068,13 +1067,13 @@ function LeadsImpl({ user }: { user: User }) {
       for (const row of rows) {
       const rawFullName =
           getRowValue(row, ["nombre", "nombres", "full_name", "nombre completo"]) || "Sin nombre";
-      const fullName = toTitleCase(rawFullName);
+      const fullName = sanitizeName(rawFullName) || "Sin nombre";
         const rawPhone = getRowValue(row, ["telefono", "tel", "phone", "celular"]);
         const phone = normalizePhoneWithChilePrefix(rawPhone);
         const rawVehicle = getRowValue(row, ["vehiculo", "vehículo", "auto", "modelo"]);
         const vehicle =
           rawVehicle && rawVehicle.trim().toLowerCase() !== "por definir"
-            ? toTitleCase(rawVehicle.trim())
+            ? formatVehicleLabel(rawVehicle.trim())
             : "";
         const region = getRowValue(row, ["region", "región"]);
         const city = getRowValue(row, ["ciudad"]);
@@ -1235,8 +1234,9 @@ function LeadsImpl({ user }: { user: User }) {
       });
       return;
     }
+    const sanitizedCreateName = sanitizeName(formState.full_name);
     const missing: string[] = [];
-    if (!formState.full_name.trim()) missing.push("nombre");
+    if (!sanitizedCreateName) missing.push("nombre");
     if (!formState.phone.trim()) missing.push("teléfono");
     else if (!normalizedCreatePhone) {
       toast({
@@ -1281,7 +1281,7 @@ function LeadsImpl({ user }: { user: User }) {
       }
 
       const created = await leadService.create({
-        full_name: toTitleCase(formState.full_name.trim()),
+        full_name: sanitizedCreateName,
         phone: normalizedCreatePhone,
         status: formState.status as any,
         source: formState.phone.trim() ? "telefono" : "otro",
@@ -1400,7 +1400,7 @@ function LeadsImpl({ user }: { user: User }) {
 
     try {
       const updates: Record<string, any> = {
-        full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
+        full_name: sanitizeName(editForm.full_name) || "Sin nombre",
         phone: normalizePhoneWithChilePrefix(editForm.phone) || "sin_telefono",
         email: editForm.email.trim() ? editForm.email.trim() : null,
         rut: editForm.rut.trim() ? editForm.rut.trim() : null,

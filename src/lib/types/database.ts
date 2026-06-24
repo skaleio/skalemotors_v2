@@ -1932,10 +1932,12 @@ export type Database = {
           attachments: Json
           body: string
           branch_id: string | null
+          channel: string | null
           created_at: string
           created_by: string | null
           id: string
           lead_id: string
+          next_action_at: string | null
           source: string
           tenant_id: string
           updated_at: string | null
@@ -1944,10 +1946,12 @@ export type Database = {
           attachments?: Json
           body: string
           branch_id?: string | null
+          channel?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id: string
+          next_action_at?: string | null
           source?: string
           tenant_id: string
           updated_at?: string | null
@@ -1956,10 +1960,12 @@ export type Database = {
           attachments?: Json
           body?: string
           branch_id?: string | null
+          channel?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id?: string
+          next_action_at?: string | null
           source?: string
           tenant_id?: string
           updated_at?: string | null
@@ -2132,6 +2138,7 @@ export type Database = {
           updated_at: string | null
           uso_principal: string | null
           vehicle_interest: string | null
+          whatsapp_attempts: number
         }
         Insert: {
           alerta_crediticia?: string | null
@@ -2182,6 +2189,7 @@ export type Database = {
           updated_at?: string | null
           uso_principal?: string | null
           vehicle_interest?: string | null
+          whatsapp_attempts?: number
         }
         Update: {
           alerta_crediticia?: string | null
@@ -2232,6 +2240,7 @@ export type Database = {
           updated_at?: string | null
           uso_principal?: string | null
           vehicle_interest?: string | null
+          whatsapp_attempts?: number
         }
         Relationships: [
           {

@@ -582,7 +582,7 @@ export default function Dashboard() {
           loading={!stats}
           loadingWidth="lg"
           value={stats ? formatCLP(stats.totalIncomeMonth ?? 0) : ""}
-          subtitle={`Ingresos del mes (${stats?.selectedMonthLabel ?? "—"})`}
+          subtitle={`Ventas + ingresos manuales (${stats?.selectedMonthLabel ?? "—"})`}
           info={DASHBOARD_KPI_INFO.totalIngresos}
           onClick={() => setShowTotalIngresosModal(true)}
         />
@@ -594,7 +594,7 @@ export default function Dashboard() {
           loadingWidth="lg"
           value={stats ? formatCLP(stats.balance ?? 0) : ""}
           valueTone={(stats?.balance ?? 0) >= 0 ? "positive" : "negative"}
-          subtitle={`Ingresos − gastos (${stats?.selectedMonthLabel ?? "mes"})`}
+          subtitle={`Ventas + manuales − gastos (${stats?.selectedMonthLabel ?? "mes"})`}
           info={DASHBOARD_KPI_INFO.balance}
           onClick={() => setShowBalanceModal(true)}
         />
