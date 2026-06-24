@@ -1,8 +1,8 @@
 import { leadNoteService } from "@/lib/services/leadNotes";
-import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { LeadNoteAttachments } from "./LeadNoteAttachments";
 
 function formatNoteDate(iso: string) {
   try {
@@ -64,6 +64,7 @@ export function CrmLeadLegacyNotes({ leadId }: { leadId: string }) {
                   className="rounded-md border border-border/45 bg-background px-3 py-2 shadow-sm"
                 >
                   <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
+                  <LeadNoteAttachments attachments={note.attachmentsResolved} />
                   <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
                     <p>
                       <span className="font-medium text-foreground/55">Registrada:</span>{" "}

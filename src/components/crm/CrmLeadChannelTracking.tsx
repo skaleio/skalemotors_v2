@@ -10,10 +10,11 @@ import {
   validateChannelNote,
   type FollowUpChannel,
 } from "@/lib/leadFollowUpNote";
+import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageCircle, Pencil, Phone, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, MessageCircle, Pencil, Phone, Trash2, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -24,6 +25,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { LeadNoteAttachments } from "./LeadNoteAttachments";
 
 function formatNoteDate(iso: string) {
   try {
@@ -80,10 +82,36 @@ export const CrmLeadChannelTracking = forwardRef<
   const askConfirm = askConfirmProp ?? internalConfirm.confirm;
 
   const [draft, setDraft] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const previews = useMemo(
+    () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [selectedFiles],
+  );
+
+  useEffect(() => {
+    return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
+  }, [previews]);
+
+  const handlePickFiles = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!list.length) return;
+    setSelectedFiles((prev) => {
+      const { accepted, rejected } = selectValidAttachments({ files: list, existingCount: prev.length });
+      if (rejected.length) toast.error(rejected[0].reason);
+      return accepted.length ? [...prev, ...accepted] : prev;
+    });
+  }, []);
+
+  const removeSelectedFile = useCallback((index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const channelLabel = FOLLOW_UP_CHANNEL_LABEL[channel];
   const ChannelIcon = channel === "llamada" ? Phone : MessageCircle;
@@ -108,6 +136,7 @@ export const CrmLeadChannelTracking = forwardRef<
 
   useEffect(() => {
     setDraft("");
+    setSelectedFiles([]);
     setEditingNoteId(null);
     setEditDraft("");
   }, [leadId, channel]);
@@ -135,7 +164,7 @@ export const CrmLeadChannelTracking = forwardRef<
   }, []);
 
   const createNote = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (body: string, files: File[]): Promise<boolean> => {
       if (!tenantId) {
         toast.error("No se pudo identificar el tenant para guardar la nota.");
         return false;
@@ -153,10 +182,12 @@ export const CrmLeadChannelTracking = forwardRef<
           createdBy: user?.id ?? null,
           channel,
           nextActionAt: nowIso,
+          files,
         });
         const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
         queryClient.setQueryData(queryKey, [...cached, created]);
         setDraft("");
+        setSelectedFiles([]);
         cancelEdit();
         await queryClient.refetchQueries({ queryKey });
         invalidate();
@@ -180,9 +211,9 @@ export const CrmLeadChannelTracking = forwardRef<
         toast.error(validation.errors.join(" "));
         return false;
       }
-      return createNote(body);
+      return createNote(body, selectedFiles);
     },
-    [createNote],
+    [createNote, selectedFiles],
   );
 
   const handleSaveNote = useCallback(async () => {
@@ -251,16 +282,16 @@ export const CrmLeadChannelTracking = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      hasPendingDraft: () => draft.trim().length > 0,
+      hasPendingDraft: () => draft.trim().length > 0 || selectedFiles.length > 0,
       // Guardado al mover/guardar el lead: best-effort, NO bloquea el movimiento
       // ni exige nota válida (la validación vive solo en el botón "Registrar").
       savePendingDraft: async () => {
-        if (!draft.trim()) return true;
-        await createNote(draft);
+        if (!draft.trim() && !selectedFiles.length) return true;
+        await createNote(draft, selectedFiles);
         return true;
       },
     }),
-    [draft, createNote],
+    [draft, selectedFiles, createNote],
   );
 
   return (
@@ -314,16 +345,61 @@ export const CrmLeadChannelTracking = forwardRef<
         <p className="text-[10px] text-muted-foreground">
           La fecha y hora se guardan automáticamente al registrar la nota.
         </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => void handleSaveNote()}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handlePickFiles}
           disabled={isSaving}
-        >
-          {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-          Registrar {actionVerb}
-        </Button>
+        />
+
+        {previews.length ? (
+          <div className="flex flex-wrap gap-2">
+            {previews.map((preview, index) => (
+              <div
+                key={preview.url}
+                className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
+              >
+                <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeSelectedFile(index)}
+                  disabled={isSaving}
+                  className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                  aria-label={`Quitar ${preview.file.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSaving}
+          >
+            <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
+            Adjuntar imágenes
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleSaveNote()}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+            Registrar {actionVerb}
+          </Button>
+        </div>
       </div>
 
       <div
@@ -423,6 +499,7 @@ export const CrmLeadChannelTracking = forwardRef<
                 ) : null}
               </div>
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
+              <LeadNoteAttachments attachments={note.attachmentsResolved} />
               <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
                 <p>
                   <span className="font-medium text-foreground/55">Registrada:</span>{" "}
