@@ -40,7 +40,9 @@ export default async function handler(req: Request): Promise<Response> {
   const vehicleId = (typeof body.vehicle_id === "string" ? body.vehicle_id.trim() : "") || null;
 
   if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
-  if (!content) return zernioJson(req, 400, { ok: false, error: "El contenido es requerido" });
+  if (!content && mediaUrls.length === 0) {
+    return zernioJson(req, 400, { ok: false, error: "El contenido o una imagen es requerido" });
+  }
   if (!platforms.length) return zernioJson(req, 400, { ok: false, error: "Selecciona al menos una cuenta" });
 
   if (scope === "org" && !canPublishOrg(auth.role)) {
