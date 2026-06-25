@@ -134,8 +134,8 @@ export function LeadMetricBar({
     void commit(next);
   };
 
-  const pillHeight = size === "sm" ? "h-1.5" : "h-2";
-  const pillWidth = size === "sm" ? "w-6" : "w-10";
+  const pillHeight = size === "sm" ? "h-2" : "h-2.5";
+  const pillWidth = size === "sm" ? "w-8" : "w-12";
 
   return (
     <div className="flex items-center gap-2 select-none" onClick={(e) => e.stopPropagation()}>
