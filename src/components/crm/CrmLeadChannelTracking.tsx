@@ -116,6 +116,7 @@ export const CrmLeadChannelTracking = forwardRef<
   const channelLabel = FOLLOW_UP_CHANNEL_LABEL[channel];
   const ChannelIcon = channel === "llamada" ? Phone : MessageCircle;
   const actionVerb = channel === "llamada" ? "llamada" : "WhatsApp";
+  const channelNoteLabel = channel === "llamada" ? "Llamada" : "WhatsApp";
 
   const canDeleteNotes =
     user?.role === "admin"
@@ -498,6 +499,17 @@ export const CrmLeadChannelTracking = forwardRef<
                   </Button>
                 ) : null}
               </div>
+              <span
+                className={cn(
+                  "mb-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                  channel === "whatsapp"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                )}
+              >
+                <ChannelIcon className="h-3 w-3" aria-hidden />
+                {channelNoteLabel}
+              </span>
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
               <LeadNoteAttachments attachments={note.attachmentsResolved} />
               <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">

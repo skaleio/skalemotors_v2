@@ -914,11 +914,13 @@ export default function CRM() {
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       return true;
     });
-    const total = base.length;
+    // Los cancelados no cuentan como lead trabajado: se excluyen del total (y por ende de la efectividad).
+    const cancelados = base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
+    const total = base.length - cancelados;
     const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
     const cerradosMes = base.filter((l) => isVendidoInLocalCalendarMonth(l, crmCalendarMonthKey)).length;
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
-    const enPipeline = total - cerrados - perdidos - base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
+    const enPipeline = total - cerrados - perdidos;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
     const noRespondieron = deletedLeads.filter((lead) => {
       const tags = normalizeTags(lead.tags);
