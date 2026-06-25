@@ -113,7 +113,11 @@ function EntryCard({
   );
 }
 
-export function DailySalesReportForm() {
+export function DailySalesReportForm({
+  showAllSections = false,
+}: {
+  showAllSections?: boolean;
+}) {
   const { user } = useAuth();
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
@@ -219,12 +223,18 @@ export function DailySalesReportForm() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>
-              Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
-            </span>
+            {showAllSections && (
+              <span>
+                Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
+              </span>
+            )}
             <span>{progress.calls} llamados</span>
-            <span>{progress.credits} créditos</span>
-            <span>{progress.platforms} publicaciones en plataformas</span>
+            {showAllSections && (
+              <>
+                <span>{progress.credits} créditos</span>
+                <span>{progress.platforms} publicaciones en plataformas</span>
+              </>
+            )}
           </div>
           {isSubmitted && reportQuery.data?.submitted_at && (
             <p className="text-xs text-green-600 dark:text-green-400">
@@ -348,6 +358,8 @@ export function DailySalesReportForm() {
           </AccordionContent>
         </AccordionItem>
 
+        {showAllSections && (
+          <>
         <AccordionItem value="credits" className="border rounded-lg px-4 bg-card">
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
@@ -645,13 +657,17 @@ export function DailySalesReportForm() {
             />
           </AccordionContent>
         </AccordionItem>
+          </>
+        )}
       </Accordion>
 
       <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">
         <div className="flex items-center justify-between gap-4 py-3">
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
-          </p>
+          {showAllSections && (
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
+            </p>
+          )}
           <Button
             className="ml-auto min-w-[160px]"
             onClick={handleSubmit}

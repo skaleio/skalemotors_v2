@@ -80,7 +80,7 @@ export function emptyPlatformRow(): DailyReportPlatformRow {
 
 export function emptyDailySalesReportPayload(): DailySalesReportPayload {
   return {
-    calls: [emptyCallRow(), emptyCallRow()],
+    calls: [emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow()],
     credits: [emptyCreditRow()],
     social_media: {
       total_posts: null,
