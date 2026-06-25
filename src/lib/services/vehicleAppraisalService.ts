@@ -56,6 +56,11 @@ function normalizePatente(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// Formatos PPU chilenos: auto antiguo (AB1234), actual (BCDF12), comercial
+// (ABC123) y motos (AB123 / ABC12). El servidor revalida con el mismo set.
+const PATENTE_REGEX =
+  /^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/;
+
 function isFreshWithin24Hours(createdAt: string): boolean {
   const ageMs = Date.now() - new Date(createdAt).getTime();
   return ageMs <= 24 * 60 * 60 * 1000;
@@ -114,8 +119,8 @@ export interface AppraisalByPatenteResult {
  */
 export async function getAppraisalByPatente(patente: string): Promise<AppraisalByPatenteResult> {
   const normalizedPatente = normalizePatente(patente);
-  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
-    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
   }
 
   // Token fresco antes de invocar (evita 401 por access token vencido). Ver getAccessToken.
@@ -179,8 +184,8 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
  */
 export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
   const normalizedPatente = normalizePatente(patente);
-  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
-    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
   }
 
   // Refrescar el token antes de invocar: la Edge Function valida el JWT del usuario
