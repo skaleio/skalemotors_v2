@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -245,14 +246,45 @@ export function DailySalesReportSupervision() {
   );
 }
 
+function AdminReportView() {
+  const [asVendedor, setAsVendedor] = useState(false);
+
+  return (
+    <div className="w-full space-y-4">
+      <div className="flex items-center justify-end gap-3 rounded-lg border bg-card px-4 py-2.5">
+        <Label htmlFor="role-preview" className="text-sm text-muted-foreground">
+          Vista previa:
+        </Label>
+        <span className={cn("text-sm", !asVendedor && "font-semibold text-foreground")}>Admin</span>
+        <Switch id="role-preview" checked={asVendedor} onCheckedChange={setAsVendedor} />
+        <span className={cn("text-sm", asVendedor && "font-semibold text-foreground")}>Vendedor</span>
+      </div>
+
+      {asVendedor ? (
+        <DailySalesReportForm showAllSections={false} />
+      ) : (
+        <div className="space-y-6">
+          <DailySalesReportSupervision />
+          <DailySalesReportForm showAllSections />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DailySalesReportPanel() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const canSupervise =
     user?.role === "admin" ||
     user?.role === "jefe_jefe" ||
     user?.role === "gerente" ||
     user?.role === "jefe_sucursal";
   const canFill = user?.role === "vendedor" || user?.role === "jefe_sucursal";
+
+  if (isAdmin) {
+    return <AdminReportView />;
+  }
 
   if (canSupervise && canFill) {
     return (
