@@ -22,6 +22,17 @@ export interface VehicleData {
   codigo_sii?: string | null;
 }
 
+/** Referencia GetAPI / fiscal que se muestra junto al valor de mercado real. */
+export interface AppraisalReferencia {
+  precio_getapi: number | null;
+  banda_min: number | null;
+  banda_max: number | null;
+  tasacion_fiscal: number | null;
+  precio_retoma: number | null;
+  permiso_circulacion: string | null;
+  ano_info_fiscal: number | null;
+}
+
 export interface AppraisalResult {
   tasacion: {
     precio_minimo: number;
@@ -32,6 +43,8 @@ export interface AppraisalResult {
     confianza: "alta" | "media" | "baja";
     fecha_consulta: string;
     tolerancia_años?: number;
+    /** "mercado" = calculado con anuncios reales; "getapi" = fallback a estimación GetAPI. */
+    fuente?: "mercado" | "getapi";
   };
   muestras: {
     titulo: string;
@@ -44,6 +57,10 @@ export interface AppraisalResult {
   resumen?: string | null;
   /** Precio de retoma sugerido por la API, si está disponible */
   precio_retoma?: number | null;
+  /** true si la tasación principal proviene de anuncios reales de mercado. */
+  mercado_disponible?: boolean;
+  /** Datos de referencia GetAPI/fiscal (no persistido en caché). */
+  referencia?: AppraisalReferencia | null;
 }
 
 type EdgeErrorResponse = {
@@ -172,6 +189,8 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     uf_valor: Number(data.uf_valor ?? 0),
     resumen: data.resumen ?? null,
     precio_retoma: (data as any).precio_retoma ?? null,
+    mercado_disponible: (data as any).mercado_disponible ?? data.tasacion.total_muestras > 0,
+    referencia: ((data as any).referencia as AppraisalReferencia | undefined) ?? null,
   };
 
   return { vehicle, appraisal };
@@ -264,18 +283,22 @@ export async function getCachedAppraisal(
     return null;
   }
 
+  const totalMuestras = Number(data.total_muestras ?? 0);
   return {
     tasacion: {
       precio_minimo: Number(data.precio_minimo ?? 0),
       precio_promedio: Number(data.precio_promedio ?? 0),
       precio_maximo: Number(data.precio_maximo ?? 0),
       precio_mediana: Number(data.precio_mediana ?? 0),
-      total_muestras: Number(data.total_muestras ?? 0),
+      total_muestras: totalMuestras,
       confianza: (data.confianza as "alta" | "media" | "baja") ?? "baja",
       fecha_consulta: data.created_at,
+      fuente: totalMuestras > 0 ? "mercado" : "getapi",
     },
     muestras: Array.isArray(data.muestras) ? (data.muestras as AppraisalResult["muestras"]) : [],
     uf_valor: Number(data.uf_valor ?? 0),
+    mercado_disponible: totalMuestras > 0,
+    referencia: null,
   };
 }
 

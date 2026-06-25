@@ -192,6 +192,11 @@ export default function VehicleAppraisal() {
     ? getConfidenceBadge(appraisal.tasacion.confianza, appraisal.tasacion.total_muestras)
     : null;
 
+  const mercadoReal = appraisal
+    ? (appraisal.mercado_disponible ?? appraisal.tasacion.total_muestras > 0)
+    : false;
+  const ref = appraisal?.referencia ?? null;
+
   const getComparableUrl = (muestra: AppraisalResult["muestras"][number]) => {
     if (typeof muestra.url === "string" && /^https?:\/\/(www\.)?chileautos\.cl/i.test(muestra.url)) {
       return muestra.url;
@@ -605,6 +610,14 @@ export default function VehicleAppraisal() {
               <>
                 {/* Resumen del vehículo */}
                 <div className="rounded-2xl border border-border bg-gradient-to-br from-muted/40 to-card p-5 dark:from-muted/20 dark:to-card">
+                  {vehicle.foto_url ? (
+                    <img
+                      src={vehicle.foto_url}
+                      alt={[vehicle.marca, vehicle.modelo].filter(Boolean).join(" ") || "Vehículo"}
+                      loading="lazy"
+                      className="mb-4 max-h-48 w-full rounded-xl border border-border object-cover"
+                    />
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="rounded-lg bg-slate-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-white dark:bg-zinc-700">
                       {vehicle.patente}
@@ -651,6 +664,8 @@ export default function VehicleAppraisal() {
                   />
                   <SpecTile label="Rev. técnica (mes)" value={vehicle.mes_revision_tecnica} />
                   <SpecTile label="Código SII" value={vehicle.codigo_sii} />
+                  <SpecTile label="Permiso circulación" value={ref?.permiso_circulacion} />
+                  <SpecTile label="Año info fiscal (SII)" value={ref?.ano_info_fiscal} />
                 </div>
 
                 {/* Corregir datos + ajustes (colapsable) */}
@@ -864,6 +879,27 @@ export default function VehicleAppraisal() {
                     </div>
                   )}
 
+                  {/* Origen de la tasación: mercado real vs fallback GetAPI */}
+                  {mercadoReal ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm dark:border-emerald-800/50 dark:bg-emerald-950/30">
+                      <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                        Valor de mercado real
+                      </span>
+                      <span className="text-emerald-900/80 dark:text-emerald-200/80">
+                        Calculado con {appraisal.tasacion.total_muestras} anuncios reales de Chileautos (año ±2).
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800/50 dark:bg-amber-950/30">
+                      <span className="font-semibold text-amber-900 dark:text-amber-200">
+                        Sin comparables de mercado
+                      </span>
+                      <span className="text-amber-800 dark:text-amber-200/80">
+                        No se pudieron obtener anuncios reales; mostrando la estimación de GetAPI / fiscal.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Resumen de rango */}
                   <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 dark:bg-muted/20">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -953,11 +989,38 @@ export default function VehicleAppraisal() {
                     </div>
                   )}
 
+                  {/* Referencia GetAPI / fiscal (junto al valor de mercado real) */}
+                  {ref && (ref.precio_getapi || ref.banda_min || ref.banda_max || ref.tasacion_fiscal) ? (
+                    <div className="rounded-2xl border border-border bg-muted/30 p-4 dark:bg-muted/20">
+                      <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Referencia GetAPI / fiscal
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <SpecTile
+                          label="Precio GetAPI"
+                          value={ref.precio_getapi ? formatCLP(ref.precio_getapi) : null}
+                          highlight
+                        />
+                        <SpecTile label="Banda mín" value={ref.banda_min ? formatCLP(ref.banda_min) : null} />
+                        <SpecTile label="Banda máx" value={ref.banda_max ? formatCLP(ref.banda_max) : null} />
+                        <SpecTile
+                          label="Tasación fiscal (SII)"
+                          value={ref.tasacion_fiscal ? formatCLP(ref.tasacion_fiscal) : null}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
                   {/* Tabla de comparables */}
                   <div>
                     <h4 className="mb-3 text-sm font-semibold text-foreground">
                       Comparables en el mercado ({muestrasOrdenadas.length} anuncios)
                     </h4>
+                    {muestrasOrdenadas.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+                        No hay anuncios reales disponibles para este vehículo en este momento.
+                      </p>
+                    ) : (
                     <div className="overflow-hidden rounded-xl border border-border shadow-sm">
                       <Table>
                         <TableHeader>
@@ -999,6 +1062,7 @@ export default function VehicleAppraisal() {
                         </TableBody>
                       </Table>
                     </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-3 border-t border-border pt-5">
