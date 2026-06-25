@@ -13,9 +13,6 @@ export type LeadNoteAttachmentWithUrl = LeadNoteAttachment & { url: string };
 
 export const LEAD_NOTE_ATTACHMENTS_BUCKET = "lead-note-attachments";
 
-/** Máximo de imágenes por nota (alineado con la UI de miniaturas). */
-export const MAX_ATTACHMENTS_PER_NOTE = 6;
-
 /** Tope del archivo original antes de optimizar; evita cargar archivos enormes al canvas. */
 export const MAX_INPUT_BYTES = 25 * 1024 * 1024; // 25 MB
 
@@ -60,16 +57,13 @@ export type AttachmentSelection = {
 };
 
 /**
- * Filtra la selección de archivos respetando tipo, tamaño y cupo restante.
- * Lógica pura para testear la validación sin tocar el DOM ni la red.
+ * Filtra la selección de archivos respetando tipo y tamaño. Sin límite de
+ * cantidad: cada imagen se comprime antes de subir. Lógica pura para testear
+ * la validación sin tocar el DOM ni la red.
  */
-export function selectValidAttachments(params: {
-  files: File[];
-  existingCount: number;
-}): AttachmentSelection {
+export function selectValidAttachments(params: { files: File[] }): AttachmentSelection {
   const accepted: File[] = [];
   const rejected: AttachmentRejection[] = [];
-  const remaining = Math.max(0, MAX_ATTACHMENTS_PER_NOTE - params.existingCount);
 
   for (const file of params.files) {
     if (!file.type.startsWith("image/") || !ACCEPTED_IMAGE_MIME.includes(file.type as never)) {
@@ -78,13 +72,6 @@ export function selectValidAttachments(params: {
     }
     if (file.size > MAX_INPUT_BYTES) {
       rejected.push({ name: file.name, reason: "Supera el tamaño máximo (25 MB)." });
-      continue;
-    }
-    if (accepted.length >= remaining) {
-      rejected.push({
-        name: file.name,
-        reason: `Máximo ${MAX_ATTACHMENTS_PER_NOTE} imágenes por nota.`,
-      });
       continue;
     }
     accepted.push(file);

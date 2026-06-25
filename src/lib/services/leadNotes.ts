@@ -214,24 +214,85 @@ export const leadNoteService = {
     }
   },
 
-  async update(noteId: string, body: string) {
+  async update(
+    noteId: string,
+    body: string,
+    opts?: {
+      tenantId?: string
+      leadId?: string
+      /** Adjuntos existentes que se conservan (los no incluidos se eliminan). */
+      keepAttachments?: LeadNoteAttachment[]
+      /** Imágenes nuevas a subir y agregar. */
+      addFiles?: File[]
+      /** Paths de adjuntos a borrar del storage tras persistir. */
+      removePaths?: string[]
+    },
+  ) {
     const trimmed = body.trim()
-    if (!trimmed) throw new Error('La nota no puede estar vacía.')
+    const hasPhotoOps =
+      !!opts &&
+      (opts.addFiles !== undefined ||
+        opts.removePaths !== undefined ||
+        opts.keepAttachments !== undefined)
+
+    let attachments: LeadNoteAttachment[] | undefined
+    let uploaded: LeadNoteAttachment[] = []
+    if (hasPhotoOps) {
+      const kept = opts!.keepAttachments ?? []
+      if (opts!.addFiles?.length) {
+        if (!opts!.tenantId || !opts!.leadId) {
+          throw new Error('Falta el tenant o el lead para subir las imágenes.')
+        }
+        uploaded = await this.uploadAttachments(opts!.addFiles, {
+          tenantId: opts!.tenantId,
+          leadId: opts!.leadId,
+          noteId,
+        })
+      }
+      attachments = [...kept, ...uploaded]
+    }
+
+    if (!trimmed && !(attachments && attachments.length)) {
+      throw new Error('La nota no puede estar vacía.')
+    }
 
     const payload: LeadNoteUpdate = {
       body: trimmed,
       updated_at: new Date().toISOString(),
     }
+    if (attachments) payload.attachments = attachments as never
 
-    const { data, error } = await supabase
-      .from('lead_notes')
-      .update(payload)
-      .eq('id', noteId)
-      .select('*, author:users!created_by(id, full_name, email)')
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('lead_notes')
+        .update(payload)
+        .eq('id', noteId)
+        .select('*, author:users!created_by(id, full_name, email)')
+        .single()
 
-    if (error) throw error
-    return data as LeadNoteWithAuthor
+      if (error) throw error
+
+      // Borrar del storage los adjuntos quitados, solo tras persistir el cambio.
+      if (opts?.removePaths?.length) {
+        await supabase.storage
+          .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+          .remove(opts.removePaths)
+          .catch(() => {})
+      }
+
+      if (!attachments) return data as LeadNoteWithAuthor
+      const resolved = await signLeadNoteAttachments(attachments)
+      return { ...(data as LeadNoteWithAuthor), attachmentsResolved: resolved }
+    } catch (err) {
+      // Evitar archivos huérfanos si la actualización falla tras subir.
+      if (uploaded.length) {
+        await supabase.storage
+          .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+          .remove(uploaded.map((a) => a.path))
+          .catch(() => {})
+      }
+      throw err
+    }
   },
 
   async delete(noteId: string) {

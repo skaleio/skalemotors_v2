@@ -14,7 +14,7 @@ import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, MessageCircle, Pencil, Phone, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, MessageCircle, Pencil, Phone, Plus, Trash2, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -88,6 +88,9 @@ export const CrmLeadChannelTracking = forwardRef<
   const [isSaving, setIsSaving] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [editFiles, setEditFiles] = useState<File[]>([]);
+  const [editRemovePaths, setEditRemovePaths] = useState<string[]>([]);
 
   const previews = useMemo(
     () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -103,7 +106,7 @@ export const CrmLeadChannelTracking = forwardRef<
     event.target.value = "";
     if (!list.length) return;
     setSelectedFiles((prev) => {
-      const { accepted, rejected } = selectValidAttachments({ files: list, existingCount: prev.length });
+      const { accepted, rejected } = selectValidAttachments({ files: list });
       if (rejected.length) toast.error(rejected[0].reason);
       return accepted.length ? [...prev, ...accepted] : prev;
     });
@@ -113,15 +116,52 @@ export const CrmLeadChannelTracking = forwardRef<
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const editPreviews = useMemo(
+    () => editFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [editFiles],
+  );
+
+  useEffect(() => {
+    return () => editPreviews.forEach((p) => URL.revokeObjectURL(p.url));
+  }, [editPreviews]);
+
+  const handlePickEditFiles = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!list.length) return;
+    setEditFiles((prev) => {
+      const { accepted, rejected } = selectValidAttachments({ files: list });
+      if (rejected.length) toast.error(rejected[0].reason);
+      return accepted.length ? [...prev, ...accepted] : prev;
+    });
+  }, []);
+
+  const removeEditFile = useCallback((index: number) => {
+    setEditFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const toggleRemoveExisting = useCallback((path: string) => {
+    setEditRemovePaths((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path],
+    );
+  }, []);
+
   const channelLabel = FOLLOW_UP_CHANNEL_LABEL[channel];
   const ChannelIcon = channel === "llamada" ? Phone : MessageCircle;
   const actionVerb = channel === "llamada" ? "llamada" : "WhatsApp";
 
-  const canDeleteNotes =
+  const canManageAnyNote =
     user?.role === "admin"
     || user?.role === "gerente"
     || user?.role === "jefe_jefe"
     || user?.role === "jefe_sucursal";
+
+  /** Jefaturas gestionan cualquier nota; el resto, solo las propias. */
+  const canManageNote = useCallback(
+    (note: { created_by?: string | null }) =>
+      canManageAnyNote || (!!user?.id && note.created_by === user.id),
+    [canManageAnyNote, user?.id],
+  );
 
   const queryKey = ["lead-notes", leadId, channel] as const;
 
@@ -161,6 +201,8 @@ export const CrmLeadChannelTracking = forwardRef<
   const cancelEdit = useCallback(() => {
     setEditingNoteId(null);
     setEditDraft("");
+    setEditFiles([]);
+    setEditRemovePaths([]);
   }, []);
 
   const createNote = useCallback(
@@ -223,18 +265,36 @@ export const CrmLeadChannelTracking = forwardRef<
 
   const handleUpdateNote = useCallback(async () => {
     if (!editingNoteId) return;
+    const note = notes.find((n) => n.id === editingNoteId);
+    const keep = (note?.attachmentsResolved ?? [])
+      .filter((a) => !editRemovePaths.includes(a.path))
+      .map((a) => ({
+        path: a.path,
+        name: a.name,
+        size: a.size,
+        mime: a.mime,
+        width: a.width,
+        height: a.height,
+      }));
     const body = editDraft.trim();
-    if (!body) {
+    if (!body && keep.length + editFiles.length === 0) {
       toast.error("La nota no puede quedar vacía.");
       return;
     }
     setIsSaving(true);
     try {
-      const updated = await leadNoteService.update(editingNoteId, body);
+      const updated = await leadNoteService.update(editingNoteId, body, {
+        tenantId: tenantId ?? undefined,
+        leadId,
+        keepAttachments: keep,
+        addFiles: editFiles,
+        removePaths: editRemovePaths,
+      });
       queryClient.setQueryData(queryKey, (current: typeof notes | undefined) =>
         (current ?? []).map((n) => (n.id === updated.id ? { ...n, ...updated } : n)),
       );
       cancelEdit();
+      await queryClient.refetchQueries({ queryKey });
       invalidate();
       toast.success("Nota actualizada");
     } catch (err) {
@@ -243,7 +303,19 @@ export const CrmLeadChannelTracking = forwardRef<
     } finally {
       setIsSaving(false);
     }
-  }, [editingNoteId, editDraft, cancelEdit, invalidate, queryClient, queryKey, notes]);
+  }, [
+    editingNoteId,
+    editDraft,
+    editFiles,
+    editRemovePaths,
+    notes,
+    tenantId,
+    leadId,
+    cancelEdit,
+    invalidate,
+    queryClient,
+    queryKey,
+  ]);
 
   const handleDeleteNote = useCallback(
     async (noteId: string) => {
@@ -277,6 +349,8 @@ export const CrmLeadChannelTracking = forwardRef<
   const startEdit = useCallback((noteId: string, body: string) => {
     setEditingNoteId(noteId);
     setEditDraft(body);
+    setEditFiles([]);
+    setEditRemovePaths([]);
   }, []);
 
   useImperativeHandle(
@@ -435,6 +509,9 @@ export const CrmLeadChannelTracking = forwardRef<
           const isEditing = editingNoteId === note.id;
 
           if (isEditing) {
+            const existingAtt = note.attachmentsResolved ?? [];
+            const keptCount = existingAtt.filter((a) => !editRemovePaths.includes(a.path)).length;
+            const canSaveEdit = editDraft.trim().length > 0 || keptCount + editFiles.length > 0;
             return (
               <div
                 key={note.id}
@@ -448,8 +525,75 @@ export const CrmLeadChannelTracking = forwardRef<
                   disabled={isSaving}
                   aria-label="Editar nota"
                 />
+
+                {existingAtt.length || editPreviews.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {existingAtt.map((att) => {
+                      const removed = editRemovePaths.includes(att.path);
+                      return (
+                        <div
+                          key={att.path}
+                          className={cn(
+                            "relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted",
+                            removed && "opacity-40",
+                          )}
+                        >
+                          <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => toggleRemoveExisting(att.path)}
+                            disabled={isSaving}
+                            className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                            aria-label={removed ? `Restaurar ${att.name}` : `Quitar ${att.name}`}
+                            title={removed ? "Restaurar" : "Quitar"}
+                          >
+                            {removed ? <Plus className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {editPreviews.map((preview, index) => (
+                      <div
+                        key={preview.url}
+                        className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
+                      >
+                        <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeEditFile(index)}
+                          disabled={isSaving}
+                          className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                          aria-label={`Quitar ${preview.file.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handlePickEditFiles}
+                  disabled={isSaving}
+                />
+
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" onClick={() => void handleUpdateNote()} disabled={isSaving || !editDraft.trim()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => editFileInputRef.current?.click()}
+                    disabled={isSaving}
+                  >
+                    <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
+                    Agregar imágenes
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => void handleUpdateNote()} disabled={isSaving || !canSaveEdit}>
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Guardar edición
                   </Button>
@@ -466,20 +610,20 @@ export const CrmLeadChannelTracking = forwardRef<
               key={note.id}
               className="group relative rounded-md border border-border/45 bg-background px-3 py-2 pr-[4.25rem] shadow-sm"
             >
-              <div className="absolute right-1 top-1 flex items-center gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                  onClick={() => startEdit(note.id, note.body)}
-                  disabled={isSaving || deletingNoteId !== null}
-                  aria-label="Editar nota"
-                  title="Editar nota"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                {canDeleteNotes ? (
+              {canManageNote(note) ? (
+                <div className="absolute right-1 top-1 flex items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                    onClick={() => startEdit(note.id, note.body)}
+                    disabled={isSaving || deletingNoteId !== null}
+                    aria-label="Editar nota"
+                    title="Editar nota"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -496,8 +640,8 @@ export const CrmLeadChannelTracking = forwardRef<
                       <Trash2 className="h-3.5 w-3.5" />
                     )}
                   </Button>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
               <p className="text-sm whitespace-pre-wrap text-foreground">{note.body}</p>
               <LeadNoteAttachments attachments={note.attachmentsResolved} />
               <div className="mt-1 space-y-0.5 text-[11px] leading-snug text-muted-foreground">
