@@ -55,6 +55,9 @@ export default function Alerts() {
   const { navigateWithLoading } = useNavigationWithLoading();
   const [filter, setFilter] = useState<Filter>("all");
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [vendorFilter, setVendorFilter] = useState<string>("all");
+
+  const isAdmin = user?.role === "admin";
 
   const { notifications, unreadCount, isLoading } = useNotifications({
     userId: user?.id,
@@ -74,21 +77,50 @@ export default function Alerts() {
     [user?.role],
   );
 
+  // Vendedores presentes en las alertas (solo admin): el vendedor es el actor
+  // de la notificación (lead contactado/asignado, sin actividad, etc.).
+  const vendorOptions = useMemo(() => {
+    if (!isAdmin) return [] as { id: string; name: string }[];
+    const map = new Map<string, string>();
+    for (const n of notifications) {
+      if (!n.actor_user_id || map.has(n.actor_user_id)) continue;
+      const name =
+        ((n.metadata as { actor_name?: string } | null)?.actor_name ?? "").trim() ||
+        "Vendedor";
+      map.set(n.actor_user_id, name);
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [notifications, isAdmin]);
+
+  // El filtro por vendedor recorta el set base; sobre él se calculan tarjetas,
+  // total no leídas e historial. El filtro por tipo se combina encima.
+  const scopedNotifications = useMemo(() => {
+    if (vendorFilter === "all") return notifications;
+    return notifications.filter((n) => n.actor_user_id === vendorFilter);
+  }, [notifications, vendorFilter]);
+
+  const scopedUnreadCount = useMemo(
+    () => scopedNotifications.filter((n) => !n.read_at && !n.archived_at).length,
+    [scopedNotifications],
+  );
+
   const countsByType = useMemo(() => {
     const acc: Record<string, { unread: number; total: number }> = {};
     for (const t of NOTIFICATION_EVENT_TYPES) {
       acc[t.key] = { unread: 0, total: 0 };
     }
-    for (const n of notifications) {
+    for (const n of scopedNotifications) {
       const bucket = acc[n.type];
       if (!bucket) continue;
       bucket.total += 1;
       if (!n.read_at && !n.archived_at) bucket.unread += 1;
     }
     return acc;
-  }, [notifications]);
+  }, [scopedNotifications]);
 
-  const filtered = notifications.filter((n) => {
+  const filtered = scopedNotifications.filter((n) => {
     if (filter === "all") return true;
     if (filter === "unread") return !n.read_at;
     return n.type === filter;
@@ -153,7 +185,7 @@ export default function Alerts() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{unreadCount}</div>
+            <div className="text-2xl font-bold">{scopedUnreadCount}</div>
             <p className="text-xs text-muted-foreground">Click para filtrar</p>
           </CardContent>
         </Card>
@@ -213,6 +245,21 @@ export default function Alerts() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && vendorOptions.length > 0 && (
+              <Select value={vendorFilter} onValueChange={setVendorFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  {vendorOptions.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {filter !== "all" && (
               <Button variant="ghost" size="sm" onClick={() => setFilter("all")}>
                 Limpiar filtro
