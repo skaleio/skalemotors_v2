@@ -843,8 +843,9 @@ export default function Consignaciones() {
 
   const handleBuscarPatente = async () => {
     const normalized = formState.patente.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!/^[A-Z]{4}\d{2}$/.test(normalized)) {
-      toast({ variant: "destructive", title: "Patente inválida", description: "Formato chileno: 4 letras + 2 números (ej: ABCD12)." });
+    // PPU chilena: auto antiguo (AB1234), actual (BCDF12), comercial (ABC123) o moto (AB123 / ABC12).
+    if (!/^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/.test(normalized)) {
+      toast({ variant: "destructive", title: "Patente inválida", description: "Patente chilena: BCDF12 (actual), AB1234 (antigua) o ABC12 (moto)." });
       return;
     }
     setPatenteLookupLoading(true);

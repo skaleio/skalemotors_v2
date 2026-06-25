@@ -15,6 +15,20 @@ export const sanitizeIntegerInput = (value: string): string => {
 export const normalizePatente = (value: string): string =>
   value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+// Formatos de patente única (PPU) chilena que aceptamos:
+//   AB1234   auto/camioneta antiguo (2 letras + 4 dígitos, pre-2007)
+//   BCDF12   auto/camioneta actual  (4 letras + 2 dígitos, desde 2007)
+//   ABC123   buses/comerciales      (3 letras + 3 dígitos)
+//   AB123    motos antiguas         (2 letras + 3 dígitos)
+//   ABC12    motos actuales         (3 letras + 2 dígitos)
+export const PATENTE_REGEX =
+  /^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/;
+
+// Valida una patente chilena tras normalizarla. Tolerante a los distintos
+// formatos (auto antiguo/nuevo, moto, comercial), no solo al actual de autos.
+export const isValidPatente = (value: string): boolean =>
+  PATENTE_REGEX.test(normalizePatente(value));
+
 // Máscara de visualización en pares: "jhgf22" → "JH-GF-22".
 export const formatPatente = (value: string): string => {
   const clean = normalizePatente(value).slice(0, 6);

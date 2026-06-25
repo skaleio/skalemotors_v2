@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCLP } from "@/lib/format";
+import { formatCLP, isValidPatente, normalizePatente } from "@/lib/format";
 import {
   getAppraisalByPatente,
   getCachedAppraisal,
@@ -36,21 +36,11 @@ import { toast } from "@/components/ui/sonner";
 
 type Step = 1 | 2 | 3;
 
-const PATENTE_REGEX = /^[A-Z]{4}\d{2}$/;
-
 const steps = [
   { id: 1, title: "Patente" },
   { id: 2, title: "Vehículo" },
   { id: 3, title: "Tasación" },
 ] as const;
-
-function normalizePatente(value: string): string {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function isValidPatente(value: string): boolean {
-  return PATENTE_REGEX.test(normalizePatente(value));
-}
 
 function getFuenteLabel(source: string): string {
   switch (source) {
@@ -303,7 +293,7 @@ export default function VehicleAppraisal() {
   // Una sola petición: patente → GetAPI appraisal → vehículo + tasación
   const handleObtenerTasacion = async () => {
     if (!patenteValida) {
-      toast.error("Ingresa una patente chilena válida, por ejemplo ABCD12.");
+      toast.error("Ingresa una patente chilena válida (ej: BCDF12, AB1234 o ABC12).");
       return;
     }
 
@@ -484,7 +474,7 @@ export default function VehicleAppraisal() {
             Ingreso de patente
           </CardTitle>
           <CardDescription>
-            Patente chilena en formato actual (4 letras y 2 números). Ej: ABCD12
+            Patente chilena: actual (BCDF12), antigua (AB1234) o de moto (ABC12).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -77,8 +77,10 @@ function normalizePatente(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// Acepta los formatos PPU chilenos: auto antiguo (AB1234), auto actual
+// (BCDF12), comercial (ABC123) y motos (AB123 / ABC12).
 function isValidChileanPatente(patente: string): boolean {
-  return /^[A-Z]{4}\d{2}$/.test(patente);
+  return /^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/.test(patente);
 }
 
 function cleanText(value: string | null | undefined): string {
@@ -140,7 +142,7 @@ Deno.serve(async (req) => {
   if (!isValidChileanPatente(patente)) {
     return jsonResponse(400, {
       ok: false,
-      error: "La patente debe tener formato chileno válido, por ejemplo ABCD12.",
+      error: "La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).",
     });
   }
 

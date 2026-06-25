@@ -71,7 +71,7 @@ import {
   hidesInventoryCosts,
   isPhotographerRole,
 } from "@/lib/appRoles";
-import { formatCLP, formatPatente, formatVehicleLabel, normalizePatente } from "@/lib/format";
+import { formatCLP, formatPatente, formatVehicleLabel, isValidPatente, normalizePatente } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
@@ -1041,8 +1041,8 @@ export default function Inventory() {
 
   const handleBuscarPatente = async () => {
     const normalized = normalizePatente(newVehicle.patente);
-    if (!/^[A-Z]{4}\d{2}$/.test(normalized)) {
-      toast({ variant: "destructive", title: "Patente inválida", description: "Formato chileno: 4 letras + 2 números (ej: ABCD12)." });
+    if (!isValidPatente(normalized)) {
+      toast({ variant: "destructive", title: "Patente inválida", description: "Patente chilena: BCDF12 (actual), AB1234 (antigua) o ABC12 (moto)." });
       return;
     }
     setPatenteLookupLoading(true);
