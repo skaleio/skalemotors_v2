@@ -36,6 +36,9 @@ import {
   type BranchSeller,
 } from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
+import { useAppointments } from "@/hooks/useAppointments";
+import { appointmentTypeLabels, type AppointmentListItem } from "@/lib/appointmentDisplay";
+import { parseCrmLeadQuickAppointmentMotive } from "@/lib/crmLeadQuickAppointment";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
@@ -80,7 +83,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Loader2, Mail, MessageCircle, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CalendarClock, CheckCircle2, Eye, Loader2, Mail, MessageCircle, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -291,6 +294,28 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   } catch {
     return "";
   }
+}
+
+/** Motivo legible de una cita: texto libre del vendedor, o etiqueta del tipo. */
+function crmCitaMotive(apt: AppointmentListItem): string {
+  return (
+    parseCrmLeadQuickAppointmentMotive(apt.description) ||
+    appointmentTypeLabels[apt.type] ||
+    apt.title?.trim() ||
+    "Cita"
+  );
+}
+
+/** Fecha `dd/MM/yy`, hora `HH:mm` y etiqueta relativa (Hoy/Mañana) de una cita. */
+function formatCrmCita(iso: string): { date: string; time: string; relative: string | null } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: "", time: "", relative: null };
+  const date = d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const time = d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(d) - startOfDay(new Date())) / 86_400_000);
+  const relative = diffDays === 0 ? "Hoy" : diffDays === 1 ? "Mañana" : null;
+  return { date, time, relative };
 }
 
 function formatLeadTimestamp(iso: string | null | undefined): string {
@@ -606,6 +631,26 @@ export default function CRM() {
     enabled: canSupervise,
   });
   const { sellers: vendorList } = useBranchSellers(vendorListQuery);
+
+  // Próximas citas agendadas por los vendedores (panel de supervisión, reemplaza el card de % por etapa).
+  const { appointments: scopeAppointments } = useAppointments({
+    tenantId: user?.tenant_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
+    enabled: !!user && canSupervise,
+    live: true,
+  });
+
+  const upcomingCitas = useMemo(() => {
+    const now = Date.now();
+    const closed = new Set(["cancelada", "completada", "no_asistio"]);
+    return (scopeAppointments as unknown as AppointmentListItem[])
+      .filter((apt) => {
+        const at = new Date(apt.scheduled_at).getTime();
+        return !Number.isNaN(at) && at >= now && !closed.has(apt.status);
+      })
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .slice(0, 8);
+  }, [scopeAppointments]);
 
   const scopedLeads = useMemo(() => {
     if (user?.role === "vendedor" && user.id) {
@@ -1910,44 +1955,57 @@ export default function CRM() {
         </Card>
       </div>
 
-      {user?.role === "admin" && (() => {
-        const activeStages = CRM_PIPELINE_STAGES.filter(
-          (stage) => stage.key !== "negocio_cerrado" && stage.key !== "cancelado",
-        );
-        const activeTotal = activeStages.reduce(
-          (sum, stage) => sum + metrics.stageCounts[stage.key],
-          0,
-        );
-        return (
-          <Card>
-            <CardContent className="py-4">
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Leads por etapa · {activeTotal} en pipeline
-              </p>
+      {canSupervise && (
+        <Card>
+          <CardContent className="py-4">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Próximas citas agendadas
+              {upcomingCitas.length > 0 ? ` · ${upcomingCitas.length}` : ""}
+            </p>
+            {upcomingCitas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay citas próximas agendadas.</p>
+            ) : (
               <div className="flex flex-wrap gap-2">
-                {activeStages.map((stage) => {
-                  const count = metrics.stageCounts[stage.key];
-                  const pct = activeTotal > 0 ? Math.round((count / activeTotal) * 100) : 0;
+                {upcomingCitas.map((apt) => {
+                  const { date, time, relative } = formatCrmCita(apt.scheduled_at);
+                  const motive = crmCitaMotive(apt);
+                  const leadName = apt.lead?.full_name?.trim() || "Sin lead";
+                  const vendor = apt.user?.full_name?.trim() || apt.user?.email?.trim() || null;
                   return (
                     <div
-                      key={stage.key}
-                      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-1.5"
-                      title={`${CRM_PIPELINE_STATUS_LABELS[stage.key]} · ${count} lead${count === 1 ? "" : "s"}`}
+                      key={apt.id}
+                      className="flex min-w-[190px] max-w-[260px] flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2"
+                      title={`${date} ${time} · ${motive} · ${leadName}${vendor ? ` · ${vendor}` : ""}`}
                     >
-                      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", CRM_STAGE_DOT_CLASS[stage.key])} />
-                      <span className="text-xs text-muted-foreground">
-                        {CRM_PIPELINE_STATUS_LABELS[stage.key]}
+                      <div className="flex items-center gap-1.5">
+                        <CalendarClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                        <span className="text-sm font-bold tabular-nums">{date}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{time}</span>
+                        {relative ? (
+                          <span className="ml-auto rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                            {relative}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="truncate text-xs font-medium text-foreground" title={motive}>
+                        {motive}
                       </span>
-                      <span className="text-sm font-bold tabular-nums">{pct}%</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">({count})</span>
+                      <span className="truncate text-xs text-muted-foreground" title={leadName}>
+                        {leadName}
+                      </span>
+                      {vendor ? (
+                        <span className="truncate text-[11px] text-muted-foreground" title={vendor}>
+                          Vend. {vendor}
+                        </span>
+                      ) : null}
                     </div>
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
