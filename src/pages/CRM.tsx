@@ -971,6 +971,15 @@ export default function CRM() {
     }));
   }, [filteredLeads, stages, crmCalendarMonthKey]);
 
+  /** Total de leads en el pipeline activo (denominador del % por columna; respeta vista global/vendedor). */
+  const kanbanActiveTotal = useMemo(
+    () =>
+      leadsByStage
+        .filter((stage) => stage.key !== "negocio_cerrado" && stage.key !== "cancelado")
+        .reduce((sum, stage) => sum + stage.leads.length, 0),
+    [leadsByStage],
+  );
+
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
@@ -2000,9 +2009,21 @@ export default function CRM() {
                     {style?.dot && <span className={`h-2 w-2 rounded-full ${style.dot}`} />}
                     {stage.label}
                   </span>
-                  <Badge className={style?.badge || ""} variant="secondary">
-                    {stage.leads.length}
-                  </Badge>
+                  <span className="flex items-center gap-1.5">
+                    {user?.role === "admin" &&
+                    stage.key !== "negocio_cerrado" &&
+                    stage.key !== "cancelado" ? (
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {kanbanActiveTotal > 0
+                          ? Math.round((stage.leads.length / kanbanActiveTotal) * 100)
+                          : 0}
+                        %
+                      </span>
+                    ) : null}
+                    <Badge className={style?.badge || ""} variant="secondary">
+                      {stage.leads.length}
+                    </Badge>
+                  </span>
                 </CardTitle>
                 {stage.key === "nuevo" ? (
                   <CardDescription className="text-[11px] pt-1 text-cyan-700/80 dark:text-cyan-300/80">
