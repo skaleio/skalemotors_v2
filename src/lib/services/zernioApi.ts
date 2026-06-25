@@ -92,6 +92,7 @@ export async function createZernioPost(params: {
   publishNow?: boolean;
   scheduledFor?: string;
   mediaUrls?: string[];
+  vehicleId?: string | null;
 }): Promise<{ postId: string; status: string }> {
   const data = await invokeZernioFunction<{
     ok: boolean;
@@ -105,6 +106,7 @@ export async function createZernioPost(params: {
     publish_now: params.publishNow ?? false,
     scheduled_for: params.scheduledFor,
     media_urls: params.mediaUrls,
+    vehicle_id: params.vehicleId ?? null,
   });
   return { postId: data.post_id ?? "", status: data.status ?? "draft" };
 }
