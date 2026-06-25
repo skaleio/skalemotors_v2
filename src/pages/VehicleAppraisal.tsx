@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Calculator, CarFront, ExternalLink, FileText, Loader2, RefreshCw, Search } from "lucide-react";
+import { Calculator, CarFront, ChevronDown, ExternalLink, FileText, Loader2, Pencil, RefreshCw, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +135,36 @@ function buildChileautosUrl({
   return `https://www.chileautos.cl/vehiculos/?q=${encodeURIComponent(q).replace(/%20/g, "+")}`;
 }
 
+function SpecTile({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value?: string | number | null;
+  highlight?: boolean;
+}) {
+  const display =
+    value === null || value === undefined || value === "" || value === 0 ? "—" : String(value);
+  const empty = display === "—";
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        highlight
+          ? "border-blue-200 bg-blue-50/60 dark:border-blue-900/60 dark:bg-blue-950/30"
+          : "border-border bg-muted/30 dark:bg-muted/20"
+      }`}
+    >
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div
+        className={`mt-0.5 break-words text-sm font-semibold ${empty ? "text-muted-foreground/60" : "text-foreground"}`}
+      >
+        {display}
+      </div>
+    </div>
+  );
+}
+
 export default function VehicleAppraisal() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -159,6 +189,7 @@ export default function VehicleAppraisal() {
   const [manualCombustible, setManualCombustible] = useState("");
   const [kilometraje, setKilometraje] = useState("");
   const [estadoGeneral, setEstadoGeneral] = useState<"excelente" | "bueno" | "regular">("bueno");
+  const [editOpen, setEditOpen] = useState(false);
 
   const normalizedPatente = normalizePatente(patente);
   const patenteValida = isValidPatente(normalizedPatente);
@@ -227,6 +258,7 @@ export default function VehicleAppraisal() {
     setManualCombustible("");
     setKilometraje("");
     setEstadoGeneral("bueno");
+    setEditOpen(false);
   };
 
   const handleContinueManual = () => {
@@ -588,12 +620,64 @@ export default function VehicleAppraisal() {
                       {vehicle.patente}
                     </span>
                     <span className="text-lg font-semibold text-foreground">
-                      {[vehicle.marca, vehicle.modelo, vehicle.año].filter(Boolean).join(" · ") || "Sin datos"}
+                      {[vehicle.marca, vehicle.modelo].filter(Boolean).join(" ") || "Sin datos"}
                     </span>
+                    {vehicle.version && (
+                      <span className="text-sm text-muted-foreground">{vehicle.version}</span>
+                    )}
+                    {vehicle.año ? (
+                      <Badge variant="secondary" className="font-semibold">{vehicle.año}</Badge>
+                    ) : null}
+                    <Badge variant="outline" className="ml-auto">{getFuenteLabel(vehicle.fuente)}</Badge>
                   </div>
                 </div>
 
-                {/* Ficha técnica en bloques */}
+                {/* Ficha del vehículo (datos más importantes, solo lectura) */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <SpecTile
+                    label="Kilometraje"
+                    value={
+                      typeof vehicle.kilometraje === "number" && vehicle.kilometraje > 0
+                        ? `${vehicle.kilometraje.toLocaleString("es-CL")} km`
+                        : null
+                    }
+                    highlight
+                  />
+                  <SpecTile label="Color" value={vehicle.color} />
+                  <SpecTile label="Combustible" value={vehicle.combustible} />
+                  <SpecTile label="Transmisión" value={vehicle.transmision} />
+                  <SpecTile label="Motor (cilindrada)" value={vehicle.motor} />
+                  <SpecTile label="Puertas" value={vehicle.puertas} />
+                  <SpecTile label="Tipo" value={vehicle.tipo_vehiculo} />
+                  <SpecTile label="N° de motor" value={vehicle.n_motor} highlight />
+                  <SpecTile label="VIN / N° de chasis" value={vehicle.n_chasis} highlight />
+                  <SpecTile
+                    label="Tasación fiscal (SII)"
+                    value={
+                      typeof vehicle.tasacion_fiscal === "number" && vehicle.tasacion_fiscal > 0
+                        ? formatCLP(vehicle.tasacion_fiscal)
+                        : null
+                    }
+                  />
+                  <SpecTile label="Rev. técnica (mes)" value={vehicle.mes_revision_tecnica} />
+                  <SpecTile label="Código SII" value={vehicle.codigo_sii} />
+                </div>
+
+                {/* Corregir datos + ajustes (colapsable) */}
+                <button
+                  type="button"
+                  onClick={() => setEditOpen((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-border bg-muted/20 px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Pencil className="h-4 w-4" />
+                    Corregir datos y ajustar tasación
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${editOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {editOpen && (
+                <>
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -730,6 +814,8 @@ export default function VehicleAppraisal() {
                     comparables.
                   </p>
                 </div>
+                </>
+                )}
 
                 <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row">
                   <Button

@@ -152,6 +152,13 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     color: vehicleFromApi?.color ?? null,
     n_motor: vehicleFromApi?.n_motor ?? null,
     n_chasis: vehicleFromApi?.n_chasis ?? null,
+    version: (vehicleFromApi as any)?.version ?? null,
+    tipo_vehiculo: (vehicleFromApi as any)?.tipo_vehiculo ?? null,
+    puertas: typeof (vehicleFromApi as any)?.puertas === "number" ? (vehicleFromApi as any).puertas : null,
+    mes_revision_tecnica: (vehicleFromApi as any)?.mes_revision_tecnica ?? null,
+    foto_url: (vehicleFromApi as any)?.foto_url ?? null,
+    tasacion_fiscal: typeof (vehicleFromApi as any)?.tasacion_fiscal === "number" ? (vehicleFromApi as any).tasacion_fiscal : null,
+    codigo_sii: (vehicleFromApi as any)?.codigo_sii ?? null,
   };
 
   const appraisal: AppraisalResult = {
