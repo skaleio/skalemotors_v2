@@ -5010,6 +5010,7 @@ export type Database = {
           tenant_id: string
           timezone: string
           updated_at: string
+          vehicle_id: string | null
           zernio_post_id: string | null
         }
         Insert: {
@@ -5027,6 +5028,7 @@ export type Database = {
           tenant_id: string
           timezone?: string
           updated_at?: string
+          vehicle_id?: string | null
           zernio_post_id?: string | null
         }
         Update: {
@@ -5044,6 +5046,7 @@ export type Database = {
           tenant_id?: string
           timezone?: string
           updated_at?: string
+          vehicle_id?: string | null
           zernio_post_id?: string | null
         }
         Relationships: [
@@ -5052,6 +5055,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zernio_posts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
