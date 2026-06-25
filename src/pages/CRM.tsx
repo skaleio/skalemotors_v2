@@ -897,6 +897,14 @@ export default function CRM() {
       ? Math.round((perdidos / (cerrados + perdidos)) * 1000) / 10
       : 0;
 
+    const stageCounts = Object.fromEntries(
+      CRM_PIPELINE_STAGES.map((s) => [s.key, 0]),
+    ) as Record<CrmStageKey, number>;
+    for (const lead of base) {
+      const stageKey = getLeadCrmStageKey(lead.status);
+      if (stageKey) stageCounts[stageKey] += 1;
+    }
+
     return {
       total,
       cerrados,
@@ -909,6 +917,7 @@ export default function CRM() {
       avanzados,
       tasaAvanceNegociando,
       tasaPerdida,
+      stageCounts,
     };
   }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
 
@@ -1891,6 +1900,45 @@ export default function CRM() {
           </CardContent>
         </Card>
       </div>
+
+      {user?.role === "admin" && (() => {
+        const activeStages = CRM_PIPELINE_STAGES.filter(
+          (stage) => stage.key !== "negocio_cerrado" && stage.key !== "cancelado",
+        );
+        const activeTotal = activeStages.reduce(
+          (sum, stage) => sum + metrics.stageCounts[stage.key],
+          0,
+        );
+        return (
+          <Card>
+            <CardContent className="py-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Leads por etapa · {activeTotal} en pipeline
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {activeStages.map((stage) => {
+                  const count = metrics.stageCounts[stage.key];
+                  const pct = activeTotal > 0 ? Math.round((count / activeTotal) * 100) : 0;
+                  return (
+                    <div
+                      key={stage.key}
+                      className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-1.5"
+                      title={`${CRM_PIPELINE_STATUS_LABELS[stage.key]} · ${count} lead${count === 1 ? "" : "s"}`}
+                    >
+                      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", CRM_STAGE_DOT_CLASS[stage.key])} />
+                      <span className="text-xs text-muted-foreground">
+                        {CRM_PIPELINE_STATUS_LABELS[stage.key]}
+                      </span>
+                      <span className="text-sm font-bold tabular-nums">{pct}%</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">({count})</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
