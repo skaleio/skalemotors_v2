@@ -71,12 +71,14 @@ import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTran
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
+import { leadNoteService } from "@/lib/services/leadNotes";
+import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
+import { Bell, ChevronDown, Download, Filter, ImagePlus, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -684,6 +686,28 @@ function LeadsImpl({ user }: { user: User }) {
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const createFileInputRef = useRef<HTMLInputElement | null>(null);
+  const createPreviews = useMemo(
+    () => createFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [createFiles],
+  );
+  useEffect(() => {
+    return () => createPreviews.forEach((p) => URL.revokeObjectURL(p.url));
+  }, [createPreviews]);
+  const handlePickCreateFiles = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!list.length) return;
+    setCreateFiles((prev) => {
+      const { accepted, rejected } = selectValidAttachments({ files: list, existingCount: prev.length });
+      if (rejected.length) toast({ variant: "destructive", title: "Imagen no agregada", description: rejected[0].reason });
+      return accepted.length ? [...prev, ...accepted] : prev;
+    });
+  }, []);
+  const removeCreateFile = useCallback((index: number) => {
+    setCreateFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const tomorrow = useMemo(() => {
@@ -1022,6 +1046,7 @@ function LeadsImpl({ user }: { user: User }) {
       reminderPriority: "today",
       contact_state: null,
     });
+    setCreateFiles([]);
   };
 
   const handleImportClick = () => {
@@ -1268,6 +1293,10 @@ function LeadsImpl({ user }: { user: User }) {
 
     setIsCreating(true);
 
+    // Si adjunta imágenes, el texto + imágenes van como primera nota del timeline (lead_notes),
+    // no al campo notes del lead, para no duplicar el texto en la UI. Requiere tenant_id.
+    const attachImages = createFiles.length > 0 && !!user.tenant_id;
+
     try {
       const tags: string[] = [];
       if (vehicleLabel) {
@@ -1300,9 +1329,31 @@ function LeadsImpl({ user }: { user: User }) {
         pie_disponible: formState.pie.trim() ? formState.pie.trim() : null,
         cuotas_mensuales: formState.cuotas_mensuales.trim() ? formState.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(formState.transmision),
-        notes: formState.notes.trim() ? formState.notes.trim() : null,
+        notes: !attachImages && formState.notes.trim() ? formState.notes.trim() : null,
         tags: buildTags(tags) as any,
       });
+
+      if (attachImages && user.tenant_id) {
+        try {
+          await leadNoteService.create({
+            leadId: (created as Lead).id,
+            body: formState.notes.trim(),
+            tenantId: user.tenant_id,
+            branchId: user.branch_id,
+            createdBy: user.id,
+            channel: null,
+            files: createFiles,
+          });
+          queryClient.invalidateQueries({ queryKey: ["lead-notes", (created as Lead).id] });
+        } catch (noteError: any) {
+          console.error("Error guardando nota con imágenes:", noteError);
+          toast({
+            variant: "destructive",
+            title: "Lead creado, pero la nota con imágenes falló",
+            description: noteError?.message || "Vuelve a adjuntar las imágenes desde la ficha del lead.",
+          });
+        }
+      }
 
       // Actualizar caché al instante con el nuevo lead al inicio (mismo orden que el API: más recientes primero)
       const queryKey = ["leads", user.branch_id, undefined, undefined, undefined, undefined];
@@ -1983,6 +2034,51 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Agrega una nota sobre el lead..."
                 rows={3}
               />
+              <input
+                ref={createFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePickCreateFiles}
+                disabled={isCreating}
+              />
+              {createPreviews.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {createPreviews.map((preview, index) => (
+                    <div
+                      key={preview.url}
+                      className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
+                    >
+                      <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeCreateFile(index)}
+                        disabled={isCreating}
+                        className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                        aria-label={`Quitar ${preview.file.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createFileInputRef.current?.click()}
+                  disabled={isCreating}
+                >
+                  <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
+                  Adjuntar imágenes
+                </Button>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Hasta 6 imágenes. Se guardan como primera nota del lead.
+                </p>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label>Estado</Label>
