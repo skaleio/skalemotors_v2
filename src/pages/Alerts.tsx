@@ -18,6 +18,7 @@ import {
 } from "@/lib/notificationEvents";
 import { Bell, Check, Clock, Info, Loader2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import {
   useDismissNotification,
@@ -71,6 +72,22 @@ export default function Alerts() {
   const markAllReadMutation = useMarkAllNotificationsRead();
   const dismissMutation = useDismissNotification();
 
+  // Nombres reales de los vendedores del tenant (solo admin), para etiquetar el
+  // filtro con el nombre y no con "Vendedor" genérico.
+  const { sellers } = useBranchSellers({
+    tenantId: user?.tenant_id,
+    scope: "tenant",
+    enabled: isAdmin && !!user?.tenant_id,
+  });
+
+  const sellerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sellers) {
+      if (s.full_name?.trim()) map.set(s.id, s.full_name.trim());
+    }
+    return map;
+  }, [sellers]);
+
   // Cards visibles según el rol del usuario (solo las que le aplican).
   const visibleEvents = useMemo(
     () => notificationEventsForRole(user?.role),
@@ -85,6 +102,7 @@ export default function Alerts() {
     for (const n of notifications) {
       if (!n.actor_user_id || map.has(n.actor_user_id)) continue;
       const name =
+        sellerNameById.get(n.actor_user_id) ||
         ((n.metadata as { actor_name?: string } | null)?.actor_name ?? "").trim() ||
         "Vendedor";
       map.set(n.actor_user_id, name);
@@ -92,7 +110,7 @@ export default function Alerts() {
     return [...map.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
-  }, [notifications, isAdmin]);
+  }, [notifications, isAdmin, sellerNameById]);
 
   // El filtro por vendedor recorta el set base; sobre él se calculan tarjetas,
   // total no leídas e historial. El filtro por tipo se combina encima.
