@@ -37,7 +37,7 @@ import {
 } from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
 import { useAppointments } from "@/hooks/useAppointments";
-import { appointmentTypeLabels, type AppointmentListItem } from "@/lib/appointmentDisplay";
+import { appointmentTypeLabels, appointmentStatusLabels, type AppointmentListItem } from "@/lib/appointmentDisplay";
 import { parseCrmLeadQuickAppointmentMotive } from "@/lib/crmLeadQuickAppointment";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
@@ -651,6 +651,8 @@ export default function CRM() {
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
       .slice(0, 8);
   }, [scopeAppointments]);
+
+  const [selectedCita, setSelectedCita] = useState<AppointmentListItem | null>(null);
 
   const scopedLeads = useMemo(() => {
     if (user?.role === "vendedor" && user.id) {
@@ -1976,10 +1978,19 @@ export default function CRM() {
                   return (
                     <div
                       key={apt.id}
-                      className="flex min-w-[190px] max-w-[260px] flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2"
+                      className="relative flex min-w-[190px] max-w-[260px] flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2"
                       title={`${date} ${time} · ${motive} · ${leadName}${vendor ? ` · ${vendor}` : ""}`}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCita(apt)}
+                        className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        title="Ver detalle de la cita"
+                        aria-label="Ver detalle de la cita"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <div className="flex items-center gap-1.5 pr-6">
                         <CalendarClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                         <span className="text-sm font-bold tabular-nums">{date}</span>
                         <span className="text-xs text-muted-foreground tabular-nums">{time}</span>
@@ -1997,7 +2008,7 @@ export default function CRM() {
                       </span>
                       {vendor ? (
                         <span className="truncate text-[11px] text-muted-foreground" title={vendor}>
-                          Vend. {vendor}
+                          De: {vendor}
                         </span>
                       ) : null}
                     </div>
@@ -2008,6 +2019,68 @@ export default function CRM() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!selectedCita} onOpenChange={(open) => !open && setSelectedCita(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          {selectedCita ? (() => {
+            const { date, time } = formatCrmCita(selectedCita.scheduled_at);
+            const motive = crmCitaMotive(selectedCita);
+            const leadName = selectedCita.lead?.full_name?.trim() || "Sin lead";
+            const phone = selectedCita.client_phone?.trim() || selectedCita.lead?.phone?.trim() || null;
+            const email = selectedCita.lead?.email?.trim() || null;
+            const vendor = selectedCita.user?.full_name?.trim() || selectedCita.user?.email?.trim() || null;
+            const vehicle = selectedCita.vehicle
+              ? `${selectedCita.vehicle.make} ${selectedCita.vehicle.model}${selectedCita.vehicle.year ? ` ${selectedCita.vehicle.year}` : ""}`.trim()
+              : null;
+            const location = selectedCita.location?.trim() || null;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <CalendarClock className="h-5 w-5 text-primary" />
+                    Detalle de la cita
+                  </DialogTitle>
+                  <DialogDescription>{motive}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-1 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{appointmentTypeLabels[selectedCita.type] ?? selectedCita.type}</Badge>
+                    <Badge variant="secondary">{appointmentStatusLabels[selectedCita.status] ?? selectedCita.status}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fecha y hora</p>
+                    <p className="font-medium tabular-nums">{date} · {time}</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 p-3 space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead</p>
+                    <p className="font-medium">{leadName}</p>
+                    {phone ? <p className="text-muted-foreground">{phone}</p> : null}
+                    {email ? <p className="text-muted-foreground">{email}</p> : null}
+                  </div>
+                  {vehicle ? (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Vehículo</p>
+                      <p className="font-medium">{vehicle}</p>
+                    </div>
+                  ) : null}
+                  {location ? (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Ubicación</p>
+                      <p className="font-medium">{location}</p>
+                    </div>
+                  ) : null}
+                  {vendor ? (
+                    <div>
+                      <p className="text-xs text-muted-foreground">De</p>
+                      <p className="font-medium">{vendor}</p>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            );
+          })() : null}
+        </DialogContent>
+      </Dialog>
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
