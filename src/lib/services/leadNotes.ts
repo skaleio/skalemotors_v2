@@ -234,6 +234,72 @@ export const leadNoteService = {
     return data as LeadNoteWithAuthor
   },
 
+  /** Edita body y adjuntos: sube nuevas imágenes, conserva las elegidas y borra las quitadas. */
+  async updateWithAttachments(params: {
+    noteId: string
+    body: string
+    tenantId: string
+    leadId: string
+    keep: LeadNoteAttachment[]
+    newFiles: File[]
+    removedPaths: string[]
+  }) {
+    const trimmed = params.body.trim()
+    const newFiles = params.newFiles ?? []
+
+    const uploaded = newFiles.length
+      ? await this.uploadAttachments(newFiles, {
+          tenantId: params.tenantId,
+          leadId: params.leadId,
+          noteId: params.noteId,
+        })
+      : []
+
+    const finalAttachments = [...params.keep, ...uploaded]
+    if (!trimmed && !finalAttachments.length) {
+      if (uploaded.length) {
+        await supabase.storage
+          .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+          .remove(uploaded.map((a) => a.path))
+          .catch(() => {})
+      }
+      throw new Error('La nota no puede quedar vacía.')
+    }
+
+    const payload: LeadNoteUpdate = {
+      body: trimmed,
+      attachments: finalAttachments as never,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from('lead_notes')
+      .update(payload)
+      .eq('id', params.noteId)
+      .select('*, author:users!created_by(id, full_name, email)')
+      .single()
+
+    if (error) {
+      if (uploaded.length) {
+        await supabase.storage
+          .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+          .remove(uploaded.map((a) => a.path))
+          .catch(() => {})
+      }
+      throw error
+    }
+
+    if (params.removedPaths.length) {
+      await supabase.storage
+        .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
+        .remove(params.removedPaths)
+        .catch(() => {})
+    }
+
+    const resolved = await signLeadNoteAttachments(finalAttachments)
+    return { ...(data as LeadNoteWithAuthor), attachmentsResolved: resolved }
+  },
+
   async delete(noteId: string) {
     const { error } = await supabase.from('lead_notes').delete().eq('id', noteId)
     if (error) throw error
