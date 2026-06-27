@@ -223,6 +223,7 @@ export type Database = {
       }
       appointments: {
         Row: {
+          archived_at: string | null
           branch_id: string | null
           client_phone: string | null
           created_at: string | null
@@ -244,6 +245,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           branch_id?: string | null
           client_phone?: string | null
           created_at?: string | null
@@ -265,6 +267,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           branch_id?: string | null
           client_phone?: string | null
           created_at?: string | null
