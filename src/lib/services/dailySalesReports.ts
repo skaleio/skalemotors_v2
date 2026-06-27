@@ -136,6 +136,7 @@ export async function buildDailyReportSupervisionRows(input: {
     .select("id, full_name, email, branch_id, branch:branches(name)")
     .eq("tenant_id", input.tenantId)
     .eq("is_active", true)
+    .eq("daily_report_exempt", false)
     .in("role", [...SELLER_ROLES_FOR_DAILY_REPORT])
     .order("full_name", { ascending: true });
 

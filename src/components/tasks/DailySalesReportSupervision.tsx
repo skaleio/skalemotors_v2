@@ -3,6 +3,7 @@ import { es } from "date-fns/locale";
 import { CheckCircle2, Eye, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { DailyReportExportsPanel } from "@/components/tasks/DailyReportExportsPanel";
 import { DailySalesReportForm } from "@/components/tasks/DailySalesReportForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -166,7 +167,7 @@ export function DailySalesReportSupervision() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide">
-                    <th className="p-3">Ejecutivo</th>
+                    <th className="p-3">Vendedores</th>
                     {isAdminWide && <th className="p-3">Sucursal</th>}
                     <th className="p-3">Estado</th>
                     <th className="p-3">Hora envío</th>
@@ -264,6 +265,7 @@ function AdminReportView() {
         <DailySalesReportForm showAllSections={false} />
       ) : (
         <div className="space-y-6">
+          <DailyReportExportsPanel />
           <DailySalesReportSupervision />
           <DailySalesReportForm showAllSections />
         </div>

@@ -4113,6 +4113,7 @@ export type Database = {
           created_at: string | null
           created_by_user_id: string | null
           crm_color: string | null
+          daily_report_exempt: boolean
           email: string
           full_name: string
           id: string
@@ -4130,6 +4131,7 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           crm_color?: string | null
+          daily_report_exempt?: boolean
           email: string
           full_name: string
           id: string
@@ -4147,6 +4149,7 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           crm_color?: string | null
+          daily_report_exempt?: boolean
           email?: string
           full_name?: string
           id?: string
