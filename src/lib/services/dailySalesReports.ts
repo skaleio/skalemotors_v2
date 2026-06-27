@@ -5,10 +5,15 @@ import type {
   DailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import {
+  chileMonthRange,
   chileTodayIsoDate,
   normalizeDailySalesReportPayload,
   SELLER_ROLES_FOR_DAILY_REPORT,
 } from "@/lib/types/dailySalesReport";
+
+function consignmentRowHasData(values: Record<string, unknown>): boolean {
+  return Object.values(values).some((v) => String(v ?? "").trim() !== "");
+}
 
 export async function syncDailySalesReportTasks(reportDate?: string): Promise<number> {
   const { data, error } = await supabase.rpc("sync_daily_sales_report_tasks", {
@@ -125,6 +130,28 @@ export async function submitDailySalesReport(input: {
   } as DailySalesReport;
 }
 
+export async function fetchMonthlyEffectiveConsignmentsCount(
+  userId: string,
+  today?: string,
+): Promise<number> {
+  const { start, endExclusive } = chileMonthRange(today);
+  const { data, error } = await supabase
+    .from("daily_sales_reports")
+    .select("payload")
+    .eq("user_id", userId)
+    .gte("report_date", start)
+    .lt("report_date", endExclusive);
+
+  if (error) throw error;
+
+  return (data ?? []).reduce((total, row) => {
+    const payload = normalizeDailySalesReportPayload(
+      row.payload as DailySalesReportPayload,
+    );
+    return total + payload.effective_consignments.filter((r) => consignmentRowHasData(r)).length;
+  }, 0);
+}
+
 export async function buildDailyReportSupervisionRows(input: {
   tenantId: string;
   reportDate: string;
@@ -136,7 +163,6 @@ export async function buildDailyReportSupervisionRows(input: {
     .select("id, full_name, email, branch_id, branch:branches(name)")
     .eq("tenant_id", input.tenantId)
     .eq("is_active", true)
-    .eq("daily_report_exempt", false)
     .in("role", [...SELLER_ROLES_FOR_DAILY_REPORT])
     .order("full_name", { ascending: true });
 

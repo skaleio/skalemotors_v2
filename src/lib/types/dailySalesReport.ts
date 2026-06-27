@@ -21,6 +21,13 @@ export interface DailyReportPlatformRow {
   observation: string;
 }
 
+export interface DailyReportConsignmentRow {
+  customer_name: string;
+  patente: string;
+  vehicle: string;
+  observation: string;
+}
+
 export interface DailySalesReportPayload {
   calls: DailyReportCallRow[];
   credits: DailyReportCreditRow[];
@@ -29,6 +36,7 @@ export interface DailySalesReportPayload {
     vehicles_posted: string[];
   };
   platform_uploads: DailyReportPlatformRow[];
+  effective_consignments: DailyReportConsignmentRow[];
   daily_observations: string;
 }
 
@@ -57,6 +65,10 @@ export interface DailyReportSupervisionRow {
 
 export const DAILY_REPORT_ALERT_REASON = "daily_sales_report";
 
+export const CONSIGNMENT_MONTHLY_GOAL = 20;
+// Monto del bono al superar la meta mensual de consignaciones efectivas. Ajustar aquí.
+export const CONSIGNMENT_BONUS_CLP = 100000;
+
 export const SELLER_ROLES_FOR_DAILY_REPORT = ["vendedor", "jefe_sucursal"] as const;
 
 export const SUPERVISOR_ROLES_FOR_DAILY_REPORT = [
@@ -78,6 +90,10 @@ export function emptyPlatformRow(): DailyReportPlatformRow {
   return { vehicle: "", year: "", platform: "", observation: "" };
 }
 
+export function emptyConsignmentRow(): DailyReportConsignmentRow {
+  return { customer_name: "", patente: "", vehicle: "", observation: "" };
+}
+
 export function emptyDailySalesReportPayload(): DailySalesReportPayload {
   return {
     calls: [emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow()],
@@ -87,6 +103,7 @@ export function emptyDailySalesReportPayload(): DailySalesReportPayload {
       vehicles_posted: [""],
     },
     platform_uploads: [emptyPlatformRow()],
+    effective_consignments: [emptyConsignmentRow()],
     daily_observations: "",
   };
 }
@@ -102,18 +119,21 @@ export function countDailyReportProgress(payload: DailySalesReportPayload) {
     payload.social_media.total_posts != null ||
     payload.social_media.vehicles_posted.some((v) => v.trim());
   const platforms = payload.platform_uploads.filter((r) => rowHasData(r)).length;
+  const consignments = payload.effective_consignments.filter((r) => rowHasData(r)).length;
   const observations = payload.daily_observations.trim().length > 0;
   const sections = [
     calls > 0,
     credits > 0,
     social,
     platforms > 0,
+    consignments > 0,
     observations,
   ];
   return {
     calls,
     credits,
     platforms,
+    consignments,
     sectionsFilled: sections.filter(Boolean).length,
     sectionsTotal: sections.length,
   };
@@ -132,6 +152,9 @@ export function normalizeDailySalesReportPayload(
   const platforms = Array.isArray(raw.platform_uploads)
     ? raw.platform_uploads.map((r) => ({ ...emptyPlatformRow(), ...r }))
     : base.platform_uploads;
+  const consignments = Array.isArray(raw.effective_consignments)
+    ? raw.effective_consignments.map((r) => ({ ...emptyConsignmentRow(), ...r }))
+    : base.effective_consignments;
   const vehiclesPosted = raw.social_media?.vehicles_posted ?? base.social_media.vehicles_posted;
 
   const ensureTrailingEmpty = <T extends Record<string, string>>(
@@ -162,6 +185,7 @@ export function normalizeDailySalesReportPayload(
           : [""],
     },
     platform_uploads: ensureTrailingEmpty(platforms, emptyPlatformRow),
+    effective_consignments: ensureTrailingEmpty(consignments, emptyConsignmentRow),
     daily_observations: raw.daily_observations ?? "",
   };
 }
@@ -170,4 +194,17 @@ export function chileTodayIsoDate(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Santiago",
   }).format(new Date());
+}
+
+// Rango [start, endExclusive) del mes en curso (hora Chile) para filtrar report_date.
+export function chileMonthRange(today = chileTodayIsoDate()): {
+  start: string;
+  endExclusive: string;
+} {
+  const [year, month] = today.split("-").map(Number);
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const endExclusive = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+  return { start, endExclusive };
 }

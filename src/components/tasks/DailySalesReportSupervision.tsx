@@ -3,7 +3,6 @@ import { es } from "date-fns/locale";
 import { CheckCircle2, Eye, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { DailyReportExportsPanel } from "@/components/tasks/DailyReportExportsPanel";
 import { DailySalesReportForm } from "@/components/tasks/DailySalesReportForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +34,9 @@ function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
   const filledCredits = payload.credits.filter((r) =>
     Object.values(r).some((v) => String(v).trim()),
   ).length;
+  const filledConsignments = payload.effective_consignments.filter((r) =>
+    Object.values(r).some((v) => String(v).trim()),
+  ).length;
 
   return (
     <div className="space-y-4 text-sm max-h-[70vh] overflow-y-auto pr-1">
@@ -43,6 +45,9 @@ function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
       </p>
       <p>
         <span className="text-muted-foreground">Créditos con datos:</span> {filledCredits}
+      </p>
+      <p>
+        <span className="text-muted-foreground">Consignaciones efectivas:</span> {filledConsignments}
       </p>
       <p>
         <span className="text-muted-foreground">Publicaciones RRSS:</span>{" "}
@@ -167,7 +172,7 @@ export function DailySalesReportSupervision() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-left text-xs uppercase tracking-wide">
-                    <th className="p-3">Vendedores</th>
+                    <th className="p-3">Ejecutivo</th>
                     {isAdminWide && <th className="p-3">Sucursal</th>}
                     <th className="p-3">Estado</th>
                     <th className="p-3">Hora envío</th>
@@ -265,7 +270,6 @@ function AdminReportView() {
         <DailySalesReportForm showAllSections={false} />
       ) : (
         <div className="space-y-6">
-          <DailyReportExportsPanel />
           <DailySalesReportSupervision />
           <DailySalesReportForm showAllSections />
         </div>

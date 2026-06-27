@@ -59,6 +59,11 @@ export interface LeadMetricBarProps {
   /** Contorno negro en cada segmento (mejor contraste en el diálogo del lead). */
   bordered?: boolean;
   onChange?: (next: number) => void;
+  /**
+   * Si se entrega, el clic en una raya NO incrementa el contador: delega en este
+   * callback (ej. abrir la nota del canal). El contador avanza por otra vía.
+   */
+  onSegmentClick?: (n: number) => void;
 }
 
 export function LeadMetricBar({
@@ -71,6 +76,7 @@ export function LeadMetricBar({
   localOnly = false,
   bordered = false,
   onChange,
+  onSegmentClick,
 }: LeadMetricBarProps) {
   const meta = FIELD_META[field];
   const queryClient = useQueryClient();
@@ -126,6 +132,10 @@ export function LeadMetricBar({
   };
 
   const handleClick = (n: number) => {
+    if (onSegmentClick) {
+      onSegmentClick(n);
+      return;
+    }
     const next = n <= current ? n - 1 : n;
     if (localOnly) {
       onChange?.(next);
@@ -155,11 +165,17 @@ export function LeadMetricBar({
                 e.stopPropagation();
                 handleClick(n);
               }}
-              aria-label={`${filled ? "Quitar" : "Marcar"} ${displayLabel.toLowerCase()} ${n}`}
+              aria-label={
+                onSegmentClick
+                  ? `Registrar nota de ${displayLabel.toLowerCase()} (raya ${n})`
+                  : `${filled ? "Quitar" : "Marcar"} ${displayLabel.toLowerCase()} ${n}`
+              }
               title={
-                n === LEAD_METRIC_MAX && !filled
-                  ? `Al marcar la 3.ª barra completas la meta de ${displayLabel.toLowerCase()}`
-                  : `${n} de ${LEAD_METRIC_MAX}`
+                onSegmentClick
+                  ? `Registra la nota del día para sumar esta raya`
+                  : n === LEAD_METRIC_MAX && !filled
+                    ? `Al marcar la 3.ª barra completas la meta de ${displayLabel.toLowerCase()}`
+                    : `${n} de ${LEAD_METRIC_MAX}`
               }
               className={cn(
                 pillHeight,

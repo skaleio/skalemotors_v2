@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   buildDailyReportSupervisionRows,
   fetchDailyReportById,
+  fetchMonthlyEffectiveConsignmentsCount,
   fetchMyDailySalesReport,
   submitDailySalesReport,
   syncDailySalesReportTasks,
@@ -94,6 +95,18 @@ export function useSubmitDailySalesReport() {
         }),
       });
     },
+  });
+}
+
+export function useMonthlyEffectiveConsignments(
+  userId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ consignmentsMonth: userId }),
+    queryFn: () => fetchMonthlyEffectiveConsignmentsCount(userId!),
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
   });
 }
 

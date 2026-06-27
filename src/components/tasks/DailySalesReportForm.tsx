@@ -6,6 +6,7 @@ import {
   Plus,
   Save,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,20 +25,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
+  useMonthlyEffectiveConsignments,
   useMyDailySalesReport,
   useSubmitDailySalesReport,
   useSyncDailySalesReportTasks,
 } from "@/hooks/useDailySalesReports";
 import type {
   DailyReportCallRow,
+  DailyReportConsignmentRow,
   DailyReportCreditRow,
   DailyReportPlatformRow,
   DailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import {
   chileTodayIsoDate,
+  CONSIGNMENT_BONUS_CLP,
+  CONSIGNMENT_MONTHLY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
+  emptyConsignmentRow,
   emptyCreditRow,
   emptyDailySalesReportPayload,
   emptyPlatformRow,
@@ -126,6 +132,7 @@ export function DailySalesReportForm({
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
   const reportQuery = useMyDailySalesReport(user?.id, reportDate, !!user?.id);
+  const monthlyConsignments = useMonthlyEffectiveConsignments(user?.id, !!user?.id);
   const submitMutation = useSubmitDailySalesReport();
 
   useEffect(() => {
@@ -140,6 +147,18 @@ export function DailySalesReportForm({
     locale: es,
   });
 
+  const monthlyConsignmentsCount = monthlyConsignments.data ?? 0;
+  const consignmentGoalReached = monthlyConsignmentsCount >= CONSIGNMENT_MONTHLY_GOAL;
+  const consignmentProgressPct = Math.min(
+    100,
+    (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
+  );
+  const consignmentBonusLabel = new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(CONSIGNMENT_BONUS_CLP);
+
   const updateCalls = (next: DailyReportCallRow[]) =>
     setPayload((p) => ({ ...p, calls: normalizeDailySalesReportPayload({ ...p, calls: next }).calls }));
   const updateCredits = (next: DailyReportCreditRow[]) =>
@@ -152,6 +171,14 @@ export function DailySalesReportForm({
       ...p,
       platform_uploads: normalizeDailySalesReportPayload({ ...p, platform_uploads: next })
         .platform_uploads,
+    }));
+  const updateConsignments = (next: DailyReportConsignmentRow[]) =>
+    setPayload((p) => ({
+      ...p,
+      effective_consignments: normalizeDailySalesReportPayload({
+        ...p,
+        effective_consignments: next,
+      }).effective_consignments,
     }));
 
   const handleSubmit = () => {
@@ -242,6 +269,38 @@ export function DailySalesReportForm({
               {format(new Date(reportQuery.data.submitted_at), "dd-MM-yyyy HH:mm", { locale: es })}
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-pink-300 dark:border-pink-900 bg-pink-50/50 dark:bg-pink-950/10">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
+              <div>
+                <p className="font-medium text-pink-700 dark:text-pink-300">
+                  Consignaciones efectivas del mes
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {consignmentGoalReached
+                    ? `¡Meta alcanzada! Bono de ${consignmentBonusLabel}`
+                    : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} para ganar ${consignmentBonusLabel}`}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-semibold skale-num text-pink-600 dark:text-pink-400">
+                {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
+              </span>
+              <span className="text-sm text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
+            </div>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
+            <div
+              className="h-full rounded-full bg-pink-500 transition-all"
+              style={{ width: `${consignmentProgressPct}%` }}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -659,6 +718,96 @@ export function DailySalesReportForm({
         </AccordionItem>
           </>
         )}
+
+        <AccordionItem
+          value="consignments"
+          className="border border-pink-300 dark:border-pink-900 rounded-lg px-4 bg-pink-50/30 dark:bg-pink-950/10"
+        >
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3 text-left">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/40 text-xs font-bold text-pink-600 dark:text-pink-300">
+                6
+              </span>
+              <div>
+                <p className="font-medium">Consignaciones efectivas</p>
+                <p className="text-xs text-muted-foreground font-normal">
+                  {progress.consignments > 0
+                    ? `${progress.consignments} registrada(s) hoy · suma puntos`
+                    : "Cada consignación efectiva suma 1 punto"}
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
+            {payload.effective_consignments.map((row, i) => (
+              <EntryCard
+                key={i}
+                index={i}
+                canRemove={payload.effective_consignments.length > 1}
+                onRemove={() =>
+                  updateConsignments(payload.effective_consignments.filter((_, j) => j !== i))
+                }
+              >
+                <FieldGrid cols={2}>
+                  <Field label="Nombre cliente">
+                    <Input
+                      value={row.customer_name}
+                      onChange={(e) => {
+                        const next = [...payload.effective_consignments];
+                        next[i] = { ...next[i], customer_name: e.target.value };
+                        updateConsignments(next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Patente">
+                    <Input
+                      placeholder="ABCD12"
+                      value={row.patente}
+                      onChange={(e) => {
+                        const next = [...payload.effective_consignments];
+                        next[i] = { ...next[i], patente: e.target.value };
+                        updateConsignments(next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Vehículo">
+                    <Input
+                      placeholder="Marca / modelo"
+                      value={row.vehicle}
+                      onChange={(e) => {
+                        const next = [...payload.effective_consignments];
+                        next[i] = { ...next[i], vehicle: e.target.value };
+                        updateConsignments(next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Observación">
+                    <Input
+                      value={row.observation}
+                      onChange={(e) => {
+                        const next = [...payload.effective_consignments];
+                        next[i] = { ...next[i], observation: e.target.value };
+                        updateConsignments(next);
+                      }}
+                    />
+                  </Field>
+                </FieldGrid>
+              </EntryCard>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full xl:col-span-2 border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
+              onClick={() =>
+                updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
+              }
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar consignación
+            </Button>
+          </AccordionContent>
+        </AccordionItem>
       </Accordion>
 
       <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">

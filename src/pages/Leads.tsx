@@ -2004,36 +2004,6 @@ function LeadsImpl({ user }: { user: User }) {
                 </div>
               </>
             )}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="grid gap-2">
-                <Label htmlFor="lead-create-budget">Presupuesto</Label>
-                <Input
-                  id="lead-create-budget"
-                  value={formState.budget}
-                  onChange={(e) => setFormState({ ...formState, budget: e.target.value })}
-                  placeholder="Ej: 10-12 millones"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lead-create-pie">Pie</Label>
-                <Input
-                  id="lead-create-pie"
-                  value={formState.pie}
-                  onChange={(e) => setFormState({ ...formState, pie: e.target.value })}
-                  placeholder="Ej: 2.500.000"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lead-create-cuotas">Cuotas mensuales</Label>
-                <Input
-                  id="lead-create-cuotas"
-                  value={formState.cuotas_mensuales}
-                  onChange={(e) => setFormState({ ...formState, cuotas_mensuales: e.target.value })}
-                  placeholder="Ej: 350.000"
-                />
-                <p className="text-[11px] text-muted-foreground">Cuota que el cliente está dispuesto a pagar.</p>
-              </div>
-            </div>
             <div className="grid gap-2">
               <Label>Nota</Label>
               <Textarea

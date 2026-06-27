@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { LeadMetricBar } from "@/components/leads/LeadMetricBar";
+import { LeadMetricBar, LEAD_METRIC_MAX } from "@/components/leads/LeadMetricBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/leadFollowUpNote";
 import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { leadNoteService } from "@/lib/services/leadNotes";
+import { leadService } from "@/lib/services/leads";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, Loader2, MessageCircle, Pencil, Phone, Trash2, X } from "lucide-react";
@@ -32,6 +33,17 @@ function formatNoteDate(iso: string) {
     return new Date(iso).toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
   } catch {
     return iso;
+  }
+}
+
+const CHILE_TZ = "America/Santiago";
+
+/** Clave de día calendario (YYYY-MM-DD) en hora Chile, para el límite de una raya por día. */
+function chileDayKey(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("en-CA", { timeZone: CHILE_TZ });
+  } catch {
+    return iso.slice(0, 10);
   }
 }
 
@@ -88,6 +100,7 @@ export const CrmLeadChannelTracking = forwardRef<
   const [isSaving, setIsSaving] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const previews = useMemo(
     () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -134,6 +147,26 @@ export const CrmLeadChannelTracking = forwardRef<
   });
 
   const notesNewestFirst = useMemo(() => [...notes].reverse(), [notes]);
+
+  const counterField = FOLLOW_UP_CHANNEL_FIELD[channel];
+
+  // Una raya por día: si ya hay una nota de este canal registrada hoy, el contador
+  // no vuelve a subir y el clic en la raya solo recuerda volver mañana.
+  const alreadyContactedToday = useMemo(() => {
+    const todayKey = chileDayKey(new Date().toISOString());
+    return notes.some((n) => chileDayKey(n.created_at) === todayKey);
+  }, [notes]);
+
+  const handleSegmentClick = useCallback(() => {
+    if (alreadyContactedToday) {
+      toast.info(
+        `Ya registraste tu ${actionVerb} de hoy. El próximo seguimiento cuenta mañana.`,
+      );
+      return;
+    }
+    textareaRef.current?.focus();
+    textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [alreadyContactedToday, actionVerb]);
 
   useEffect(() => {
     setDraft("");
@@ -186,12 +219,32 @@ export const CrmLeadChannelTracking = forwardRef<
           files,
         });
         const cached = queryClient.getQueryData<typeof notes>(queryKey) ?? notes;
+        const todayKey = chileDayKey(nowIso);
+        const hadNoteToday = cached.some((n) => chileDayKey(n.created_at) === todayKey);
         queryClient.setQueryData(queryKey, [...cached, created]);
         setDraft("");
         setSelectedFiles([]);
         cancelEdit();
         await queryClient.refetchQueries({ queryKey });
         invalidate();
+
+        // Una raya por día: solo la primera nota del canal en el día suma el contador.
+        if (!hadNoteToday && counterValue < LEAD_METRIC_MAX) {
+          const nextCounter = counterValue + 1;
+          queryClient.setQueriesData({ queryKey: ["leads"] }, (data: unknown) => {
+            if (!Array.isArray(data)) return data;
+            return data.map((l: { id: string } & Record<string, unknown>) =>
+              l.id === leadId ? { ...l, [counterField]: nextCounter, last_contact_at: nowIso } : l,
+            );
+          });
+          try {
+            await leadService.update(leadId, { [counterField]: nextCounter, last_contact_at: nowIso });
+            onCounterChange?.(nextCounter);
+          } catch (counterErr) {
+            console.error("[CrmLeadChannelTracking] bump counter", counterErr);
+            queryClient.invalidateQueries({ queryKey: ["leads"] });
+          }
+        }
         return true;
       } catch (err) {
         console.error("[CrmLeadChannelTracking] create", err);
@@ -201,7 +254,7 @@ export const CrmLeadChannelTracking = forwardRef<
         setIsSaving(false);
       }
     },
-    [tenantId, leadId, branchId, channel, user?.branch_id, user?.id, queryClient, queryKey, notes, invalidate, cancelEdit],
+    [tenantId, leadId, branchId, channel, user?.branch_id, user?.id, queryClient, queryKey, notes, invalidate, cancelEdit, counterValue, counterField, onCounterChange],
   );
 
   /** Registro explícito (botón): exige nota real con contexto. */
@@ -314,13 +367,14 @@ export const CrmLeadChannelTracking = forwardRef<
         </p>
         <LeadMetricBar
           leadId={leadId}
-          field={FOLLOW_UP_CHANNEL_FIELD[channel]}
+          field={counterField}
           value={counterValue}
           showLabel={false}
           bordered
           size="sm"
           localOnly={localOnly}
           onChange={onCounterChange}
+          onSegmentClick={handleSegmentClick}
         />
       </div>
 
@@ -336,6 +390,7 @@ export const CrmLeadChannelTracking = forwardRef<
           Nota de {actionVerb} (qué ofreciste, qué conversaron, qué quedó pendiente)
         </Label>
         <Textarea
+          ref={textareaRef}
           id={`channel-note-${channel}-${leadId}`}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
