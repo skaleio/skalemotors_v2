@@ -1,20 +1,32 @@
-import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Download, FileSpreadsheet, Loader2, Package } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
+  fetchAppointmentsExportRows,
   fetchConsignacionesExportRows,
   fetchContactCoverageExportRows,
   fetchDailyReportExportRows,
   fetchLeadCallsExportRows,
+  fetchReportSellers,
 } from "@/lib/services/informeDiarioReports";
 import { chileTodayIsoDate } from "@/lib/types/dailySalesReport";
-import { exportRowsToXlsx, type ExportRow } from "@/lib/utils/exportXlsx";
+import { exportRowsToXlsx, exportSheetsToXlsx, type ExportRow } from "@/lib/utils/exportXlsx";
+
+const ALL_SELLERS = "all";
 
 interface ReportCard {
   key: string;
@@ -23,7 +35,12 @@ interface ReportCard {
   sheet: string;
   fileBase: string;
   usesRange: boolean;
-  fetcher: (tenantId: string, from: string, to: string) => Promise<ExportRow[]>;
+  fetcher: (
+    tenantId: string,
+    from: string,
+    to: string,
+    sellerId?: string | null,
+  ) => Promise<ExportRow[]>;
 }
 
 const REPORTS: ReportCard[] = [
@@ -34,7 +51,7 @@ const REPORTS: ReportCard[] = [
     sheet: "Informe diario",
     fileBase: "informe-diario",
     usesRange: true,
-    fetcher: (t, f, to) => fetchDailyReportExportRows(t, f, to),
+    fetcher: fetchDailyReportExportRows,
   },
   {
     key: "consignaciones",
@@ -43,7 +60,7 @@ const REPORTS: ReportCard[] = [
     sheet: "Consignaciones",
     fileBase: "consignaciones",
     usesRange: true,
-    fetcher: (t, f, to) => fetchConsignacionesExportRows(t, f, to),
+    fetcher: fetchConsignacionesExportRows,
   },
   {
     key: "llamados",
@@ -52,7 +69,16 @@ const REPORTS: ReportCard[] = [
     sheet: "Llamados leads",
     fileBase: "llamados-leads",
     usesRange: true,
-    fetcher: (t, f, to) => fetchLeadCallsExportRows(t, f, to),
+    fetcher: fetchLeadCallsExportRows,
+  },
+  {
+    key: "citas",
+    title: "Citas",
+    description: "Citas agendadas: cliente, vendedor, tipo, estado y fecha.",
+    sheet: "Citas",
+    fileBase: "citas",
+    usesRange: true,
+    fetcher: fetchAppointmentsExportRows,
   },
   {
     key: "cobertura",
@@ -61,7 +87,7 @@ const REPORTS: ReportCard[] = [
     sheet: "Cobertura contacto",
     fileBase: "cobertura-contacto",
     usesRange: false,
-    fetcher: (t) => fetchContactCoverageExportRows(t),
+    fetcher: (t, _from, _to, sellerId) => fetchContactCoverageExportRows(t, sellerId),
   },
 ];
 
@@ -74,34 +100,47 @@ export function DailyReportExportsPanel() {
   const today = chileTodayIsoDate();
   const [from, setFrom] = useState(firstOfMonth(today));
   const [to, setTo] = useState(today);
+  const [seller, setSeller] = useState<string>(ALL_SELLERS);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
+
+  const sellersQuery = useQuery({
+    queryKey: ["report-sellers", user?.tenant_id],
+    queryFn: () => fetchReportSellers(user!.tenant_id!),
+    enabled: !!user?.tenant_id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const sellerId = seller === ALL_SELLERS ? null : seller;
+  const sellerSuffix = seller === ALL_SELLERS ? "" : "_vendedor";
+
+  const validateRange = (): boolean => {
+    if (from > to) {
+      toast({
+        title: "Rango inválido",
+        description: "La fecha 'desde' no puede ser mayor que 'hasta'.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
 
   const handleDownload = async (report: ReportCard) => {
     if (!user?.tenant_id) {
       toast({ title: "Sesión inválida", variant: "destructive" });
       return;
     }
-    if (report.usesRange && from > to) {
-      toast({
-        title: "Rango inválido",
-        description: "La fecha 'desde' no puede ser mayor que 'hasta'.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (report.usesRange && !validateRange()) return;
 
     setLoadingKey(report.key);
     try {
-      const rows = await report.fetcher(user.tenant_id, from, to);
+      const rows = await report.fetcher(user.tenant_id, from, to, sellerId);
       if (rows.length === 0) {
-        toast({
-          title: "Sin datos",
-          description: "No hay registros para descargar en ese período.",
-        });
+        toast({ title: "Sin datos", description: "No hay registros para descargar." });
         return;
       }
-      const suffix = report.usesRange ? `${from}_a_${to}` : today;
-      exportRowsToXlsx(rows, report.sheet, `${report.fileBase}_${suffix}.xlsx`);
+      const period = report.usesRange ? `${from}_a_${to}` : today;
+      exportRowsToXlsx(rows, report.sheet, `${report.fileBase}${sellerSuffix}_${period}.xlsx`);
     } catch (err) {
       console.error("[DailyReportExportsPanel] export falló", { report: report.key, err });
       toast({
@@ -114,6 +153,38 @@ export function DailyReportExportsPanel() {
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (!user?.tenant_id) {
+      toast({ title: "Sesión inválida", variant: "destructive" });
+      return;
+    }
+    if (!validateRange()) return;
+
+    setLoadingKey("__all__");
+    try {
+      const results = await Promise.all(
+        REPORTS.map((r) => r.fetcher(user.tenant_id!, from, to, sellerId)),
+      );
+      const sheets = REPORTS.map((r, i) => ({ name: r.sheet, rows: results[i] }));
+      if (sheets.every((s) => s.rows.length === 0)) {
+        toast({ title: "Sin datos", description: "No hay registros para descargar." });
+        return;
+      }
+      exportSheetsToXlsx(sheets, `reportes${sellerSuffix}_${from}_a_${to}.xlsx`);
+    } catch (err) {
+      console.error("[DailyReportExportsPanel] export combinado falló", err);
+      toast({
+        title: "No se pudo descargar",
+        description: err instanceof Error ? err.message : "Intentá de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingKey(null);
+    }
+  };
+
+  const busy = loadingKey !== null;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -122,8 +193,8 @@ export function DailyReportExportsPanel() {
           Reportes
         </CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
-          Descargá los reportes en Excel. El rango aplica a Informe diario, Consignaciones y
-          Llamados; Cobertura de contacto es una foto del estado actual.
+          Descargá los reportes en Excel. El rango aplica a Informe diario, Consignaciones,
+          Llamados y Citas; Cobertura de contacto es una foto del estado actual.
         </p>
         <div className="flex flex-wrap items-end gap-3 pt-2">
           <div className="space-y-1">
@@ -152,10 +223,34 @@ export function DailyReportExportsPanel() {
               onChange={(e) => setTo(e.target.value)}
             />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Vendedor</Label>
+            <Select value={seller} onValueChange={setSeller}>
+              <SelectTrigger className="h-9 w-52">
+                <SelectValue placeholder="Vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_SELLERS}>Todos (global)</SelectItem>
+                {(sellersQuery.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button className="h-9 ml-auto" onClick={handleDownloadAll} disabled={busy}>
+            {loadingKey === "__all__" ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Package className="h-4 w-4 mr-2" />
+            )}
+            Descargar todo (1 Excel)
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {REPORTS.map((report) => (
             <div
               key={report.key}
@@ -170,7 +265,7 @@ export function DailyReportExportsPanel() {
                 size="sm"
                 className="w-full"
                 onClick={() => handleDownload(report)}
-                disabled={loadingKey === report.key}
+                disabled={busy}
               >
                 {loadingKey === report.key ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
