@@ -1925,43 +1925,47 @@ function LeadsImpl({ user }: { user: User }) {
                 onChange={(next) => setFormState({ ...formState, contact_state: next })}
               />
             )}
-            <div className="grid gap-2">
-              <Label htmlFor="lead_make">Marca</Label>
-              <VehicleMakeCombobox
-                id="lead_make"
-                value={formState.make}
-                onChange={(value) => setFormState({ ...formState, make: value })}
-                placeholder="Selecciona o escribe la marca"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead_model">Modelo</Label>
-              <Input
-                id="lead_model"
-                value={formState.model}
-                onChange={(e) => setFormState({ ...formState, model: e.target.value })}
-                placeholder="Ej: Corolla, Ranger, 208…"
-                autoComplete="off"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lead_vehicle">Vehiculo</Label>
-              <Select
-                value={formState.vehicle}
-                onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
-              >
-                <SelectTrigger id="lead_vehicle">
-                  <SelectValue placeholder="Selecciona tipo de vehículo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VEHICLE_TYPE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt} value={opt}>
-                      {opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {user?.role !== "admin" && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="lead_make">Marca</Label>
+                  <VehicleMakeCombobox
+                    id="lead_make"
+                    value={formState.make}
+                    onChange={(value) => setFormState({ ...formState, make: value })}
+                    placeholder="Selecciona o escribe la marca"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lead_model">Modelo</Label>
+                  <Input
+                    id="lead_model"
+                    value={formState.model}
+                    onChange={(e) => setFormState({ ...formState, model: e.target.value })}
+                    placeholder="Ej: Corolla, Ranger, 208…"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="lead_vehicle">Vehiculo</Label>
+                  <Select
+                    value={formState.vehicle}
+                    onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
+                  >
+                    <SelectTrigger id="lead_vehicle">
+                      <SelectValue placeholder="Selecciona tipo de vehículo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="grid gap-2">
               <Label>Región</Label>
               <Input
@@ -1970,32 +1974,36 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Ej: Metropolitana de Santiago"
               />
             </div>
-            <LeadTransmissionSelect
-              id="lead-create-transmision"
-              value={formState.transmision}
-              onChange={(transmision) => setFormState({ ...formState, transmision })}
-              disabled={isCreating}
-            />
-            <div className="grid gap-2">
-              <Label>Financiamiento/Contado</Label>
-              <Select
-                value={formState.payment_type}
-                onValueChange={(value) =>
-                  setFormState({ ...formState, payment_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona forma de pago" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TYPE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt} value={opt}>
-                      {opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {user?.role !== "admin" && (
+              <>
+                <LeadTransmissionSelect
+                  id="lead-create-transmision"
+                  value={formState.transmision}
+                  onChange={(transmision) => setFormState({ ...formState, transmision })}
+                  disabled={isCreating}
+                />
+                <div className="grid gap-2">
+                  <Label>Financiamiento/Contado</Label>
+                  <Select
+                    value={formState.payment_type}
+                    onValueChange={(value) =>
+                      setFormState({ ...formState, payment_type: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona forma de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
                 <Label htmlFor="lead-create-budget">Presupuesto</Label>

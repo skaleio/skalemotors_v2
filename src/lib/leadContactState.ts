@@ -11,7 +11,7 @@ export const LEAD_CONTACT_STATE_OPTIONS: LeadContactState[] = [
 export const LEAD_CONTACT_STATE_LABELS: Record<LeadContactState, string> = {
   prioridad: "Prioridad",
   interesado: "Interesado",
-  filtrar: "Filtrar",
+  filtrar: "Por filtrar",
 };
 
 export const LEAD_CONTACT_STATE_HINTS: Record<LeadContactState, string> = {
