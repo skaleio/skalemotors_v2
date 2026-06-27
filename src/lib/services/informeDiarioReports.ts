@@ -21,6 +21,11 @@ const fmtDateTime = (iso: string | null | undefined): string => {
   return Number.isNaN(d.getTime()) ? "" : format(d, "dd-MM-yyyy HH:mm");
 };
 
+export interface ReportSeller {
+  id: string;
+  name: string;
+}
+
 interface Lookups {
   userName: Map<string, string>;
   branchName: Map<string, string>;
@@ -41,21 +46,34 @@ async function fetchLookups(tenantId: string): Promise<Lookups> {
   return { userName, branchName };
 }
 
+export async function fetchReportSellers(tenantId: string): Promise<ReportSeller[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name, email")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .in("role", [...SELLER_ROLES_FOR_DAILY_REPORT])
+    .order("full_name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((u) => ({ id: u.id, name: u.full_name || u.email || "—" }));
+}
+
 export async function fetchDailyReportExportRows(
   tenantId: string,
   from: string,
   to: string,
+  sellerId?: string | null,
 ): Promise<ExportRow[]> {
-  const [{ data, error }, lookups] = await Promise.all([
-    supabase
-      .from("daily_sales_reports")
-      .select("report_date, submitted_at, payload, user_id, branch_id")
-      .eq("tenant_id", tenantId)
-      .gte("report_date", from)
-      .lte("report_date", to)
-      .order("report_date", { ascending: true }),
-    fetchLookups(tenantId),
-  ]);
+  let query = supabase
+    .from("daily_sales_reports")
+    .select("report_date, submitted_at, payload, user_id, branch_id")
+    .eq("tenant_id", tenantId)
+    .gte("report_date", from)
+    .lte("report_date", to)
+    .order("report_date", { ascending: true });
+  if (sellerId) query = query.eq("user_id", sellerId);
+
+  const [{ data, error }, lookups] = await Promise.all([query, fetchLookups(tenantId)]);
   if (error) throw error;
 
   return (data ?? []).map((row) => {
@@ -82,19 +100,20 @@ export async function fetchConsignacionesExportRows(
   tenantId: string,
   from: string,
   to: string,
+  sellerId?: string | null,
 ): Promise<ExportRow[]> {
-  const [{ data, error }, lookups] = await Promise.all([
-    supabase
-      .from("consignaciones")
-      .select(
-        "fecha, created_at, owner_name, owner_phone, patente, vehicle_make, vehicle_model, vehicle_year, vehicle_km, consignacion_price, sale_price, status, publicado, created_by, branch_id",
-      )
-      .eq("tenant_id", tenantId)
-      .gte("fecha", from)
-      .lte("fecha", to)
-      .order("fecha", { ascending: true }),
-    fetchLookups(tenantId),
-  ]);
+  let query = supabase
+    .from("consignaciones")
+    .select(
+      "fecha, created_at, owner_name, owner_phone, patente, vehicle_make, vehicle_model, vehicle_year, vehicle_km, consignacion_price, sale_price, status, publicado, created_by, branch_id",
+    )
+    .eq("tenant_id", tenantId)
+    .gte("fecha", from)
+    .lte("fecha", to)
+    .order("fecha", { ascending: true });
+  if (sellerId) query = query.eq("created_by", sellerId);
+
+  const [{ data, error }, lookups] = await Promise.all([query, fetchLookups(tenantId)]);
   if (error) throw error;
 
   return (data ?? []).map((row) => ({
@@ -117,18 +136,19 @@ export async function fetchLeadCallsExportRows(
   tenantId: string,
   from: string,
   to: string,
+  sellerId?: string | null,
 ): Promise<ExportRow[]> {
-  const [{ data, error }, lookups] = await Promise.all([
-    supabase
-      .from("lead_notes")
-      .select("created_at, body, created_by, branch_id, lead:leads(full_name, phone)")
-      .eq("tenant_id", tenantId)
-      .eq("channel", "llamada")
-      .gte("created_at", `${from}T00:00:00`)
-      .lte("created_at", `${to}T23:59:59`)
-      .order("created_at", { ascending: true }),
-    fetchLookups(tenantId),
-  ]);
+  let query = supabase
+    .from("lead_notes")
+    .select("created_at, body, created_by, branch_id, lead:leads(full_name, phone)")
+    .eq("tenant_id", tenantId)
+    .eq("channel", "llamada")
+    .gte("created_at", `${from}T00:00:00`)
+    .lte("created_at", `${to}T23:59:59`)
+    .order("created_at", { ascending: true });
+  if (sellerId) query = query.eq("created_by", sellerId);
+
+  const [{ data, error }, lookups] = await Promise.all([query, fetchLookups(tenantId)]);
   if (error) throw error;
 
   return (data ?? []).map((row) => {
@@ -144,16 +164,61 @@ export async function fetchLeadCallsExportRows(
   });
 }
 
-export async function fetchContactCoverageExportRows(tenantId: string): Promise<ExportRow[]> {
+export async function fetchAppointmentsExportRows(
+  tenantId: string,
+  from: string,
+  to: string,
+  sellerId?: string | null,
+): Promise<ExportRow[]> {
+  let query = supabase
+    .from("appointments")
+    .select(
+      "scheduled_at, status, type, title, client_phone, location, notes, user_id, branch_id, lead:leads(full_name, phone)",
+    )
+    .eq("tenant_id", tenantId)
+    .gte("scheduled_at", `${from}T00:00:00`)
+    .lte("scheduled_at", `${to}T23:59:59`)
+    .order("scheduled_at", { ascending: true });
+  if (sellerId) query = query.eq("user_id", sellerId);
+
+  const [{ data, error }, lookups] = await Promise.all([query, fetchLookups(tenantId)]);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => {
+    const lead = row.lead as { full_name?: string; phone?: string } | null;
+    return {
+      Fecha: fmtDateTime(row.scheduled_at),
+      Vendedor: row.user_id ? lookups.userName.get(row.user_id) ?? "—" : "—",
+      Sucursal: row.branch_id ? lookups.branchName.get(row.branch_id) ?? "—" : "—",
+      Cliente: lead?.full_name ?? row.title ?? "",
+      Teléfono: row.client_phone ?? lead?.phone ?? "",
+      Tipo: row.type ?? "",
+      Estado: row.status ?? "",
+      Lugar: row.location ?? "",
+      Notas: row.notes ?? "",
+    };
+  });
+}
+
+export async function fetchContactCoverageExportRows(
+  tenantId: string,
+  sellerId?: string | null,
+): Promise<ExportRow[]> {
+  let sellersQuery = supabase
+    .from("users")
+    .select("id, full_name, email, branch_id")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .in("role", [...SELLER_ROLES_FOR_DAILY_REPORT]);
+  if (sellerId) {
+    sellersQuery = sellersQuery.eq("id", sellerId);
+  } else {
+    sellersQuery = sellersQuery.eq("daily_report_exempt", false);
+  }
+
   const [{ data: sellers, error: sellersError }, { data: leads, error: leadsError }, lookups] =
     await Promise.all([
-      supabase
-        .from("users")
-        .select("id, full_name, email, branch_id")
-        .eq("tenant_id", tenantId)
-        .eq("is_active", true)
-        .eq("daily_report_exempt", false)
-        .in("role", [...SELLER_ROLES_FOR_DAILY_REPORT]),
+      sellersQuery,
       supabase
         .from("leads")
         .select("assigned_to, contact_attempts")
