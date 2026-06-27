@@ -418,6 +418,9 @@ const LeadCard = memo(function LeadCard({
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
+  // Solo en AGENDADO: si el lead tiene nota, se muestra; si no, no ocupa espacio.
+  const isAgendado = getLeadCrmStageKey(lead.status) === "agendado";
+  const agendadoNote = isAgendado ? (lead.notes?.trim() ?? "") : "";
   const lastDragEndRef = useRef(0);
   const callsMade = Math.max(0, Math.min(lead.calls_made ?? 0, 3));
   const waSent = Math.max(0, Math.min(lead.whatsapp_attempts ?? 0, 3));
@@ -550,6 +553,14 @@ const LeadCard = memo(function LeadCard({
           </span>
         </div>
       </div>
+      {agendadoNote && (
+        <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted/40 px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+          <StickyNote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          <span className="line-clamp-2" title={agendadoNote}>
+            {agendadoNote}
+          </span>
+        </div>
+      )}
       {label && styles && (
         <div className="mt-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
