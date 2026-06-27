@@ -126,7 +126,6 @@ export function countDailyReportProgress(payload: DailySalesReportPayload) {
     credits > 0,
     social,
     platforms > 0,
-    consignments > 0,
     observations,
   ];
   return {

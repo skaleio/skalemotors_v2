@@ -39,7 +39,6 @@ import type {
 } from "@/lib/types/dailySalesReport";
 import {
   chileTodayIsoDate,
-  CONSIGNMENT_BONUS_CLP,
   CONSIGNMENT_MONTHLY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
@@ -153,11 +152,6 @@ export function DailySalesReportForm({
     100,
     (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
   );
-  const consignmentBonusLabel = new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(CONSIGNMENT_BONUS_CLP);
 
   const updateCalls = (next: DailyReportCallRow[]) =>
     setPayload((p) => ({ ...p, calls: normalizeDailySalesReportPayload({ ...p, calls: next }).calls }));
@@ -272,38 +266,6 @@ export function DailySalesReportForm({
         </CardContent>
       </Card>
 
-      <Card className="border-pink-300 dark:border-pink-900 bg-pink-50/50 dark:bg-pink-950/10">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
-              <div>
-                <p className="font-medium text-pink-700 dark:text-pink-300">
-                  Consignaciones efectivas del mes
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {consignmentGoalReached
-                    ? `¡Meta alcanzada! Bono de ${consignmentBonusLabel}`
-                    : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} para ganar ${consignmentBonusLabel}`}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-2xl font-semibold skale-num text-pink-600 dark:text-pink-400">
-                {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
-              </span>
-              <span className="text-sm text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
-            </div>
-          </div>
-          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
-            <div
-              className="h-full rounded-full bg-pink-500 transition-all"
-              style={{ width: `${consignmentProgressPct}%` }}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       <Accordion
         type="multiple"
         value={openSections}
@@ -404,6 +366,119 @@ export function DailySalesReportForm({
                 </FieldGrid>
               </EntryCard>
             ))}
+            <div className="rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/40 dark:bg-pink-950/10 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-pink-700 dark:text-pink-300">
+                      Registro bonus · Consignación efectiva
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {consignmentGoalReached
+                        ? "¡Meta alcanzada! Bono de $xxx.xxx"
+                        : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} este mes y gana $xxx.xxx`}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="text-xl font-semibold skale-num text-pink-600 dark:text-pink-400">
+                    {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
+                </div>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
+                <div
+                  className="h-full rounded-full bg-pink-500 transition-all"
+                  style={{ width: `${consignmentProgressPct}%` }}
+                />
+              </div>
+              {payload.effective_consignments.map((row, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-pink-200 dark:border-pink-900/60 bg-card p-3 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wide text-pink-600 dark:text-pink-300">
+                      Registro {payload.calls.length + i + 1} · Bonus
+                    </span>
+                    {payload.effective_consignments.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          updateConsignments(
+                            payload.effective_consignments.filter((_, j) => j !== i),
+                          )
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                  <FieldGrid cols={3}>
+                    <Field label="Nombre cliente">
+                      <Input
+                        value={row.customer_name}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], customer_name: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Patente">
+                      <Input
+                        placeholder="ABCD12"
+                        value={row.patente}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], patente: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Vehículo">
+                      <Input
+                        placeholder="Marca / modelo"
+                        value={row.vehicle}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], vehicle: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Observación">
+                      <Input
+                        value={row.observation}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], observation: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                  </FieldGrid>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
+                onClick={() =>
+                  updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar consignación efectiva
+              </Button>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -716,98 +791,9 @@ export function DailySalesReportForm({
             />
           </AccordionContent>
         </AccordionItem>
+
           </>
         )}
-
-        <AccordionItem
-          value="consignments"
-          className="border border-pink-300 dark:border-pink-900 rounded-lg px-4 bg-pink-50/30 dark:bg-pink-950/10"
-        >
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3 text-left">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/40 text-xs font-bold text-pink-600 dark:text-pink-300">
-                6
-              </span>
-              <div>
-                <p className="font-medium">Consignaciones efectivas</p>
-                <p className="text-xs text-muted-foreground font-normal">
-                  {progress.consignments > 0
-                    ? `${progress.consignments} registrada(s) hoy · suma puntos`
-                    : "Cada consignación efectiva suma 1 punto"}
-                </p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
-            {payload.effective_consignments.map((row, i) => (
-              <EntryCard
-                key={i}
-                index={i}
-                canRemove={payload.effective_consignments.length > 1}
-                onRemove={() =>
-                  updateConsignments(payload.effective_consignments.filter((_, j) => j !== i))
-                }
-              >
-                <FieldGrid cols={2}>
-                  <Field label="Nombre cliente">
-                    <Input
-                      value={row.customer_name}
-                      onChange={(e) => {
-                        const next = [...payload.effective_consignments];
-                        next[i] = { ...next[i], customer_name: e.target.value };
-                        updateConsignments(next);
-                      }}
-                    />
-                  </Field>
-                  <Field label="Patente">
-                    <Input
-                      placeholder="ABCD12"
-                      value={row.patente}
-                      onChange={(e) => {
-                        const next = [...payload.effective_consignments];
-                        next[i] = { ...next[i], patente: e.target.value };
-                        updateConsignments(next);
-                      }}
-                    />
-                  </Field>
-                  <Field label="Vehículo">
-                    <Input
-                      placeholder="Marca / modelo"
-                      value={row.vehicle}
-                      onChange={(e) => {
-                        const next = [...payload.effective_consignments];
-                        next[i] = { ...next[i], vehicle: e.target.value };
-                        updateConsignments(next);
-                      }}
-                    />
-                  </Field>
-                  <Field label="Observación">
-                    <Input
-                      value={row.observation}
-                      onChange={(e) => {
-                        const next = [...payload.effective_consignments];
-                        next[i] = { ...next[i], observation: e.target.value };
-                        updateConsignments(next);
-                      }}
-                    />
-                  </Field>
-                </FieldGrid>
-              </EntryCard>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full xl:col-span-2 border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
-              onClick={() =>
-                updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
-              }
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar consignación
-            </Button>
-          </AccordionContent>
-        </AccordionItem>
       </Accordion>
 
       <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">
