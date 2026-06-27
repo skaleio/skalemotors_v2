@@ -118,7 +118,7 @@ function GateContent({ appointments }: { appointments: Appointment[] }) {
                 <Label
                   key={o.value}
                   htmlFor={`outcome-${o.value}`}
-                  className="flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-sm font-normal has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                  className="flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-sm font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
                 >
                   <RadioGroupItem id={`outcome-${o.value}`} value={o.value} className="mt-0.5" />
                   <span>
