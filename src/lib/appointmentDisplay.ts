@@ -20,6 +20,7 @@ export const appointmentStatusLabels: Record<string, string> = {
 };
 
 type AppointmentLead = {
+  id?: string | null;
   full_name?: string | null;
   email?: string | null;
   phone?: string | null;
