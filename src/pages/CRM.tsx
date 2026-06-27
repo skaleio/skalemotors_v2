@@ -21,6 +21,7 @@ import {
 } from "@/components/crm/CrmLeadChannelTracking";
 import { LeadIngestSummary } from "@/components/crm/LeadIngestSummary";
 import { CrmLeadLegacyNotes } from "@/components/crm/CrmLeadLegacyNotes";
+import { CrmCitaLeadNotes } from "@/components/crm/CrmCitaLeadNotes";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
@@ -83,7 +84,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, Eye, Loader2, Mail, MessageCircle, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CalendarClock, CheckCircle2, Eye, Loader2, Mail, MapPin, MessageCircle, Pencil, Phone, RotateCcw, Search, StickyNote, Target, TrendingUp, Trash2, User, Users, X, PhoneOff, ArrowUpRight, Ban, Car } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -654,6 +655,13 @@ export default function CRM() {
 
   const [selectedCita, setSelectedCita] = useState<AppointmentListItem | null>(null);
 
+  // Resumen del chatbot (lead.notes) por id, para mostrarlo en el detalle de la cita.
+  const leadsById = useMemo(() => {
+    const map = new Map<string, LeadWithAssignee>();
+    for (const lead of leads as LeadWithAssignee[]) map.set(lead.id, lead);
+    return map;
+  }, [leads]);
+
   const scopedLeads = useMemo(() => {
     if (user?.role === "vendedor" && user.id) {
       return filterLeadsForVendorView(leads, user.id);
@@ -919,6 +927,9 @@ export default function CRM() {
     // Los cancelados no cuentan como lead trabajado: se excluyen del total (y por ende de la efectividad).
     const cancelados = base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
     const total = base.length - cancelados;
+    const tasaCancelados = base.length > 0
+      ? Math.round((cancelados / base.length) * 1000) / 10
+      : 0;
     const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
     const cerradosMes = base.filter((l) => isVendidoInLocalCalendarMonth(l, crmCalendarMonthKey)).length;
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
@@ -942,10 +953,6 @@ export default function CRM() {
       ? Math.round((avanzados / (total + noRespondieron)) * 1000) / 10
       : 0;
 
-    const tasaPerdida = cerrados + perdidos > 0
-      ? Math.round((perdidos / (cerrados + perdidos)) * 1000) / 10
-      : 0;
-
     const stageCounts = Object.fromEntries(
       CRM_PIPELINE_STAGES.map((s) => [s.key, 0]),
     ) as Record<CrmStageKey, number>;
@@ -956,6 +963,8 @@ export default function CRM() {
 
     return {
       total,
+      cancelados,
+      tasaCancelados,
       cerrados,
       cerradosMes,
       perdidos,
@@ -965,7 +974,6 @@ export default function CRM() {
       tasaNoRespondieron,
       avanzados,
       tasaAvanceNegociando,
-      tasaPerdida,
       stageCounts,
     };
   }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
@@ -1942,17 +1950,17 @@ export default function CRM() {
         <Card>
           <CardContent className="flex items-center gap-3 py-4">
             <div className="rounded-lg bg-amber-50 p-2 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-              <Skull className="h-5 w-5" />
+              <Ban className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Tasa de pérdida</p>
+              <p className="text-xs text-muted-foreground">Leads cancelados</p>
               <p className="text-2xl font-bold leading-tight">
-                {(metrics.cerrados + metrics.perdidos) > 0
-                  ? `${metrics.tasaPerdida.toLocaleString("es-CL")}%`
+                {(metrics.cancelados + metrics.total) > 0
+                  ? `${metrics.tasaCancelados.toLocaleString("es-CL")}%`
                   : "—"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {metrics.perdidos} de {metrics.cerrados + metrics.perdidos} cerrados/perdidos
+                {metrics.cancelados} de {metrics.cancelados + metrics.total} leads
               </p>
             </div>
           </CardContent>
@@ -1969,48 +1977,77 @@ export default function CRM() {
             {upcomingCitas.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hay citas próximas agendadas.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 {upcomingCitas.map((apt) => {
                   const { date, time, relative } = formatCrmCita(apt.scheduled_at);
                   const motive = crmCitaMotive(apt);
                   const leadName = apt.lead?.full_name?.trim() || "Sin lead";
                   const vendor = apt.user?.full_name?.trim() || apt.user?.email?.trim() || null;
+                  const isToday = relative === "Hoy";
+                  const isTomorrow = relative === "Mañana";
+                  const accent = isToday
+                    ? "border-l-emerald-500"
+                    : isTomorrow
+                      ? "border-l-sky-500"
+                      : "border-l-border";
+                  const badgeClass = isToday
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    : "bg-sky-500/15 text-sky-600 dark:text-sky-400";
                   return (
                     <div
                       key={apt.id}
-                      className="relative flex min-w-[190px] max-w-[260px] flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2"
+                      className={cn(
+                        "group relative flex flex-col gap-2 rounded-xl border border-l-[3px] bg-card px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md",
+                        accent,
+                      )}
                       title={`${date} ${time} · ${motive} · ${leadName}${vendor ? ` · ${vendor}` : ""}`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCita(apt)}
-                        className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        title="Ver detalle de la cita"
-                        aria-label="Ver detalle de la cita"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      <div className="flex items-center gap-1.5 pr-6">
-                        <CalendarClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        <span className="text-sm font-bold tabular-nums">{date}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">{time}</span>
-                        {relative ? (
-                          <span className="ml-auto rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                            {relative}
-                          </span>
-                        ) : null}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <CalendarClock className="h-4 w-4" aria-hidden />
+                          </div>
+                          <div className="leading-tight">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold tabular-nums">{time}</span>
+                              {relative ? (
+                                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", badgeClass)}>
+                                  {relative}
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{date}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCita(apt)}
+                          className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                          title="Ver detalle de la cita"
+                          aria-label="Ver detalle de la cita"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
                       </div>
-                      <span className="truncate text-xs font-medium text-foreground" title={motive}>
-                        {motive}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground" title={leadName}>
-                        {leadName}
-                      </span>
-                      {vendor ? (
-                        <span className="truncate text-[11px] text-muted-foreground" title={vendor}>
-                          De: {vendor}
-                        </span>
-                      ) : null}
+                      <div className="min-w-0 space-y-1 border-t pt-2">
+                        <p className="truncate text-sm font-semibold text-foreground" title={leadName}>
+                          {leadName}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="inline-flex max-w-full items-center truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                            title={motive}
+                          >
+                            {motive}
+                          </span>
+                          {vendor ? (
+                            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground" title={vendor}>
+                              <Users className="h-3 w-3 shrink-0" aria-hidden />
+                              <span className="truncate">{vendor}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -2021,12 +2058,15 @@ export default function CRM() {
       )}
 
       <Dialog open={!!selectedCita} onOpenChange={(open) => !open && setSelectedCita(null)}>
-        <DialogContent className="sm:max-w-[460px]">
+        <DialogContent className="max-h-[88vh] gap-0 overflow-y-auto p-0 sm:max-w-[520px]">
           {selectedCita ? (() => {
-            const { date, time } = formatCrmCita(selectedCita.scheduled_at);
+            const { date, time, relative } = formatCrmCita(selectedCita.scheduled_at);
             const motive = crmCitaMotive(selectedCita);
             const leadName = selectedCita.lead?.full_name?.trim() || "Sin lead";
+            const leadId = selectedCita.lead?.id ?? null;
+            const fullLead = leadId ? leadsById.get(leadId) : undefined;
             const phone = selectedCita.client_phone?.trim() || selectedCita.lead?.phone?.trim() || null;
+            const waDigits = phone ? phone.replace(/\D/g, "") : "";
             const email = selectedCita.lead?.email?.trim() || null;
             const vendor = selectedCita.user?.full_name?.trim() || selectedCita.user?.email?.trim() || null;
             const vehicle = selectedCita.vehicle
@@ -2035,46 +2075,118 @@ export default function CRM() {
             const location = selectedCita.location?.trim() || null;
             return (
               <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
+                <DialogHeader className="space-y-3 border-b bg-muted/30 px-5 py-4 text-left">
+                  <DialogTitle className="flex items-center gap-2 text-base">
                     <CalendarClock className="h-5 w-5 text-primary" />
                     Detalle de la cita
                   </DialogTitle>
-                  <DialogDescription>{motive}</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 py-1 text-sm">
+                  <DialogDescription className="sr-only">{motive}</DialogDescription>
+                  <div className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <CalendarClock className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-base font-bold leading-tight tabular-nums text-foreground">
+                        {date} · {time}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{motive}</p>
+                    </div>
+                    {relative ? (
+                      <span className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        {relative}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{appointmentTypeLabels[selectedCita.type] ?? selectedCita.type}</Badge>
                     <Badge variant="secondary">{appointmentStatusLabels[selectedCita.status] ?? selectedCita.status}</Badge>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Fecha y hora</p>
-                    <p className="font-medium tabular-nums">{date} · {time}</p>
+                </DialogHeader>
+
+                <div className="space-y-4 px-5 py-4 text-sm">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <User className="h-3.5 w-3.5" aria-hidden />
+                      Lead
+                    </p>
+                    <p className="mt-1 font-semibold text-foreground">{leadName}</p>
+                    {phone || email ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {phone ? (
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                          >
+                            <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            {phone}
+                          </a>
+                        ) : null}
+                        {waDigits ? (
+                          <a
+                            href={`https://wa.me/${waDigits}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                            WhatsApp
+                          </a>
+                        ) : null}
+                        {email ? (
+                          <a
+                            href={`mailto:${email}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                          >
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            {email}
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="rounded-md border bg-muted/30 p-3 space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead</p>
-                    <p className="font-medium">{leadName}</p>
-                    {phone ? <p className="text-muted-foreground">{phone}</p> : null}
-                    {email ? <p className="text-muted-foreground">{email}</p> : null}
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {vehicle ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Car className="h-3.5 w-3.5" aria-hidden />
+                          Vehículo
+                        </p>
+                        <p className="font-medium text-foreground">{vehicle}</p>
+                      </div>
+                    ) : null}
+                    {location ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden />
+                          Ubicación
+                        </p>
+                        <p className="font-medium text-foreground">{location}</p>
+                      </div>
+                    ) : null}
+                    {vendor ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <User className="h-3.5 w-3.5" aria-hidden />
+                          Vendedor
+                        </p>
+                        <p className="font-medium text-foreground">{vendor}</p>
+                      </div>
+                    ) : null}
                   </div>
-                  {vehicle ? (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Vehículo</p>
-                      <p className="font-medium">{vehicle}</p>
-                    </div>
-                  ) : null}
-                  {location ? (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Ubicación</p>
-                      <p className="font-medium">{location}</p>
-                    </div>
-                  ) : null}
-                  {vendor ? (
-                    <div>
-                      <p className="text-xs text-muted-foreground">De</p>
-                      <p className="font-medium">{vendor}</p>
-                    </div>
-                  ) : null}
+
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <StickyNote className="h-3.5 w-3.5" aria-hidden />
+                      Notas del lead
+                    </p>
+                    <LeadIngestSummary notes={fullLead?.notes} />
+                    {leadId ? (
+                      <CrmCitaLeadNotes leadId={leadId} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Esta cita no está vinculada a un lead.</p>
+                    )}
+                  </div>
                 </div>
               </>
             );
