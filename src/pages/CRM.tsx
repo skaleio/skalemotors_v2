@@ -27,6 +27,7 @@ import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge"
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
+import { LEAD_METRIC_MAX } from "@/components/leads/LeadMetricBar";
 import { CrmLeadScheduleAppointmentDialog } from "@/components/crm/CrmLeadScheduleAppointmentDialog";
 import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
@@ -422,8 +423,8 @@ const LeadCard = memo(function LeadCard({
   const isAgendado = getLeadCrmStageKey(lead.status) === "agendado";
   const agendadoNote = isAgendado ? (lead.notes?.trim() ?? "") : "";
   const lastDragEndRef = useRef(0);
-  const callsMade = Math.max(0, Math.min(lead.calls_made ?? 0, 3));
-  const waSent = Math.max(0, Math.min(lead.whatsapp_attempts ?? 0, 3));
+  const callsMade = Math.max(0, Math.min(lead.calls_made ?? 0, LEAD_METRIC_MAX));
+  const waSent = Math.max(0, Math.min(lead.whatsapp_attempts ?? 0, LEAD_METRIC_MAX));
   const attempts = Math.max(callsMade, waSent);
   const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
   const assigneeId = leadAssignedToId(lead);
@@ -455,8 +456,12 @@ const LeadCard = memo(function LeadCard({
   const attemptStyles: Record<number, string> = {
     0: "",
     1: "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/10",
-    2: "border-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
-    3: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
+    2: "border-lime-500 bg-lime-50/60 dark:bg-lime-500/10",
+    3: "border-yellow-400 bg-yellow-50/70 dark:bg-yellow-500/10",
+    4: "border-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
+    5: "border-orange-400 bg-orange-50/70 dark:bg-orange-500/10",
+    6: "border-orange-500 bg-orange-50/70 dark:bg-orange-500/10",
+    7: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
   };
 
   const handleCardOpen = () => {
@@ -546,10 +551,10 @@ const LeadCard = memo(function LeadCard({
       <div className="mt-1.5">
         <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
           <span className="inline-flex items-center gap-1" title="Llamadas registradas">
-            <Phone className="h-3 w-3" aria-hidden /> {callsMade}/3
+            <Phone className="h-3 w-3" aria-hidden /> {callsMade}/{LEAD_METRIC_MAX}
           </span>
           <span className="inline-flex items-center gap-1" title="WhatsApp registrados">
-            <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/3
+            <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/{LEAD_METRIC_MAX}
           </span>
         </div>
       </div>
