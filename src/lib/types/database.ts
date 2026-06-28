@@ -4121,6 +4121,7 @@ export type Database = {
           onboarding_completed: boolean | null
           phone: string | null
           role: string
+          sales_staff_id: string | null
           tenant_id: string | null
           updated_at: string | null
         }
@@ -4138,6 +4139,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           phone?: string | null
           role?: string
+          sales_staff_id?: string | null
           tenant_id?: string | null
           updated_at?: string | null
         }
@@ -4155,6 +4157,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           phone?: string | null
           role?: string
+          sales_staff_id?: string | null
           tenant_id?: string | null
           updated_at?: string | null
         }
@@ -4171,6 +4174,13 @@ export type Database = {
             columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_sales_staff_id_fkey"
+            columns: ["sales_staff_id"]
+            isOneToOne: false
+            referencedRelation: "branch_sales_staff"
             referencedColumns: ["id"]
           },
           {
