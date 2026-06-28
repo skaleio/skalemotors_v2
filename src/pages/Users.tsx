@@ -61,6 +61,7 @@ async function createVendorViaEdgeFunction(payload: {
   password: string;
   full_name: string;
   branch_id: string;
+  sales_staff_id?: string | null;
 }) {
   return createVendorUser(payload);
 }
@@ -304,6 +305,7 @@ export default function Users() {
       password: newPassword,
       full_name: newFullName.trim(),
       branch_id: newBranchId,
+      sales_staff_id: selectedStaffId !== MANUAL_STAFF_VALUE ? selectedStaffId : null,
     });
   };
 
