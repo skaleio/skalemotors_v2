@@ -688,6 +688,7 @@ function LeadsImpl({ user }: { user: User }) {
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [leadTypeFilter, setLeadTypeFilter] = useState<"all" | "venta" | "consignacion">("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -923,9 +924,14 @@ function LeadsImpl({ user }: { user: User }) {
           ? true
           : bucket === resolvedStatusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesType =
+        leadTypeFilter === "all"
+          ? true
+          : (lead.lead_type ?? "venta") === leadTypeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [leads, deferredSearchQuery, resolvedStatusFilter]);
+  }, [leads, deferredSearchQuery, resolvedStatusFilter, leadTypeFilter]);
 
   const leadStats = useMemo(() => {
     const total = leads.length;
@@ -1810,6 +1816,20 @@ function LeadsImpl({ user }: { user: User }) {
                   </SelectItem>
                 ))}
                 <SelectItem value="cancelado">{CANCELLED_STATUS_LABELS.cancelado}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={leadTypeFilter} onValueChange={(v) => setLeadTypeFilter(v as "all" | "venta" | "consignacion")}>
+              <SelectTrigger className="w-[160px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar por tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {LEAD_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button
