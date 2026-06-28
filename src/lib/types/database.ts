@@ -2112,6 +2112,7 @@ export type Database = {
           full_name: string
           id: string
           last_contact_at: string | null
+          lead_type: string
           marca_preferida: string | null
           next_follow_up: string | null
           notes: string | null
@@ -2163,6 +2164,7 @@ export type Database = {
           full_name: string
           id?: string
           last_contact_at?: string | null
+          lead_type?: string
           marca_preferida?: string | null
           next_follow_up?: string | null
           notes?: string | null
@@ -2214,6 +2216,7 @@ export type Database = {
           full_name?: string
           id?: string
           last_contact_at?: string | null
+          lead_type?: string
           marca_preferida?: string | null
           next_follow_up?: string | null
           notes?: string | null

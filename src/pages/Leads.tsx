@@ -270,6 +270,12 @@ const VEHICLE_TYPE_OPTIONS = [
  *  capitalizadas tal como aparecen en el resto del UI (CRM, exports). */
 const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
 
+/** Tipo de lead: distingue oportunidades de venta vs. consignación. value = valor en DB. */
+const LEAD_TYPE_OPTIONS = [
+  { value: "venta", label: "Venta" },
+  { value: "consignacion", label: "Consignación" },
+] as const;
+
 /** Estados activos del pipeline (mismo modelo que CRM). */
 const PIPELINE_STATUS_LABELS = CRM_PIPELINE_STATUS_LABELS;
 
@@ -721,6 +727,7 @@ function LeadsImpl({ user }: { user: User }) {
     rut: "",
     phone: "",
     status: "nuevo",
+    lead_type: "venta",
     make: "",
     vehicle: "",
     model: "",
@@ -756,6 +763,7 @@ function LeadsImpl({ user }: { user: User }) {
     phone: "",
     email: "",
     status: "en_seguimiento",
+    lead_type: "venta",
     make: "",
     vehicle: "",
     model: "",
@@ -1031,6 +1039,7 @@ function LeadsImpl({ user }: { user: User }) {
       rut: "",
       phone: "",
       status: "nuevo",
+      lead_type: "venta",
       make: "",
       vehicle: "",
       model: "",
@@ -1313,6 +1322,7 @@ function LeadsImpl({ user }: { user: User }) {
         full_name: sanitizedCreateName,
         phone: normalizedCreatePhone,
         status: formState.status as any,
+        lead_type: formState.lead_type,
         source: formState.phone.trim() ? "telefono" : "otro",
         priority:
           canSetLeadContactState(user?.role) && formState.contact_state != null
@@ -1419,6 +1429,7 @@ function LeadsImpl({ user }: { user: User }) {
       phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
       status: statusForEditForm(lead.status),
+      lead_type: lead.lead_type || "venta",
       make: getTagValue(tags, MARCA_TAG_PREFIX),
       model: getTagValue(tags, MODELO_TAG_PREFIX),
       vehicle: isConsignacion
@@ -1456,6 +1467,7 @@ function LeadsImpl({ user }: { user: User }) {
         email: editForm.email.trim() ? editForm.email.trim() : null,
         rut: editForm.rut.trim() ? editForm.rut.trim() : null,
         status: crmStageToDbStatus(editForm.status) as Lead["status"],
+        lead_type: editForm.lead_type,
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
         budget: editForm.budget.trim() ? editForm.budget.trim() : null,
@@ -2059,6 +2071,24 @@ function LeadsImpl({ user }: { user: User }) {
               </div>
             </div>
             <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select
+                value={formState.lead_type}
+                onValueChange={(value) => setFormState({ ...formState, lead_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <Label>Estado</Label>
               <Select value={formState.status} onValueChange={(value) => setFormState({ ...formState, status: value })}>
                 <SelectTrigger>
@@ -2359,6 +2389,24 @@ function LeadsImpl({ user }: { user: User }) {
               onMotiveChange={(citaMotivo) => setEditForm({ ...editForm, citaMotivo })}
               disabled={isUpdating || leadQuickAppointmentQuery.isLoading}
             />
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select
+                value={editForm.lead_type}
+                onValueChange={(value) => setEditForm((f) => ({ ...f, lead_type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-2">
               <Label>Estado</Label>
               <Select
