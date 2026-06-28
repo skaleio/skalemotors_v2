@@ -5,6 +5,7 @@ import {
   fetchDailyReportById,
   fetchMonthlyEffectiveConsignmentsCount,
   fetchMyDailySalesReport,
+  fetchUserReportMetrics,
   submitDailySalesReport,
   syncDailySalesReportTasks,
 } from "@/lib/services/dailySalesReports";
@@ -107,6 +108,19 @@ export function useMonthlyEffectiveConsignments(
     queryFn: () => fetchMonthlyEffectiveConsignmentsCount(userId!),
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
+  });
+}
+
+export function useUserReportMetrics(
+  userId: string | undefined,
+  days = 30,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ metrics: userId, days: String(days) }),
+    queryFn: () => fetchUserReportMetrics(userId!, days),
+    enabled: enabled && !!userId,
+    staleTime: 60 * 1000,
   });
 }
 

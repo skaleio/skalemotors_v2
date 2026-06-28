@@ -164,6 +164,8 @@ export function TopBar() {
         return <UserPlus className="h-5 w-5 text-pink-500" />;
       case 'lead_note_added':
         return <FileText className="h-5 w-5 text-violet-500" />;
+      case 'daily_report_submitted':
+        return <FileText className="h-5 w-5 text-pink-500" />;
       case 'lead_ingested':
         return <UserPlus className="h-5 w-5 text-cyan-600" />;
       case 'lead':

@@ -1,8 +1,10 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CheckCircle2, Eye, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Eye, FileText, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
+import { DailyReportVendedorAnalysis } from "@/components/tasks/DailyReportVendedorAnalysis";
 import { DailySalesReportForm } from "@/components/tasks/DailySalesReportForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -23,7 +33,19 @@ import {
   useDailyReportSupervision,
   useSyncDailySalesReportTasks,
 } from "@/hooks/useDailySalesReports";
-import type { DailySalesReportPayload } from "@/lib/types/dailySalesReport";
+import {
+  downloadAllVendedorReportsZip,
+  downloadGeneralReportPdf,
+  downloadVendedorReportPdf,
+} from "@/lib/pdf/dailyReportPdf";
+import {
+  fetchDailyReportById,
+  fetchSubmittedReportPdfDataForDate,
+} from "@/lib/services/dailySalesReports";
+import type {
+  DailyReportSupervisionRow,
+  DailySalesReportPayload,
+} from "@/lib/types/dailySalesReport";
 import { chileTodayIsoDate } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +57,9 @@ function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
     Object.values(r).some((v) => String(v).trim()),
   ).length;
   const filledConsignments = payload.effective_consignments.filter((r) =>
+    Object.values(r).some((v) => String(v).trim()),
+  ).length;
+  const filledSocial = payload.social_posts.filter((r) =>
     Object.values(r).some((v) => String(v).trim()),
   ).length;
 
@@ -50,8 +75,7 @@ function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
         <span className="text-muted-foreground">Consignaciones efectivas:</span> {filledConsignments}
       </p>
       <p>
-        <span className="text-muted-foreground">Publicaciones RRSS:</span>{" "}
-        {payload.social_media.total_posts ?? "—"}
+        <span className="text-muted-foreground">Publicaciones RRSS:</span> {filledSocial}
       </p>
       {payload.daily_observations?.trim() && (
         <div>
@@ -86,11 +110,83 @@ export function DailySalesReportSupervision() {
 
   const detail = useDailyReportDetail(viewReportId, !!viewReportId);
 
+  const [analysisRow, setAnalysisRow] = useState<DailyReportSupervisionRow | null>(null);
+  const [generatingGeneral, setGeneratingGeneral] = useState(false);
+  const [generatingZip, setGeneratingZip] = useState(false);
+
   const stats = useMemo(() => {
     const rows = supervision.data ?? [];
     const submitted = rows.filter((r) => r.status === "submitted").length;
     return { total: rows.length, submitted, pending: rows.length - submitted };
   }, [supervision.data]);
+
+  const submittedRows = useMemo(
+    () => (supervision.data ?? []).filter((r) => r.status === "submitted" && r.report_id),
+    [supervision.data],
+  );
+
+  const handleGeneralReport = async () => {
+    if (!user?.tenant_id) return;
+    setGeneratingGeneral(true);
+    try {
+      const reports = await fetchSubmittedReportPdfDataForDate({
+        tenantId: user.tenant_id,
+        reportDate,
+        branchId: user.branch_id,
+        scope,
+      });
+      if (reports.length === 0) {
+        toast.info("No hay informes enviados para esta fecha.");
+        return;
+      }
+      await downloadGeneralReportPdf(reportDate, reports);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo generar el reporte.");
+    } finally {
+      setGeneratingGeneral(false);
+    }
+  };
+
+  const handleDownloadAllZip = async () => {
+    if (!user?.tenant_id) return;
+    setGeneratingZip(true);
+    try {
+      const reports = await fetchSubmittedReportPdfDataForDate({
+        tenantId: user.tenant_id,
+        reportDate,
+        branchId: user.branch_id,
+        scope,
+      });
+      if (reports.length === 0) {
+        toast.info("No hay informes enviados para esta fecha.");
+        return;
+      }
+      await downloadAllVendedorReportsZip(reportDate, reports);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo generar el .zip.");
+    } finally {
+      setGeneratingZip(false);
+    }
+  };
+
+  const handleVendedorReport = async (row: DailyReportSupervisionRow) => {
+    if (!row.report_id) return;
+    try {
+      const report = await fetchDailyReportById(row.report_id);
+      if (!report) {
+        toast.error("No se encontró el informe.");
+        return;
+      }
+      await downloadVendedorReportPdf({
+        fullName: row.full_name,
+        branchName: row.branch_name,
+        reportDate,
+        payload: report.payload,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo generar el PDF.");
+    }
+  };
 
   const formattedDateLabel = format(new Date(`${reportDate}T12:00:00`), "EEEE d MMMM yyyy", {
     locale: es,
@@ -134,6 +230,46 @@ export function DailySalesReportSupervision() {
                   <RefreshCw className="h-4 w-4" />
                 )}
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="h-9" disabled={generatingGeneral || generatingZip}>
+                    {generatingGeneral || generatingZip ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    Reportes
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72 max-h-96 overflow-y-auto">
+                  <DropdownMenuLabel>Descargar reportes de los vendedores</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={handleDownloadAllZip}
+                    disabled={submittedRows.length === 0}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Descargar todos (.zip)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGeneralReport}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Reporte general (1 PDF)
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Descargar uno a uno</DropdownMenuLabel>
+                  {submittedRows.length === 0 ? (
+                    <DropdownMenuItem disabled>Nadie ha enviado aún</DropdownMenuItem>
+                  ) : (
+                    submittedRows.map((row) => (
+                      <DropdownMenuItem
+                        key={row.user_id}
+                        onClick={() => handleVendedorReport(row)}
+                      >
+                        {row.full_name}
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </CardHeader>
@@ -183,8 +319,9 @@ export function DailySalesReportSupervision() {
                   {(supervision.data ?? []).map((row) => (
                     <tr
                       key={row.user_id}
+                      onClick={() => setAnalysisRow(row)}
                       className={cn(
-                        "border-b last:border-0",
+                        "border-b last:border-0 cursor-pointer hover:bg-muted/50 transition-colors",
                         row.status === "pending" && "bg-amber-50/50 dark:bg-amber-950/10",
                       )}
                     >
@@ -216,7 +353,10 @@ export function DailySalesReportSupervision() {
                             size="sm"
                             variant="ghost"
                             className="h-8"
-                            onClick={() => setViewReportId(row.report_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewReportId(row.report_id);
+                            }}
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             Ver
@@ -248,6 +388,18 @@ export function DailySalesReportSupervision() {
           )}
         </DialogContent>
       </Dialog>
+
+      {analysisRow && (
+        <DailyReportVendedorAnalysis
+          open={!!analysisRow}
+          onOpenChange={(open) => !open && setAnalysisRow(null)}
+          userId={analysisRow.user_id}
+          fullName={analysisRow.full_name}
+          branchName={analysisRow.branch_name}
+          reportDate={reportDate}
+          reportId={analysisRow.report_id}
+        />
+      )}
     </div>
   );
 }
