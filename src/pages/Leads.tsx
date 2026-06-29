@@ -268,7 +268,7 @@ const VEHICLE_TYPE_OPTIONS = [
 
 /** Forma de pago. payment_type es string libre en DB; mantenemos las 2 opciones
  *  capitalizadas tal como aparecen en el resto del UI (CRM, exports). */
-const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
+const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado", "Auto en parte de pago"] as const;
 
 /** Tipo de lead: distingue oportunidades de venta vs. consignación. value = valor en DB. */
 const LEAD_TYPE_OPTIONS = [
@@ -688,6 +688,7 @@ function LeadsImpl({ user }: { user: User }) {
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [leadTypeFilter, setLeadTypeFilter] = useState<"all" | "venta" | "consignacion">("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -923,9 +924,14 @@ function LeadsImpl({ user }: { user: User }) {
           ? true
           : bucket === resolvedStatusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesType =
+        leadTypeFilter === "all"
+          ? true
+          : (lead.lead_type ?? "venta") === leadTypeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [leads, deferredSearchQuery, resolvedStatusFilter]);
+  }, [leads, deferredSearchQuery, resolvedStatusFilter, leadTypeFilter]);
 
   const leadStats = useMemo(() => {
     const total = leads.length;
@@ -1812,6 +1818,20 @@ function LeadsImpl({ user }: { user: User }) {
                 <SelectItem value="cancelado">{CANCELLED_STATUS_LABELS.cancelado}</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={leadTypeFilter} onValueChange={(v) => setLeadTypeFilter(v as "all" | "venta" | "consignacion")}>
+              <SelectTrigger className="w-[160px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar por tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {LEAD_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="icon"
@@ -1937,47 +1957,43 @@ function LeadsImpl({ user }: { user: User }) {
                 onChange={(next) => setFormState({ ...formState, contact_state: next })}
               />
             )}
-            {user?.role !== "admin" && (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor="lead_make">Marca</Label>
-                  <VehicleMakeCombobox
-                    id="lead_make"
-                    value={formState.make}
-                    onChange={(value) => setFormState({ ...formState, make: value })}
-                    placeholder="Selecciona o escribe la marca"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="lead_model">Modelo</Label>
-                  <Input
-                    id="lead_model"
-                    value={formState.model}
-                    onChange={(e) => setFormState({ ...formState, model: e.target.value })}
-                    placeholder="Ej: Corolla, Ranger, 208…"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="lead_vehicle">Vehiculo</Label>
-                  <Select
-                    value={formState.vehicle}
-                    onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
-                  >
-                    <SelectTrigger id="lead_vehicle">
-                      <SelectValue placeholder="Selecciona tipo de vehículo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VEHICLE_TYPE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+            <div className="grid gap-2">
+              <Label htmlFor="lead_make">Marca</Label>
+              <VehicleMakeCombobox
+                id="lead_make"
+                value={formState.make}
+                onChange={(value) => setFormState({ ...formState, make: value })}
+                placeholder="Selecciona o escribe la marca"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead_model">Modelo</Label>
+              <Input
+                id="lead_model"
+                value={formState.model}
+                onChange={(e) => setFormState({ ...formState, model: e.target.value })}
+                placeholder="Ej: Corolla, Ranger, 208…"
+                autoComplete="off"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead_vehicle">Tipo de carrocería</Label>
+              <Select
+                value={formState.vehicle}
+                onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
+              >
+                <SelectTrigger id="lead_vehicle">
+                  <SelectValue placeholder="Selecciona tipo de carrocería" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-2">
               <Label>Región</Label>
               <Input
@@ -1986,36 +2002,62 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Ej: Metropolitana de Santiago"
               />
             </div>
-            {user?.role !== "admin" && (
-              <>
-                <LeadTransmissionSelect
-                  id="lead-create-transmision"
-                  value={formState.transmision}
-                  onChange={(transmision) => setFormState({ ...formState, transmision })}
-                  disabled={isCreating}
+            <LeadTransmissionSelect
+              id="lead-create-transmision"
+              value={formState.transmision}
+              onChange={(transmision) => setFormState({ ...formState, transmision })}
+              disabled={isCreating}
+            />
+            <div className="grid gap-2">
+              <Label>Forma de pago</Label>
+              <Select
+                value={formState.payment_type}
+                onValueChange={(value) =>
+                  setFormState({ ...formState, payment_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona forma de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={opt}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-budget">Presupuesto de compra</Label>
+                <Input
+                  id="lead-create-budget"
+                  value={formState.budget}
+                  onChange={(e) => setFormState({ ...formState, budget: e.target.value })}
+                  placeholder="Ej: 10-12 millones"
                 />
-                <div className="grid gap-2">
-                  <Label>Financiamiento/Contado</Label>
-                  <Select
-                    value={formState.payment_type}
-                    onValueChange={(value) =>
-                      setFormState({ ...formState, payment_type: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona forma de pago" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_TYPE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-pie">Pie</Label>
+                <Input
+                  id="lead-create-pie"
+                  value={formState.pie}
+                  onChange={(e) => setFormState({ ...formState, pie: e.target.value })}
+                  placeholder="Ej: 2.500.000"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lead-create-cuotas">Cuota mensual</Label>
+                <Input
+                  id="lead-create-cuotas"
+                  value={formState.cuotas_mensuales}
+                  onChange={(e) => setFormState({ ...formState, cuotas_mensuales: e.target.value })}
+                  placeholder="Ej: 350.000"
+                />
+                <p className="text-[11px] text-muted-foreground">Cuota que el cliente está dispuesto a pagar.</p>
+              </div>
+            </div>
             <div className="grid gap-2">
               <Label>Nota</Label>
               <Textarea

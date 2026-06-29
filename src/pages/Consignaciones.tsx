@@ -993,6 +993,7 @@ export default function Consignaciones() {
                   email: payloadBase.owner_email,
                   source: payloadBase.owner_phone ? "telefono" : "otro",
                   status: "nuevo",
+                  lead_type: "consignacion",
                   priority: "media",
                   tenant_id: user?.tenant_id ?? null,
                   branch_id: user?.branch_id ?? null,
