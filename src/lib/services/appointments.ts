@@ -36,6 +36,8 @@ export const appointmentService = {
     status?: string
     dateFrom?: string
     dateTo?: string
+    /** Incluir citas archivadas (soft-delete). Por defecto se excluyen. */
+    includeArchived?: boolean
   }) {
     let query = supabase
       .from('appointments')
@@ -47,6 +49,10 @@ export const appointmentService = {
         branch:branches(id, name)
       `)
       .order('scheduled_at', { ascending: true })
+
+    if (!filters?.includeArchived) {
+      query = query.is('archived_at', null)
+    }
 
     if (filters?.userId) {
       query = query.eq('user_id', filters.userId)
@@ -177,6 +183,46 @@ export const appointmentService = {
 
     if (error) throw error
     return data as Appointment[]
+  },
+
+  /**
+   * Citas vencidas (scheduled_at < ahora) que el vendedor aún no resolvió
+   * (status programada/confirmada) y no están archivadas. Alimentan el modal
+   * bloqueante que obliga a registrar qué pasó con la cita.
+   */
+  async getOverdueUnresolved(userId: string) {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select(`
+        *,
+        lead:leads(id, full_name, phone),
+        vehicle:vehicles(id, make, model, year)
+      `)
+      .eq('user_id', userId)
+      .in('status', ['programada', 'confirmada'])
+      .is('archived_at', null)
+      .lt('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true })
+
+    if (error) throw error
+    return data as Appointment[]
+  },
+
+  /**
+   * Cierra una cita vencida con su resultado obligatorio. La nota queda anexada
+   * a `description` para conservar el motivo original. El archivado (soft-delete)
+   * de las no concretadas lo hace el cron `archive_unconcreted_appointments`.
+   */
+  async resolveOverdue(
+    id: string,
+    status: 'completada' | 'no_asistio' | 'cancelada',
+    note: string,
+    previousDescription?: string | null,
+  ) {
+    const stamped = `[Cierre] ${note.trim()}`
+    const prev = previousDescription?.trim() ?? ''
+    const description = (prev ? `${prev}\n\n${stamped}` : stamped).slice(0, 1000)
+    await this.update(id, { status, description })
   },
 
   /**
