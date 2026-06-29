@@ -83,6 +83,7 @@ export const leadService = {
     status?: string
     source?: string
     search?: string
+    leadType?: 'venta' | 'consignacion'
     limit?: number
   }) {
     const isSearch = Boolean(filters?.search?.trim())
@@ -114,6 +115,10 @@ export const leadService = {
 
     if (filters?.source) {
       query = query.eq('source', filters.source)
+    }
+
+    if (filters?.leadType) {
+      query = query.eq('lead_type', filters.leadType)
     }
 
     if (filters?.search) {

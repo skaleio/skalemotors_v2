@@ -88,7 +88,8 @@ import { CalendarClock, CheckCircle2, Eye, Loader2, Mail, MapPin, MessageCircle,
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -635,6 +636,38 @@ export default function CRM() {
   const canUseGlobalView = !!user?.role && CAN_USE_CRM_GLOBAL_VIEW.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [crmLeadType, setCrmLeadTypeState] = useState<"venta" | "consignacion">(() => {
+    const fromUrl = searchParams.get("tipo");
+    if (fromUrl === "venta" || fromUrl === "consignacion") return fromUrl;
+    try {
+      const fromLs = localStorage.getItem("crm.leadType");
+      if (fromLs === "venta" || fromLs === "consignacion") return fromLs;
+    } catch {
+      // localStorage no disponible (modo privado): se usa el default.
+    }
+    return "venta";
+  });
+  const setCrmLeadType = useCallback(
+    (next: "venta" | "consignacion") => {
+      setCrmLeadTypeState(next);
+      try {
+        localStorage.setItem("crm.leadType", next);
+      } catch {
+        // ignorar
+      }
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.set("tipo", next);
+          return p;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const crmSupervisorSelectValue =
     supervisedVendorId ?? (canUseGlobalView ? CRM_VIEW_GLOBAL : undefined);
 
@@ -674,11 +707,12 @@ export default function CRM() {
   }, [leads]);
 
   const scopedLeads = useMemo(() => {
-    if (user?.role === "vendedor" && user.id) {
-      return filterLeadsForVendorView(leads, user.id);
-    }
-    return leads;
-  }, [leads, user?.role, user?.id]);
+    const roleScoped =
+      user?.role === "vendedor" && user.id
+        ? filterLeadsForVendorView(leads, user.id)
+        : leads;
+    return roleScoped.filter((lead) => (lead.lead_type ?? "venta") === crmLeadType);
+  }, [leads, user?.role, user?.id, crmLeadType]);
 
   const supervisedVendorName = useMemo(
     () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
@@ -827,12 +861,11 @@ export default function CRM() {
 
   const papeleraLeads = useMemo(() => {
     return deletedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if ((lead.lead_type ?? "venta") !== crmLeadType) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       return true;
     });
-  }, [deletedLeads, supervisedVendorId]);
+  }, [deletedLeads, supervisedVendorId, crmLeadType]);
 
   const handleRestoreLead = useCallback(
     async (id: string) => {
@@ -930,8 +963,6 @@ export default function CRM() {
    */
   const metrics = useMemo(() => {
     const base = scopedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       return true;
     });
@@ -947,8 +978,7 @@ export default function CRM() {
     const enPipeline = total - cerrados - perdidos;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
     const noRespondieron = deletedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if ((lead.lead_type ?? "venta") !== crmLeadType) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       const st = (lead.status || "").toLowerCase();
       return st === "nuevo" || st === "no_contesta" || st === "contactado" || st === "interesado";
@@ -987,15 +1017,12 @@ export default function CRM() {
       tasaAvanceNegociando,
       stageCounts,
     };
-  }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
+  }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey, crmLeadType]);
 
   const filteredLeads = useMemo(() => {
-    // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
-    // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
+    // Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
+    // La separación venta/consignación ya viene resuelta en scopedLeads (por lead_type).
     const onlyLeads = scopedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
-      if (isConsignacion) return false;
       const st = (lead.status || "").toLowerCase();
       if (st === "perdido") return false;
       return true;
@@ -1021,7 +1048,7 @@ export default function CRM() {
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [scopedLeads, searchQuery, supervisedVendorId]);
+  }, [scopedLeads, searchQuery, supervisedVendorId, crmLeadType]);
 
   const leadsByStage = useMemo(() => {
     return stages.map((stage) => ({
@@ -1761,6 +1788,12 @@ export default function CRM() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shrink-0">
+          <Tabs value={crmLeadType} onValueChange={(v) => setCrmLeadType(v as "venta" | "consignacion")}>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="venta">Venta</TabsTrigger>
+              <TabsTrigger value="consignacion">Consignación</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {canSupervise && (
             <Select
               value={crmSupervisorSelectValue ?? ""}
