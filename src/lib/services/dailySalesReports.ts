@@ -4,8 +4,10 @@ import type {
   DailyReportSupervisionRow,
   DailySalesReport,
   DailySalesReportPayload,
+  LeadDailyCallRow,
 } from "@/lib/types/dailySalesReport";
 import {
+  chileDayKey,
   chileMonthRange,
   chileTodayIsoDate,
   normalizeDailySalesReportPayload,
@@ -266,6 +268,58 @@ export async function fetchUserReportMetrics(
       consignments: p.effective_consignments.filter((r) => consignmentRowHasData(r)).length,
     } satisfies DailyReportMetricPoint;
   });
+}
+
+/**
+ * Llamadas a leads del vendedor en un día (hora Chile), derivadas del CRM.
+ * Read-only: cada nota de canal "llamada" registrada en el CRM es una fila.
+ * Consulta una ventana UTC amplia (±1 día) y filtra el día exacto con `chileDayKey`,
+ * igual que la regla "una raya por día" del CRM, para evitar bugs de DST.
+ */
+export async function fetchLeadsCallsForUserDay(input: {
+  userId: string;
+  reportDate: string;
+}): Promise<LeadDailyCallRow[]> {
+  const [yy, mm, dd] = input.reportDate.split("-").map(Number);
+  const base = Date.UTC(yy, mm - 1, dd);
+  const dayMs = 86400000;
+  const fromIso = new Date(base - dayMs).toISOString();
+  const toIso = new Date(base + 2 * dayMs).toISOString();
+
+  const { data, error } = await supabase
+    .from("lead_notes")
+    .select(
+      "id, lead_id, body, created_at, lead:leads(full_name, phone, vehicle_interest, status)",
+    )
+    .eq("created_by", input.userId)
+    .eq("channel", "llamada")
+    .eq("source", "vendor")
+    .gte("created_at", fromIso)
+    .lt("created_at", toIso)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .filter((row) => chileDayKey(row.created_at) === input.reportDate)
+    .map((row) => {
+      const lead = row.lead as {
+        full_name?: string | null;
+        phone?: string | null;
+        vehicle_interest?: string | null;
+        status?: string | null;
+      } | null;
+      return {
+        note_id: row.id,
+        lead_id: row.lead_id,
+        customer_name: lead?.full_name ?? "—",
+        phone: lead?.phone ?? "",
+        vehicle_interest: lead?.vehicle_interest ?? "",
+        lead_status: lead?.status ?? "",
+        created_at: row.created_at,
+        note: row.body ?? "",
+      } satisfies LeadDailyCallRow;
+    });
 }
 
 export async function buildDailyReportSupervisionRows(input: {

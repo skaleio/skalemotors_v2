@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { DailyReportVendedorAnalysis } from "@/components/tasks/DailyReportVendedorAnalysis";
 import { DailySalesReportForm } from "@/components/tasks/DailySalesReportForm";
+import { LeadCallsSection } from "@/components/tasks/LeadCallsSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,12 +45,13 @@ import {
 } from "@/lib/services/dailySalesReports";
 import type {
   DailyReportSupervisionRow,
-  DailySalesReportPayload,
+  DailySalesReport,
 } from "@/lib/types/dailySalesReport";
 import { chileTodayIsoDate } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
 
-function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
+function ReportDetailView({ report }: { report: DailySalesReport }) {
+  const payload = report.payload;
   const filledCalls = payload.calls.filter((r) =>
     Object.values(r).some((v) => String(v).trim()),
   ).length;
@@ -65,8 +67,12 @@ function ReportDetailView({ payload }: { payload: DailySalesReportPayload }) {
 
   return (
     <div className="space-y-4 text-sm max-h-[70vh] overflow-y-auto pr-1">
+      <div>
+        <p className="mb-2 font-medium text-foreground">Llamadas a leads (CRM)</p>
+        <LeadCallsSection userId={report.user_id} reportDate={report.report_date} />
+      </div>
       <p>
-        <span className="text-muted-foreground">Llamados con datos:</span> {filledCalls}
+        <span className="text-muted-foreground">Llamados consignación con datos:</span> {filledCalls}
       </p>
       <p>
         <span className="text-muted-foreground">Créditos con datos:</span> {filledCredits}
@@ -381,8 +387,8 @@ export function DailySalesReportSupervision() {
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
-          ) : detail.data?.payload ? (
-            <ReportDetailView payload={detail.data.payload} />
+          ) : detail.data ? (
+            <ReportDetailView report={detail.data} />
           ) : (
             <p className="text-sm text-muted-foreground">No se encontró el informe.</p>
           )}

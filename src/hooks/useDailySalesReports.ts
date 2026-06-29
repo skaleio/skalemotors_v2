@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   buildDailyReportSupervisionRows,
   fetchDailyReportById,
+  fetchLeadsCallsForUserDay,
   fetchMonthlyEffectiveConsignmentsCount,
   fetchMyDailySalesReport,
   fetchUserReportMetrics,
@@ -37,6 +38,19 @@ export function useMyDailySalesReport(
   return useQuery({
     queryKey: dailySalesReportQueryKey({ mine: userId, date: reportDate }),
     queryFn: () => fetchMyDailySalesReport(userId!, reportDate),
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useLeadsCallsForDay(
+  userId: string | undefined,
+  reportDate: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ leadCalls: userId, date: reportDate }),
+    queryFn: () => fetchLeadsCallsForUserDay({ userId: userId!, reportDate }),
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });

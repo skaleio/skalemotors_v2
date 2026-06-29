@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chileDayKey,
   chileTodayIsoDate,
   countDailyReportProgress,
   emptyDailySalesReportPayload,
@@ -35,5 +36,12 @@ describe("dailySalesReport", () => {
 
   it("chileTodayIsoDate devuelve formato YYYY-MM-DD", () => {
     expect(chileTodayIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("chileDayKey mapea un timestamp UTC al día calendario en hora Chile", () => {
+    // 03:00 UTC del 16-06 = 23:00 del 15-06 en Chile (UTC-4): cuenta como día anterior.
+    expect(chileDayKey("2026-06-16T03:00:00Z")).toBe("2026-06-15");
+    // 12:00 UTC del 16-06 = 08:00 del 16-06 en Chile: mismo día.
+    expect(chileDayKey("2026-06-16T12:00:00Z")).toBe("2026-06-16");
   });
 });
