@@ -1,6 +1,7 @@
 import { ClipboardList } from "lucide-react";
 
 import { DailySalesReportPanel } from "@/components/tasks/DailySalesReportSupervision";
+import { LeadsReportView } from "@/components/tasks/LeadsReportView";
 
 export default function PendingTasks() {
   return (
@@ -16,6 +17,8 @@ export default function PendingTasks() {
       </div>
 
       <DailySalesReportPanel />
+
+      <LeadsReportView />
     </div>
   );
 }
