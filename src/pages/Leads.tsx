@@ -276,12 +276,6 @@ const LEAD_TYPE_OPTIONS = [
   { value: "consignacion", label: "Consignación" },
 ] as const;
 
-/** Tipo de lead: distingue oportunidades de venta vs. consignación. value = valor en DB. */
-const LEAD_TYPE_OPTIONS = [
-  { value: "venta", label: "Venta" },
-  { value: "consignacion", label: "Consignación" },
-] as const;
-
 /** Estados activos del pipeline (mismo modelo que CRM). */
 const PIPELINE_STATUS_LABELS = CRM_PIPELINE_STATUS_LABELS;
 
