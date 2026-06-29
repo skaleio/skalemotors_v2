@@ -3,19 +3,27 @@
  * Genera una clave aleatoria para lead ingest y un INSERT listo para Supabase (secret_hash = SHA-256).
  *
  * Uso:
- *   node scripts/generate_lead_ingest_key.mjs <tenant_uuid> <branch_uuid> "Etiqueta opcional"
+ *   Key por sucursal:  node scripts/generate_lead_ingest_key.mjs <tenant_uuid> <branch_uuid> "Etiqueta"
+ *   Key por tenant:    node scripts/generate_lead_ingest_key.mjs <tenant_uuid> --tenant "Etiqueta"
  *
- * La clave en texto plano se muestra una sola vez; cópiala al n8n (header x-api-key).
+ * Una key por tenant (branch_id NULL) sirve para todas las sucursales del concesionario;
+ * el request indica la sucursal y el endpoint valida que pertenezca al tenant.
+ *
+ * La clave en texto plano se muestra una sola vez; cópiala al cliente / config (header x-api-key).
  * Ejecuta el SQL en el SQL Editor de Supabase (o psql).
  */
 import { createHash, randomBytes } from "node:crypto";
 
-const [tenantId, branchId, ...labelParts] = process.argv.slice(2);
+const [tenantId, scopeArg, ...labelParts] = process.argv.slice(2);
 const label = labelParts.join(" ").trim() || "n8n";
+const tenantScoped = scopeArg === "--tenant";
+const branchId = tenantScoped ? null : scopeArg;
 
-if (!tenantId || !branchId) {
+if (!tenantId || !scopeArg) {
   console.error(
-    "Uso: node scripts/generate_lead_ingest_key.mjs <tenant_id> <branch_id> [etiqueta]"
+    "Uso:\n" +
+      "  Key por sucursal: node scripts/generate_lead_ingest_key.mjs <tenant_id> <branch_id> [etiqueta]\n" +
+      "  Key por tenant:   node scripts/generate_lead_ingest_key.mjs <tenant_id> --tenant [etiqueta]"
   );
   process.exit(1);
 }
@@ -24,14 +32,18 @@ const plainKey = randomBytes(32).toString("base64url");
 const secretHash = createHash("sha256").update(plainKey, "utf8").digest("hex");
 
 const esc = (s) => s.replace(/'/g, "''");
+const branchValue = branchId ? `'${esc(branchId)}'::uuid` : "NULL";
 
-console.log("\n--- Clave (mostrar solo al cliente / pegar en n8n; no commitear) ---\n");
+console.log("\n--- Clave (mostrar solo al cliente / pegar en config; no commitear) ---\n");
 console.log(plainKey);
+console.log(
+  `\n--- Alcance: ${tenantScoped ? "TENANT (todas las sucursales)" : "SUCURSAL"} ---`
+);
 console.log("\n--- SQL (ejecutar en Supabase) ---\n");
 console.log(`INSERT INTO public.lead_ingest_keys (tenant_id, branch_id, label, secret_hash)
 VALUES (
   '${esc(tenantId)}'::uuid,
-  '${esc(branchId)}'::uuid,
+  ${branchValue},
   '${esc(label)}',
   '${esc(secretHash)}'
 );`);

@@ -34,7 +34,7 @@ import type {
   DailyReportCallRow,
   DailyReportConsignmentRow,
   DailyReportCreditRow,
-  DailyReportPlatformRow,
+  DailyReportSocialPostRow,
   DailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import {
@@ -45,7 +45,7 @@ import {
   emptyConsignmentRow,
   emptyCreditRow,
   emptyDailySalesReportPayload,
-  emptyPlatformRow,
+  emptySocialPostRow,
   normalizeDailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
@@ -160,11 +160,10 @@ export function DailySalesReportForm({
       ...p,
       credits: normalizeDailySalesReportPayload({ ...p, credits: next }).credits,
     }));
-  const updatePlatforms = (next: DailyReportPlatformRow[]) =>
+  const updateSocialPosts = (next: DailyReportSocialPostRow[]) =>
     setPayload((p) => ({
       ...p,
-      platform_uploads: normalizeDailySalesReportPayload({ ...p, platform_uploads: next })
-        .platform_uploads,
+      social_posts: normalizeDailySalesReportPayload({ ...p, social_posts: next }).social_posts,
     }));
   const updateConsignments = (next: DailyReportConsignmentRow[]) =>
     setPayload((p) => ({
@@ -253,7 +252,7 @@ export function DailySalesReportForm({
             {showAllSections && (
               <>
                 <span>{progress.credits} créditos</span>
-                <span>{progress.platforms} publicaciones en plataformas</span>
+                <span>{progress.social} publicaciones en redes</span>
               </>
             )}
           </div>
@@ -585,167 +584,65 @@ export function DailySalesReportForm({
               <div>
                 <p className="font-medium">Publicaciones en redes sociales</p>
                 <p className="text-xs text-muted-foreground font-normal">
-                  {payload.social_media.total_posts != null
-                    ? `${payload.social_media.total_posts} publicación(es)`
-                    : "Indica cantidad y vehículos"}
-                </p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-4 pb-4 xl:grid xl:grid-cols-[minmax(0,280px)_1fr] xl:gap-8 xl:items-start">
-            <Field label="Cantidad total de publicaciones">
-              <Input
-                type="number"
-                min={0}
-                className="max-w-full sm:max-w-[200px]"
-                placeholder="0"
-                value={payload.social_media.total_posts ?? ""}
-                onChange={(e) =>
-                  setPayload({
-                    ...payload,
-                    social_media: {
-                      ...payload.social_media,
-                      total_posts: e.target.value === "" ? null : Number(e.target.value),
-                    },
-                  })
-                }
-              />
-            </Field>
-            <div className="space-y-2 xl:min-w-0">
-              <Label className="text-xs text-muted-foreground">Vehículos publicados</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-              {payload.social_media.vehicles_posted.map((v, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    placeholder={`Vehículo ${i + 1}`}
-                    value={v}
-                    onChange={(e) => {
-                      const vehicles = [...payload.social_media.vehicles_posted];
-                      vehicles[i] = e.target.value;
-                      setPayload({
-                        ...payload,
-                        social_media: {
-                          ...payload.social_media,
-                          vehicles_posted: normalizeDailySalesReportPayload({
-                            ...payload,
-                            social_media: { ...payload.social_media, vehicles_posted: vehicles },
-                          }).social_media.vehicles_posted,
-                        },
-                      });
-                    }}
-                  />
-                  {payload.social_media.vehicles_posted.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        setPayload({
-                          ...payload,
-                          social_media: {
-                            ...payload.social_media,
-                            vehicles_posted: payload.social_media.vehicles_posted.filter(
-                              (_, j) => j !== i,
-                            ),
-                          },
-                        })
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() =>
-                  setPayload({
-                    ...payload,
-                    social_media: {
-                      ...payload.social_media,
-                      vehicles_posted: [...payload.social_media.vehicles_posted, ""],
-                    },
-                  })
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar vehículo
-              </Button>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="platforms" className="border rounded-lg px-4 bg-card">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3 text-left">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                4
-              </span>
-              <div>
-                <p className="font-medium">Vehículos subidos a plataformas</p>
-                <p className="text-xs text-muted-foreground font-normal">
-                  {progress.platforms > 0
-                    ? `${progress.platforms} registrado(s)`
-                    : "Chileautos, Mercado Libre..."}
+                  {progress.social > 0
+                    ? `${progress.social} registrado(s)`
+                    : "Marca, modelo, año y URL de Facebook Marketplace"}
                 </p>
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
-            {payload.platform_uploads.map((row, i) => (
+            {payload.social_posts.map((row, i) => (
               <EntryCard
                 key={i}
                 index={i}
-                canRemove={payload.platform_uploads.length > 1}
-                onRemove={() =>
-                  updatePlatforms(payload.platform_uploads.filter((_, j) => j !== i))
-                }
+                canRemove={payload.social_posts.length > 1}
+                onRemove={() => updateSocialPosts(payload.social_posts.filter((_, j) => j !== i))}
               >
                 <FieldGrid cols={2}>
-                  <Field label="Vehículo">
+                  <Field label="Marca">
                     <Input
-                      value={row.vehicle}
+                      placeholder="Ej: Toyota"
+                      value={row.brand}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], vehicle: e.target.value };
-                        updatePlatforms(next);
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], brand: e.target.value };
+                        updateSocialPosts(next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Modelo">
+                    <Input
+                      placeholder="Ej: Corolla"
+                      value={row.model}
+                      onChange={(e) => {
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], model: e.target.value };
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
                   <Field label="Año">
                     <Input
+                      placeholder="2020"
                       inputMode="numeric"
                       value={row.year}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
+                        const next = [...payload.social_posts];
                         next[i] = { ...next[i], year: e.target.value };
-                        updatePlatforms(next);
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
-                  <Field label="Plataforma">
+                  <Field label="URL publicación Facebook Marketplace">
                     <Input
-                      placeholder="Chileautos, Yapo..."
-                      value={row.platform}
+                      placeholder="https://facebook.com/marketplace/..."
+                      inputMode="url"
+                      value={row.url}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], platform: e.target.value };
-                        updatePlatforms(next);
-                      }}
-                    />
-                  </Field>
-                  <Field label="Observación">
-                    <Input
-                      value={row.observation}
-                      onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], observation: e.target.value };
-                        updatePlatforms(next);
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], url: e.target.value };
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
@@ -757,7 +654,7 @@ export function DailySalesReportForm({
               variant="outline"
               size="sm"
               className="w-full xl:col-span-2"
-              onClick={() => updatePlatforms([...payload.platform_uploads, emptyPlatformRow()])}
+              onClick={() => updateSocialPosts([...payload.social_posts, emptySocialPostRow()])}
             >
               <Plus className="h-4 w-4 mr-2" />
               Agregar publicación
@@ -769,7 +666,7 @@ export function DailySalesReportForm({
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                5
+                4
               </span>
               <div>
                 <p className="font-medium">Observaciones del día</p>

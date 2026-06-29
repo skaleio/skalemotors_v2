@@ -9,6 +9,7 @@ import FloatingChatButton from "@/components/FloatingChatButton";
 import { MobileBottomNav, MOBILE_BOTTOM_NAV_OFFSET_CLASS } from "@/components/MobileBottomNav";
 import SupportChat from "@/components/SupportChat";
 import { LoginAlertsDialog } from "@/components/LoginAlertsDialog";
+import { OverdueAppointmentsGate } from "@/components/OverdueAppointmentsGate";
 import { PrefetchLeads } from "@/components/PrefetchLeads";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -62,6 +63,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <SidebarProvider>
       <LoginAlertsDialog />
+      <OverdueAppointmentsGate />
       <PrefetchLeads />
       <div
         className={

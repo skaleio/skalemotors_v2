@@ -126,6 +126,7 @@ export async function createVendorUser(payload: {
   password: string;
   full_name: string;
   branch_id: string;
+  sales_staff_id?: string | null;
 }) {
   return invokeVendorFunction<{ ok: boolean; user_id?: string; email?: string }>(
     "vendor-user-create",
