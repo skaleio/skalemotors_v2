@@ -401,6 +401,7 @@ const LeadCard = memo(function LeadCard({
   justLanded,
   showAssigneeBadge = false,
   showContactStateBadge = true,
+  canDelegate = false,
 }: {
   lead: LeadWithAssignee;
   onClick: () => void;
@@ -417,6 +418,8 @@ const LeadCard = memo(function LeadCard({
   showAssigneeBadge?: boolean;
   /** Etiqueta de calificación (vendedor: solo en columna Nuevo). */
   showContactStateBadge?: boolean;
+  /** Admin / supervisión: delegar a vendedor desde la tarjeta. */
+  canDelegate?: boolean;
 }) {
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
@@ -550,15 +553,24 @@ const LeadCard = memo(function LeadCard({
         {formatChilePhoneForDisplay(lead.phone) || "Sin telefono"}
       </div>
       <LeadDelegationAdminBlock lead={lead} variant="inline" className="mt-1" />
-      <div className="mt-1.5">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
-          <span className="inline-flex items-center gap-1" title="Llamadas registradas">
-            <Phone className="h-3 w-3" aria-hidden /> {callsMade}/{LEAD_METRIC_MAX}
-          </span>
-          <span className="inline-flex items-center gap-1" title="WhatsApp registrados">
-            <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/{LEAD_METRIC_MAX}
-          </span>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+            <span className="inline-flex items-center gap-1" title="Llamadas registradas">
+              <Phone className="h-3 w-3" aria-hidden /> {callsMade}/{LEAD_METRIC_MAX}
+            </span>
+            <span className="inline-flex items-center gap-1" title="WhatsApp registrados">
+              <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/{LEAD_METRIC_MAX}
+            </span>
+          </div>
         </div>
+        {canDelegate ? (
+          <AssignLeadMenu
+            leadId={lead.id}
+            assignedTo={lead.assigned_to}
+            assignedLabel={assigneeFullName}
+          />
+        ) : null}
       </div>
       {agendadoNote && (
         <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted/40 px-2 py-1 text-[11px] leading-snug text-muted-foreground">
@@ -2375,6 +2387,7 @@ export default function CRM() {
                           key={lead.id}
                           lead={lead}
                           showAssigneeBadge={canSupervise}
+                          canDelegate={canSupervise}
                           showContactStateBadge={shouldShowLeadContactStateBadge(lead, user?.role)}
                           draggable={!loading && movingLeadId !== lead.id}
                           isDragging={draggingLeadId === lead.id}
