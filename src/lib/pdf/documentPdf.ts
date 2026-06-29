@@ -34,16 +34,18 @@ export async function downloadDocumentPdf(
   const pageH = pdf.internal.pageSize.getHeight();
   const imgW = pageW;
   const imgH = (canvas.height * imgW) / canvas.width;
-  const imgData = canvas.toDataURL("image/png");
+  // JPEG en vez de PNG: para texto sobre fondo blanco la calidad es idéntica
+  // a la vista, pero el archivo pesa ~20x menos (clave para enviar por WhatsApp/email).
+  const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
   let heightLeft = imgH;
   let position = 0;
-  pdf.addImage(imgData, "PNG", 0, position, imgW, imgH);
+  pdf.addImage(imgData, "JPEG", 0, position, imgW, imgH);
   heightLeft -= pageH;
   while (heightLeft > 0) {
     position = heightLeft - imgH;
     pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, imgW, imgH);
+    pdf.addImage(imgData, "JPEG", 0, position, imgW, imgH);
     heightLeft -= pageH;
   }
 
