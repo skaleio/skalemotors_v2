@@ -24,6 +24,7 @@ import { CrmLeadLegacyNotes } from "@/components/crm/CrmLeadLegacyNotes";
 import { CrmCitaLeadNotes } from "@/components/crm/CrmCitaLeadNotes";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
+import { LeadFollowUpGuide } from "@/components/leads/LeadFollowUpGuide";
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
@@ -2622,6 +2623,7 @@ export default function CRM() {
           </DialogHeader>
           {editingLead && (
             <div className="space-y-4 py-2">
+              {!isEditingForm && <LeadFollowUpGuide lead={editingLead} />}
               {isEditingForm ? (
                 <>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
