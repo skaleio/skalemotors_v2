@@ -90,8 +90,9 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
   doc.line(MARGIN, infoY + 9, PAGE_W - MARGIN, infoY + 9);
   y = infoY + 15;
 
-  const section = (num: number, title: string) => {
-    ensureSpace(12);
+  // reserve = espacio mínimo (mm) que debe quedar para no dejar el título huérfano.
+  const section = (num: number, title: string, reserve = 14) => {
+    ensureSpace(reserve);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(...PINK);
@@ -188,8 +189,8 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
     ]),
   );
 
-  // 4. Observaciones del día
-  section(4, "Observaciones del día");
+  // 4. Observaciones del día (reserva alta para que el título no quede solo al pie)
+  section(4, "Observaciones del día", 60);
   if (data.payload.daily_observations.trim()) {
     block("Observaciones", [["Notas", data.payload.daily_observations.trim()]]);
   } else {
