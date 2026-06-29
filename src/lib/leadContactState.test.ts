@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canAssignLeadContactState,
   shouldClearContactStateOnVendorExitNuevo,
+  shouldResetContactAttemptsOnMove,
   shouldShowLeadContactStateBadge,
 } from "./leadContactState";
 
@@ -37,5 +38,16 @@ describe("leadContactState visibility", () => {
     expect(
       shouldClearContactStateOnVendorExitNuevo("vendedor", "en_seguimiento", "negociando"),
     ).toBe(false);
+  });
+
+  it("reinicia el semáforo de contacto al pasar de Nuevo a En seguimiento", () => {
+    expect(shouldResetContactAttemptsOnMove("nuevo", "en_seguimiento")).toBe(true);
+    // legacy: 'contactado' e 'interesado' mapean a la columna En seguimiento
+    expect(shouldResetContactAttemptsOnMove("nuevo", "contactado")).toBe(true);
+    // otros destinos no reinician
+    expect(shouldResetContactAttemptsOnMove("nuevo", "negociando")).toBe(false);
+    expect(shouldResetContactAttemptsOnMove("nuevo", "no_contesta")).toBe(false);
+    // si no venía de Nuevo, no reinicia
+    expect(shouldResetContactAttemptsOnMove("negociando", "en_seguimiento")).toBe(false);
   });
 });
