@@ -91,7 +91,10 @@ export default {
   		boxShadow: {
   			xs: '0 1px 2px 0 rgb(0 0 0 / 0.04)',
   			elevated: '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)',
-  			popover: '0 8px 24px -8px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08)'
+  			// 'dialog' (no 'popover'): un boxShadow llamado 'popover' colisiona con la
+  			// utilidad shadow-popover que Tailwind autogenera desde colors.popover y la
+  			// sombra terminaba pintándose del color del popover (blanca, invisible).
+  			dialog: '0 8px 24px -8px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08)'
   		},
 		keyframes: {
 			'accordion-down': {

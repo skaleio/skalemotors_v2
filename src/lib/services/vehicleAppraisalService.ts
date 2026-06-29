@@ -10,6 +10,27 @@ export interface VehicleData {
   transmision: string | null;
   fuente: string;
   kilometraje?: number | null;
+  color?: string | null;
+  n_motor?: string | null;
+  n_chasis?: string | null;
+  version?: string | null;
+  tipo_vehiculo?: string | null;
+  puertas?: number | null;
+  mes_revision_tecnica?: string | null;
+  foto_url?: string | null;
+  tasacion_fiscal?: number | null;
+  codigo_sii?: string | null;
+}
+
+/** Referencia GetAPI / fiscal que se muestra junto al valor de mercado real. */
+export interface AppraisalReferencia {
+  precio_getapi: number | null;
+  banda_min: number | null;
+  banda_max: number | null;
+  tasacion_fiscal: number | null;
+  precio_retoma: number | null;
+  permiso_circulacion: string | null;
+  ano_info_fiscal: number | null;
 }
 
 export interface AppraisalResult {
@@ -22,6 +43,8 @@ export interface AppraisalResult {
     confianza: "alta" | "media" | "baja";
     fecha_consulta: string;
     tolerancia_años?: number;
+    /** "mercado" = calculado con anuncios reales; "getapi" = fallback a estimación GetAPI. */
+    fuente?: "mercado" | "getapi";
   };
   muestras: {
     titulo: string;
@@ -34,6 +57,10 @@ export interface AppraisalResult {
   resumen?: string | null;
   /** Precio de retoma sugerido por la API, si está disponible */
   precio_retoma?: number | null;
+  /** true si la tasación principal proviene de anuncios reales de mercado. */
+  mercado_disponible?: boolean;
+  /** Datos de referencia GetAPI/fiscal (no persistido en caché). */
+  referencia?: AppraisalReferencia | null;
 }
 
 type EdgeErrorResponse = {
@@ -45,6 +72,11 @@ type EdgeErrorResponse = {
 function normalizePatente(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
+
+// Formatos PPU chilenos: auto antiguo (AB1234), actual (BCDF12), comercial
+// (ABC123) y motos (AB123 / ABC12). El servidor revalida con el mismo set.
+const PATENTE_REGEX =
+  /^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/;
 
 function isFreshWithin24Hours(createdAt: string): boolean {
   const ageMs = Date.now() - new Date(createdAt).getTime();
@@ -104,14 +136,18 @@ export interface AppraisalByPatenteResult {
  */
 export async function getAppraisalByPatente(patente: string): Promise<AppraisalByPatenteResult> {
   const normalizedPatente = normalizePatente(patente);
-  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
-    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
   }
+
+  // Token fresco antes de invocar (evita 401 por access token vencido). Ver getAccessToken.
+  const accessToken = await getAccessToken();
 
   const { data, error } = await supabase.functions.invoke<
     AppraisalResult & { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
   >("getapi-appraisal", {
     body: { patente: normalizedPatente },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (error) {
@@ -135,6 +171,16 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     transmision: vehicleFromApi?.transmision ?? null,
     fuente: "getapi",
     kilometraje: typeof (vehicleFromApi as any)?.kilometraje === "number" ? (vehicleFromApi as any).kilometraje : null,
+    color: vehicleFromApi?.color ?? null,
+    n_motor: vehicleFromApi?.n_motor ?? null,
+    n_chasis: vehicleFromApi?.n_chasis ?? null,
+    version: (vehicleFromApi as any)?.version ?? null,
+    tipo_vehiculo: (vehicleFromApi as any)?.tipo_vehiculo ?? null,
+    puertas: typeof (vehicleFromApi as any)?.puertas === "number" ? (vehicleFromApi as any).puertas : null,
+    mes_revision_tecnica: (vehicleFromApi as any)?.mes_revision_tecnica ?? null,
+    foto_url: (vehicleFromApi as any)?.foto_url ?? null,
+    tasacion_fiscal: typeof (vehicleFromApi as any)?.tasacion_fiscal === "number" ? (vehicleFromApi as any).tasacion_fiscal : null,
+    codigo_sii: (vehicleFromApi as any)?.codigo_sii ?? null,
   };
 
   const appraisal: AppraisalResult = {
@@ -143,15 +189,67 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     uf_valor: Number(data.uf_valor ?? 0),
     resumen: data.resumen ?? null,
     precio_retoma: (data as any).precio_retoma ?? null,
+    mercado_disponible: (data as any).mercado_disponible ?? data.tasacion.total_muestras > 0,
+    referencia: ((data as any).referencia as AppraisalReferencia | undefined) ?? null,
   };
 
   return { vehicle, appraisal };
 }
 
-/** @deprecated Usar getAppraisalByPatente(patente) para flujo simplificado */
+/**
+ * Solo datos del vehículo por patente (consignación / alta de inventario).
+ * Usa mode:"vehicle" para que GetAPI devuelva marca/modelo/año/km/N° motor/VIN
+ * aunque NO exista precio de tasación — el flujo de consignación no lo necesita.
+ */
 export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
-  const result = await getAppraisalByPatente(patente);
-  return result.vehicle;
+  const normalizedPatente = normalizePatente(patente);
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
+  }
+
+  // Refrescar el token antes de invocar: la Edge Function valida el JWT del usuario
+  // y rechaza con 401 si el access token del navegador está vencido. refreshSession()
+  // recupera uno fresco (o lanza mensaje claro de re-login si el refresh token murió).
+  const accessToken = await getAccessToken();
+
+  const { data, error } = await supabase.functions.invoke<
+    { ok?: boolean; error?: string; vehicle?: Partial<VehicleData> } & EdgeErrorResponse
+  >("getapi-appraisal", {
+    body: { patente: normalizedPatente, mode: "vehicle" },
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (error) {
+    const msg = await getEdgeErrorMessage(error);
+    throw new Error(msg ?? error.message ?? "Error al obtener los datos del vehículo.");
+  }
+
+  if (!data?.ok || !data.vehicle) {
+    throw new Error(data?.error ?? "GetAPI no devolvió datos del vehículo para esa patente.");
+  }
+
+  const vehicleFromApi = data.vehicle;
+  return {
+    patente: normalizedPatente,
+    marca: vehicleFromApi.marca ?? "",
+    modelo: vehicleFromApi.modelo ?? "",
+    año: vehicleFromApi.año ?? 0,
+    motor: vehicleFromApi.motor ?? null,
+    combustible: vehicleFromApi.combustible ?? null,
+    transmision: vehicleFromApi.transmision ?? null,
+    fuente: "getapi",
+    kilometraje: typeof vehicleFromApi.kilometraje === "number" ? vehicleFromApi.kilometraje : null,
+    color: vehicleFromApi.color ?? null,
+    n_motor: vehicleFromApi.n_motor ?? null,
+    n_chasis: vehicleFromApi.n_chasis ?? null,
+    version: vehicleFromApi.version ?? null,
+    tipo_vehiculo: vehicleFromApi.tipo_vehiculo ?? null,
+    puertas: typeof vehicleFromApi.puertas === "number" ? vehicleFromApi.puertas : null,
+    mes_revision_tecnica: vehicleFromApi.mes_revision_tecnica ?? null,
+    foto_url: vehicleFromApi.foto_url ?? null,
+    tasacion_fiscal: typeof vehicleFromApi.tasacion_fiscal === "number" ? vehicleFromApi.tasacion_fiscal : null,
+    codigo_sii: vehicleFromApi.codigo_sii ?? null,
+  };
 }
 
 /** @deprecated Usar getAppraisalByPatente(patente) y usar result.appraisal */
@@ -185,18 +283,22 @@ export async function getCachedAppraisal(
     return null;
   }
 
+  const totalMuestras = Number(data.total_muestras ?? 0);
   return {
     tasacion: {
       precio_minimo: Number(data.precio_minimo ?? 0),
       precio_promedio: Number(data.precio_promedio ?? 0),
       precio_maximo: Number(data.precio_maximo ?? 0),
       precio_mediana: Number(data.precio_mediana ?? 0),
-      total_muestras: Number(data.total_muestras ?? 0),
+      total_muestras: totalMuestras,
       confianza: (data.confianza as "alta" | "media" | "baja") ?? "baja",
       fecha_consulta: data.created_at,
+      fuente: totalMuestras > 0 ? "mercado" : "getapi",
     },
     muestras: Array.isArray(data.muestras) ? (data.muestras as AppraisalResult["muestras"]) : [],
     uf_valor: Number(data.uf_valor ?? 0),
+    mercado_disponible: totalMuestras > 0,
+    referencia: null,
   };
 }
 

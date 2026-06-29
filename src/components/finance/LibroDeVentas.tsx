@@ -35,10 +35,10 @@ function socioMonto(row: LibroVentaRow, nombre: string): number {
 
 // Paleta: azul = se ingresa, verde = se calcula.
 const HEAD_BASE =
-  "sticky top-0 z-20 whitespace-nowrap px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide border-b";
+  "sticky top-0 z-20 min-w-[88px] whitespace-nowrap px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide border-b";
 const HEAD_IN = `${HEAD_BASE} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
 const HEAD_CALC = `${HEAD_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200`;
-const CELL = "whitespace-nowrap px-3 py-2 border-b border-border/60";
+const CELL = "min-w-[88px] whitespace-nowrap px-3 py-2 border-b border-border/60";
 const NUM = `${CELL} text-right tabular-nums`;
 // Sombra al borde derecho de las columnas congeladas (se ve al scrollear).
 const FROZEN_SHADOW = "shadow-[6px_0_8px_-6px_rgba(0,0,0,0.25)]";

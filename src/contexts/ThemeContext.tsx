@@ -22,16 +22,18 @@ const THEME_COLOR_DARK = '#0a0a0a';
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-/** Lee la preferencia persistida. Tolera valores legacy ('light'|'dark') y default a 'system'. */
+/** Lee la preferencia persistida. Tolera valores legacy ('light'|'dark') y default a 'light'. */
 function readStoredMode(): ThemeMode {
-  if (typeof window === 'undefined') return 'system';
+  // Default 'light': SaaS de concesionario arranca en claro; el user activa
+  // dark/system con el toggle (se persiste). Quien ya eligió conserva su modo.
+  if (typeof window === 'undefined') return 'light';
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === 'light' || raw === 'dark' || raw === 'system') return raw;
   } catch {
     /* localStorage bloqueado (private mode / cookies off): caer a default */
   }
-  return 'system';
+  return 'light';
 }
 
 /** Resuelve mode -> theme aplicado. 'system' consulta prefers-color-scheme en vivo. */

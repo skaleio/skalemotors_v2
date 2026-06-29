@@ -33,7 +33,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Calendar, ChevronDown, FileText, Filter, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, ChevronDown, FileText, Filter, Loader2, Mail, Phone, Plus, Search, Trash2, X } from "lucide-react";
+import { getAppraisalByPatente } from "@/lib/services/vehicleAppraisalService";
 import { useEffect, useMemo, useState, memo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -572,6 +573,8 @@ export default function Consignaciones() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [formRevealed, setFormRevealed] = useState(false);
+  const [patenteLookupLoading, setPatenteLookupLoading] = useState(false);
   const [consignacionAdvancedOpen, setConsignacionAdvancedOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [selectedRanker, setSelectedRanker] = useState<ConsignacionesAdminRankingRow | null>(null);
@@ -611,6 +614,8 @@ export default function Consignaciones() {
     motor: "",
     transmision: "",
     combustible: "",
+    color: "",
+    engine_number: "",
     patente: "",
     label: "sin_etiqueta",
     status: "nuevo" as Consignacion["status"],
@@ -643,6 +648,7 @@ export default function Consignaciones() {
           ? `Patente tasada: ${patente}`
           : prev.notes,
     }));
+    setFormRevealed(true);
   };
 
   useEffect(() => {
@@ -805,6 +811,8 @@ export default function Consignaciones() {
       motor: "",
       transmision: "",
       combustible: "",
+      color: "",
+      engine_number: "",
       patente: "",
       label: "sin_etiqueta",
       status: "nuevo",
@@ -816,6 +824,7 @@ export default function Consignaciones() {
       publicado: false,
     });
     setCoverImageFile(null);
+    setFormRevealed(false);
   };
 
   const uploadConsignmentReferenceCover = async (vehicleId: string, file: File) => {
@@ -830,6 +839,40 @@ export default function Consignaciones() {
       url: publicUrl,
       makeCover: true,
     });
+  };
+
+  const handleBuscarPatente = async () => {
+    const normalized = formState.patente.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    // PPU chilena: auto antiguo (AB1234), actual (BCDF12), comercial (ABC123) o moto (AB123 / ABC12).
+    if (!/^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/.test(normalized)) {
+      toast({ variant: "destructive", title: "Patente inválida", description: "Patente chilena: BCDF12 (actual), AB1234 (antigua) o ABC12 (moto)." });
+      return;
+    }
+    setPatenteLookupLoading(true);
+    try {
+      const { vehicle } = await getAppraisalByPatente(normalized);
+      setFormState((prev) => ({
+        ...prev,
+        patente: normalized,
+        vehicle_make: vehicle.marca || prev.vehicle_make,
+        vehicle_model: vehicle.modelo || prev.vehicle_model,
+        vehicle_year: vehicle.año && vehicle.año > 0 ? String(vehicle.año) : prev.vehicle_year,
+        vehicle_km: typeof vehicle.kilometraje === "number" ? String(vehicle.kilometraje) : prev.vehicle_km,
+        motor: vehicle.motor || prev.motor,
+        transmision: vehicle.transmision || prev.transmision,
+        combustible: vehicle.combustible || prev.combustible,
+        color: vehicle.color || prev.color,
+        engine_number: vehicle.n_motor || prev.engine_number,
+        vehicle_vin: vehicle.n_chasis || prev.vehicle_vin,
+      }));
+      setFormRevealed(true);
+      toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — completá los datos del consignante y revisá el resto.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
+      toast({ variant: "destructive", title: "No se encontró la patente", description: message });
+    } finally {
+      setPatenteLookupLoading(false);
+    }
   };
 
   const handleCreate = async () => {
@@ -865,6 +908,8 @@ export default function Consignaciones() {
         motor: formState.motor.trim() || null,
         transmision: formState.transmision.trim() || null,
         combustible: formState.combustible.trim() || null,
+        color: formState.color.trim() || null,
+        engine_number: formState.engine_number.trim() || null,
         patente: formState.patente.trim() ? formState.patente.trim() : null,
         publicado: formState.publicado,
         label: normalizeLabelValue(formState.label),
@@ -948,6 +993,7 @@ export default function Consignaciones() {
                   email: payloadBase.owner_email,
                   source: payloadBase.owner_phone ? "telefono" : "otro",
                   status: "nuevo",
+                  lead_type: "consignacion",
                   priority: "media",
                   tenant_id: user?.tenant_id ?? null,
                   branch_id: user?.branch_id ?? null,
@@ -1951,6 +1997,55 @@ export default function Consignaciones() {
             }}
             className="space-y-4"
           >
+          {/* Paso 1: buscar por patente */}
+          <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+            <Label htmlFor="patente-lookup" className="text-sm font-medium">Patente del vehículo</Label>
+            <p className="text-xs text-muted-foreground">
+              Ingresá la patente y traemos marca, modelo, año, color, kilometraje, N° motor y N° chasis automáticamente.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="patente-lookup"
+                value={formState.patente}
+                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleBuscarPatente();
+                  }
+                }}
+                placeholder="ABCD12"
+                maxLength={6}
+                className="uppercase"
+                disabled={patenteLookupLoading}
+              />
+              <Button type="button" onClick={handleBuscarPatente} disabled={patenteLookupLoading}>
+                {patenteLookupLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Buscando…
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Buscar
+                  </>
+                )}
+              </Button>
+            </div>
+            {!formRevealed && (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() => setFormRevealed(true)}
+              >
+                Completar manualmente sin patente
+              </button>
+            )}
+          </div>
+
+          {formRevealed && (
+          <>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             Stock en línea (Excel)
           </p>
@@ -2041,6 +2136,24 @@ export default function Consignaciones() {
                 value={formState.combustible}
                 onChange={(e) => setFormState({ ...formState, combustible: e.target.value })}
                 placeholder="Ej: DIESEL, BENCINA, HIBRIDA"
+              />
+            </div>
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input
+                id="color"
+                value={formState.color}
+                onChange={(e) => setFormState({ ...formState, color: e.target.value })}
+                placeholder="Ej: BLANCO"
+              />
+            </div>
+            <div>
+              <Label htmlFor="engine_number">N° Motor</Label>
+              <Input
+                id="engine_number"
+                value={formState.engine_number}
+                onChange={(e) => setFormState({ ...formState, engine_number: e.target.value })}
+                placeholder="Ej: G4LCHE718662"
               />
             </div>
             <div>
@@ -2279,6 +2392,8 @@ export default function Consignaciones() {
               {isCreating ? "Guardando..." : "Guardar consignacion"}
             </Button>
           </div>
+          </>
+          )}
           </form>
         </DialogContent>
       </Dialog>

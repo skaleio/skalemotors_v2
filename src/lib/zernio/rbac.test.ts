@@ -19,4 +19,11 @@ describe("zernio rbac", () => {
     expect(canPublishOrg("vendedor")).toBe(false);
     expect(showOrgTab("vendedor")).toBe(false);
   });
+
+  it("fotografo publica en org y ve la pestaña, pero no conecta", () => {
+    expect(canConnectOrg("fotografo")).toBe(false);
+    expect(canPublishOrg("fotografo")).toBe(true);
+    expect(canViewOrgAccounts("fotografo")).toBe(true);
+    expect(showOrgTab("fotografo")).toBe(true);
+  });
 });

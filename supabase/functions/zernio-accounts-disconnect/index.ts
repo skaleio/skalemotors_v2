@@ -50,3 +50,5 @@ export default async function handler(req: Request): Promise<Response> {
 
   return zernioJson(req, 200, { ok: true });
 }
+
+Deno.serve((req) => handler(req));

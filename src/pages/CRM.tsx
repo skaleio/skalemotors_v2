@@ -13,17 +13,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDevice } from "@/contexts/DeviceContext";
 import { CrmPipelineMoveBanner, type CrmPipelineMoveNotice } from "@/components/crm/CrmPipelineMoveBanner";
-import { LeadNotesSection, type LeadNotesSectionHandle } from "@/components/crm/LeadNotesSection";
+import {
+  CrmLeadChannelTracking,
+  type CrmLeadChannelTrackingHandle,
+} from "@/components/crm/CrmLeadChannelTracking";
+import { LeadIngestSummary } from "@/components/crm/LeadIngestSummary";
+import { CrmLeadLegacyNotes } from "@/components/crm/CrmLeadLegacyNotes";
+import { CrmCitaLeadNotes } from "@/components/crm/CrmCitaLeadNotes";
 import { AssignLeadMenu } from "@/components/leads/AssignLeadMenu";
 import { LeadContactStateBadge } from "@/components/leads/LeadContactStateBadge";
 import { LeadContactStateSelect } from "@/components/leads/LeadContactStateSelect";
 import { LeadDelegationAdminBlock } from "@/components/leads/LeadDelegationAdminBlock";
 import { LeadTransmissionSelect } from "@/components/leads/LeadTransmissionSelect";
-import { CrmLeadContactTrackingBlock } from "@/components/crm/CrmLeadContactTrackingBlock";
+import { LEAD_METRIC_MAX } from "@/components/leads/LeadMetricBar";
 import { CrmLeadScheduleAppointmentDialog } from "@/components/crm/CrmLeadScheduleAppointmentDialog";
 import { CrmTeamPerformanceBar } from "@/components/crm/CrmTeamPerformanceBar";
-import { ContactAttemptsBar } from "@/components/leads/ContactAttemptsBar";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import {
   fetchDelegatableSellers,
@@ -32,6 +38,9 @@ import {
   type BranchSeller,
 } from "@/lib/delegatableSellersScope";
 import { VendorLoginGate } from "@/components/VendorLoginGate";
+import { useAppointments } from "@/hooks/useAppointments";
+import { appointmentTypeLabels, appointmentStatusLabels, type AppointmentListItem } from "@/lib/appointmentDisplay";
+import { parseCrmLeadQuickAppointmentMotive } from "@/lib/crmLeadQuickAppointment";
 import { useLeads } from "@/hooks/useLeads";
 import { useConfirmDialog, type ConfirmOptions } from "@/hooks/useConfirmDialog";
 import { resolveAssigneeBorderColor } from "@/lib/crmAssigneeColor";
@@ -59,9 +68,11 @@ import {
   contactStateClearPatch,
   contactStateToPriority,
   shouldClearContactStateOnVendorExitNuevo,
+  shouldResetContactAttemptsOnMove,
   shouldShowLeadContactStateBadge,
   type LeadContactState,
 } from "@/lib/leadContactState";
+import { sanitizeName } from "@/lib/format";
 import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTransmission";
 import {
   filterLeadsForVendorView,
@@ -75,11 +86,12 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Loader2, Mail, Pencil, Phone, RotateCcw, Search, Target, TrendingUp, Trash2, Users, X, PhoneOff, ArrowUpRight, Skull } from "lucide-react";
+import { CalendarClock, CheckCircle2, Eye, Loader2, Mail, MapPin, MessageCircle, Pencil, Phone, RotateCcw, Search, StickyNote, Target, TrendingUp, Trash2, User, Users, X, PhoneOff, ArrowUpRight, Ban, Car } from "lucide-react";
 import type { DragEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -185,6 +197,15 @@ function formatChilePhoneForDisplay(value?: string | null) {
   return trimmed;
 }
 
+/** Href `tel:` (E.164 chileno) para llamar desde móvil; null si no hay número válido. */
+function buildTelHref(value?: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return null;
+  const e164 = digits.startsWith("56") ? `+${digits}` : `+56${digits}`;
+  return `tel:${e164}`;
+}
+
 const labelStyles: Record<string, { dot: string; text: string }> = {
   sin_etiqueta: { dot: "bg-slate-300", text: "text-slate-600" },
   Urgente: { dot: "bg-red-500", text: "text-red-600" },
@@ -248,7 +269,8 @@ function buildCrmLeadEditForm(lead: Lead) {
     transmision: leadTransmissionForForm(lead.transmision),
     status: safePipelineSelectValue(lead.status),
     assigned_to: lead.assigned_to ?? null,
-    contact_attempts: lead.contact_attempts ?? 0,
+    calls_made: lead.calls_made ?? 0,
+    whatsapp_attempts: lead.whatsapp_attempts ?? 0,
     contact_state: lead.contact_state ?? null,
   };
 }
@@ -268,15 +290,6 @@ function normalizePhoneChile(value: string): string {
   return `+56 ${raw}`;
 }
 
-function toTitleCase(s: string): string {
-  return s
-    .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function formatStateUpdatedAt(iso: string | null | undefined): string {
   if (!iso) return "";
   try {
@@ -285,6 +298,28 @@ function formatStateUpdatedAt(iso: string | null | undefined): string {
   } catch {
     return "";
   }
+}
+
+/** Motivo legible de una cita: texto libre del vendedor, o etiqueta del tipo. */
+function crmCitaMotive(apt: AppointmentListItem): string {
+  return (
+    parseCrmLeadQuickAppointmentMotive(apt.description) ||
+    appointmentTypeLabels[apt.type] ||
+    apt.title?.trim() ||
+    "Cita"
+  );
+}
+
+/** Fecha `dd/MM/yy`, hora `HH:mm` y etiqueta relativa (Hoy/Mañana) de una cita. */
+function formatCrmCita(iso: string): { date: string; time: string; relative: string | null } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: "", time: "", relative: null };
+  const date = d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const time = d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(d) - startOfDay(new Date())) / 86_400_000);
+  const relative = diffDays === 0 ? "Hoy" : diffDays === 1 ? "Mañana" : null;
+  return { date, time, relative };
 }
 
 function formatLeadTimestamp(iso: string | null | undefined): string {
@@ -389,8 +424,13 @@ const LeadCard = memo(function LeadCard({
   const label = getConsignacionLabel(lead.tags);
   const styles = label ? (labelStyles[label] || labelStyles.sin_etiqueta) : null;
   const hasAiState = lead.state != null && lead.state !== "";
+  // Solo en AGENDADO: si el lead tiene nota, se muestra; si no, no ocupa espacio.
+  const isAgendado = getLeadCrmStageKey(lead.status) === "agendado";
+  const agendadoNote = isAgendado ? (lead.notes?.trim() ?? "") : "";
   const lastDragEndRef = useRef(0);
-  const attempts = Math.max(0, Math.min(lead.contact_attempts ?? 0, 3));
+  const callsMade = Math.max(0, Math.min(lead.calls_made ?? 0, LEAD_METRIC_MAX));
+  const waSent = Math.max(0, Math.min(lead.whatsapp_attempts ?? 0, LEAD_METRIC_MAX));
+  const attempts = Math.max(callsMade, waSent);
   const socio = isCrmSeguimientoSocio(lead.crm_seguimiento_socio) ? lead.crm_seguimiento_socio : null;
   const assigneeId = leadAssignedToId(lead);
   const assigneeName = assigneeCornerLabel(lead);
@@ -421,8 +461,12 @@ const LeadCard = memo(function LeadCard({
   const attemptStyles: Record<number, string> = {
     0: "",
     1: "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/10",
-    2: "border-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
-    3: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
+    2: "border-lime-500 bg-lime-50/60 dark:bg-lime-500/10",
+    3: "border-yellow-400 bg-yellow-50/70 dark:bg-yellow-500/10",
+    4: "border-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
+    5: "border-orange-400 bg-orange-50/70 dark:bg-orange-500/10",
+    6: "border-orange-500 bg-orange-50/70 dark:bg-orange-500/10",
+    7: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
   };
 
   const handleCardOpen = () => {
@@ -511,18 +555,14 @@ const LeadCard = memo(function LeadCard({
       <LeadDelegationAdminBlock lead={lead} variant="inline" className="mt-1" />
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          {showContactAttemptsSemaforo ? (
-            <ContactAttemptsBar
-              leadId={lead.id}
-              value={lead.contact_attempts ?? 0}
-              size="sm"
-              showLabel={false}
-            />
-          ) : (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Contactos {attempts}/3
+          <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+            <span className="inline-flex items-center gap-1" title="Llamadas registradas">
+              <Phone className="h-3 w-3" aria-hidden /> {callsMade}/{LEAD_METRIC_MAX}
             </span>
-          )}
+            <span className="inline-flex items-center gap-1" title="WhatsApp registrados">
+              <MessageCircle className="h-3 w-3" aria-hidden /> {waSent}/{LEAD_METRIC_MAX}
+            </span>
+          </div>
         </div>
         {canDelegate ? (
           <AssignLeadMenu
@@ -532,6 +572,14 @@ const LeadCard = memo(function LeadCard({
           />
         ) : null}
       </div>
+      {agendadoNote && (
+        <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted/40 px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+          <StickyNote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          <span className="line-clamp-2" title={agendadoNote}>
+            {agendadoNote}
+          </span>
+        </div>
+      )}
       {label && styles && (
         <div className="mt-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
@@ -566,6 +614,7 @@ const CAN_USE_CRM_GLOBAL_VIEW = new Set(["admin", "jefe_jefe"]);
 
 export default function CRM() {
   const { user } = useAuth();
+  const { isMobileDevice } = useDevice();
   const location = useLocation();
   const vendorMode = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -578,6 +627,7 @@ export default function CRM() {
     branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
     assignedTo: leadsAssignedToForQuery(user?.role, user?.id),
     enabled: !!user,
+    live: true,
   });
 
   const { data: deletedLeads = [], isLoading: loadingPapelera, refetch: refetchPapelera } = useQuery({
@@ -604,6 +654,38 @@ export default function CRM() {
   const canUseGlobalView = !!user?.role && CAN_USE_CRM_GLOBAL_VIEW.has(user.role);
   const [supervisedVendorId, setSupervisedVendorId] = useState<string | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [crmLeadType, setCrmLeadTypeState] = useState<"venta" | "consignacion">(() => {
+    const fromUrl = searchParams.get("tipo");
+    if (fromUrl === "venta" || fromUrl === "consignacion") return fromUrl;
+    try {
+      const fromLs = localStorage.getItem("crm.leadType");
+      if (fromLs === "venta" || fromLs === "consignacion") return fromLs;
+    } catch {
+      // localStorage no disponible (modo privado): se usa el default.
+    }
+    return "venta";
+  });
+  const setCrmLeadType = useCallback(
+    (next: "venta" | "consignacion") => {
+      setCrmLeadTypeState(next);
+      try {
+        localStorage.setItem("crm.leadType", next);
+      } catch {
+        // ignorar
+      }
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.set("tipo", next);
+          return p;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const crmSupervisorSelectValue =
     supervisedVendorId ?? (canUseGlobalView ? CRM_VIEW_GLOBAL : undefined);
 
@@ -613,12 +695,42 @@ export default function CRM() {
   });
   const { sellers: vendorList } = useBranchSellers(vendorListQuery);
 
+  // Próximas citas agendadas por los vendedores (panel de supervisión, reemplaza el card de % por etapa).
+  const { appointments: scopeAppointments } = useAppointments({
+    tenantId: user?.tenant_id ?? undefined,
+    branchId: leadsBranchIdForQuery(user?.role, user?.branch_id),
+    enabled: !!user && canSupervise,
+    live: true,
+  });
+
+  const upcomingCitas = useMemo(() => {
+    const now = Date.now();
+    const closed = new Set(["cancelada", "completada", "no_asistio"]);
+    return (scopeAppointments as unknown as AppointmentListItem[])
+      .filter((apt) => {
+        const at = new Date(apt.scheduled_at).getTime();
+        return !Number.isNaN(at) && at >= now && !closed.has(apt.status);
+      })
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .slice(0, 8);
+  }, [scopeAppointments]);
+
+  const [selectedCita, setSelectedCita] = useState<AppointmentListItem | null>(null);
+
+  // Resumen del chatbot (lead.notes) por id, para mostrarlo en el detalle de la cita.
+  const leadsById = useMemo(() => {
+    const map = new Map<string, LeadWithAssignee>();
+    for (const lead of leads as LeadWithAssignee[]) map.set(lead.id, lead);
+    return map;
+  }, [leads]);
+
   const scopedLeads = useMemo(() => {
-    if (user?.role === "vendedor" && user.id) {
-      return filterLeadsForVendorView(leads, user.id);
-    }
-    return leads;
-  }, [leads, user?.role, user?.id]);
+    const roleScoped =
+      user?.role === "vendedor" && user.id
+        ? filterLeadsForVendorView(leads, user.id)
+        : leads;
+    return roleScoped.filter((lead) => (lead.lead_type ?? "venta") === crmLeadType);
+  }, [leads, user?.role, user?.id, crmLeadType]);
 
   const supervisedVendorName = useMemo(
     () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
@@ -664,7 +776,8 @@ export default function CRM() {
     status: "en_seguimiento",
     /** Vendedor que hace el seguimiento (`leads.assigned_to`) */
     assigned_to: null as string | null,
-    contact_attempts: 0,
+    calls_made: 0,
+    whatsapp_attempts: 0,
     contact_state: null as LeadContactState | null,
   });
 
@@ -766,12 +879,11 @@ export default function CRM() {
 
   const papeleraLeads = useMemo(() => {
     return deletedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if ((lead.lead_type ?? "venta") !== crmLeadType) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       return true;
     });
-  }, [deletedLeads, supervisedVendorId]);
+  }, [deletedLeads, supervisedVendorId, crmLeadType]);
 
   const handleRestoreLead = useCallback(
     async (id: string) => {
@@ -868,21 +980,23 @@ export default function CRM() {
    * Es decir: del total de leads trabajados, qué % terminó cerrado.
    */
   const metrics = useMemo(() => {
-    const base = leads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+    const base = scopedLeads.filter((lead) => {
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       return true;
     });
-    const total = base.length;
+    // Los cancelados no cuentan como lead trabajado: se excluyen del total (y por ende de la efectividad).
+    const cancelados = base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
+    const total = base.length - cancelados;
+    const tasaCancelados = base.length > 0
+      ? Math.round((cancelados / base.length) * 1000) / 10
+      : 0;
     const cerrados = base.filter((l) => (l.status || "").toLowerCase() === "vendido").length;
     const cerradosMes = base.filter((l) => isVendidoInLocalCalendarMonth(l, crmCalendarMonthKey)).length;
     const perdidos = base.filter((l) => (l.status || "").toLowerCase() === "perdido").length;
-    const enPipeline = total - cerrados - perdidos - base.filter((l) => (l.status || "").toLowerCase() === "cancelado").length;
+    const enPipeline = total - cerrados - perdidos;
     const efectividad = total > 0 ? Math.round((cerrados / total) * 1000) / 10 : 0;
     const noRespondieron = deletedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      if (tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX))) return false;
+      if ((lead.lead_type ?? "venta") !== crmLeadType) return false;
       if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) return false;
       const st = (lead.status || "").toLowerCase();
       return st === "nuevo" || st === "no_contesta" || st === "contactado" || st === "interesado";
@@ -898,12 +1012,18 @@ export default function CRM() {
       ? Math.round((avanzados / (total + noRespondieron)) * 1000) / 10
       : 0;
 
-    const tasaPerdida = cerrados + perdidos > 0
-      ? Math.round((perdidos / (cerrados + perdidos)) * 1000) / 10
-      : 0;
+    const stageCounts = Object.fromEntries(
+      CRM_PIPELINE_STAGES.map((s) => [s.key, 0]),
+    ) as Record<CrmStageKey, number>;
+    for (const lead of base) {
+      const stageKey = getLeadCrmStageKey(lead.status);
+      if (stageKey) stageCounts[stageKey] += 1;
+    }
 
     return {
       total,
+      cancelados,
+      tasaCancelados,
       cerrados,
       cerradosMes,
       perdidos,
@@ -913,17 +1033,14 @@ export default function CRM() {
       tasaNoRespondieron,
       avanzados,
       tasaAvanceNegociando,
-      tasaPerdida,
+      stageCounts,
     };
-  }, [leads, supervisedVendorId, deletedLeads, crmCalendarMonthKey]);
+  }, [scopedLeads, supervisedVendorId, deletedLeads, crmCalendarMonthKey, crmLeadType]);
 
   const filteredLeads = useMemo(() => {
-    // 1) Excluir consignaciones: solo mostrar leads creados como "Leads" (no los que vienen de Consignaciones).
-    // 2) Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
+    // Excluir perdidos: los vendidos ahora se muestran en "NEGOCIO CONCRETADO".
+    // La separación venta/consignación ya viene resuelta en scopedLeads (por lead_type).
     const onlyLeads = scopedLeads.filter((lead) => {
-      const tags = normalizeTags(lead.tags);
-      const isConsignacion = tags.some((tag) => tag.startsWith(CONSIGNACION_TAG_PREFIX));
-      if (isConsignacion) return false;
       const st = (lead.status || "").toLowerCase();
       if (st === "perdido") return false;
       return true;
@@ -949,7 +1066,7 @@ export default function CRM() {
       const email = (lead.email || "").toLowerCase();
       return name.includes(q) || email.includes(q) || (phoneQuery.length >= 3 && phone.includes(phoneQuery));
     });
-  }, [scopedLeads, searchQuery, supervisedVendorId]);
+  }, [scopedLeads, searchQuery, supervisedVendorId, crmLeadType]);
 
   const leadsByStage = useMemo(() => {
     return stages.map((stage) => ({
@@ -967,12 +1084,22 @@ export default function CRM() {
     }));
   }, [filteredLeads, stages, crmCalendarMonthKey]);
 
+  /** Total de leads en el pipeline activo (denominador del % por columna; respeta vista global/vendedor). */
+  const kanbanActiveTotal = useMemo(
+    () =>
+      leadsByStage
+        .filter((stage) => stage.key !== "negocio_cerrado" && stage.key !== "cancelado")
+        .reduce((sum, stage) => sum + stage.leads.length, 0),
+    [leadsByStage],
+  );
+
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStageKey, setDragOverStageKey] = useState<CrmStageKey | null>(null);
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null);
   const [landedLeadId, setLandedLeadId] = useState<string | null>(null);
   const landHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const leadNotesRef = useRef<LeadNotesSectionHandle>(null);
+  const callsTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
+  const whatsappTrackingRef = useRef<CrmLeadChannelTrackingHandle>(null);
   const [pipelineMoveNotice, setPipelineMoveNotice] = useState<CrmPipelineMoveNotice | null>(null);
   const pipelineMoveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1085,11 +1212,11 @@ export default function CRM() {
 
     setIsUpdating(true);
     try {
-      if (leadNotesRef.current?.hasPendingDraft()) {
-        const noteOk = await leadNotesRef.current.savePendingDraft();
-        if (!noteOk) {
-          setIsUpdating(false);
-          return;
+      // Guarda notas pendientes best-effort. NUNCA bloquea el cambio de estado del
+      // lead (mover a cancelado, etc.): la nota válida solo se exige en "Registrar".
+      for (const trackingRef of [callsTrackingRef.current, whatsappTrackingRef.current]) {
+        if (trackingRef?.hasPendingDraft()) {
+          await trackingRef.savePendingDraft();
         }
       }
 
@@ -1099,7 +1226,7 @@ export default function CRM() {
 
       const updates: Record<string, unknown> = isEditingForm
         ? {
-            full_name: toTitleCase(editForm.full_name.trim()) || "Sin nombre",
+            full_name: sanitizeName(editForm.full_name) || "Sin nombre",
             phone: normalizePhoneChile(editForm.phone) || "sin_telefono",
             email: editForm.email.trim() || null,
             status: nextDbStatus,
@@ -1111,7 +1238,8 @@ export default function CRM() {
             transmision: leadTransmissionForSave(editForm.transmision),
             tags: buildTagsWithVehicle(editingLead.tags, editForm.vehicle),
             assigned_to: editForm.assigned_to,
-            contact_attempts: editForm.contact_attempts,
+            calls_made: editForm.calls_made,
+            whatsapp_attempts: editForm.whatsapp_attempts,
           }
         : { status: nextDbStatus };
 
@@ -1129,9 +1257,17 @@ export default function CRM() {
         }
       }
 
+      // Mover de NUEVO a EN SEGUIMIENTO reinicia el semáforo de intentos de contacto.
+      if (shouldResetContactAttemptsOnMove(editingLead.status, nextDbStatus)) {
+        updates.contact_attempts = 0;
+      }
+
       if (
         isEditingForm
-        && editForm.contact_attempts > (editingLead.contact_attempts ?? 0)
+        && (
+          editForm.calls_made > (editingLead.calls_made ?? 0)
+          || editForm.whatsapp_attempts > (editingLead.whatsapp_attempts ?? 0)
+        )
       ) {
         updates.last_contact_at = new Date().toISOString();
       }
@@ -1353,6 +1489,7 @@ export default function CRM() {
         previousStatus,
         nextStatus,
       );
+      const resetAttempts = shouldResetContactAttemptsOnMove(previousStatus, nextStatus);
       queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.map((l: Lead) => {
@@ -1361,6 +1498,7 @@ export default function CRM() {
             ...l,
             status: nextStatus,
             ...(clearContactState ? contactStateClearPatch() : {}),
+            ...(resetAttempts ? { contact_attempts: 0 } : {}),
           };
         });
       });
@@ -1368,6 +1506,7 @@ export default function CRM() {
       try {
         const dropUpdates: Record<string, unknown> = { status: nextStatus };
         if (clearContactState) Object.assign(dropUpdates, contactStateClearPatch());
+        if (resetAttempts) dropUpdates.contact_attempts = 0;
         const updated = await leadService.update(leadId, dropUpdates as any);
         queryClient.setQueriesData({ queryKey: ["leads"] }, (current: unknown) => {
           if (!Array.isArray(current)) return current;
@@ -1663,18 +1802,24 @@ export default function CRM() {
           </Button>
         </div>
       )}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between [@media(max-height:600px)]:gap-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-3xl font-bold tracking-tight [@media(max-height:600px)]:text-xl">CRM</h1>
+          <p className="text-muted-foreground mt-2 [@media(max-height:600px)]:hidden">
             Gestión de clientes y relaciones
           </p>
-          <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+          <p className="text-xs text-muted-foreground mt-1 hidden sm:block [@media(max-height:600px)]:!hidden">
             Arrastra una tarjeta a otra columna para cambiar el estado. Al mover a{" "}
             <span className="font-medium">NEGOCIO CONCRETADO</span> se pedirán datos de la venta antes de guardar.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shrink-0">
+          <Tabs value={crmLeadType} onValueChange={(v) => setCrmLeadType(v as "venta" | "consignacion")}>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="venta">Venta</TabsTrigger>
+              <TabsTrigger value="consignacion">Consignación</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {canSupervise && (
             <Select
               value={crmSupervisorSelectValue ?? ""}
@@ -1760,7 +1905,7 @@ export default function CRM() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <Card>
           <CardContent className="flex items-center gap-3 py-4">
             <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
@@ -1875,22 +2020,249 @@ export default function CRM() {
         <Card>
           <CardContent className="flex items-center gap-3 py-4">
             <div className="rounded-lg bg-amber-50 p-2 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-              <Skull className="h-5 w-5" />
+              <Ban className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Tasa de pérdida</p>
+              <p className="text-xs text-muted-foreground">Leads cancelados</p>
               <p className="text-2xl font-bold leading-tight">
-                {(metrics.cerrados + metrics.perdidos) > 0
-                  ? `${metrics.tasaPerdida.toLocaleString("es-CL")}%`
+                {(metrics.cancelados + metrics.total) > 0
+                  ? `${metrics.tasaCancelados.toLocaleString("es-CL")}%`
                   : "—"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {metrics.perdidos} de {metrics.cerrados + metrics.perdidos} cerrados/perdidos
+                {metrics.cancelados} de {metrics.cancelados + metrics.total} leads
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {canSupervise && (
+        <Card>
+          <CardContent className="py-4">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Próximas citas agendadas
+              {upcomingCitas.length > 0 ? ` · ${upcomingCitas.length}` : ""}
+            </p>
+            {upcomingCitas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay citas próximas agendadas.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {upcomingCitas.map((apt) => {
+                  const { date, time, relative } = formatCrmCita(apt.scheduled_at);
+                  const motive = crmCitaMotive(apt);
+                  const leadName = apt.lead?.full_name?.trim() || "Sin lead";
+                  const vendor = apt.user?.full_name?.trim() || apt.user?.email?.trim() || null;
+                  const isToday = relative === "Hoy";
+                  const isTomorrow = relative === "Mañana";
+                  const accent = isToday
+                    ? "border-l-emerald-500"
+                    : isTomorrow
+                      ? "border-l-sky-500"
+                      : "border-l-border";
+                  const badgeClass = isToday
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    : "bg-sky-500/15 text-sky-600 dark:text-sky-400";
+                  return (
+                    <div
+                      key={apt.id}
+                      className={cn(
+                        "group relative flex flex-col gap-2 rounded-xl border border-l-[3px] bg-card px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md",
+                        accent,
+                      )}
+                      title={`${date} ${time} · ${motive} · ${leadName}${vendor ? ` · ${vendor}` : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <CalendarClock className="h-4 w-4" aria-hidden />
+                          </div>
+                          <div className="leading-tight">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold tabular-nums">{time}</span>
+                              {relative ? (
+                                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", badgeClass)}>
+                                  {relative}
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{date}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCita(apt)}
+                          className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                          title="Ver detalle de la cita"
+                          aria-label="Ver detalle de la cita"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="min-w-0 space-y-1 border-t pt-2">
+                        <p className="truncate text-sm font-semibold text-foreground" title={leadName}>
+                          {leadName}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="inline-flex max-w-full items-center truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                            title={motive}
+                          >
+                            {motive}
+                          </span>
+                          {vendor ? (
+                            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground" title={vendor}>
+                              <Users className="h-3 w-3 shrink-0" aria-hidden />
+                              <span className="truncate">{vendor}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!selectedCita} onOpenChange={(open) => !open && setSelectedCita(null)}>
+        <DialogContent className="max-h-[88vh] gap-0 overflow-y-auto p-0 sm:max-w-[520px]">
+          {selectedCita ? (() => {
+            const { date, time, relative } = formatCrmCita(selectedCita.scheduled_at);
+            const motive = crmCitaMotive(selectedCita);
+            const leadName = selectedCita.lead?.full_name?.trim() || "Sin lead";
+            const leadId = selectedCita.lead?.id ?? null;
+            const fullLead = leadId ? leadsById.get(leadId) : undefined;
+            const phone = selectedCita.client_phone?.trim() || selectedCita.lead?.phone?.trim() || null;
+            const waDigits = phone ? phone.replace(/\D/g, "") : "";
+            const email = selectedCita.lead?.email?.trim() || null;
+            const vendor = selectedCita.user?.full_name?.trim() || selectedCita.user?.email?.trim() || null;
+            const vehicle = selectedCita.vehicle
+              ? `${selectedCita.vehicle.make} ${selectedCita.vehicle.model}${selectedCita.vehicle.year ? ` ${selectedCita.vehicle.year}` : ""}`.trim()
+              : null;
+            const location = selectedCita.location?.trim() || null;
+            return (
+              <>
+                <DialogHeader className="space-y-3 border-b bg-muted/30 px-5 py-4 text-left">
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <CalendarClock className="h-5 w-5 text-primary" />
+                    Detalle de la cita
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">{motive}</DialogDescription>
+                  <div className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <CalendarClock className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-base font-bold leading-tight tabular-nums text-foreground">
+                        {date} · {time}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{motive}</p>
+                    </div>
+                    {relative ? (
+                      <span className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        {relative}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{appointmentTypeLabels[selectedCita.type] ?? selectedCita.type}</Badge>
+                    <Badge variant="secondary">{appointmentStatusLabels[selectedCita.status] ?? selectedCita.status}</Badge>
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 px-5 py-4 text-sm">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <User className="h-3.5 w-3.5" aria-hidden />
+                      Lead
+                    </p>
+                    <p className="mt-1 font-semibold text-foreground">{leadName}</p>
+                    {phone || email ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {phone ? (
+                          <a
+                            href={`tel:${phone}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                          >
+                            <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            {phone}
+                          </a>
+                        ) : null}
+                        {waDigits ? (
+                          <a
+                            href={`https://wa.me/${waDigits}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                            WhatsApp
+                          </a>
+                        ) : null}
+                        {email ? (
+                          <a
+                            href={`mailto:${email}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                          >
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                            {email}
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {vehicle ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Car className="h-3.5 w-3.5" aria-hidden />
+                          Vehículo
+                        </p>
+                        <p className="font-medium text-foreground">{vehicle}</p>
+                      </div>
+                    ) : null}
+                    {location ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden />
+                          Ubicación
+                        </p>
+                        <p className="font-medium text-foreground">{location}</p>
+                      </div>
+                    ) : null}
+                    {vendor ? (
+                      <div className="space-y-0.5">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <User className="h-3.5 w-3.5" aria-hidden />
+                          Vendedor
+                        </p>
+                        <p className="font-medium text-foreground">{vendor}</p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <StickyNote className="h-3.5 w-3.5" aria-hidden />
+                      Notas del lead
+                    </p>
+                    <LeadIngestSummary notes={fullLead?.notes} />
+                    {leadId ? (
+                      <CrmCitaLeadNotes leadId={leadId} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Esta cita no está vinculada a un lead.</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })() : null}
+        </DialogContent>
+      </Dialog>
 
       <CrmPipelineMoveBanner notice={pipelineMoveNotice} onDismiss={dismissPipelineMoveNotice} />
 
@@ -1952,9 +2324,21 @@ export default function CRM() {
                     {style?.dot && <span className={`h-2 w-2 rounded-full ${style.dot}`} />}
                     {stage.label}
                   </span>
-                  <Badge className={style?.badge || ""} variant="secondary">
-                    {stage.leads.length}
-                  </Badge>
+                  <span className="flex items-center gap-1.5">
+                    {user?.role === "admin" &&
+                    stage.key !== "negocio_cerrado" &&
+                    stage.key !== "cancelado" ? (
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {kanbanActiveTotal > 0
+                          ? Math.round((stage.leads.length / kanbanActiveTotal) * 100)
+                          : 0}
+                        %
+                      </span>
+                    ) : null}
+                    <Badge className={style?.badge || ""} variant="secondary">
+                      {stage.leads.length}
+                    </Badge>
+                  </span>
                 </CardTitle>
                 {stage.key === "nuevo" ? (
                   <CardDescription className="text-[11px] pt-1 text-cyan-700/80 dark:text-cyan-300/80">
@@ -2264,12 +2648,34 @@ export default function CRM() {
                       </div>
                     </div>
                   </div>
-                  <CrmLeadContactTrackingBlock
-                    leadId={editingLead.id}
-                    value={editForm.contact_attempts}
-                    localOnly
-                    onChange={(next) => setEditForm((f) => ({ ...f, contact_attempts: next }))}
-                  />
+                  <LeadIngestSummary notes={editingLead.notes} />
+                  <CrmLeadLegacyNotes leadId={editingLead.id} />
+                  <div className="grid gap-3">
+                    <CrmLeadChannelTracking
+                      ref={callsTrackingRef}
+                      channel="llamada"
+                      step={1}
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editForm.calls_made}
+                      localOnly
+                      onCounterChange={(next) => setEditForm((f) => ({ ...f, calls_made: next }))}                      askConfirm={askConfirm}
+                    />
+                    <CrmLeadChannelTracking
+                      ref={whatsappTrackingRef}
+                      channel="whatsapp"
+                      step={2}
+                      reminder="Recordatorio: aunque te contesten por WhatsApp, no olvides llamar también al cliente."
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editForm.whatsapp_attempts}
+                      localOnly
+                      onCounterChange={(next) => setEditForm((f) => ({ ...f, whatsapp_attempts: next }))}
+                      askConfirm={askConfirm}
+                    />
+                  </div>
                   {canSetContactState ? (
                     <LeadContactStateSelect
                       value={editForm.contact_state}
@@ -2299,14 +2705,6 @@ export default function CRM() {
                       onChange={(next) => setEditForm((f) => ({ ...f, contact_state: next }))}
                     />
                   ) : null}
-                  <LeadNotesSection
-                    ref={leadNotesRef}
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                    askConfirm={askConfirm}
-                  />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="crm-edit-email">Correo</Label>
@@ -2437,7 +2835,21 @@ export default function CRM() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Teléfono</p>
-                      <p className="text-base">{formatChilePhoneForDisplay(editingLead.phone) || "—"}</p>
+                      {(() => {
+                        const display = formatChilePhoneForDisplay(editingLead.phone) || "—";
+                        const telHref = isMobileDevice ? buildTelHref(editingLead.phone) : null;
+                        return telHref ? (
+                          <a
+                            href={telHref}
+                            className="text-base text-primary underline underline-offset-2 inline-flex items-center gap-1.5"
+                          >
+                            <Phone className="h-3.5 w-3.5 shrink-0" />
+                            {display}
+                          </a>
+                        ) : (
+                          <p className="text-base">{display}</p>
+                        );
+                      })()}
                     </div>
                   </div>
                   {canSetContactState ? (
@@ -2481,21 +2893,36 @@ export default function CRM() {
                       }
                     />
                   ) : null}
-                  <CrmLeadContactTrackingBlock
-                    leadId={editingLead.id}
-                    value={editingLead.contact_attempts ?? 0}
-                    onChange={(next) =>
-                      setEditingLead((prev) => (prev ? { ...prev, contact_attempts: next } : prev))
-                    }
-                  />
-                  <LeadNotesSection
-                    ref={leadNotesRef}
-                    leadId={editingLead.id}
-                    tenantId={editingLead.tenant_id ?? user?.tenant_id}
-                    branchId={editingLead.branch_id ?? user?.branch_id}
-                    legacyNotes={editingLead.notes}
-                    askConfirm={askConfirm}
-                  />
+                  <LeadIngestSummary notes={editingLead.notes} />
+                  <CrmLeadLegacyNotes leadId={editingLead.id} />
+                  <div className="grid gap-3">
+                    <CrmLeadChannelTracking
+                      ref={callsTrackingRef}
+                      channel="llamada"
+                      step={1}
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editingLead.calls_made ?? 0}
+                      onCounterChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, calls_made: next } : prev))
+                      }                      askConfirm={askConfirm}
+                    />
+                    <CrmLeadChannelTracking
+                      ref={whatsappTrackingRef}
+                      channel="whatsapp"
+                      step={2}
+                      reminder="Recordatorio: aunque te contesten por WhatsApp, no olvides llamar también al cliente."
+                      leadId={editingLead.id}
+                      tenantId={editingLead.tenant_id ?? user?.tenant_id}
+                      branchId={editingLead.branch_id ?? user?.branch_id}
+                      counterValue={editingLead.whatsapp_attempts ?? 0}
+                      onCounterChange={(next) =>
+                        setEditingLead((prev) => (prev ? { ...prev, whatsapp_attempts: next } : prev))
+                      }
+                      askConfirm={askConfirm}
+                    />
+                  </div>
                   {(() => {
                     const rut = editingLead.rut?.trim();
                     const email = editingLead.email?.trim();

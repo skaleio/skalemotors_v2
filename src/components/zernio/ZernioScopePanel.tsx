@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertCircle,
+  Car,
   CheckCircle2,
   Loader2,
   Megaphone,
@@ -35,7 +36,11 @@ import {
   zernioPostsQueryKey,
 } from "@/hooks/useZernioAccounts";
 import { toast } from "sonner";
-import { redirectToZernioOAuth } from "@/lib/zernio/oauth";
+import { openZernioOAuthPopup, redirectToZernioOAuth } from "@/lib/zernio/oauth";
+import { ZernioImageUploader } from "@/components/zernio/ZernioImageUploader";
+import { VehiclePickerDialog } from "@/components/zernio/VehiclePickerDialog";
+import { buildVehicleCaption } from "@/lib/zernio/caption";
+import type { PostableVehicle } from "@/lib/services/zernioVehicles";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_ACCENT: Record<string, string> = {
@@ -160,6 +165,30 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
   const [scheduledFor, setScheduledFor] = useState("");
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [composerReset, setComposerReset] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<PostableVehicle | null>(null);
+  const [selectedVehicleImages, setSelectedVehicleImages] = useState<string[]>([]);
+
+  const handleMediaReady = useCallback((urls: string[]) => setMediaUrls(urls), []);
+  const handleMediaBusy = useCallback((busy: boolean) => setUploadingMedia(busy), []);
+
+  const handleVehiclePicked = useCallback((v: PostableVehicle) => {
+    setSelectedVehicle(v);
+    setSelectedVehicleImages(v.images);
+    setContent(buildVehicleCaption(v));
+  }, []);
+  const toggleVehicleImage = (url: string, checked: boolean) => {
+    setSelectedVehicleImages((prev) =>
+      checked ? [...prev, url] : prev.filter((u) => u !== url),
+    );
+  };
+  const clearVehicle = () => {
+    setSelectedVehicle(null);
+    setSelectedVehicleImages([]);
+  };
 
   const canConnect = scope === "org" ? canConnectOrg(user?.role) : true;
 
@@ -182,28 +211,53 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
     const platformLabel =
       ZERNIO_PLATFORMS.find((p) => p.id === platform)?.label ?? platform;
 
-    const safetyTimer = window.setTimeout(() => {
-      setConnectingPlatform((current) => {
-        if (current === platform) {
-          toast.error(
-            `No pudimos abrir ${platformLabel}. Comprueba tu conexión y vuelve a intentar.`,
-          );
-          return null;
-        }
-        return current;
-      });
-    }, 19_000);
-
     try {
       sessionStorage.setItem("zernio_connect_scope", scope);
       const redirectUrl = `${window.location.origin}/app/redes-sociales/callback`;
       const { authUrl } = await getZernioConnectUrl(scope, platform, redirectUrl);
-      redirectToZernioOAuth(authUrl);
+
+      const popup = openZernioOAuthPopup(authUrl);
+      if (!popup) {
+        // El navegador bloqueó el popup: caemos al flujo de redirección en la misma pestaña.
+        redirectToZernioOAuth(authUrl);
+        return;
+      }
+
+      let settled = false;
+      const finish = (refresh: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("message", onMessage);
+        window.clearInterval(poll);
+        setConnectingPlatform(null);
+        if (refresh) {
+          queryClient.invalidateQueries({ queryKey: zernioAccountsQueryKey(scope) });
+          queryClient.invalidateQueries({ queryKey: zernioPostsQueryKey(scope) });
+        }
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        const data = event.data as { type?: string; ok?: boolean; error?: string };
+        if (data?.type !== "zernio-oauth-result") return;
+        if (!popup.closed) popup.close();
+        if (data.ok) {
+          toast.success(`Cuenta de ${platformLabel} conectada.`);
+        } else if (data.error) {
+          toast.error(data.error);
+        }
+        finish(true);
+      };
+
+      window.addEventListener("message", onMessage);
+
+      // Si el usuario cierra el popup a mano (con o sin completar), refrescamos igual.
+      const poll = window.setInterval(() => {
+        if (popup.closed) finish(true);
+      }, 700);
     } catch (e) {
       toast.error((e as Error).message);
       setConnectingPlatform(null);
-    } finally {
-      window.clearTimeout(safetyTimer);
     }
   };
 
@@ -222,8 +276,13 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
   };
 
   const handlePublish = async (publishNow: boolean) => {
-    if (!content.trim()) {
-      toast.error("Escribe el contenido del post.");
+    const allMedia = [...selectedVehicleImages, ...mediaUrls];
+    if (!content.trim() && allMedia.length === 0) {
+      toast.error("Escribe un mensaje o agrega al menos una imagen.");
+      return;
+    }
+    if (uploadingMedia) {
+      toast.error("Espera a que terminen de subir las imágenes.");
       return;
     }
     const selected = accounts.filter((a) => selectedAccountIds.includes(a.zernio_account_id));
@@ -247,12 +306,18 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
         })),
         publishNow,
         scheduledFor: publishNow ? undefined : new Date(scheduledFor).toISOString(),
+        mediaUrls: allMedia,
+        vehicleId: selectedVehicle?.id ?? null,
       });
       toast.success(publishNow ? "Publicación enviada." : "Post programado.");
       setContent("");
       setScheduledFor("");
       setSelectedAccountIds([]);
+      setMediaUrls([]);
+      clearVehicle();
+      setComposerReset((n) => n + 1);
       queryClient.invalidateQueries({ queryKey: zernioPostsQueryKey(scope) });
+      queryClient.invalidateQueries({ queryKey: ["zernio-postable-vehicles"] });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -391,6 +456,77 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
               <CardDescription>Publica o programa en las cuentas seleccionadas.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-3 rounded-lg border bg-muted/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label className="flex items-center gap-2">
+                    <Car className="h-4 w-4" /> Auto del inventario
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    {selectedVehicle ? "Cambiar auto" : "Elegir del inventario"}
+                  </Button>
+                </div>
+                {selectedVehicle ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="capitalize">
+                        {[selectedVehicle.make, selectedVehicle.model, selectedVehicle.year]
+                          .filter(Boolean)
+                          .join(" ")}
+                      </Badge>
+                      <Button type="button" variant="ghost" size="sm" onClick={clearVehicle}>
+                        Quitar
+                      </Button>
+                    </div>
+                    {selectedVehicle.images.length > 0 ? (
+                      <div>
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          Elige las fotos que van al post ({selectedVehicleImages.length}/
+                          {selectedVehicle.images.length}).
+                        </p>
+                        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                          {selectedVehicle.images.map((url) => {
+                            const checked = selectedVehicleImages.includes(url);
+                            return (
+                              <li key={url}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVehicleImage(url, !checked)}
+                                  className={cn(
+                                    "relative block aspect-square w-full overflow-hidden rounded-lg border-2",
+                                    checked
+                                      ? "border-primary"
+                                      : "border-transparent opacity-60",
+                                  )}
+                                >
+                                  <img src={url} alt="" className="h-full w-full object-cover" />
+                                  {checked && (
+                                    <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                    </span>
+                                  )}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Este auto no tiene fotos cargadas en el inventario. Agrega imágenes abajo.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Publica un auto disponible: trae sus fotos y arma el caption automáticamente.
+                  </p>
+                )}
+              </div>
               <div className="space-y-2">
                 <Label>Cuentas destino</Label>
                 <ul className="space-y-2 rounded-lg border p-3">
@@ -425,6 +561,15 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
                 />
               </div>
               <div className="space-y-2">
+                <Label>Imágenes adicionales (opcional)</Label>
+                <ZernioImageUploader
+                  resetSignal={composerReset}
+                  disabled={publishing}
+                  onReadyChange={handleMediaReady}
+                  onBusyChange={handleMediaBusy}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor={`schedule-${scope}`}>Programar (opcional)</Label>
                 <Input
                   id={`schedule-${scope}`}
@@ -433,14 +578,21 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
                   onChange={(e) => setScheduledFor(e.target.value)}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={publishing} onClick={() => handlePublish(true)}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button disabled={publishing || uploadingMedia} onClick={() => handlePublish(true)}>
                   {publishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Publicar ahora
                 </Button>
-                <Button variant="secondary" disabled={publishing} onClick={() => handlePublish(false)}>
+                <Button
+                  variant="secondary"
+                  disabled={publishing || uploadingMedia}
+                  onClick={() => handlePublish(false)}
+                >
                   Programar
                 </Button>
+                {uploadingMedia && (
+                  <span className="text-xs text-muted-foreground">Subiendo imágenes…</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -483,6 +635,12 @@ export function ZernioScopePanel({ scope, label }: { scope: ZernioScope; label: 
           </Card>
         )
       )}
+
+      <VehiclePickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={handleVehiclePicked}
+      />
     </div>
   );
 }

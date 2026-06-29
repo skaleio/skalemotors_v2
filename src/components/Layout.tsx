@@ -4,10 +4,12 @@ import { TopBar } from "@/components/TopBar";
 import { PageRestore } from "@/components/PageRestore";
 import { PageLoader } from "@/components/PageLoader";
 import { GlobalQuickActions } from "@/components/GlobalQuickActions";
+import { StickyNotesLayer } from "@/components/sticky-notes/StickyNotesLayer";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import { MobileBottomNav, MOBILE_BOTTOM_NAV_OFFSET_CLASS } from "@/components/MobileBottomNav";
 import SupportChat from "@/components/SupportChat";
 import { LoginAlertsDialog } from "@/components/LoginAlertsDialog";
+import { OverdueAppointmentsGate } from "@/components/OverdueAppointmentsGate";
 import { PrefetchLeads } from "@/components/PrefetchLeads";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -61,6 +63,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <SidebarProvider>
       <LoginAlertsDialog />
+      <OverdueAppointmentsGate />
       <PrefetchLeads />
       <div
         className={
@@ -93,6 +96,9 @@ export function Layout({ children }: LayoutProps) {
       {showBottomNav ? <MobileBottomNav /> : null}
       <PageLoader />
       <GlobalQuickActions />
+
+      {/* Notas flotantes tipo post-it (el disparador "+" vive en el sidebar) */}
+      <StickyNotesLayer />
 
       {/* Chat flotante solo en desktop; en mobile va en TopBar */}
       {!showBottomNav ? <FloatingChatButton onClick={openChat} /> : null}

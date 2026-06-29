@@ -4,15 +4,19 @@ import { leadService } from "@/lib/services/leads";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
-export const LEAD_METRIC_MAX = 3;
+export const LEAD_METRIC_MAX = 7;
 
 const PILL_COLORS: Record<number, { filled: string; hover: string }> = {
   1: { filled: "bg-emerald-500", hover: "hover:bg-emerald-600" },
-  2: { filled: "bg-amber-400", hover: "hover:bg-amber-500" },
-  3: { filled: "bg-red-500", hover: "hover:bg-red-600" },
+  2: { filled: "bg-lime-500", hover: "hover:bg-lime-600" },
+  3: { filled: "bg-yellow-400", hover: "hover:bg-yellow-500" },
+  4: { filled: "bg-amber-400", hover: "hover:bg-amber-500" },
+  5: { filled: "bg-orange-400", hover: "hover:bg-orange-500" },
+  6: { filled: "bg-orange-500", hover: "hover:bg-orange-600" },
+  7: { filled: "bg-red-500", hover: "hover:bg-red-600" },
 };
 
-export type LeadMetricField = "contact_attempts" | "calls_made";
+export type LeadMetricField = "contact_attempts" | "calls_made" | "whatsapp_attempts";
 
 const FIELD_META: Record<
   LeadMetricField,
@@ -34,9 +38,16 @@ const FIELD_META: Record<
   calls_made: {
     defaultLabel: "Llamadas realizadas",
     maxToastTitle: "Meta de llamadas",
-    maxToastDescription: "Completaste las 3 llamadas registradas para este lead.",
+    maxToastDescription: `Completaste las ${LEAD_METRIC_MAX} llamadas registradas para este lead.`,
     reorderOnMax: false,
-    touchLastContactAt: false,
+    touchLastContactAt: true,
+  },
+  whatsapp_attempts: {
+    defaultLabel: "WhatsApp enviados",
+    maxToastTitle: "Meta de WhatsApp",
+    maxToastDescription: `Completaste los ${LEAD_METRIC_MAX} WhatsApp registrados para este lead.`,
+    reorderOnMax: false,
+    touchLastContactAt: true,
   },
 };
 
@@ -52,6 +63,11 @@ export interface LeadMetricBarProps {
   /** Contorno negro en cada segmento (mejor contraste en el diálogo del lead). */
   bordered?: boolean;
   onChange?: (next: number) => void;
+  /**
+   * Si se entrega, el clic en una raya NO incrementa el contador: delega en este
+   * callback (ej. abrir la nota del canal). El contador avanza por otra vía.
+   */
+  onSegmentClick?: (n: number) => void;
 }
 
 export function LeadMetricBar({
@@ -64,6 +80,7 @@ export function LeadMetricBar({
   localOnly = false,
   bordered = false,
   onChange,
+  onSegmentClick,
 }: LeadMetricBarProps) {
   const meta = FIELD_META[field];
   const queryClient = useQueryClient();
@@ -119,6 +136,10 @@ export function LeadMetricBar({
   };
 
   const handleClick = (n: number) => {
+    if (onSegmentClick) {
+      onSegmentClick(n);
+      return;
+    }
     const next = n <= current ? n - 1 : n;
     if (localOnly) {
       onChange?.(next);
@@ -127,8 +148,8 @@ export function LeadMetricBar({
     void commit(next);
   };
 
-  const pillHeight = size === "sm" ? "h-1.5" : "h-2";
-  const pillWidth = size === "sm" ? "w-6" : "w-10";
+  const pillHeight = size === "sm" ? "h-2" : "h-2.5";
+  const pillWidth = size === "sm" ? "w-8" : "w-12";
 
   return (
     <div className="flex items-center gap-2 select-none" onClick={(e) => e.stopPropagation()}>
@@ -148,11 +169,17 @@ export function LeadMetricBar({
                 e.stopPropagation();
                 handleClick(n);
               }}
-              aria-label={`${filled ? "Quitar" : "Marcar"} ${displayLabel.toLowerCase()} ${n}`}
+              aria-label={
+                onSegmentClick
+                  ? `Registrar nota de ${displayLabel.toLowerCase()} (raya ${n})`
+                  : `${filled ? "Quitar" : "Marcar"} ${displayLabel.toLowerCase()} ${n}`
+              }
               title={
-                n === LEAD_METRIC_MAX && !filled
-                  ? `Al marcar la 3.ª barra completas la meta de ${displayLabel.toLowerCase()}`
-                  : `${n} de ${LEAD_METRIC_MAX}`
+                onSegmentClick
+                  ? `Registra la nota del día para sumar esta raya`
+                  : n === LEAD_METRIC_MAX && !filled
+                    ? `Al marcar la ${LEAD_METRIC_MAX}.ª barra completas la meta de ${displayLabel.toLowerCase()}`
+                    : `${n} de ${LEAD_METRIC_MAX}`
               }
               className={cn(
                 pillHeight,

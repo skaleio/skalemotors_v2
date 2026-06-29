@@ -1,7 +1,8 @@
 export type ZernioScope = "org" | "personal";
 
 const ORG_CONNECT_ROLES = new Set(["admin", "gerente", "jefe_jefe"]);
-const ORG_PUBLISH_ROLES = new Set(["admin", "gerente", "jefe_jefe", "jefe_sucursal"]);
+// El fotógrafo publica en la cuenta de la automotora pero no la conecta/desconecta.
+const ORG_PUBLISH_ROLES = new Set(["admin", "gerente", "jefe_jefe", "jefe_sucursal", "fotografo"]);
 const ORG_VIEW_ROLES = ORG_PUBLISH_ROLES;
 
 export function canConnectOrg(role: string | undefined | null): boolean {

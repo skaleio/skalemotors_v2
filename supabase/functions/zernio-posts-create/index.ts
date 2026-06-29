@@ -13,6 +13,7 @@ type CreatePostBody = {
   scheduled_for?: string;
   timezone?: string;
   media_urls?: string[];
+  vehicle_id?: string | null;
 };
 
 export default async function handler(req: Request): Promise<Response> {
@@ -36,9 +37,12 @@ export default async function handler(req: Request): Promise<Response> {
   const scheduledFor = (body.scheduled_for ?? "").trim() || null;
   const timezone = (body.timezone ?? "America/Santiago").trim();
   const mediaUrls = Array.isArray(body.media_urls) ? body.media_urls.filter(Boolean) : [];
+  const vehicleId = (typeof body.vehicle_id === "string" ? body.vehicle_id.trim() : "") || null;
 
   if (!scope) return zernioJson(req, 400, { ok: false, error: "scope debe ser org o personal" });
-  if (!content) return zernioJson(req, 400, { ok: false, error: "El contenido es requerido" });
+  if (!content && mediaUrls.length === 0) {
+    return zernioJson(req, 400, { ok: false, error: "El contenido o una imagen es requerido" });
+  }
   if (!platforms.length) return zernioJson(req, 400, { ok: false, error: "Selecciona al menos una cuenta" });
 
   if (scope === "org" && !canPublishOrg(auth.role)) {
@@ -67,6 +71,18 @@ export default async function handler(req: Request): Promise<Response> {
     return zernioJson(req, 403, { ok: false, error: "Una o más cuentas no están autorizadas" });
   }
 
+  if (vehicleId) {
+    const { data: veh } = await auth.admin
+      .from("vehicles")
+      .select("id")
+      .eq("id", vehicleId)
+      .eq("tenant_id", auth.tenantId)
+      .maybeSingle();
+    if (!veh) {
+      return zernioJson(req, 403, { ok: false, error: "El vehículo no pertenece a tu automotora" });
+    }
+  }
+
   const zernioPlatforms = platforms.map((p) => ({
     platform: p.platform,
     accountId: p.accountId,
@@ -86,6 +102,7 @@ export default async function handler(req: Request): Promise<Response> {
       scheduled_for: scheduledFor,
       timezone,
       status: localStatus,
+      vehicle_id: vehicleId,
     })
     .select("id")
     .single();
@@ -98,7 +115,10 @@ export default async function handler(req: Request): Promise<Response> {
       platforms: zernioPlatforms,
       timezone,
     };
-    if (mediaUrls.length) zernioBody.mediaUrls = mediaUrls;
+    if (mediaUrls.length) {
+      // Zernio espera mediaItems: [{ url, type }] (ver docs/guides/media-uploads).
+      zernioBody.mediaItems = mediaUrls.map((url: string) => ({ url, type: "image" }));
+    }
     if (publishNow) {
       zernioBody.publishNow = true;
     } else if (scheduledFor) {
@@ -142,3 +162,5 @@ export default async function handler(req: Request): Promise<Response> {
     return zernioJson(req, 500, { ok: false, error: (e as Error).message });
   }
 }
+
+Deno.serve((req) => handler(req));

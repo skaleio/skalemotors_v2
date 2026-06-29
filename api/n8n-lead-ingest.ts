@@ -195,8 +195,17 @@ function normalizePhoneChile(value: string): string {
   return `+56 ${raw}`;
 }
 
-function toTitleCase(s: string): string {
-  return s
+// Sanea un nombre: descarta emojis/símbolos/control chars, colapsa espacios
+// y aplica Title Case. Devuelve "" si no queda nada útil.
+function sanitizeName(v: unknown, max = 200): string {
+  if (v === null || v === undefined) return "";
+  const cleaned = String(v)
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\s.'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+  return cleaned
     .toLowerCase()
     .split(" ")
     .filter(Boolean)
@@ -306,7 +315,7 @@ async function resolveIngestKey(
 
   const { data: row, error } = await supabase
     .from("lead_ingest_keys")
-    .select("id, branch_id")
+    .select("id, tenant_id, branch_id")
     .eq("secret_hash", secretHash)
     .is("revoked_at", null)
     .maybeSingle();
@@ -321,17 +330,54 @@ async function resolveIngestKey(
   }
 
   const bodyBid = bodyBranchId?.trim();
-  if (bodyBid && bodyBid !== row.branch_id) {
+
+  // Key scopeada a sucursal (branch_id no nulo): el body, si trae branch_id, debe coincidir.
+  if (row.branch_id) {
+    if (bodyBid && bodyBid !== row.branch_id) {
+      return {
+        ok: false,
+        status: 403,
+        error: "branch_id does not match this API key",
+      };
+    }
+    return {
+      ok: true,
+      resolution: { kind: "db", branchId: row.branch_id, keyRowId: row.id },
+    };
+  }
+
+  // Key scopeada a tenant (branch_id NULL): el request debe indicar la sucursal,
+  // y esa sucursal tiene que pertenecer al tenant de la key.
+  if (!bodyBid) {
+    return {
+      ok: false,
+      status: 400,
+      error: "branch_id is required for tenant-scoped API keys",
+    };
+  }
+
+  const { data: branchRow, error: branchErr } = await supabase
+    .from("branches")
+    .select("id")
+    .eq("id", bodyBid)
+    .eq("tenant_id", row.tenant_id)
+    .maybeSingle();
+
+  if (branchErr) {
+    console.error("[n8n-lead-ingest] resolveIngestKey branch check error:", branchErr);
+    return { ok: false, status: 500, error: "Internal error resolving branch" };
+  }
+  if (!branchRow) {
     return {
       ok: false,
       status: 403,
-      error: "branch_id does not match this API key",
+      error: "branch_id does not belong to this API key's tenant",
     };
   }
 
   return {
     ok: true,
-    resolution: { kind: "db", branchId: row.branch_id, keyRowId: row.id },
+    resolution: { kind: "db", branchId: bodyBid, keyRowId: row.id },
   };
 }
 
@@ -460,7 +506,7 @@ async function handleLeadIngest(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ ok: false, error: "phone is required (valid Chile format)" });
   }
 
-  const fullName = toTitleCase(pickString(body.full_name, body.nombre, parsed.nombre) || "") || "Sin nombre";
+  const fullName = sanitizeName(pickString(body.full_name, body.nombre, parsed.nombre)) || "Sin nombre";
 
   const explicitStatus =
     body.status && includes(VALID_STATUSES, body.status) ? body.status : null;

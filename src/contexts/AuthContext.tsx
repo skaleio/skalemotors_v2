@@ -16,6 +16,7 @@ import {
 import { readOptimisticAuthSnapshot } from "@/lib/authOptimisticHydration";
 import { schedulePostAuthChunkPrefetch } from "@/lib/postAuthChunkPrefetch";
 import { getAuthTimings, isFastAuthDev } from "@/lib/authTimings";
+import { createSingleFlight } from "@/lib/authRefresh";
 import { supabase, type User } from "@/lib/supabase";
 import { toast } from "sonner";
 import { captureAppError, clearObservabilityUserContext, setObservabilityUserContext } from "@/lib/observability";
@@ -23,6 +24,12 @@ import { clearTenantContext, setTenantContext } from "@/lib/tenant";
 import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+
+// Un solo refresh de sesión en vuelo a la vez. Bootstrap, visibilitychange y
+// online pueden dispararse juntos en móvil; sin esto, dos refresh concurrentes
+// usan el mismo refresh token rotante y el segundo recibe "Refresh Token Not
+// Found" → deslogueo. Compartido a nivel módulo (sobrevive remounts del provider).
+const refreshSessionSingleFlight = createSingleFlight(() => supabase.auth.refreshSession());
 
 type ProfileFetchReason = "ok" | "disabled" | "no-profile" | "error";
 
@@ -383,7 +390,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (persisted && canRefreshPersistedSession(persisted)) {
           try {
             const { data } = await withTimeout(
-              supabase.auth.refreshSession(),
+              refreshSessionSingleFlight(),
               bootstrapTimeoutMs,
               "AUTH_REFRESH_TIMEOUT",
             );
@@ -588,7 +595,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!isAccessTokenExpired(persisted)) return;
       lastRefreshAttempt = now;
       try {
-        const { data, error } = await supabase.auth.refreshSession();
+        const { data, error } = await refreshSessionSingleFlight();
         if (error || !data.session) return;
         pendingSessionRef.current = data.session;
         setSession(data.session);

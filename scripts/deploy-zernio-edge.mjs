@@ -24,6 +24,7 @@ const FUNCTIONS = [
 
 const SHARED = [
   "cors.ts",
+  "zernioHttp.ts",
   "zernioAuth.ts",
   "zernioClient.ts",
   "zernioProfiles.ts",
