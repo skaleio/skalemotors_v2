@@ -12,7 +12,7 @@ describe("dailySalesReport", () => {
     const p = emptyDailySalesReportPayload();
     expect(p.calls.length).toBeGreaterThanOrEqual(1);
     expect(p.credits.length).toBeGreaterThanOrEqual(1);
-    expect(p.platform_uploads.length).toBeGreaterThanOrEqual(1);
+    expect(p.social_posts.length).toBeGreaterThanOrEqual(4);
   });
 
   it("normaliza payload parcial y agrega fila vacía al final si hay datos", () => {

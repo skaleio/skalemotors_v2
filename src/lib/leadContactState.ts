@@ -11,7 +11,7 @@ export const LEAD_CONTACT_STATE_OPTIONS: LeadContactState[] = [
 export const LEAD_CONTACT_STATE_LABELS: Record<LeadContactState, string> = {
   prioridad: "Prioridad",
   interesado: "Interesado",
-  filtrar: "Filtrar",
+  filtrar: "Por filtrar",
 };
 
 export const LEAD_CONTACT_STATE_HINTS: Record<LeadContactState, string> = {
@@ -100,4 +100,19 @@ export function contactStateClearPatch(): {
   priority: "media";
 } {
   return { contact_state: null, priority: "media" };
+}
+
+/**
+ * Al mover un lead de NUEVO a EN SEGUIMIENTO se reinicia el semáforo de intentos
+ * de contacto (`contact_attempts` → 0): los intentos del primer contacto no se
+ * arrastran a la etapa de seguimiento. Solo aplica a movimientos nuevos.
+ */
+export function shouldResetContactAttemptsOnMove(
+  fromStatus: string | null | undefined,
+  toStatus: string | null | undefined,
+): boolean {
+  return (
+    getLeadCrmStageKey(fromStatus) === "nuevo"
+    && getLeadCrmStageKey(toStatus) === "en_seguimiento"
+  );
 }

@@ -12,6 +12,7 @@ interface UseLeadsOptions {
   status?: string
   source?: string
   search?: string
+  leadType?: 'venta' | 'consignacion'
   enabled?: boolean
   refetchOnWindowFocus?: boolean
   refetchOnMount?: boolean
@@ -26,6 +27,7 @@ export function useLeads(options: UseLeadsOptions = {}) {
     status,
     source,
     search,
+    leadType,
     enabled = true,
     refetchOnWindowFocus = false,
     refetchOnMount = false,
@@ -34,7 +36,7 @@ export function useLeads(options: UseLeadsOptions = {}) {
 
   const queryClient = useQueryClient()
   const channelId = useId()
-  const queryKey = ['leads', branchId, assignedTo, status, source, search]
+  const queryKey = ['leads', branchId, assignedTo, status, source, search, leadType]
 
   const { data: leads = [], isLoading: loading, isFetching, error, refetch } = useQuery({
     queryKey,
@@ -45,6 +47,7 @@ export function useLeads(options: UseLeadsOptions = {}) {
         status,
         source,
         search,
+        leadType,
       }),
     enabled,
     staleTime: 5 * 60 * 1000,

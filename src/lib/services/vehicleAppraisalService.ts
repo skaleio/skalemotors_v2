@@ -22,6 +22,17 @@ export interface VehicleData {
   codigo_sii?: string | null;
 }
 
+/** Referencia GetAPI / fiscal que se muestra junto al valor de mercado real. */
+export interface AppraisalReferencia {
+  precio_getapi: number | null;
+  banda_min: number | null;
+  banda_max: number | null;
+  tasacion_fiscal: number | null;
+  precio_retoma: number | null;
+  permiso_circulacion: string | null;
+  ano_info_fiscal: number | null;
+}
+
 export interface AppraisalResult {
   tasacion: {
     precio_minimo: number;
@@ -32,6 +43,8 @@ export interface AppraisalResult {
     confianza: "alta" | "media" | "baja";
     fecha_consulta: string;
     tolerancia_años?: number;
+    /** "mercado" = calculado con anuncios reales; "getapi" = fallback a estimación GetAPI. */
+    fuente?: "mercado" | "getapi";
   };
   muestras: {
     titulo: string;
@@ -44,6 +57,10 @@ export interface AppraisalResult {
   resumen?: string | null;
   /** Precio de retoma sugerido por la API, si está disponible */
   precio_retoma?: number | null;
+  /** true si la tasación principal proviene de anuncios reales de mercado. */
+  mercado_disponible?: boolean;
+  /** Datos de referencia GetAPI/fiscal (no persistido en caché). */
+  referencia?: AppraisalReferencia | null;
 }
 
 type EdgeErrorResponse = {
@@ -55,6 +72,11 @@ type EdgeErrorResponse = {
 function normalizePatente(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
+
+// Formatos PPU chilenos: auto antiguo (AB1234), actual (BCDF12), comercial
+// (ABC123) y motos (AB123 / ABC12). El servidor revalida con el mismo set.
+const PATENTE_REGEX =
+  /^([A-Z]{2}\d{4}|[A-Z]{4}\d{2}|[A-Z]{3}\d{3}|[A-Z]{2}\d{3}|[A-Z]{3}\d{2})$/;
 
 function isFreshWithin24Hours(createdAt: string): boolean {
   const ageMs = Date.now() - new Date(createdAt).getTime();
@@ -114,8 +136,8 @@ export interface AppraisalByPatenteResult {
  */
 export async function getAppraisalByPatente(patente: string): Promise<AppraisalByPatenteResult> {
   const normalizedPatente = normalizePatente(patente);
-  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
-    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
   }
 
   // Token fresco antes de invocar (evita 401 por access token vencido). Ver getAccessToken.
@@ -167,6 +189,8 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
     uf_valor: Number(data.uf_valor ?? 0),
     resumen: data.resumen ?? null,
     precio_retoma: (data as any).precio_retoma ?? null,
+    mercado_disponible: (data as any).mercado_disponible ?? data.tasacion.total_muestras > 0,
+    referencia: ((data as any).referencia as AppraisalReferencia | undefined) ?? null,
   };
 
   return { vehicle, appraisal };
@@ -179,8 +203,8 @@ export async function getAppraisalByPatente(patente: string): Promise<AppraisalB
  */
 export async function lookupVehicleByPatente(patente: string): Promise<VehicleData> {
   const normalizedPatente = normalizePatente(patente);
-  if (!/^[A-Z]{4}\d{2}$/.test(normalizedPatente)) {
-    throw new Error("La patente debe tener formato chileno válido (4 letras + 2 números).");
+  if (!PATENTE_REGEX.test(normalizedPatente)) {
+    throw new Error("La patente debe tener formato chileno válido (ej: BCDF12, AB1234 o ABC12).");
   }
 
   // Refrescar el token antes de invocar: la Edge Function valida el JWT del usuario
@@ -259,18 +283,22 @@ export async function getCachedAppraisal(
     return null;
   }
 
+  const totalMuestras = Number(data.total_muestras ?? 0);
   return {
     tasacion: {
       precio_minimo: Number(data.precio_minimo ?? 0),
       precio_promedio: Number(data.precio_promedio ?? 0),
       precio_maximo: Number(data.precio_maximo ?? 0),
       precio_mediana: Number(data.precio_mediana ?? 0),
-      total_muestras: Number(data.total_muestras ?? 0),
+      total_muestras: totalMuestras,
       confianza: (data.confianza as "alta" | "media" | "baja") ?? "baja",
       fecha_consulta: data.created_at,
+      fuente: totalMuestras > 0 ? "mercado" : "getapi",
     },
     muestras: Array.isArray(data.muestras) ? (data.muestras as AppraisalResult["muestras"]) : [],
     uf_valor: Number(data.uf_valor ?? 0),
+    mercado_disponible: totalMuestras > 0,
+    referencia: null,
   };
 }
 

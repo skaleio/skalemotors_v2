@@ -6,6 +6,7 @@ import {
   Plus,
   Save,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,23 +25,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
+  useMonthlyEffectiveConsignments,
   useMyDailySalesReport,
   useSubmitDailySalesReport,
   useSyncDailySalesReportTasks,
 } from "@/hooks/useDailySalesReports";
 import type {
   DailyReportCallRow,
+  DailyReportConsignmentRow,
   DailyReportCreditRow,
-  DailyReportPlatformRow,
+  DailyReportSocialPostRow,
   DailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import {
   chileTodayIsoDate,
+  CONSIGNMENT_MONTHLY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
+  emptyConsignmentRow,
   emptyCreditRow,
   emptyDailySalesReportPayload,
-  emptyPlatformRow,
+  emptySocialPostRow,
   normalizeDailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
@@ -113,7 +118,11 @@ function EntryCard({
   );
 }
 
-export function DailySalesReportForm() {
+export function DailySalesReportForm({
+  showAllSections = false,
+}: {
+  showAllSections?: boolean;
+}) {
   const { user } = useAuth();
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
@@ -122,6 +131,7 @@ export function DailySalesReportForm() {
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
   const reportQuery = useMyDailySalesReport(user?.id, reportDate, !!user?.id);
+  const monthlyConsignments = useMonthlyEffectiveConsignments(user?.id, !!user?.id);
   const submitMutation = useSubmitDailySalesReport();
 
   useEffect(() => {
@@ -136,6 +146,13 @@ export function DailySalesReportForm() {
     locale: es,
   });
 
+  const monthlyConsignmentsCount = monthlyConsignments.data ?? 0;
+  const consignmentGoalReached = monthlyConsignmentsCount >= CONSIGNMENT_MONTHLY_GOAL;
+  const consignmentProgressPct = Math.min(
+    100,
+    (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
+  );
+
   const updateCalls = (next: DailyReportCallRow[]) =>
     setPayload((p) => ({ ...p, calls: normalizeDailySalesReportPayload({ ...p, calls: next }).calls }));
   const updateCredits = (next: DailyReportCreditRow[]) =>
@@ -143,11 +160,18 @@ export function DailySalesReportForm() {
       ...p,
       credits: normalizeDailySalesReportPayload({ ...p, credits: next }).credits,
     }));
-  const updatePlatforms = (next: DailyReportPlatformRow[]) =>
+  const updateSocialPosts = (next: DailyReportSocialPostRow[]) =>
     setPayload((p) => ({
       ...p,
-      platform_uploads: normalizeDailySalesReportPayload({ ...p, platform_uploads: next })
-        .platform_uploads,
+      social_posts: normalizeDailySalesReportPayload({ ...p, social_posts: next }).social_posts,
+    }));
+  const updateConsignments = (next: DailyReportConsignmentRow[]) =>
+    setPayload((p) => ({
+      ...p,
+      effective_consignments: normalizeDailySalesReportPayload({
+        ...p,
+        effective_consignments: next,
+      }).effective_consignments,
     }));
 
   const handleSubmit = () => {
@@ -219,12 +243,18 @@ export function DailySalesReportForm() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>
-              Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
-            </span>
+            {showAllSections && (
+              <span>
+                Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
+              </span>
+            )}
             <span>{progress.calls} llamados</span>
-            <span>{progress.credits} créditos</span>
-            <span>{progress.platforms} publicaciones en plataformas</span>
+            {showAllSections && (
+              <>
+                <span>{progress.credits} créditos</span>
+                <span>{progress.social} publicaciones en redes</span>
+              </>
+            )}
           </div>
           {isSubmitted && reportQuery.data?.submitted_at && (
             <p className="text-xs text-green-600 dark:text-green-400">
@@ -335,6 +365,119 @@ export function DailySalesReportForm() {
                 </FieldGrid>
               </EntryCard>
             ))}
+            <div className="rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/40 dark:bg-pink-950/10 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-pink-700 dark:text-pink-300">
+                      Registro bonus · Consignación efectiva
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {consignmentGoalReached
+                        ? "¡Meta alcanzada! Bono de $xxx.xxx"
+                        : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} este mes y gana $xxx.xxx`}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="text-xl font-semibold skale-num text-pink-600 dark:text-pink-400">
+                    {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
+                </div>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
+                <div
+                  className="h-full rounded-full bg-pink-500 transition-all"
+                  style={{ width: `${consignmentProgressPct}%` }}
+                />
+              </div>
+              {payload.effective_consignments.map((row, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-pink-200 dark:border-pink-900/60 bg-card p-3 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wide text-pink-600 dark:text-pink-300">
+                      Registro {payload.calls.length + i + 1} · Bonus
+                    </span>
+                    {payload.effective_consignments.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          updateConsignments(
+                            payload.effective_consignments.filter((_, j) => j !== i),
+                          )
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                  <FieldGrid cols={3}>
+                    <Field label="Nombre cliente">
+                      <Input
+                        value={row.customer_name}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], customer_name: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Patente">
+                      <Input
+                        placeholder="ABCD12"
+                        value={row.patente}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], patente: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Vehículo">
+                      <Input
+                        placeholder="Marca / modelo"
+                        value={row.vehicle}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], vehicle: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                    <Field label="Observación">
+                      <Input
+                        value={row.observation}
+                        onChange={(e) => {
+                          const next = [...payload.effective_consignments];
+                          next[i] = { ...next[i], observation: e.target.value };
+                          updateConsignments(next);
+                        }}
+                      />
+                    </Field>
+                  </FieldGrid>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
+                onClick={() =>
+                  updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar consignación efectiva
+              </Button>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -348,6 +491,8 @@ export function DailySalesReportForm() {
           </AccordionContent>
         </AccordionItem>
 
+        {showAllSections && (
+          <>
         <AccordionItem value="credits" className="border rounded-lg px-4 bg-card">
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
@@ -439,167 +584,65 @@ export function DailySalesReportForm() {
               <div>
                 <p className="font-medium">Publicaciones en redes sociales</p>
                 <p className="text-xs text-muted-foreground font-normal">
-                  {payload.social_media.total_posts != null
-                    ? `${payload.social_media.total_posts} publicación(es)`
-                    : "Indica cantidad y vehículos"}
-                </p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-4 pb-4 xl:grid xl:grid-cols-[minmax(0,280px)_1fr] xl:gap-8 xl:items-start">
-            <Field label="Cantidad total de publicaciones">
-              <Input
-                type="number"
-                min={0}
-                className="max-w-full sm:max-w-[200px]"
-                placeholder="0"
-                value={payload.social_media.total_posts ?? ""}
-                onChange={(e) =>
-                  setPayload({
-                    ...payload,
-                    social_media: {
-                      ...payload.social_media,
-                      total_posts: e.target.value === "" ? null : Number(e.target.value),
-                    },
-                  })
-                }
-              />
-            </Field>
-            <div className="space-y-2 xl:min-w-0">
-              <Label className="text-xs text-muted-foreground">Vehículos publicados</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-              {payload.social_media.vehicles_posted.map((v, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    placeholder={`Vehículo ${i + 1}`}
-                    value={v}
-                    onChange={(e) => {
-                      const vehicles = [...payload.social_media.vehicles_posted];
-                      vehicles[i] = e.target.value;
-                      setPayload({
-                        ...payload,
-                        social_media: {
-                          ...payload.social_media,
-                          vehicles_posted: normalizeDailySalesReportPayload({
-                            ...payload,
-                            social_media: { ...payload.social_media, vehicles_posted: vehicles },
-                          }).social_media.vehicles_posted,
-                        },
-                      });
-                    }}
-                  />
-                  {payload.social_media.vehicles_posted.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        setPayload({
-                          ...payload,
-                          social_media: {
-                            ...payload.social_media,
-                            vehicles_posted: payload.social_media.vehicles_posted.filter(
-                              (_, j) => j !== i,
-                            ),
-                          },
-                        })
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() =>
-                  setPayload({
-                    ...payload,
-                    social_media: {
-                      ...payload.social_media,
-                      vehicles_posted: [...payload.social_media.vehicles_posted, ""],
-                    },
-                  })
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar vehículo
-              </Button>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="platforms" className="border rounded-lg px-4 bg-card">
-          <AccordionTrigger className="hover:no-underline py-4">
-            <div className="flex items-center gap-3 text-left">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                4
-              </span>
-              <div>
-                <p className="font-medium">Vehículos subidos a plataformas</p>
-                <p className="text-xs text-muted-foreground font-normal">
-                  {progress.platforms > 0
-                    ? `${progress.platforms} registrado(s)`
-                    : "Chileautos, Mercado Libre..."}
+                  {progress.social > 0
+                    ? `${progress.social} registrado(s)`
+                    : "Marca, modelo, año y URL de Facebook Marketplace"}
                 </p>
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
-            {payload.platform_uploads.map((row, i) => (
+            {payload.social_posts.map((row, i) => (
               <EntryCard
                 key={i}
                 index={i}
-                canRemove={payload.platform_uploads.length > 1}
-                onRemove={() =>
-                  updatePlatforms(payload.platform_uploads.filter((_, j) => j !== i))
-                }
+                canRemove={payload.social_posts.length > 1}
+                onRemove={() => updateSocialPosts(payload.social_posts.filter((_, j) => j !== i))}
               >
                 <FieldGrid cols={2}>
-                  <Field label="Vehículo">
+                  <Field label="Marca">
                     <Input
-                      value={row.vehicle}
+                      placeholder="Ej: Toyota"
+                      value={row.brand}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], vehicle: e.target.value };
-                        updatePlatforms(next);
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], brand: e.target.value };
+                        updateSocialPosts(next);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Modelo">
+                    <Input
+                      placeholder="Ej: Corolla"
+                      value={row.model}
+                      onChange={(e) => {
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], model: e.target.value };
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
                   <Field label="Año">
                     <Input
+                      placeholder="2020"
                       inputMode="numeric"
                       value={row.year}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
+                        const next = [...payload.social_posts];
                         next[i] = { ...next[i], year: e.target.value };
-                        updatePlatforms(next);
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
-                  <Field label="Plataforma">
+                  <Field label="URL publicación Facebook Marketplace">
                     <Input
-                      placeholder="Chileautos, Yapo..."
-                      value={row.platform}
+                      placeholder="https://facebook.com/marketplace/..."
+                      inputMode="url"
+                      value={row.url}
                       onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], platform: e.target.value };
-                        updatePlatforms(next);
-                      }}
-                    />
-                  </Field>
-                  <Field label="Observación">
-                    <Input
-                      value={row.observation}
-                      onChange={(e) => {
-                        const next = [...payload.platform_uploads];
-                        next[i] = { ...next[i], observation: e.target.value };
-                        updatePlatforms(next);
+                        const next = [...payload.social_posts];
+                        next[i] = { ...next[i], url: e.target.value };
+                        updateSocialPosts(next);
                       }}
                     />
                   </Field>
@@ -611,7 +654,7 @@ export function DailySalesReportForm() {
               variant="outline"
               size="sm"
               className="w-full xl:col-span-2"
-              onClick={() => updatePlatforms([...payload.platform_uploads, emptyPlatformRow()])}
+              onClick={() => updateSocialPosts([...payload.social_posts, emptySocialPostRow()])}
             >
               <Plus className="h-4 w-4 mr-2" />
               Agregar publicación
@@ -623,7 +666,7 @@ export function DailySalesReportForm() {
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                5
+                4
               </span>
               <div>
                 <p className="font-medium">Observaciones del día</p>
@@ -645,13 +688,18 @@ export function DailySalesReportForm() {
             />
           </AccordionContent>
         </AccordionItem>
+
+          </>
+        )}
       </Accordion>
 
       <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">
         <div className="flex items-center justify-between gap-4 py-3">
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
-          </p>
+          {showAllSections && (
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
+            </p>
+          )}
           <Button
             className="ml-auto min-w-[160px]"
             onClick={handleSubmit}

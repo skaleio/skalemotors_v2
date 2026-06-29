@@ -1,0 +1,20 @@
+{
+  "name": "@skalemotors/mcp-lead-ingest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Servidor MCP para cargar leads y agendar citas en Skale Motors hablándole a Claude.",
+  "type": "module",
+  "bin": {
+    "skale-mcp-lead-ingest": "index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  }
+}

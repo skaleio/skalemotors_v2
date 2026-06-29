@@ -71,12 +71,14 @@ import { leadTransmissionForForm, leadTransmissionForSave } from "@/lib/leadTran
 import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope";
 import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
+import { leadNoteService } from "@/lib/services/leadNotes";
+import { selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2 } from "lucide-react";
+import { Bell, ChevronDown, Download, Filter, ImagePlus, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -266,7 +268,13 @@ const VEHICLE_TYPE_OPTIONS = [
 
 /** Forma de pago. payment_type es string libre en DB; mantenemos las 2 opciones
  *  capitalizadas tal como aparecen en el resto del UI (CRM, exports). */
-const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado"] as const;
+const PAYMENT_TYPE_OPTIONS = ["Financiamiento", "Contado", "Auto en parte de pago"] as const;
+
+/** Tipo de lead: distingue oportunidades de venta vs. consignación. value = valor en DB. */
+const LEAD_TYPE_OPTIONS = [
+  { value: "venta", label: "Venta" },
+  { value: "consignacion", label: "Consignación" },
+] as const;
 
 /** Estados activos del pipeline (mismo modelo que CRM). */
 const PIPELINE_STATUS_LABELS = CRM_PIPELINE_STATUS_LABELS;
@@ -680,10 +688,33 @@ function LeadsImpl({ user }: { user: User }) {
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [leadTypeFilter, setLeadTypeFilter] = useState<"all" | "venta" | "consignacion">("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const createFileInputRef = useRef<HTMLInputElement | null>(null);
+  const createPreviews = useMemo(
+    () => createFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [createFiles],
+  );
+  useEffect(() => {
+    return () => createPreviews.forEach((p) => URL.revokeObjectURL(p.url));
+  }, [createPreviews]);
+  const handlePickCreateFiles = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!list.length) return;
+    setCreateFiles((prev) => {
+      const { accepted, rejected } = selectValidAttachments({ files: list, existingCount: prev.length });
+      if (rejected.length) toast({ variant: "destructive", title: "Imagen no agregada", description: rejected[0].reason });
+      return accepted.length ? [...prev, ...accepted] : prev;
+    });
+  }, []);
+  const removeCreateFile = useCallback((index: number) => {
+    setCreateFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const tomorrow = useMemo(() => {
@@ -697,6 +728,7 @@ function LeadsImpl({ user }: { user: User }) {
     rut: "",
     phone: "",
     status: "nuevo",
+    lead_type: "venta",
     make: "",
     vehicle: "",
     model: "",
@@ -732,6 +764,7 @@ function LeadsImpl({ user }: { user: User }) {
     phone: "",
     email: "",
     status: "en_seguimiento",
+    lead_type: "venta",
     make: "",
     vehicle: "",
     model: "",
@@ -891,9 +924,14 @@ function LeadsImpl({ user }: { user: User }) {
           ? true
           : bucket === resolvedStatusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesType =
+        leadTypeFilter === "all"
+          ? true
+          : (lead.lead_type ?? "venta") === leadTypeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [leads, deferredSearchQuery, resolvedStatusFilter]);
+  }, [leads, deferredSearchQuery, resolvedStatusFilter, leadTypeFilter]);
 
   const leadStats = useMemo(() => {
     const total = leads.length;
@@ -1007,6 +1045,7 @@ function LeadsImpl({ user }: { user: User }) {
       rut: "",
       phone: "",
       status: "nuevo",
+      lead_type: "venta",
       make: "",
       vehicle: "",
       model: "",
@@ -1022,6 +1061,7 @@ function LeadsImpl({ user }: { user: User }) {
       reminderPriority: "today",
       contact_state: null,
     });
+    setCreateFiles([]);
   };
 
   const handleImportClick = () => {
@@ -1268,6 +1308,10 @@ function LeadsImpl({ user }: { user: User }) {
 
     setIsCreating(true);
 
+    // Si adjunta imágenes, el texto + imágenes van como primera nota del timeline (lead_notes),
+    // no al campo notes del lead, para no duplicar el texto en la UI. Requiere tenant_id.
+    const attachImages = createFiles.length > 0 && !!user.tenant_id;
+
     try {
       const tags: string[] = [];
       if (vehicleLabel) {
@@ -1284,6 +1328,7 @@ function LeadsImpl({ user }: { user: User }) {
         full_name: sanitizedCreateName,
         phone: normalizedCreatePhone,
         status: formState.status as any,
+        lead_type: formState.lead_type,
         source: formState.phone.trim() ? "telefono" : "otro",
         priority:
           canSetLeadContactState(user?.role) && formState.contact_state != null
@@ -1300,9 +1345,31 @@ function LeadsImpl({ user }: { user: User }) {
         pie_disponible: formState.pie.trim() ? formState.pie.trim() : null,
         cuotas_mensuales: formState.cuotas_mensuales.trim() ? formState.cuotas_mensuales.trim() : null,
         transmision: leadTransmissionForSave(formState.transmision),
-        notes: formState.notes.trim() ? formState.notes.trim() : null,
+        notes: !attachImages && formState.notes.trim() ? formState.notes.trim() : null,
         tags: buildTags(tags) as any,
       });
+
+      if (attachImages && user.tenant_id) {
+        try {
+          await leadNoteService.create({
+            leadId: (created as Lead).id,
+            body: formState.notes.trim(),
+            tenantId: user.tenant_id,
+            branchId: user.branch_id,
+            createdBy: user.id,
+            channel: null,
+            files: createFiles,
+          });
+          queryClient.invalidateQueries({ queryKey: ["lead-notes", (created as Lead).id] });
+        } catch (noteError: any) {
+          console.error("Error guardando nota con imágenes:", noteError);
+          toast({
+            variant: "destructive",
+            title: "Lead creado, pero la nota con imágenes falló",
+            description: noteError?.message || "Vuelve a adjuntar las imágenes desde la ficha del lead.",
+          });
+        }
+      }
 
       // Actualizar caché al instante con el nuevo lead al inicio (mismo orden que el API: más recientes primero)
       const queryKey = ["leads", user.branch_id, undefined, undefined, undefined, undefined];
@@ -1368,6 +1435,7 @@ function LeadsImpl({ user }: { user: User }) {
       phone: (lead.phone || "").replace(/^(\+56\s*)/g, ""),
       email: lead.email || "",
       status: statusForEditForm(lead.status),
+      lead_type: lead.lead_type || "venta",
       make: getTagValue(tags, MARCA_TAG_PREFIX),
       model: getTagValue(tags, MODELO_TAG_PREFIX),
       vehicle: isConsignacion
@@ -1405,6 +1473,7 @@ function LeadsImpl({ user }: { user: User }) {
         email: editForm.email.trim() ? editForm.email.trim() : null,
         rut: editForm.rut.trim() ? editForm.rut.trim() : null,
         status: crmStageToDbStatus(editForm.status) as Lead["status"],
+        lead_type: editForm.lead_type,
         region: editForm.region.trim() ? editForm.region.trim() : null,
         payment_type: editForm.payment_type ? editForm.payment_type : null,
         budget: editForm.budget.trim() ? editForm.budget.trim() : null,
@@ -1749,6 +1818,20 @@ function LeadsImpl({ user }: { user: User }) {
                 <SelectItem value="cancelado">{CANCELLED_STATUS_LABELS.cancelado}</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={leadTypeFilter} onValueChange={(v) => setLeadTypeFilter(v as "all" | "venta" | "consignacion")}>
+              <SelectTrigger className="w-[160px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar por tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {LEAD_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="icon"
@@ -1894,13 +1977,13 @@ function LeadsImpl({ user }: { user: User }) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lead_vehicle">Vehiculo</Label>
+              <Label htmlFor="lead_vehicle">Tipo de carrocería</Label>
               <Select
                 value={formState.vehicle}
                 onValueChange={(value) => setFormState({ ...formState, vehicle: value })}
               >
                 <SelectTrigger id="lead_vehicle">
-                  <SelectValue placeholder="Selecciona tipo de vehículo" />
+                  <SelectValue placeholder="Selecciona tipo de carrocería" />
                 </SelectTrigger>
                 <SelectContent>
                   {VEHICLE_TYPE_OPTIONS.map((opt) => (
@@ -1926,7 +2009,7 @@ function LeadsImpl({ user }: { user: User }) {
               disabled={isCreating}
             />
             <div className="grid gap-2">
-              <Label>Financiamiento/Contado</Label>
+              <Label>Forma de pago</Label>
               <Select
                 value={formState.payment_type}
                 onValueChange={(value) =>
@@ -1947,7 +2030,7 @@ function LeadsImpl({ user }: { user: User }) {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
-                <Label htmlFor="lead-create-budget">Presupuesto</Label>
+                <Label htmlFor="lead-create-budget">Presupuesto de compra</Label>
                 <Input
                   id="lead-create-budget"
                   value={formState.budget}
@@ -1965,7 +2048,7 @@ function LeadsImpl({ user }: { user: User }) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="lead-create-cuotas">Cuotas mensuales</Label>
+                <Label htmlFor="lead-create-cuotas">Cuota mensual</Label>
                 <Input
                   id="lead-create-cuotas"
                   value={formState.cuotas_mensuales}
@@ -1983,6 +2066,69 @@ function LeadsImpl({ user }: { user: User }) {
                 placeholder="Agrega una nota sobre el lead..."
                 rows={3}
               />
+              <input
+                ref={createFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePickCreateFiles}
+                disabled={isCreating}
+              />
+              {createPreviews.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {createPreviews.map((preview, index) => (
+                    <div
+                      key={preview.url}
+                      className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
+                    >
+                      <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeCreateFile(index)}
+                        disabled={isCreating}
+                        className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
+                        aria-label={`Quitar ${preview.file.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createFileInputRef.current?.click()}
+                  disabled={isCreating}
+                >
+                  <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
+                  Adjuntar imágenes
+                </Button>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Hasta 6 imágenes. Se guardan como primera nota del lead.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select
+                value={formState.lead_type}
+                onValueChange={(value) => setFormState({ ...formState, lead_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>Estado</Label>
@@ -2285,6 +2431,24 @@ function LeadsImpl({ user }: { user: User }) {
               onMotiveChange={(citaMotivo) => setEditForm({ ...editForm, citaMotivo })}
               disabled={isUpdating || leadQuickAppointmentQuery.isLoading}
             />
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select
+                value={editForm.lead_type}
+                onValueChange={(value) => setEditForm((f) => ({ ...f, lead_type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-2">
               <Label>Estado</Label>
               <Select
