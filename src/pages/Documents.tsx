@@ -7,6 +7,7 @@ import {
   ScrollText,
   Plus,
   Printer,
+  Download,
   Eye,
   Trash2,
   CheckCircle,
@@ -140,6 +141,20 @@ interface PreviewProps {
 
 function DocumentPreview({ doc, issuerName }: PreviewProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setDownloading(true);
+    try {
+      const { downloadDocumentPdf } = await import("@/lib/pdf/documentPdf");
+      await downloadDocumentPdf(printRef.current, doc.document_number ?? "documento");
+    } catch {
+      toast.error("No se pudo generar el PDF");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handlePrint = () => {
     const content = printRef.current?.innerHTML;
@@ -190,10 +205,19 @@ function DocumentPreview({ doc, issuerName }: PreviewProps) {
         </DialogTitle>
       </DialogHeader>
 
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-2 mb-4">
+        <Button
+          variant="outline"
+          onClick={handleDownloadPdf}
+          disabled={downloading}
+          className="gap-2"
+        >
+          <Download className="h-4 w-4" />
+          {downloading ? "Generando…" : "Descargar PDF"}
+        </Button>
         <Button onClick={handlePrint} className="gap-2 bg-pink-600 hover:bg-pink-700 text-white">
           <Printer className="h-4 w-4" />
-          Imprimir / Guardar PDF
+          Imprimir
         </Button>
       </div>
 

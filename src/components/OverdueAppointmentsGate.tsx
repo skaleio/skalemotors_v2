@@ -38,6 +38,7 @@ const NOTE_MIN = 3;
 
 function GateContent({ appointments }: { appointments: Appointment[] }) {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(true);
   const [queue, setQueue] = useState(appointments);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [note, setNote] = useState("");
@@ -77,12 +78,8 @@ function GateContent({ appointments }: { appointments: Appointment[] }) {
   };
 
   return (
-    <Dialog open>
-      <DialogContent
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        className="sm:max-w-[460px] [&>button]:hidden"
-      >
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader className="space-y-2 text-left">
           <DialogTitle className="flex items-center gap-2 text-base">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
