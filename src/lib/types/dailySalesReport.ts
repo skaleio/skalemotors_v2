@@ -28,6 +28,22 @@ export interface DailyReportConsignmentRow {
   observation: string;
 }
 
+/**
+ * Llamada a un lead derivada del CRM (read-only). No se persiste en el payload:
+ * se calcula en vivo desde `lead_notes` (channel='llamada') para no duplicar datos
+ * ni desincronizarse del CRM. Fuente de verdad = la nota que registra el vendedor.
+ */
+export interface LeadDailyCallRow {
+  note_id: string;
+  lead_id: string;
+  customer_name: string;
+  phone: string;
+  vehicle_interest: string;
+  lead_status: string;
+  created_at: string;
+  note: string;
+}
+
 export interface DailySalesReportPayload {
   calls: DailyReportCallRow[];
   credits: DailyReportCreditRow[];
@@ -170,6 +186,15 @@ export function chileTodayIsoDate(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Santiago",
   }).format(new Date());
+}
+
+/** Día calendario (YYYY-MM-DD) en hora Chile de un timestamp ISO. */
+export function chileDayKey(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
+  } catch {
+    return iso.slice(0, 10);
+  }
 }
 
 // Rango [start, endExclusive) del mes en curso (hora Chile) para filtrar report_date.

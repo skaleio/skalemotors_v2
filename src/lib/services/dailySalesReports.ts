@@ -4,8 +4,10 @@ import type {
   DailyReportSupervisionRow,
   DailySalesReport,
   DailySalesReportPayload,
+  LeadDailyCallRow,
 } from "@/lib/types/dailySalesReport";
 import {
+  chileDayKey,
   chileMonthRange,
   chileTodayIsoDate,
   normalizeDailySalesReportPayload,
@@ -177,6 +179,11 @@ export async function fetchSubmittedReportPdfDataForDate(input: {
 
   const userMap = new Map((users ?? []).map((u) => [u.id, u]));
 
+  const leadCallsByUser = await fetchLeadsCallsForUsersDay({
+    userIds: reports.map((r) => r.user_id),
+    reportDate: input.reportDate,
+  });
+
   return reports
     .map((r) => {
       const u = userMap.get(r.user_id);
@@ -186,6 +193,7 @@ export async function fetchSubmittedReportPdfDataForDate(input: {
         branchName: branchJoin?.name ?? null,
         reportDate: r.report_date,
         payload: r.payload,
+        leadCalls: leadCallsByUser.get(r.user_id) ?? [],
       } satisfies DailyReportPdfData;
     })
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
@@ -266,6 +274,79 @@ export async function fetchUserReportMetrics(
       consignments: p.effective_consignments.filter((r) => consignmentRowHasData(r)).length,
     } satisfies DailyReportMetricPoint;
   });
+}
+
+/**
+ * Llamadas a leads de varios vendedores en un día (hora Chile), derivadas del CRM.
+ * Read-only: cada nota de canal "llamada" registrada en el CRM es una fila.
+ * Consulta una ventana UTC amplia (±1 día) y filtra el día exacto con `chileDayKey`,
+ * igual que la regla "una raya por día" del CRM, para evitar bugs de DST.
+ * Devuelve un Map userId → llamadas (incluye solo usuarios con llamadas).
+ */
+export async function fetchLeadsCallsForUsersDay(input: {
+  userIds: string[];
+  reportDate: string;
+}): Promise<Map<string, LeadDailyCallRow[]>> {
+  const grouped = new Map<string, LeadDailyCallRow[]>();
+  if (input.userIds.length === 0) return grouped;
+
+  const [yy, mm, dd] = input.reportDate.split("-").map(Number);
+  const base = Date.UTC(yy, mm - 1, dd);
+  const dayMs = 86400000;
+  const fromIso = new Date(base - dayMs).toISOString();
+  const toIso = new Date(base + 2 * dayMs).toISOString();
+
+  const { data, error } = await supabase
+    .from("lead_notes")
+    .select(
+      "id, lead_id, created_by, body, created_at, lead:leads(full_name, phone, vehicle_interest, status)",
+    )
+    .in("created_by", input.userIds)
+    .eq("channel", "llamada")
+    .eq("source", "vendor")
+    .gte("created_at", fromIso)
+    .lt("created_at", toIso)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    if (chileDayKey(row.created_at) !== input.reportDate) continue;
+    if (!row.created_by) continue;
+    const lead = row.lead as {
+      full_name?: string | null;
+      phone?: string | null;
+      vehicle_interest?: string | null;
+      status?: string | null;
+    } | null;
+    const call: LeadDailyCallRow = {
+      note_id: row.id,
+      lead_id: row.lead_id,
+      customer_name: lead?.full_name ?? "—",
+      phone: lead?.phone ?? "",
+      vehicle_interest: lead?.vehicle_interest ?? "",
+      lead_status: lead?.status ?? "",
+      created_at: row.created_at,
+      note: row.body ?? "",
+    };
+    const list = grouped.get(row.created_by);
+    if (list) list.push(call);
+    else grouped.set(row.created_by, [call]);
+  }
+
+  return grouped;
+}
+
+/** Llamadas a leads de un vendedor en un día (hora Chile), derivadas del CRM. */
+export async function fetchLeadsCallsForUserDay(input: {
+  userId: string;
+  reportDate: string;
+}): Promise<LeadDailyCallRow[]> {
+  const grouped = await fetchLeadsCallsForUsersDay({
+    userIds: [input.userId],
+    reportDate: input.reportDate,
+  });
+  return grouped.get(input.userId) ?? [];
 }
 
 export async function buildDailyReportSupervisionRows(input: {

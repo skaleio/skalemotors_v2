@@ -26,6 +26,7 @@ import {
 } from "@/lib/pdf/dailyReportPdf";
 import {
   fetchDailyReportById,
+  fetchLeadsCallsForUserDay,
   fetchUserReportPdfDataRange,
 } from "@/lib/services/dailySalesReports";
 
@@ -89,11 +90,16 @@ export function DailyReportVendedorAnalysis({
         toast.error("No se encontró el informe del día.");
         return;
       }
+      const leadCalls = await fetchLeadsCallsForUserDay({
+        userId: report.user_id,
+        reportDate: report.report_date,
+      });
       await downloadVendedorReportPdf({
         fullName,
         branchName,
         reportDate,
         payload: report.payload,
+        leadCalls,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo generar el PDF.");

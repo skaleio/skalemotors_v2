@@ -1,11 +1,40 @@
 import { MIAMI_LOGO_REPORT_DATA_URI } from "@/assets/miamiLogoReport";
-import type { DailySalesReportPayload } from "@/lib/types/dailySalesReport";
+import {
+  CRM_PIPELINE_STATUS_LABELS,
+  getLeadCrmStageKey,
+} from "@/lib/crmPipeline";
+import type {
+  DailySalesReportPayload,
+  LeadDailyCallRow,
+} from "@/lib/types/dailySalesReport";
 
 export interface DailyReportPdfData {
   fullName: string;
   branchName: string | null;
   reportDate: string; // YYYY-MM-DD
   payload: DailySalesReportPayload;
+  /**
+   * Llamadas a leads del día derivadas del CRM (read-only). `undefined` = no se
+   * consultó (ej. históricos) y la sección se omite; `[]` = se consultó y no hubo.
+   */
+  leadCalls?: LeadDailyCallRow[];
+}
+
+function leadStatusLabel(status: string): string {
+  const key = getLeadCrmStageKey(status);
+  return key ? CRM_PIPELINE_STATUS_LABELS[key] : "—";
+}
+
+function callTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString("es-CL", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/Santiago",
+    });
+  } catch {
+    return "—";
+  }
 }
 
 const PINK: [number, number, number] = [219, 39, 119];
@@ -133,8 +162,23 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
     y = lastY(doc) + 4;
   };
 
-  // 1. Llamados realizados
-  section(1, "Llamados realizados");
+  // 1. Llamadas a leads (CRM) — derivadas, read-only. Se omite en históricos.
+  if (data.leadCalls) {
+    section(1, "Llamadas a leads (CRM)");
+    if (!data.leadCalls.length) emptyNote("Sin llamadas a leads registradas.");
+    data.leadCalls.forEach((c, i) =>
+      block(`Llamada ${i + 1}  ·  ${callTime(c.created_at)}`, [
+        ["Cliente", c.customer_name],
+        ["Teléfono", c.phone],
+        ["Vehículo de interés", c.vehicle_interest],
+        ["Estado del lead", leadStatusLabel(c.lead_status)],
+        ["Nota", c.note],
+      ]),
+    );
+  }
+
+  // 2. Llamados consignación
+  section(2, "Llamados consignación");
   const calls = data.payload.calls.filter(hasData);
   if (!calls.length) emptyNote("Sin registros.");
   calls.forEach((c, i) =>
@@ -163,8 +207,8 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
     ),
   );
 
-  // 2. Créditos ingresados
-  section(2, "Créditos ingresados");
+  // 3. Créditos ingresados
+  section(3, "Créditos ingresados");
   const credits = data.payload.credits.filter(hasData);
   if (!credits.length) emptyNote("Sin registros.");
   credits.forEach((c, i) =>
@@ -176,8 +220,8 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
     ]),
   );
 
-  // 3. Publicaciones en redes sociales
-  section(3, "Publicaciones en redes sociales");
+  // 4. Publicaciones en redes sociales
+  section(4, "Publicaciones en redes sociales");
   const social = data.payload.social_posts.filter(hasData);
   if (!social.length) emptyNote("Sin registros.");
   social.forEach((s, i) =>
@@ -189,8 +233,8 @@ function renderReport(doc: any, autoTable: AutoTable, data: DailyReportPdfData, 
     ]),
   );
 
-  // 4. Observaciones del día (reserva alta para que el título no quede solo al pie)
-  section(4, "Observaciones del día", 60);
+  // 5. Observaciones del día (reserva alta para que el título no quede solo al pie)
+  section(5, "Observaciones del día", 60);
   if (data.payload.daily_observations.trim()) {
     block("Observaciones", [["Notas", data.payload.daily_observations.trim()]]);
   } else {
