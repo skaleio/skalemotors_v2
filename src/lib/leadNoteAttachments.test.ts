@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLeadNoteAttachmentPath,
-  MAX_ATTACHMENTS_PER_NOTE,
   parseAttachments,
   selectValidAttachments,
 } from "./leadNoteAttachments";
@@ -47,26 +46,24 @@ describe("selectValidAttachments", () => {
         makeFile("a.jpg", "image/jpeg", 1000),
         makeFile("doc.pdf", "application/pdf", 1000),
       ],
-      existingCount: 0,
     });
     expect(accepted.map((f) => f.name)).toEqual(["a.jpg"]);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].name).toBe("doc.pdf");
   });
 
-  it("respeta el cupo restante por nota", () => {
-    const files = Array.from({ length: MAX_ATTACHMENTS_PER_NOTE }, (_, i) =>
+  it("acepta muchas imágenes sin límite de cantidad", () => {
+    const files = Array.from({ length: 20 }, (_, i) =>
       makeFile(`f${i}.jpg`, "image/jpeg", 100),
     );
-    const { accepted, rejected } = selectValidAttachments({ files, existingCount: 4 });
-    expect(accepted).toHaveLength(MAX_ATTACHMENTS_PER_NOTE - 4);
-    expect(rejected).toHaveLength(4);
+    const { accepted, rejected } = selectValidAttachments({ files });
+    expect(accepted).toHaveLength(20);
+    expect(rejected).toHaveLength(0);
   });
 
   it("rechaza archivos demasiado grandes", () => {
     const { accepted, rejected } = selectValidAttachments({
       files: [makeFile("big.jpg", "image/jpeg", 30 * 1024 * 1024)],
-      existingCount: 0,
     });
     expect(accepted).toHaveLength(0);
     expect(rejected[0].reason).toContain("tamaño");
