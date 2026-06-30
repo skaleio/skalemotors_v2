@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CheckCircle2, Download, Eye, FileText, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Download, Eye, FileText, Loader2, RefreshCw, Users, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -42,6 +42,8 @@ import {
   fetchDailyReportById,
   fetchSubmittedReportPdfDataForDate,
 } from "@/lib/services/dailySalesReports";
+import { buildLeadsDailyConsolidated } from "@/lib/services/leadsDailyReport";
+import { downloadLeadsDailyReportPdf } from "@/lib/pdf/leadsDailyReportPdf";
 import type {
   DailyReportSupervisionRow,
   DailySalesReportPayload,
@@ -113,6 +115,7 @@ export function DailySalesReportSupervision() {
   const [analysisRow, setAnalysisRow] = useState<DailyReportSupervisionRow | null>(null);
   const [generatingGeneral, setGeneratingGeneral] = useState(false);
   const [generatingZip, setGeneratingZip] = useState(false);
+  const [generatingLeads, setGeneratingLeads] = useState(false);
 
   const stats = useMemo(() => {
     const rows = supervision.data ?? [];
@@ -188,6 +191,21 @@ export function DailySalesReportSupervision() {
     }
   };
 
+  const handleLeadsReport = async () => {
+    setGeneratingLeads(true);
+    try {
+      const data = await buildLeadsDailyConsolidated({
+        date: reportDate,
+        branchId: scope === "branch" ? user?.branch_id ?? null : null,
+      });
+      await downloadLeadsDailyReportPdf(data);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo generar el informe de leads.");
+    } finally {
+      setGeneratingLeads(false);
+    }
+  };
+
   const formattedDateLabel = format(new Date(`${reportDate}T12:00:00`), "EEEE d MMMM yyyy", {
     locale: es,
   });
@@ -229,6 +247,20 @@ export function DailySalesReportSupervision() {
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={handleLeadsReport}
+                disabled={generatingLeads}
+              >
+                {generatingLeads ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Users className="h-4 w-4 mr-2" />
+                )}
+                Informe de Leads
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
