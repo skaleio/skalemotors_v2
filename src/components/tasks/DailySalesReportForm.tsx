@@ -3,6 +3,7 @@ import { es } from "date-fns/locale";
 import {
   CheckCircle2,
   Loader2,
+  Phone,
   Plus,
   Save,
   Trash2,
@@ -49,6 +50,8 @@ import {
   normalizeDailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import { cn } from "@/lib/utils";
+
+import { LeadCallsSection } from "@/components/tasks/LeadCallsSection";
 
 function FieldGrid({
   children,
@@ -126,7 +129,7 @@ export function DailySalesReportForm({
   const { user } = useAuth();
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
-  const [openSections, setOpenSections] = useState<string[]>(["calls"]);
+  const [openSections, setOpenSections] = useState<string[]>(["lead_calls", "calls"]);
 
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
@@ -271,6 +274,25 @@ export function DailySalesReportForm({
         onValueChange={setOpenSections}
         className="w-full space-y-2"
       >
+        <AccordionItem value="lead_calls" className="border rounded-lg px-4 bg-card">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3 text-left">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                <Phone className="h-4 w-4" aria-hidden />
+              </span>
+              <div>
+                <p className="font-medium">Llamadas a leads</p>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Se completan solas desde el CRM — no necesitas escribir nada
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <LeadCallsSection userId={user?.id} reportDate={reportDate} enabled={!!user?.id} />
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="calls" className="border rounded-lg px-4 bg-card">
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
@@ -278,7 +300,7 @@ export function DailySalesReportForm({
                 1
               </span>
               <div>
-                <p className="font-medium">Llamados realizados</p>
+                <p className="font-medium">Llamados consignación</p>
                 <p className="text-xs text-muted-foreground font-normal">
                   {progress.calls > 0 ? `${progress.calls} registrado(s)` : "Sin registros aún"}
                 </p>
