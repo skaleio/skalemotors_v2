@@ -8,7 +8,6 @@ import {
   Plus,
   Save,
   Trash2,
-  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -27,14 +26,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
-  useMonthlyEffectiveConsignments,
   useMyDailySalesReport,
   useSubmitDailySalesReport,
   useSyncDailySalesReportTasks,
 } from "@/hooks/useDailySalesReports";
 import type {
   DailyReportCallRow,
-  DailyReportConsignmentRow,
   DailyReportCreditRow,
   DailyReportSocialPostRow,
   DailySalesReportPayload,
@@ -42,10 +39,8 @@ import type {
 import {
   chileTodayIsoDate,
   CONSIGNMENT_CALLS_DAILY_GOAL,
-  CONSIGNMENT_MONTHLY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
-  emptyConsignmentRow,
   emptyCreditRow,
   emptyDailySalesReportPayload,
   emptySocialPostRow,
@@ -136,7 +131,6 @@ export function DailySalesReportForm({
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
   const reportQuery = useMyDailySalesReport(user?.id, reportDate, !!user?.id);
-  const monthlyConsignments = useMonthlyEffectiveConsignments(user?.id, !!user?.id);
   const submitMutation = useSubmitDailySalesReport();
 
   useEffect(() => {
@@ -150,13 +144,6 @@ export function DailySalesReportForm({
   const formattedDate = format(new Date(`${reportDate}T12:00:00`), "EEEE d 'de' MMMM yyyy", {
     locale: es,
   });
-
-  const monthlyConsignmentsCount = monthlyConsignments.data ?? 0;
-  const consignmentGoalReached = monthlyConsignmentsCount >= CONSIGNMENT_MONTHLY_GOAL;
-  const consignmentProgressPct = Math.min(
-    100,
-    (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
-  );
 
   // Barra de llamados: sube en vivo con cada llamado que se anota en el form del día.
   const dailyCallsCount = progress.calls;
@@ -174,14 +161,6 @@ export function DailySalesReportForm({
     setPayload((p) => ({
       ...p,
       social_posts: normalizeDailySalesReportPayload({ ...p, social_posts: next }).social_posts,
-    }));
-  const updateConsignments = (next: DailyReportConsignmentRow[]) =>
-    setPayload((p) => ({
-      ...p,
-      effective_consignments: normalizeDailySalesReportPayload({
-        ...p,
-        effective_consignments: next,
-      }).effective_consignments,
     }));
 
   const handleSubmit = () => {
@@ -428,119 +407,6 @@ export function DailySalesReportForm({
                 </FieldGrid>
               </EntryCard>
             ))}
-            <div className="rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/40 dark:bg-pink-950/10 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-pink-700 dark:text-pink-300">
-                      Registro bonus · Consignación efectiva
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {consignmentGoalReached
-                        ? "¡Meta alcanzada! Bono de $xxx.xxx"
-                        : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} este mes y gana $xxx.xxx`}
-                    </p>
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="text-xl font-semibold skale-num text-pink-600 dark:text-pink-400">
-                    {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
-                  </span>
-                  <span className="text-xs text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
-                </div>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
-                <div
-                  className="h-full rounded-full bg-pink-500 transition-all"
-                  style={{ width: `${consignmentProgressPct}%` }}
-                />
-              </div>
-              {payload.effective_consignments.map((row, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-pink-200 dark:border-pink-900/60 bg-card p-3 space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wide text-pink-600 dark:text-pink-300">
-                      Registro {payload.calls.length + i + 1} · Bonus
-                    </span>
-                    {payload.effective_consignments.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                        onClick={() =>
-                          updateConsignments(
-                            payload.effective_consignments.filter((_, j) => j !== i),
-                          )
-                        }
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        Quitar
-                      </Button>
-                    )}
-                  </div>
-                  <FieldGrid cols={3}>
-                    <Field label="Nombre cliente">
-                      <Input
-                        value={row.customer_name}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], customer_name: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Patente">
-                      <Input
-                        placeholder="ABCD12"
-                        value={row.patente}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], patente: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Vehículo">
-                      <Input
-                        placeholder="Marca / modelo"
-                        value={row.vehicle}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], vehicle: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Observación">
-                      <Input
-                        value={row.observation}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], observation: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                  </FieldGrid>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
-                onClick={() =>
-                  updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar consignación efectiva
-              </Button>
-            </div>
             <Button
               type="button"
               variant="outline"

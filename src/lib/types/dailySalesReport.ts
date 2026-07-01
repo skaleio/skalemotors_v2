@@ -111,7 +111,7 @@ export function emptyConsignmentRow(): DailyReportConsignmentRow {
 
 export function emptyDailySalesReportPayload(): DailySalesReportPayload {
   return {
-    calls: [emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow()],
+    calls: Array.from({ length: CONSIGNMENT_CALLS_DAILY_GOAL }, () => emptyCallRow()),
     credits: [emptyCreditRow()],
     social_posts: [
       emptySocialPostRow(),
