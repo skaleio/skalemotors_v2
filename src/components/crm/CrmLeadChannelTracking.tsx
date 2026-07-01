@@ -95,6 +95,9 @@ export const CrmLeadChannelTracking = forwardRef<
 
   const [draft, setDraft] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  // Relleno optimista de la raya: se pinta al tocar la barrita y se confirma al
+  // registrar la nota. Si el diálogo se cierra sin nota, la raya real no cambia.
+  const [armed, setArmed] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -197,6 +200,12 @@ export const CrmLeadChannelTracking = forwardRef<
     return notes.some((n) => chileDayKey(n.created_at) === todayKey);
   }, [notes]);
 
+  // Lo que ve la barrita: la raya real + la que se está por confirmar (relleno optimista).
+  const optimisticCounter =
+    armed && !alreadyContactedToday && counterValue < LEAD_METRIC_MAX
+      ? counterValue + 1
+      : counterValue;
+
   const handleSegmentClick = useCallback(() => {
     if (alreadyContactedToday) {
       toast.info(
@@ -204,15 +213,24 @@ export const CrmLeadChannelTracking = forwardRef<
       );
       return;
     }
+    if (counterValue >= LEAD_METRIC_MAX) {
+      toast.info(
+        `Ya completaste las ${LEAD_METRIC_MAX} de ${channelLabel.toLowerCase()} de este lead.`,
+      );
+      return;
+    }
+    // La raya se pinta al toque; queda firme al registrar la nota (que alimenta el informe).
+    setArmed(true);
     textareaRef.current?.focus();
     textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [alreadyContactedToday, actionVerb]);
+  }, [alreadyContactedToday, actionVerb, counterValue, channelLabel]);
 
   useEffect(() => {
     setDraft("");
     setSelectedFiles([]);
     setEditingNoteId(null);
     setEditDraft("");
+    setArmed(false);
   }, [leadId, channel]);
 
   const errorToastShownRef = useRef(false);
@@ -266,6 +284,7 @@ export const CrmLeadChannelTracking = forwardRef<
         queryClient.setQueryData(queryKey, [...cached, created]);
         setDraft("");
         setSelectedFiles([]);
+        setArmed(false);
         cancelEdit();
         await queryClient.refetchQueries({ queryKey });
         invalidate();
@@ -442,7 +461,7 @@ export const CrmLeadChannelTracking = forwardRef<
         <LeadMetricBar
           leadId={leadId}
           field={counterField}
-          value={counterValue}
+          value={optimisticCounter}
           showLabel={false}
           bordered
           size="sm"
