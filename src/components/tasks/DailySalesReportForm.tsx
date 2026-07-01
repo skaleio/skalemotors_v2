@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   CheckCircle2,
+  Download,
   Loader2,
   Phone,
   PhoneCall,
@@ -46,6 +47,8 @@ import {
   emptySocialPostRow,
   normalizeDailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
+import { fetchOwnReportPdfData } from "@/lib/services/dailySalesReports";
+import { downloadVendedorReportPdf } from "@/lib/pdf/dailyReportPdf";
 import { cn } from "@/lib/utils";
 
 import { LeadCallsSection } from "@/components/tasks/LeadCallsSection";
@@ -138,6 +141,8 @@ export function DailySalesReportForm({
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
   const [openSections, setOpenSections] = useState<string[]>(["lead_calls", "calls"]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [submittedOnce, setSubmittedOnce] = useState(false);
 
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
@@ -174,6 +179,31 @@ export function DailySalesReportForm({
       social_posts: normalizeDailySalesReportPayload({ ...p, social_posts: next }).social_posts,
     }));
 
+  const handleDownload = async () => {
+    if (!user?.id) return;
+    setIsDownloading(true);
+    try {
+      const data = await fetchOwnReportPdfData({ userId: user.id, reportDate });
+      if (!data) {
+        toast({
+          title: "Nada para descargar",
+          description: "Primero envía el informe.",
+          variant: "destructive",
+        });
+        return;
+      }
+      await downloadVendedorReportPdf(data);
+    } catch (err) {
+      toast({
+        title: "No se pudo descargar",
+        description: err instanceof Error ? err.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (!user?.id || !user.tenant_id) {
       toast({ title: "Sesión inválida", variant: "destructive" });
@@ -198,11 +228,14 @@ export function DailySalesReportForm({
         existingId: reportQuery.data?.id ?? null,
       },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          setSubmittedOnce(true);
           toast({
             title: isSubmitted ? "Informe actualizado" : "Informe enviado",
-            description: "Quedó registrado para supervisión.",
-          }),
+            description: "Quedó registrado para supervisión. Descargando tu copia…",
+          });
+          void handleDownload();
+        },
         onError: (err) =>
           toast({
             title: "No se pudo guardar",
@@ -633,14 +666,30 @@ export function DailySalesReportForm({
         )}
       </Accordion>
 
-      <div className="mt-6 flex items-center justify-between gap-4">
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
         {showAllSections && (
-          <p className="text-xs text-muted-foreground hidden sm:block">
+          <p className="mr-auto text-xs text-muted-foreground hidden sm:block">
             {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
           </p>
         )}
+        {(isSubmitted || submittedOnce) && (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-[160px]"
+            onClick={handleDownload}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Descargar informe
+          </Button>
+        )}
         <Button
-          className="ml-auto min-w-[160px]"
+          className="min-w-[160px]"
           onClick={handleSubmit}
           disabled={submitMutation.isPending}
         >
