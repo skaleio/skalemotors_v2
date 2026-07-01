@@ -633,26 +633,24 @@ export function DailySalesReportForm({
         )}
       </Accordion>
 
-      <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">
-        <div className="flex items-center justify-between gap-4 py-3">
-          {showAllSections && (
-            <p className="text-xs text-muted-foreground hidden sm:block">
-              {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
-            </p>
+      <div className="mt-6 flex items-center justify-between gap-4">
+        {showAllSections && (
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
+          </p>
+        )}
+        <Button
+          className="ml-auto min-w-[160px]"
+          onClick={handleSubmit}
+          disabled={submitMutation.isPending}
+        >
+          {submitMutation.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
           )}
-          <Button
-            className="ml-auto min-w-[160px]"
-            onClick={handleSubmit}
-            disabled={submitMutation.isPending}
-          >
-            {submitMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            {isSubmitted ? "Actualizar informe" : "Enviar informe"}
-          </Button>
-        </div>
+          {isSubmitted ? "Actualizar informe" : "Enviar informe"}
+        </Button>
       </div>
     </div>
   );
