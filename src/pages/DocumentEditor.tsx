@@ -576,6 +576,14 @@ export default function DocumentEditor() {
                       setForm((f) => ({ ...(f as ReservaFormState), buyer_email: e.target.value }))
                     }
                   />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Dirección"
+                    value={rForm.buyer_address}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_address: e.target.value }))
+                    }
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Precio del vehículo</Label>
