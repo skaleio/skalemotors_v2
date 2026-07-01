@@ -463,11 +463,11 @@ function AdminReportView() {
       </div>
 
       {asVendedor ? (
-        <DailySalesReportForm showAllSections={false} />
+        <DailySalesReportForm />
       ) : (
         <div className="space-y-6">
           <DailySalesReportSupervision />
-          <DailySalesReportForm showAllSections />
+          <DailySalesReportForm />
         </div>
       )}
     </div>

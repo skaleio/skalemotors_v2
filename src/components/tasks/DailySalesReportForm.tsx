@@ -132,11 +132,7 @@ function ensureMinCallRows(payload: DailySalesReportPayload): DailySalesReportPa
   };
 }
 
-export function DailySalesReportForm({
-  showAllSections = false,
-}: {
-  showAllSections?: boolean;
-}) {
+export function DailySalesReportForm() {
   const { user } = useAuth();
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
@@ -276,18 +272,12 @@ export function DailySalesReportForm({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {showAllSections && (
-              <span>
-                Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
-              </span>
-            )}
+            <span>
+              Progreso: {progress.sectionsFilled}/{progress.sectionsTotal} secciones
+            </span>
             <span>{progress.calls} llamados</span>
-            {showAllSections && (
-              <>
-                <span>{progress.credits} créditos</span>
-                <span>{progress.social} publicaciones en redes</span>
-              </>
-            )}
+            <span>{progress.credits} créditos</span>
+            <span>{progress.social} publicaciones en redes</span>
           </div>
           {isSubmitted && reportQuery.data?.submitted_at && (
             <p className="text-xs text-green-600 dark:text-green-400">
@@ -464,8 +454,6 @@ export function DailySalesReportForm({
           </AccordionContent>
         </AccordionItem>
 
-        {showAllSections && (
-          <>
         <AccordionItem value="credits" className="border rounded-lg px-4 bg-card">
           <AccordionTrigger className="hover:no-underline py-4">
             <div className="flex items-center gap-3 text-left">
@@ -661,17 +649,12 @@ export function DailySalesReportForm({
             />
           </AccordionContent>
         </AccordionItem>
-
-          </>
-        )}
       </Accordion>
 
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-        {showAllSections && (
-          <p className="mr-auto text-xs text-muted-foreground hidden sm:block">
-            {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
-          </p>
-        )}
+        <p className="mr-auto text-xs text-muted-foreground hidden sm:block">
+          {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
+        </p>
         {(isSubmitted || submittedOnce) && (
           <Button
             type="button"
