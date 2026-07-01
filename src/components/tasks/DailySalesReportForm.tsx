@@ -118,6 +118,17 @@ function EntryCard({
   );
 }
 
+// Garantiza al menos la meta diaria de filas de llamados, aunque el informe
+// guardado tenga menos (p. ej. reportes creados antes de subir la meta a 8).
+function ensureMinCallRows(payload: DailySalesReportPayload): DailySalesReportPayload {
+  if (payload.calls.length >= CONSIGNMENT_CALLS_DAILY_GOAL) return payload;
+  const missing = CONSIGNMENT_CALLS_DAILY_GOAL - payload.calls.length;
+  return {
+    ...payload,
+    calls: [...payload.calls, ...Array.from({ length: missing }, () => emptyCallRow())],
+  };
+}
+
 export function DailySalesReportForm({
   showAllSections = false,
 }: {
@@ -135,7 +146,7 @@ export function DailySalesReportForm({
 
   useEffect(() => {
     if (reportQuery.data) {
-      setPayload(normalizeDailySalesReportPayload(reportQuery.data.payload));
+      setPayload(ensureMinCallRows(normalizeDailySalesReportPayload(reportQuery.data.payload)));
     }
   }, [reportQuery.data]);
 
