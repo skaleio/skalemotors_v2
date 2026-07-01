@@ -27,7 +27,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
-  useMonthlyConsignmentCalls,
   useMonthlyEffectiveConsignments,
   useMyDailySalesReport,
   useSubmitDailySalesReport,
@@ -43,7 +42,6 @@ import type {
 import {
   chileTodayIsoDate,
   CONSIGNMENT_CALLS_DAILY_GOAL,
-  CONSIGNMENT_CALLS_MONTHLY_GOAL,
   CONSIGNMENT_MONTHLY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
@@ -84,7 +82,7 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label className="text-xs font-medium text-foreground/80">{label}</Label>
       {children}
     </div>
   );
@@ -102,9 +100,9 @@ function EntryCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3 relative">
+    <div className="rounded-lg border-2 border-border bg-card p-4 space-y-3 relative shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
           Registro {index + 1}
         </span>
         {canRemove && onRemove && (
@@ -139,7 +137,6 @@ export function DailySalesReportForm({
 
   const reportQuery = useMyDailySalesReport(user?.id, reportDate, !!user?.id);
   const monthlyConsignments = useMonthlyEffectiveConsignments(user?.id, !!user?.id);
-  const monthlyCallsPrev = useMonthlyConsignmentCalls(user?.id, reportDate, !!user?.id);
   const submitMutation = useSubmitDailySalesReport();
 
   useEffect(() => {
@@ -161,16 +158,10 @@ export function DailySalesReportForm({
     (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
   );
 
-  // Barra de llamados: hoy sube en vivo con cada llamado del form; la línea mensual
-  // suma los días previos guardados (excluye hoy) + los del form para no contar doble.
+  // Barra de llamados: sube en vivo con cada llamado que se anota en el form del día.
   const dailyCallsCount = progress.calls;
   const dailyCallsPct = Math.min(100, (dailyCallsCount / CONSIGNMENT_CALLS_DAILY_GOAL) * 100);
   const dailyGoalReached = dailyCallsCount >= CONSIGNMENT_CALLS_DAILY_GOAL;
-  const monthlyCallsCount = (monthlyCallsPrev.data ?? 0) + dailyCallsCount;
-  const monthlyCallsPct = Math.min(
-    100,
-    (monthlyCallsCount / CONSIGNMENT_CALLS_MONTHLY_GOAL) * 100,
-  );
 
   const updateCalls = (next: DailyReportCallRow[]) =>
     setPayload((p) => ({ ...p, calls: normalizeDailySalesReportPayload({ ...p, calls: next }).calls }));
@@ -324,12 +315,12 @@ export function DailySalesReportForm({
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
-            <div className="xl:col-span-2 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/10 p-4 space-y-3">
+            <div className="xl:col-span-2 rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/60 dark:bg-pink-950/15 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <PhoneCall className="h-5 w-5 text-blue-500 shrink-0" />
+                  <PhoneCall className="h-5 w-5 text-pink-500 shrink-0" />
                   <div>
-                    <p className="font-semibold text-blue-700 dark:text-blue-300">
+                    <p className="font-semibold text-pink-700 dark:text-pink-300">
                       Llamados de hoy
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -338,7 +329,7 @@ export function DailySalesReportForm({
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <span className="text-2xl font-semibold skale-num text-blue-600 dark:text-blue-400">
+                  <span className="text-2xl font-semibold skale-num text-pink-600 dark:text-pink-400">
                     {dailyCallsCount}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -346,30 +337,17 @@ export function DailySalesReportForm({
                   </span>
                 </div>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
                 <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                  className="h-full rounded-full bg-pink-500 transition-all duration-500"
                   style={{ width: `${dailyCallsPct}%` }}
                 />
               </div>
               {dailyGoalReached && (
-                <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                <p className="text-xs font-medium text-pink-600 dark:text-pink-400">
                   ¡Meta diaria completa! 🎯
                 </p>
               )}
-              <div className="flex items-center justify-between gap-2 border-t border-blue-200/60 dark:border-blue-900/40 pt-2.5 text-xs text-muted-foreground">
-                <span>Este mes</span>
-                <span className="skale-num">
-                  {monthlyCallsPrev.isLoading ? "…" : monthlyCallsCount}/
-                  {CONSIGNMENT_CALLS_MONTHLY_GOAL} · {Math.round(monthlyCallsPct)}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-100/70 dark:bg-blue-950/70">
-                <div
-                  className="h-full rounded-full bg-blue-400/80 transition-all duration-500"
-                  style={{ width: `${monthlyCallsPct}%` }}
-                />
-              </div>
             </div>
             {payload.calls.map((row, i) => (
               <EntryCard
