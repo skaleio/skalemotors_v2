@@ -40,16 +40,26 @@ describe("buildLeadNoteAttachmentPath", () => {
 });
 
 describe("selectValidAttachments", () => {
-  it("acepta imágenes válidas y rechaza no-imágenes", () => {
+  it("acepta imágenes y documentos, rechaza formatos no admitidos", () => {
     const { accepted, rejected } = selectValidAttachments({
       files: [
         makeFile("a.jpg", "image/jpeg", 1000),
         makeFile("doc.pdf", "application/pdf", 1000),
+        makeFile("hoja.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 1000),
+        makeFile("clip.mp4", "video/mp4", 1000),
       ],
     });
-    expect(accepted.map((f) => f.name)).toEqual(["a.jpg"]);
+    expect(accepted.map((f) => f.name)).toEqual(["a.jpg", "doc.pdf", "hoja.xlsx"]);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0].name).toBe("doc.pdf");
+    expect(rejected[0].name).toBe("clip.mp4");
+  });
+
+  it("deduce el tipo de documento por extensión cuando el mime viene vacío", () => {
+    const { accepted, rejected } = selectValidAttachments({
+      files: [makeFile("contrato.docx", "", 1000)],
+    });
+    expect(accepted.map((f) => f.name)).toEqual(["contrato.docx"]);
+    expect(rejected).toHaveLength(0);
   });
 
   it("acepta muchas imágenes sin límite de cantidad", () => {

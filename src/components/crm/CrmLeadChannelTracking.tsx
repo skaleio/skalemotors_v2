@@ -10,12 +10,12 @@ import {
   validateChannelNote,
   type FollowUpChannel,
 } from "@/lib/leadFollowUpNote";
-import { selectValidAttachments } from "@/lib/leadNoteAttachments";
+import { ATTACHMENT_ACCEPT, selectValidAttachments } from "@/lib/leadNoteAttachments";
 import { leadNoteService } from "@/lib/services/leadNotes";
 import { leadService } from "@/lib/services/leads";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, MessageCircle, Pencil, Phone, Plus, Trash2, X } from "lucide-react";
+import { Loader2, MessageCircle, Paperclip, Pencil, Phone, Trash2 } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -27,6 +27,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { LeadNoteAttachments } from "./LeadNoteAttachments";
+import { LeadNoteFileTile } from "./LeadNoteFileTile";
 
 function formatNoteDate(iso: string) {
   try {
@@ -498,7 +499,7 @@ export const CrmLeadChannelTracking = forwardRef<
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ATTACHMENT_ACCEPT}
           multiple
           className="hidden"
           onChange={handlePickFiles}
@@ -508,21 +509,14 @@ export const CrmLeadChannelTracking = forwardRef<
         {previews.length ? (
           <div className="flex flex-wrap gap-2">
             {previews.map((preview, index) => (
-              <div
+              <LeadNoteFileTile
                 key={preview.url}
-                className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
-              >
-                <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeSelectedFile(index)}
-                  disabled={isSaving}
-                  className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                  aria-label={`Quitar ${preview.file.name}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
+                name={preview.file.name}
+                mime={preview.file.type}
+                imageUrl={preview.url}
+                onRemove={() => removeSelectedFile(index)}
+                disabled={isSaving}
+              />
             ))}
           </div>
         ) : null}
@@ -535,8 +529,8 @@ export const CrmLeadChannelTracking = forwardRef<
             onClick={() => fileInputRef.current?.click()}
             disabled={isSaving}
           >
-            <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
-            Adjuntar imágenes
+            <Paperclip className="mr-1 h-4 w-4" aria-hidden />
+            Adjuntar archivos
           </Button>
           <Button
             type="button"
@@ -600,43 +594,27 @@ export const CrmLeadChannelTracking = forwardRef<
                     {existingAtt.map((att) => {
                       const removed = editRemovePaths.includes(att.path);
                       return (
-                        <div
-                          key={att.path}
-                          className={cn(
-                            "relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted",
-                            removed && "opacity-40",
-                          )}
-                        >
-                          <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => toggleRemoveExisting(att.path)}
+                        <div key={att.path} className={cn(removed && "opacity-40")}>
+                          <LeadNoteFileTile
+                            name={att.name}
+                            mime={att.mime}
+                            imageUrl={att.url}
+                            onRemove={() => toggleRemoveExisting(att.path)}
                             disabled={isSaving}
-                            className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                            aria-label={removed ? `Restaurar ${att.name}` : `Quitar ${att.name}`}
-                            title={removed ? "Restaurar" : "Quitar"}
-                          >
-                            {removed ? <Plus className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                          </button>
+                          />
                         </div>
                       );
                     })}
                     {editPreviews.map((preview, index) => (
-                      <div
+                      <LeadNoteFileTile
                         key={preview.url}
-                        className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
-                      >
-                        <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeEditFile(index)}
-                          disabled={isSaving}
-                          className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                          aria-label={`Quitar ${preview.file.name}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
+                        name={preview.file.name}
+                        mime={preview.file.type}
+                        imageUrl={preview.url}
+                        onRemove={() => removeEditFile(index)}
+                        disabled={isSaving}
+                        highlight
+                      />
                     ))}
                   </div>
                 ) : null}
@@ -644,7 +622,7 @@ export const CrmLeadChannelTracking = forwardRef<
                 <input
                   ref={editFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={ATTACHMENT_ACCEPT}
                   multiple
                   className="hidden"
                   onChange={handlePickEditFiles}
@@ -659,8 +637,8 @@ export const CrmLeadChannelTracking = forwardRef<
                     onClick={() => editFileInputRef.current?.click()}
                     disabled={isSaving}
                   >
-                    <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
-                    Agregar imágenes
+                    <Paperclip className="mr-1 h-4 w-4" aria-hidden />
+                    Agregar archivos
                   </Button>
                   <Button type="button" size="sm" onClick={() => void handleUpdateNote()} disabled={isSaving || !canSaveEdit}>
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

@@ -3,8 +3,10 @@ import type { Database } from '../types/database'
 import { optimizeVehicleImageForUpload } from '../vehicleImageOptimize'
 import {
   buildLeadNoteAttachmentPath,
+  isImageMime,
   LEAD_NOTE_ATTACHMENTS_BUCKET,
   parseAttachments,
+  resolveUploadMime,
   type LeadNoteAttachment,
   type LeadNoteAttachmentWithUrl,
 } from '../leadNoteAttachments'
@@ -131,26 +133,32 @@ export const leadNoteService = {
     return (data ?? []) as LeadNoteArchive[]
   },
 
-  /** Optimiza y sube imágenes al bucket privado bajo {tenant}/{lead}/{note}/. */
+  /**
+   * Sube adjuntos al bucket privado bajo {tenant}/{lead}/{note}/. Las imágenes se
+   * comprimen; los documentos (PDF/Word/Excel/CSV) se suben tal cual.
+   */
   async uploadAttachments(
     files: File[],
     ctx: { tenantId: string; leadId: string; noteId: string },
   ): Promise<LeadNoteAttachment[]> {
     const uploaded: LeadNoteAttachment[] = []
     for (const file of files) {
-      const optimized = await optimizeVehicleImageForUpload(file)
+      const isImage = isImageMime(resolveUploadMime(file), file.name)
+      const blob: Blob = isImage ? await optimizeVehicleImageForUpload(file) : file
+      const fileName = isImage ? (blob as File).name : file.name
+      const mime = isImage ? blob.type : resolveUploadMime(file)
       const path = buildLeadNoteAttachmentPath({
         tenantId: ctx.tenantId,
         leadId: ctx.leadId,
         noteId: ctx.noteId,
-        fileName: optimized.name,
-        mime: optimized.type,
+        fileName,
+        mime,
       })
       const { error } = await supabase.storage
         .from(LEAD_NOTE_ATTACHMENTS_BUCKET)
-        .upload(path, optimized, { cacheControl: '3600', upsert: false, contentType: optimized.type })
+        .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: mime })
       if (error) throw error
-      uploaded.push({ path, name: file.name, size: optimized.size, mime: optimized.type })
+      uploaded.push({ path, name: file.name, size: blob.size, mime })
     }
     return uploaded
   },
