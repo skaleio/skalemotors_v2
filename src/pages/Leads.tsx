@@ -72,13 +72,14 @@ import { leadsAssignedToForQuery, leadsBranchIdForQuery } from "@/lib/leadsScope
 import { appointmentService } from "@/lib/services/appointments";
 import { leadService } from "@/lib/services/leads";
 import { leadNoteService } from "@/lib/services/leadNotes";
-import { selectValidAttachments } from "@/lib/leadNoteAttachments";
+import { ATTACHMENT_ACCEPT, selectValidAttachments } from "@/lib/leadNoteAttachments";
+import { LeadNoteFileTile } from "@/components/crm/LeadNoteFileTile";
 import { supabase, type User } from "@/lib/supabase";
 import type { Database } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Bell, ChevronDown, Download, Filter, ImagePlus, Loader2, Mail, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2, X } from "lucide-react";
+import { Bell, ChevronDown, Download, Filter, Loader2, Mail, Paperclip, Pencil, Phone, Plus, RefreshCw, RotateCcw, Search, Target, Trash2, X } from "lucide-react";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -708,7 +709,7 @@ function LeadsImpl({ user }: { user: User }) {
     if (!list.length) return;
     setCreateFiles((prev) => {
       const { accepted, rejected } = selectValidAttachments({ files: list, existingCount: prev.length });
-      if (rejected.length) toast({ variant: "destructive", title: "Imagen no agregada", description: rejected[0].reason });
+      if (rejected.length) toast({ variant: "destructive", title: "Archivo no agregado", description: rejected[0].reason });
       return accepted.length ? [...prev, ...accepted] : prev;
     });
   }, []);
@@ -2069,7 +2070,7 @@ function LeadsImpl({ user }: { user: User }) {
               <input
                 ref={createFileInputRef}
                 type="file"
-                accept="image/*"
+                accept={ATTACHMENT_ACCEPT}
                 multiple
                 className="hidden"
                 onChange={handlePickCreateFiles}
@@ -2078,21 +2079,14 @@ function LeadsImpl({ user }: { user: User }) {
               {createPreviews.length ? (
                 <div className="flex flex-wrap gap-2">
                   {createPreviews.map((preview, index) => (
-                    <div
+                    <LeadNoteFileTile
                       key={preview.url}
-                      className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
-                    >
-                      <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeCreateFile(index)}
-                        disabled={isCreating}
-                        className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                        aria-label={`Quitar ${preview.file.name}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
+                      name={preview.file.name}
+                      mime={preview.file.type}
+                      imageUrl={preview.url}
+                      onRemove={() => removeCreateFile(index)}
+                      disabled={isCreating}
+                    />
                   ))}
                 </div>
               ) : null}
@@ -2104,11 +2098,11 @@ function LeadsImpl({ user }: { user: User }) {
                   onClick={() => createFileInputRef.current?.click()}
                   disabled={isCreating}
                 >
-                  <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
-                  Adjuntar imágenes
+                  <Paperclip className="mr-1 h-4 w-4" aria-hidden />
+                  Adjuntar archivos
                 </Button>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Hasta 6 imágenes. Se guardan como primera nota del lead.
+                  Imágenes o documentos (PDF, Word, Excel, CSV). Se guardan como primera nota del lead.
                 </p>
               </div>
             </div>

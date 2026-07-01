@@ -1,4 +1,4 @@
-/** Metadata de una imagen adjunta a una nota, tal como se guarda en lead_notes.attachments. */
+/** Metadata de un adjunto de una nota, tal como se guarda en lead_notes.attachments. */
 export type LeadNoteAttachment = {
   path: string;
   name: string;
@@ -13,8 +13,11 @@ export type LeadNoteAttachmentWithUrl = LeadNoteAttachment & { url: string };
 
 export const LEAD_NOTE_ATTACHMENTS_BUCKET = "lead-note-attachments";
 
-/** Tope del archivo original antes de optimizar; evita cargar archivos enormes al canvas. */
+/** Tope del archivo de imagen original antes de optimizar (se comprime al subir). */
 export const MAX_INPUT_BYTES = 25 * 1024 * 1024; // 25 MB
+
+/** Tope real de un documento: no se comprime, así que es el límite del bucket. */
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const ACCEPTED_IMAGE_MIME = [
   "image/jpeg",
@@ -23,6 +26,62 @@ export const ACCEPTED_IMAGE_MIME = [
   "image/webp",
   "image/gif",
 ] as const;
+
+/** Documentos que el cliente suele mandar: PDF, Word, Excel, CSV. */
+export const ACCEPTED_DOC_MIME = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+] as const;
+
+/** Extensión → mime, para cuando el navegador manda file.type vacío u octet-stream. */
+const DOC_EXT_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  csv: "text/csv",
+};
+
+/** Valor del atributo `accept` del <input type=file>: imágenes + documentos. */
+export const ATTACHMENT_ACCEPT = [
+  "image/*",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".csv",
+  ...ACCEPTED_DOC_MIME,
+].join(",");
+
+function extOf(name: string): string {
+  return name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+/** ¿El adjunto es una imagen? Usa el mime y cae a la extensión si el mime falta. */
+export function isImageMime(mime?: string | null, name?: string): boolean {
+  if (mime && mime.startsWith("image/")) return true;
+  if (mime && ACCEPTED_DOC_MIME.includes(mime as never)) return false;
+  const ext = name ? extOf(name) : "";
+  return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+}
+
+/** Mime con el que se sube el archivo: el del navegador o el deducido de la extensión. */
+export function resolveUploadMime(file: File): string {
+  if (file.type && file.type !== "application/octet-stream") return file.type;
+  return DOC_EXT_TO_MIME[extOf(file.name)] ?? file.type ?? "application/octet-stream";
+}
+
+function isAcceptedAttachment(file: File): boolean {
+  const mime = resolveUploadMime(file);
+  if (mime.startsWith("image/") && ACCEPTED_IMAGE_MIME.includes(mime as never)) return true;
+  return ACCEPTED_DOC_MIME.includes(mime as never);
+}
 
 function safeExt(fileName: string, mime: string): string {
   const fromName = fileName.split(".").pop()?.toLowerCase();
@@ -57,21 +116,32 @@ export type AttachmentSelection = {
 };
 
 /**
- * Filtra la selección de archivos respetando tipo y tamaño. Sin límite de
- * cantidad: cada imagen se comprime antes de subir. Lógica pura para testear
- * la validación sin tocar el DOM ni la red.
+ * Filtra la selección respetando tipo y tamaño. Acepta imágenes (se comprimen al
+ * subir) y documentos (PDF/Word/Excel/CSV, tal cual). Sin límite de cantidad.
+ * Lógica pura para testear la validación sin tocar el DOM ni la red.
  */
-export function selectValidAttachments(params: { files: File[] }): AttachmentSelection {
+export function selectValidAttachments(params: {
+  files: File[];
+  existingCount?: number;
+}): AttachmentSelection {
   const accepted: File[] = [];
   const rejected: AttachmentRejection[] = [];
 
   for (const file of params.files) {
-    if (!file.type.startsWith("image/") || !ACCEPTED_IMAGE_MIME.includes(file.type as never)) {
-      rejected.push({ name: file.name, reason: "No es una imagen compatible." });
+    if (!isAcceptedAttachment(file)) {
+      rejected.push({
+        name: file.name,
+        reason: "Formato no admitido. Usa imágenes, PDF, Word, Excel o CSV.",
+      });
       continue;
     }
-    if (file.size > MAX_INPUT_BYTES) {
-      rejected.push({ name: file.name, reason: "Supera el tamaño máximo (25 MB)." });
+    const isImage = isImageMime(resolveUploadMime(file), file.name);
+    const maxBytes = isImage ? MAX_INPUT_BYTES : MAX_ATTACHMENT_BYTES;
+    if (file.size > maxBytes) {
+      rejected.push({
+        name: file.name,
+        reason: `Supera el tamaño máximo (${Math.round(maxBytes / 1024 / 1024)} MB).`,
+      });
       continue;
     }
     accepted.push(file);
@@ -90,9 +160,9 @@ export function parseAttachments(raw: unknown): LeadNoteAttachment[] {
     return [
       {
         path: a.path,
-        name: typeof a.name === "string" ? a.name : "imagen",
+        name: typeof a.name === "string" ? a.name : "archivo",
         size: typeof a.size === "number" ? a.size : 0,
-        mime: typeof a.mime === "string" ? a.mime : "image/jpeg",
+        mime: typeof a.mime === "string" ? a.mime : "application/octet-stream",
         width: typeof a.width === "number" ? a.width : undefined,
         height: typeof a.height === "number" ? a.height : undefined,
       },

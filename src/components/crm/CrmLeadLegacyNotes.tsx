@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import { selectValidAttachments, type LeadNoteAttachment } from "@/lib/leadNoteAttachments";
+import { ATTACHMENT_ACCEPT, selectValidAttachments, type LeadNoteAttachment } from "@/lib/leadNoteAttachments";
 import { leadNoteService, type LeadNoteWithAuthor } from "@/lib/services/leadNotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, ImagePlus, Loader2, Pencil, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Paperclip, Pencil } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LeadNoteAttachments } from "./LeadNoteAttachments";
+import { LeadNoteFileTile } from "./LeadNoteFileTile";
 
 function formatNoteDate(iso: string) {
   try {
@@ -169,48 +170,33 @@ export function CrmLeadLegacyNotes({ leadId }: { leadId: string }) {
                         {keepAttachments.map((att) => {
                           const resolved = (note.attachmentsResolved ?? []).find((a) => a.path === att.path);
                           return (
-                            <div
+                            <LeadNoteFileTile
                               key={att.path}
-                              className="relative h-16 w-16 overflow-hidden rounded-md border border-border/50 bg-muted"
-                            >
-                              {resolved ? (
-                                <img src={resolved.url} alt={att.name} className="h-full w-full object-cover" />
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => removeExisting(att.path)}
-                                disabled={isSaving}
-                                className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                                aria-label={`Quitar ${att.name}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
+                              name={att.name}
+                              mime={att.mime}
+                              imageUrl={resolved?.url}
+                              onRemove={() => removeExisting(att.path)}
+                              disabled={isSaving}
+                            />
                           );
                         })}
                         {newPreviews.map((preview, index) => (
-                          <div
+                          <LeadNoteFileTile
                             key={preview.url}
-                            className="relative h-16 w-16 overflow-hidden rounded-md border border-primary/50 bg-muted"
-                          >
-                            <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => removeNewFile(index)}
-                              disabled={isSaving}
-                              className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-foreground shadow hover:bg-background"
-                              aria-label={`Quitar ${preview.file.name}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
+                            name={preview.file.name}
+                            mime={preview.file.type}
+                            imageUrl={preview.url}
+                            onRemove={() => removeNewFile(index)}
+                            disabled={isSaving}
+                            highlight
+                          />
                         ))}
                       </div>
                     ) : null}
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={ATTACHMENT_ACCEPT}
                       multiple
                       className="hidden"
                       onChange={handlePickFiles}
@@ -224,8 +210,8 @@ export function CrmLeadLegacyNotes({ leadId }: { leadId: string }) {
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isSaving}
                       >
-                        <ImagePlus className="mr-1 h-4 w-4" aria-hidden />
-                        Agregar imágenes
+                        <Paperclip className="mr-1 h-4 w-4" aria-hidden />
+                        Agregar archivos
                       </Button>
                       <Button
                         type="button"
