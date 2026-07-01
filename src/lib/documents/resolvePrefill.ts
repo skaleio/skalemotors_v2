@@ -5,10 +5,13 @@ import { vehicleService } from "@/lib/services/vehicles";
 import { leadService } from "@/lib/services/leads";
 import {
   emptyConsignacionForm,
+  emptyReservaForm,
   mapConsignacionToForm,
   mapVehicleToConsignacionForm,
+  mapVehicleToReservaForm,
   mapVehicleToVentaForm,
   type ConsignacionFormState,
+  type ReservaFormState,
   type VentaFormState,
 } from "@/lib/documents/mappers";
 
@@ -24,6 +27,12 @@ export interface ConsignacionPrefillResult {
 
 export interface VentaPrefillResult {
   form: VentaFormState;
+  vehicle: Vehicle;
+  warning?: string;
+}
+
+export interface ReservaPrefillResult {
+  form: ReservaFormState;
   vehicle: Vehicle;
   warning?: string;
 }
@@ -111,6 +120,31 @@ export async function resolveVentaPrefill(
   return { form, vehicle };
 }
 
+export async function resolveReservaPrefill(
+  vehicleId: string,
+  branchId?: string
+): Promise<ReservaPrefillResult> {
+  const vehicle = await vehicleService.getById(vehicleId);
+  const form = { ...emptyReservaForm(), ...mapVehicleToReservaForm(vehicle) } as ReservaFormState;
+  // El N° de motor (y a veces el N° de chasis) viven en la consignación del vehículo.
+  try {
+    const consignacion = await consignacionesService.resolveForVehicle({
+      vehicleId,
+      patente: vehicle.patente,
+      branchId,
+    });
+    if (consignacion) {
+      if (consignacion.motor && !form.vehicle_motor) form.vehicle_motor = consignacion.motor;
+      if (!form.vehicle_chasis) {
+        form.vehicle_chasis = consignacion.vehicle_vin ?? form.vehicle_vin ?? "";
+      }
+    }
+  } catch {
+    /* la nota de reserva no depende de la consignación */
+  }
+  return { form, vehicle };
+}
+
 export function consignacionFormToDocumentFields(
   form: ConsignacionFormState,
   extras?: { min_sale_price?: number | null; vehicle_motor?: string; vehicle_chasis?: string }
@@ -144,5 +178,7 @@ export function consignacionFormToDocumentFields(
 }
 
 export function documentTypeFromQuery(raw: string | null): DocumentType {
-  return raw === "venta" ? "contrato_venta" : "contrato_consignacion";
+  if (raw === "venta") return "contrato_venta";
+  if (raw === "reserva") return "nota_reserva";
+  return "contrato_consignacion";
 }

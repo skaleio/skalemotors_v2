@@ -32,6 +32,14 @@ function formatDate(dateStr: string): string {
   return `${dd}-${mm}-${yyyy}`;
 }
 
+/** Fecha tipo DATE ("YYYY-MM-DD") sin desfases de zona horaria. */
+function formatDateOnly(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const [yyyy, mm, dd] = dateStr.slice(0, 10).split("-");
+  if (!yyyy || !mm || !dd) return formatDate(dateStr);
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 const densityClass = {
   normal: "text-[13px] leading-relaxed",
   compact: "text-[11px] leading-snug",
@@ -74,6 +82,8 @@ export function DocumentContractBody({
   compact,
 }: DocumentContractBodyProps) {
   const isVenta = doc.type === "contrato_venta";
+  const isReserva = doc.type === "nota_reserva";
+  const isConsignacion = doc.type === "contrato_consignacion";
   const layout = mergeLayoutSettings(
     template?.settings ?? { sections: {}, density: "normal" },
     doc.layout_settings
@@ -86,11 +96,17 @@ export function DocumentContractBody({
   const title =
     layout.title ??
     template?.settings?.title ??
-    (isVenta ? "NOTA DE VENTA" : "CONTRATO DE CONSIGNACIÓN");
+    (isVenta
+      ? "NOTA DE VENTA"
+      : isReserva
+        ? "NOTA DE RESERVA"
+        : "CONTRATO DE CONSIGNACIÓN");
 
   const price = doc.sale_price ?? 0;
   const downPayment = doc.down_payment ?? 0;
   const balance = price - downPayment;
+  const reservedAmount = doc.down_payment ?? 0;
+  const reservaBalance = price - reservedAmount;
 
   return (
     <div className={`${densityClass[density]} ${gapClass[density]} text-slate-700`}>
@@ -117,7 +133,7 @@ export function DocumentContractBody({
       </div>
 
       {/* Partes: consignante (consignación) o cliente (venta) */}
-      {sections.consignor && !isVenta && (
+      {sections.consignor && isConsignacion && (
         <section>
           <SectionTitle>Datos del consignante</SectionTitle>
           <div className="grid grid-cols-2 gap-x-8 gap-y-2">
@@ -130,7 +146,7 @@ export function DocumentContractBody({
         </section>
       )}
 
-      {sections.buyer && isVenta && (
+      {sections.buyer && (isVenta || isReserva) && (
         <section>
           <SectionTitle>Datos del cliente</SectionTitle>
           <div className="grid grid-cols-2 gap-x-8 gap-y-2">
@@ -138,7 +154,9 @@ export function DocumentContractBody({
             <Field label="RUT" value={doc.buyer_rut} />
             <Field label="Teléfono" value={doc.buyer_phone} />
             <Field label="Email" value={doc.buyer_email} />
-            <Field label="Dirección" value={doc.buyer_address} />
+            {(!isReserva || doc.buyer_address) && (
+              <Field label="Dirección" value={doc.buyer_address} />
+            )}
           </div>
         </section>
       )}
@@ -163,7 +181,7 @@ export function DocumentContractBody({
       )}
 
       {/* Consignación: precios sugerido y mínimo */}
-      {sections.consignment_details && !isVenta && (
+      {sections.consignment_details && isConsignacion && (
         <section>
           <SectionTitle>Detalles de la consignación</SectionTitle>
           <div className="grid grid-cols-2 gap-x-8 gap-y-2">
@@ -208,6 +226,35 @@ export function DocumentContractBody({
         </section>
       )}
 
+      {/* Reserva: precio, monto reservado fijo y saldo pendiente */}
+      {sections.economic && isReserva && (
+        <section>
+          <SectionTitle>Detalle de la reserva</SectionTitle>
+          <div className="space-y-1.5">
+            <div className="flex justify-between border-b border-slate-100 pb-1">
+              <span>Precio del vehículo</span>
+              <span className="font-semibold text-slate-800">{formatCLP(price)}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-1">
+              <span className="font-semibold text-rose-600">Monto reservado</span>
+              <span className="font-bold text-rose-600">{formatCLP(reservedAmount)}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-300 pt-1">
+              <span className="font-bold text-slate-800">Saldo pendiente</span>
+              <span className="font-bold text-slate-800">{formatCLP(reservaBalance)}</span>
+            </div>
+          </div>
+          <div className="flex justify-between mt-3 pt-2 border-t border-slate-200">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">
+              Fecha de vencimiento
+            </span>
+            <span className="font-semibold text-slate-800">
+              {formatDateOnly(doc.reservation_expires_at)}
+            </span>
+          </div>
+        </section>
+      )}
+
       {sections.observations && doc.notes && (
         <section>
           <SectionTitle>Observaciones</SectionTitle>
@@ -234,16 +281,18 @@ export function DocumentContractBody({
           <div className="text-center w-[45%]">
             <div className="border-t border-slate-800 pt-2 mt-10 text-[11px]">
               <p className="font-semibold text-slate-800">{ISSUER.name}</p>
-              <p className="text-slate-500">{isVenta ? "Vendedor" : "Consignatario"}</p>
+              <p className="text-slate-500">{isConsignacion ? "Consignatario" : "Vendedor"}</p>
             </div>
           </div>
           <div className="text-center w-[45%]">
             <div className="border-t border-slate-800 pt-2 mt-10 text-[11px]">
               <p className="font-semibold text-slate-800">
-                {(isVenta ? doc.buyer_name : doc.owner_name) || "________________"}
+                {(isConsignacion ? doc.owner_name : doc.buyer_name) || "________________"}
               </p>
-              <p className="text-slate-500">{isVenta ? "Comprador" : "Consignante"}</p>
-              <p className="text-slate-400">{isVenta ? doc.buyer_rut : doc.owner_rut}</p>
+              <p className="text-slate-500">
+                {isConsignacion ? "Consignante" : isReserva ? "Cliente" : "Comprador"}
+              </p>
+              <p className="text-slate-400">{isConsignacion ? doc.owner_rut : doc.buyer_rut}</p>
             </div>
           </div>
         </div>

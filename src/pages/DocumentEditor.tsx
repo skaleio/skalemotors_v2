@@ -22,18 +22,26 @@ import {
   consignacionFormToPreview,
   consignacionFormToUpdate,
   documentToConsignacionForm,
+  documentToReservaForm,
   documentToVentaForm,
   emptyConsignacionForm,
+  emptyReservaForm,
   emptyVentaForm,
+  RESERVED_AMOUNT,
+  reservaFormToInsert,
+  reservaFormToPreview,
+  reservaFormToUpdate,
   ventaFormToInsert,
   ventaFormToPreview,
   ventaFormToUpdate,
   type ConsignacionFormState,
+  type ReservaFormState,
   type VentaFormState,
 } from "@/lib/documents/mappers";
 import {
   documentTypeFromQuery,
   resolveConsignacionPrefill,
+  resolveReservaPrefill,
   resolveVentaPrefill,
 } from "@/lib/documents/resolvePrefill";
 import { mergeLayoutSettings, type DocumentTemplateSettings } from "@/lib/documents/templateTypes";
@@ -42,7 +50,7 @@ import { documentService, Document, DocumentStatus } from "@/lib/services/docume
 import { documentTemplateService } from "@/lib/services/documentTemplates";
 import { supabase } from "@/lib/supabase";
 
-type AnyForm = ConsignacionFormState | VentaFormState;
+type AnyForm = ConsignacionFormState | VentaFormState | ReservaFormState;
 
 const CONSIGNACION_SECTIONS = [
   ["consignor", "Datos del consignante"],
@@ -62,6 +70,15 @@ const VENTA_SECTIONS = [
   ["observations", "Observaciones"],
 ] as const;
 
+const RESERVA_SECTIONS = [
+  ["buyer", "Datos del cliente"],
+  ["vehicle", "Datos del vehículo"],
+  ["economic", "Detalle de la reserva"],
+  ["terms", "Términos y condiciones"],
+  ["signatures", "Firmas"],
+  ["observations", "Observaciones"],
+] as const;
+
 export default function DocumentEditor() {
   const { vehicleId } = useParams<{ vehicleId: string }>();
   const [searchParams] = useSearchParams();
@@ -71,9 +88,14 @@ export default function DocumentEditor() {
 
   const docType = documentTypeFromQuery(searchParams.get("tipo"));
   const isConsignacion = docType === "contrato_consignacion";
+  const isReserva = docType === "nota_reserva";
 
-  const [form, setForm] = useState<AnyForm>(
-    isConsignacion ? emptyConsignacionForm() : emptyVentaForm()
+  const [form, setForm] = useState<AnyForm>(() =>
+    isConsignacion
+      ? emptyConsignacionForm()
+      : isReserva
+        ? emptyReservaForm()
+        : emptyVentaForm()
   );
   const [doc, setDoc] = useState<Document | null>(null);
   const [layoutSettings, setLayoutSettings] = useState<DocumentTemplateSettings | null>(null);
@@ -83,6 +105,7 @@ export default function DocumentEditor() {
 
   const cForm = form as ConsignacionFormState;
   const vForm = form as VentaFormState;
+  const rForm = form as ReservaFormState;
 
   const { data: issuerName } = useQuery({
     queryKey: ["branch-name", user?.branch_id],
@@ -110,15 +133,14 @@ export default function DocumentEditor() {
   );
 
   const previewDoc = useMemo((): Document => {
+    const num = doc?.document_number ?? "BORRADOR";
     const base = isConsignacion
-      ? consignacionFormToPreview(form as ConsignacionFormState, {
-          document_number: doc?.document_number ?? "BORRADOR",
-        })
-      : ventaFormToPreview(form as VentaFormState, {
-          document_number: doc?.document_number ?? "BORRADOR",
-        });
+      ? consignacionFormToPreview(form as ConsignacionFormState, { document_number: num })
+      : isReserva
+        ? reservaFormToPreview(form as ReservaFormState, { document_number: num })
+        : ventaFormToPreview(form as VentaFormState, { document_number: num });
     return { ...base, layout_settings: effectiveLayout as unknown as Record<string, unknown> };
-  }, [form, doc?.document_number, effectiveLayout, isConsignacion]);
+  }, [form, doc?.document_number, effectiveLayout, isConsignacion, isReserva]);
 
   useEffect(() => {
     if (!vehicleId || !user) return;
@@ -134,7 +156,11 @@ export default function DocumentEditor() {
         if (existing) {
           setDoc(existing);
           setForm(
-            isConsignacion ? documentToConsignacionForm(existing) : documentToVentaForm(existing)
+            isConsignacion
+              ? documentToConsignacionForm(existing)
+              : isReserva
+                ? documentToReservaForm(existing)
+                : documentToVentaForm(existing)
           );
           setLayoutSettings(
             (existing.layout_settings as DocumentTemplateSettings) ??
@@ -171,6 +197,29 @@ export default function DocumentEditor() {
           return;
         }
 
+        if (isReserva) {
+          const prefill = await resolveReservaPrefill(vehicleId, user.branch_id);
+          if (cancelled) return;
+          setForm(prefill.form);
+          const tpl = await documentTemplateService.resolveForType(docType, user.branch_id);
+          const created = await documentService.create({
+            ...reservaFormToInsert(prefill.form, {
+              branch_id: user.branch_id ?? null,
+              tenant_id: user.tenant_id ?? null,
+              created_by: user.id ?? null,
+              status: "borrador",
+            }),
+            type: docType,
+            template_id: tpl.id !== "builtin" ? tpl.id : null,
+            layout_settings: tpl.settings as unknown as Record<string, unknown>,
+          });
+          if (!cancelled) {
+            setDoc(created);
+            setLayoutSettings(tpl.settings);
+          }
+          return;
+        }
+
         // Nota de venta: el vehículo siempre alcanza para autorrellenar.
         const prefill = await resolveVentaPrefill(vehicleId, user.branch_id);
         if (cancelled) return;
@@ -202,7 +251,7 @@ export default function DocumentEditor() {
     return () => {
       cancelled = true;
     };
-  }, [vehicleId, user?.id, user?.branch_id, user?.tenant_id, docType, isConsignacion]);
+  }, [vehicleId, user?.id, user?.branch_id, user?.tenant_id, docType, isConsignacion, isReserva]);
 
   const persist = async (status: DocumentStatus) => {
     if (!doc) return;
@@ -210,7 +259,9 @@ export default function DocumentEditor() {
     try {
       const fields = isConsignacion
         ? consignacionFormToUpdate(form as ConsignacionFormState)
-        : ventaFormToUpdate(form as VentaFormState);
+        : isReserva
+          ? reservaFormToUpdate(form as ReservaFormState)
+          : ventaFormToUpdate(form as VentaFormState);
       const updated = await documentService.update(doc.id, {
         ...fields,
         status,
@@ -281,6 +332,25 @@ export default function DocumentEditor() {
       });
       return;
     }
+    if (isReserva) {
+      void resolveReservaPrefill(vehicleId, user?.branch_id).then((p) => {
+        // Refresca datos del vehículo conservando lo que se haya escrito del cliente.
+        setForm((f) => {
+          const cur = f as ReservaFormState;
+          return {
+            ...p.form,
+            buyer_name: cur.buyer_name,
+            buyer_rut: cur.buyer_rut,
+            buyer_phone: cur.buyer_phone,
+            buyer_email: cur.buyer_email,
+            buyer_address: cur.buyer_address,
+            reservation_expires_at: cur.reservation_expires_at,
+          };
+        });
+        toast.success("Datos del vehículo actualizados");
+      });
+      return;
+    }
     void resolveVentaPrefill(vehicleId, user?.branch_id).then((p) => {
       // Refresca datos del vehículo conservando lo que se haya escrito del comprador.
       setForm((f) => {
@@ -321,7 +391,11 @@ export default function DocumentEditor() {
     return null;
   }
 
-  const sectionList = isConsignacion ? CONSIGNACION_SECTIONS : VENTA_SECTIONS;
+  const sectionList = isConsignacion
+    ? CONSIGNACION_SECTIONS
+    : isReserva
+      ? RESERVA_SECTIONS
+      : VENTA_SECTIONS;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -332,7 +406,11 @@ export default function DocumentEditor() {
           </Button>
           <div className="min-w-0">
             <h1 className="font-semibold truncate">
-              {isConsignacion ? "Contrato de consignación" : "Nota de venta"}
+              {isConsignacion
+                ? "Contrato de consignación"
+                : isReserva
+                  ? "Nota de reserva"
+                  : "Nota de venta"}
               {doc?.document_number ? ` — ${doc.document_number}` : ""}
             </h1>
             <p className="text-xs text-muted-foreground truncate">
@@ -475,6 +553,98 @@ export default function DocumentEditor() {
                       }
                     />
                   </div>
+                </div>
+              </div>
+            ) : isReserva ? (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Datos del cliente</p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Cliente</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    value={rForm.buyer_name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_name: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="RUT"
+                    value={rForm.buyer_rut}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_rut: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Teléfono"
+                    value={rForm.buyer_phone}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_phone: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    type="email"
+                    placeholder="Email"
+                    value={rForm.buyer_email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_email: e.target.value }))
+                    }
+                  />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Dirección"
+                    value={rForm.buyer_address}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), buyer_address: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Precio del vehículo</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    type="number"
+                    value={rForm.sale_price}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...(f as ReservaFormState), sale_price: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Monto reservado</span>
+                  <span className="font-semibold text-rose-600">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(RESERVED_AMOUNT)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Saldo pendiente</span>
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("es-CL", {
+                      style: "currency",
+                      currency: "CLP",
+                      maximumFractionDigits: 0,
+                    }).format(Math.max(0, (parseFloat(rForm.sale_price) || 0) - RESERVED_AMOUNT))}
+                  </span>
+                </div>
+                <div>
+                  <Label className="text-xs">Fecha de vencimiento</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    type="date"
+                    value={rForm.reservation_expires_at}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...(f as ReservaFormState),
+                        reservation_expires_at: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
               </div>
             ) : (

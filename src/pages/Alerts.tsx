@@ -16,7 +16,7 @@ import {
   notificationLabelForType,
   type NotificationEventKey,
 } from "@/lib/notificationEvents";
-import { Bell, Check, Clock, Info, Loader2, X } from "lucide-react";
+import { Bell, Check, Clock, Info, Loader2, User, UserCircle2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
@@ -49,6 +49,37 @@ function formatTime(iso: string) {
   } catch {
     return "";
   }
+}
+
+type NotificationMeta = {
+  assignee_name?: string | null;
+  seller_name?: string | null;
+  actor_name?: string | null;
+  lead_full_name?: string | null;
+  owner_name?: string | null;
+};
+
+function metaOf(n: Notification): NotificationMeta {
+  const m = n.metadata;
+  return m && typeof m === "object" && !Array.isArray(m) ? (m as NotificationMeta) : {};
+}
+
+/** Vendedor al que pertenece la alerta: primero el nombre real del metadata, luego actor_user_id. */
+function sellerNameOf(n: Notification, fallbackById: Map<string, string>): string | null {
+  const m = metaOf(n);
+  const name =
+    m.assignee_name?.trim() ||
+    m.seller_name?.trim() ||
+    m.actor_name?.trim() ||
+    (n.actor_user_id ? fallbackById.get(n.actor_user_id) : "") ||
+    "";
+  return name || null;
+}
+
+/** Lead/cliente por el cual llega la notificación. */
+function leadNameOf(n: Notification): string | null {
+  const m = metaOf(n);
+  return m.lead_full_name?.trim() || m.owner_name?.trim() || null;
 }
 
 export default function Alerts() {
@@ -94,21 +125,21 @@ export default function Alerts() {
     [user?.role],
   );
 
-  // Vendedores presentes en las alertas (solo admin): el vendedor es el actor
-  // de la notificación (lead contactado/asignado, sin actividad, etc.).
+  // Vendedores presentes en las alertas (solo admin): el vendedor sale del
+  // metadata real de cada notificación (assignee_name / seller_name / actor_name),
+  // no de actor_user_id, que viene null en la mayoría de las alertas de leads.
+  // Se deduplica por nombre para unir identidades (usuario CRM vs plantilla).
   const vendorOptions = useMemo(() => {
-    if (!isAdmin) return [] as { id: string; name: string }[];
+    if (!isAdmin) return [] as { key: string; name: string }[];
     const map = new Map<string, string>();
     for (const n of notifications) {
-      if (!n.actor_user_id || map.has(n.actor_user_id)) continue;
-      const name =
-        sellerNameById.get(n.actor_user_id) ||
-        ((n.metadata as { actor_name?: string } | null)?.actor_name ?? "").trim() ||
-        "Vendedor";
-      map.set(n.actor_user_id, name);
+      const name = sellerNameOf(n, sellerNameById);
+      if (!name) continue;
+      const key = name.toLocaleLowerCase("es");
+      if (!map.has(key)) map.set(key, name);
     }
     return [...map.entries()]
-      .map(([id, name]) => ({ id, name }))
+      .map(([key, name]) => ({ key, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
   }, [notifications, isAdmin, sellerNameById]);
 
@@ -116,8 +147,11 @@ export default function Alerts() {
   // total no leídas e historial. El filtro por tipo se combina encima.
   const scopedNotifications = useMemo(() => {
     if (vendorFilter === "all") return notifications;
-    return notifications.filter((n) => n.actor_user_id === vendorFilter);
-  }, [notifications, vendorFilter]);
+    return notifications.filter((n) => {
+      const name = sellerNameOf(n, sellerNameById);
+      return name ? name.toLocaleLowerCase("es") === vendorFilter : false;
+    });
+  }, [notifications, vendorFilter, sellerNameById]);
 
   const scopedUnreadCount = useMemo(
     () => scopedNotifications.filter((n) => !n.read_at && !n.archived_at).length,
@@ -271,7 +305,7 @@ export default function Alerts() {
                 <SelectContent>
                   <SelectItem value="all">Todos los vendedores</SelectItem>
                   {vendorOptions.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
+                    <SelectItem key={v.key} value={v.key}>
                       {v.name}
                     </SelectItem>
                   ))}
@@ -317,6 +351,8 @@ export default function Alerts() {
               {filtered.map((n) => {
                 const unread = !n.read_at;
                 const archived = !!n.archived_at;
+                const sellerName = sellerNameOf(n, sellerNameById);
+                const leadName = leadNameOf(n);
                 return (
                   <div
                     key={n.id}
@@ -334,6 +370,22 @@ export default function Alerts() {
                           {archived && <Badge variant="outline">Archivada</Badge>}
                         </div>
                         {n.message && <p className="text-sm text-muted-foreground mt-1">{n.message}</p>}
+                        {(sellerName || leadName) && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
+                            {sellerName && (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <User className="h-3 w-3 text-pink-600" />
+                                Vendedor: <span className="font-medium text-foreground">{sellerName}</span>
+                              </span>
+                            )}
+                            {leadName && (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <UserCircle2 className="h-3 w-3 text-sky-600" />
+                                Lead: <span className="font-medium text-foreground">{leadName}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
                           <Clock className="h-3 w-3" />
                           <span>{formatTime(n.created_at)}</span>
