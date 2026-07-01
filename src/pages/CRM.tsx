@@ -740,6 +740,24 @@ export default function CRM() {
     return roleScoped.filter((lead) => (lead.lead_type ?? "venta") === crmLeadType);
   }, [leads, user?.role, user?.id, crmLeadType]);
 
+  // Conteo por tipo (Venta / Consignación) para las pestañas: un lead nunca debe
+  // quedar "escondido" en la otra pestaña sin que se note. Respeta la vista de
+  // supervisión y excluye perdidos (no se muestran en el tablero).
+  const leadTypeCounts = useMemo(() => {
+    const roleScoped =
+      user?.role === "vendedor" && user.id
+        ? filterLeadsForVendorView(leads, user.id)
+        : leads;
+    const counts = { venta: 0, consignacion: 0 };
+    for (const lead of roleScoped) {
+      if (supervisedVendorId && lead.assigned_to !== supervisedVendorId) continue;
+      if ((lead.status || "").toLowerCase() === "perdido") continue;
+      const type = (lead.lead_type ?? "venta") === "consignacion" ? "consignacion" : "venta";
+      counts[type] += 1;
+    }
+    return counts;
+  }, [leads, user?.role, user?.id, supervisedVendorId]);
+
   const supervisedVendorName = useMemo(
     () => vendorList.find((v) => v.id === supervisedVendorId)?.full_name ?? null,
     [vendorList, supervisedVendorId],
@@ -1824,8 +1842,12 @@ export default function CRM() {
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center shrink-0">
           <Tabs value={crmLeadType} onValueChange={(v) => setCrmLeadType(v as "venta" | "consignacion")}>
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="venta">Venta</TabsTrigger>
-              <TabsTrigger value="consignacion">Consignación</TabsTrigger>
+              <TabsTrigger value="venta">
+                Venta{leadTypeCounts.venta ? ` · ${leadTypeCounts.venta}` : ""}
+              </TabsTrigger>
+              <TabsTrigger value="consignacion">
+                Consignación{leadTypeCounts.consignacion ? ` · ${leadTypeCounts.consignacion}` : ""}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           {canSupervise && (
