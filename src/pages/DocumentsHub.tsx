@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Car, FileText, Plus, Search, ScrollText } from "lucide-react";
+import { Car, FileText, Plus, Search, ScrollText, Tag } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ interface VehicleRow {
 const TYPE_BADGE: Record<DocumentType, { label: string; className: string }> = {
   contrato_consignacion: { label: "Consignación", className: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200" },
   contrato_venta: { label: "Venta", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" },
+  nota_reserva: { label: "Reserva", className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200" },
 };
 
 function formatUpdated(date: string) {
@@ -158,7 +159,10 @@ export default function DocumentsHub() {
     );
   });
 
-  const openVehicle = (vehicleId: string, tipo: "consignacion" | "venta" = "consignacion") => {
+  const openVehicle = (
+    vehicleId: string,
+    tipo: "consignacion" | "venta" | "reserva" = "consignacion"
+  ) => {
     navigate(`/app/documents/vehiculo/${vehicleId}?tipo=${tipo}`);
   };
 
@@ -346,6 +350,19 @@ export default function DocumentsHub() {
                               >
                                 <FileText className="h-4 w-4 text-emerald-600" />
                                 Venta
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                title="Nota de reserva"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openVehicle(row.vehicle.id, "reserva");
+                                }}
+                              >
+                                <Tag className="h-4 w-4 text-amber-600" />
+                                Reserva
                               </Button>
                             </div>
                           </TableCell>

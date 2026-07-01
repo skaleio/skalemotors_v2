@@ -64,6 +64,11 @@ const TYPE_META: Record<
     short: "Venta",
     description: "Contrato de venta directa del vehículo al comprador.",
   },
+  nota_reserva: {
+    label: "Nota de reserva",
+    short: "Reserva",
+    description: "Reserva del vehículo con monto fijo de $200.000 y fecha de vencimiento.",
+  },
 };
 
 const SECTION_LABELS: { key: keyof DocumentTemplateSections; label: string }[] = [

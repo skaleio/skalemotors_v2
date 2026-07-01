@@ -99,3 +99,36 @@ export const DEFAULT_VENTA_CLAUSES: DocumentClause[] = [
     body: "Con la firma de la presente nota de venta, el cliente declara haber leído, comprendido y aceptado íntegramente los términos y condiciones aquí establecidos. El comprador declara haber revisado el vehículo y adquirirlo a su entera conformidad, en el estado en que se encuentra, renunciando a cualquier reclamo posterior relacionado con desgaste propio de vehículos usados.",
   },
 ];
+
+export const DEFAULT_RESERVA_CLAUSES: DocumentClause[] = [
+  {
+    id: "objeto",
+    title: "1. Objeto de la reserva",
+    body: "La reserva tiene como finalidad asegurar la disponibilidad del vehículo para el cliente interesado, retirándolo temporalmente de exhibición y comercialización durante el período acordado entre las partes.",
+  },
+  {
+    id: "monto",
+    title: "2. Monto de la reserva",
+    body: "El cliente realiza un pago en dinero a modo de reserva del vehículo, monto que será descontado del valor total del mismo al momento de concretar la compra.",
+  },
+  {
+    id: "vigencia",
+    title: "3. Vigencia de la reserva",
+    body: "La reserva tendrá una vigencia hasta la fecha establecida en el presente documento, la cual es acordada entre el cliente y el vendedor al momento de realizar la reserva.\nDurante este período el vehículo quedará reservado exclusivamente para el cliente.",
+  },
+  {
+    id: "cancelacion",
+    title: "4. Cancelación de la reserva por parte del cliente",
+    body: "En caso de que el cliente decida desistir de la compra del vehículo una vez realizada la reserva, la empresa procederá a devolver únicamente el 50% del monto pagado por concepto de reserva, reteniendo el 50% restante por concepto de gastos administrativos, costos operacionales y perjuicio comercial derivado de la inmovilización del vehículo durante el período de reserva.",
+  },
+  {
+    id: "vencimiento",
+    title: "5. Vencimiento de la reserva",
+    body: "Si llegada la fecha de vencimiento de la reserva el cliente no concreta la compra del vehículo ni solicita una extensión previamente acordada con la empresa, se entenderá que el cliente desiste de la operación, aplicándose las condiciones de cancelación indicadas en el punto anterior.",
+  },
+  {
+    id: "aceptacion",
+    title: "6. Aceptación de condiciones",
+    body: "Con la firma del presente documento, el cliente declara haber leído, comprendido y aceptado íntegramente los términos y condiciones establecidos para la reserva del vehículo.",
+  },
+];
