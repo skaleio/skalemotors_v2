@@ -42,8 +42,13 @@ describe("leadsScope", () => {
     expect(vendorLeadScopeOrFilter(vendorId)).toContain(`created_by.eq.${vendorId}`);
   });
 
-  it("leadsBranchIdForQuery omite sucursal para vendedor", () => {
+  it("leadsBranchIdForQuery: vendedor y admin/jefe_jefe ven todo el tenant; el resto su sucursal", () => {
     expect(leadsBranchIdForQuery("vendedor", "branch-1")).toBeUndefined();
-    expect(leadsBranchIdForQuery("admin", "branch-1")).toBe("branch-1");
+    // admin y jefe_jefe ven todo el tenant (Vista global): sin filtro de sucursal.
+    expect(leadsBranchIdForQuery("admin", "branch-1")).toBeUndefined();
+    expect(leadsBranchIdForQuery("jefe_jefe", "branch-1")).toBeUndefined();
+    // jefaturas de sucursal / gerencia / finanzas siguen scopeadas a su sucursal.
+    expect(leadsBranchIdForQuery("jefe_sucursal", "branch-1")).toBe("branch-1");
+    expect(leadsBranchIdForQuery("gerente", "branch-1")).toBe("branch-1");
   });
 });
