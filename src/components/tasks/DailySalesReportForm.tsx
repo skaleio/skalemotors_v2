@@ -2,12 +2,13 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   CheckCircle2,
+  Download,
   Loader2,
   Phone,
+  PhoneCall,
   Plus,
   Save,
   Trash2,
-  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -26,29 +27,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import {
-  useMonthlyEffectiveConsignments,
   useMyDailySalesReport,
   useSubmitDailySalesReport,
   useSyncDailySalesReportTasks,
 } from "@/hooks/useDailySalesReports";
 import type {
   DailyReportCallRow,
-  DailyReportConsignmentRow,
   DailyReportCreditRow,
   DailyReportSocialPostRow,
   DailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
 import {
   chileTodayIsoDate,
-  CONSIGNMENT_MONTHLY_GOAL,
+  CONSIGNMENT_CALLS_DAILY_GOAL,
   countDailyReportProgress,
   emptyCallRow,
-  emptyConsignmentRow,
   emptyCreditRow,
   emptyDailySalesReportPayload,
   emptySocialPostRow,
   normalizeDailySalesReportPayload,
 } from "@/lib/types/dailySalesReport";
+import { fetchOwnReportPdfData } from "@/lib/services/dailySalesReports";
+import { downloadVendedorReportPdf } from "@/lib/pdf/dailyReportPdf";
 import { cn } from "@/lib/utils";
 
 import { LeadCallsSection } from "@/components/tasks/LeadCallsSection";
@@ -80,7 +80,7 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label className="text-xs font-medium text-foreground/80">{label}</Label>
       {children}
     </div>
   );
@@ -98,9 +98,9 @@ function EntryCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3 relative">
+    <div className="rounded-lg border-2 border-border bg-card p-4 space-y-3 relative shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
           Registro {index + 1}
         </span>
         {canRemove && onRemove && (
@@ -121,6 +121,17 @@ function EntryCard({
   );
 }
 
+// Garantiza al menos la meta diaria de filas de llamados, aunque el informe
+// guardado tenga menos (p. ej. reportes creados antes de subir la meta a 8).
+function ensureMinCallRows(payload: DailySalesReportPayload): DailySalesReportPayload {
+  if (payload.calls.length >= CONSIGNMENT_CALLS_DAILY_GOAL) return payload;
+  const missing = CONSIGNMENT_CALLS_DAILY_GOAL - payload.calls.length;
+  return {
+    ...payload,
+    calls: [...payload.calls, ...Array.from({ length: missing }, () => emptyCallRow())],
+  };
+}
+
 export function DailySalesReportForm({
   showAllSections = false,
 }: {
@@ -130,16 +141,17 @@ export function DailySalesReportForm({
   const reportDate = chileTodayIsoDate();
   const [payload, setPayload] = useState<DailySalesReportPayload>(emptyDailySalesReportPayload());
   const [openSections, setOpenSections] = useState<string[]>(["lead_calls", "calls"]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [submittedOnce, setSubmittedOnce] = useState(false);
 
   useSyncDailySalesReportTasks(reportDate, !!user?.id);
 
   const reportQuery = useMyDailySalesReport(user?.id, reportDate, !!user?.id);
-  const monthlyConsignments = useMonthlyEffectiveConsignments(user?.id, !!user?.id);
   const submitMutation = useSubmitDailySalesReport();
 
   useEffect(() => {
     if (reportQuery.data) {
-      setPayload(normalizeDailySalesReportPayload(reportQuery.data.payload));
+      setPayload(ensureMinCallRows(normalizeDailySalesReportPayload(reportQuery.data.payload)));
     }
   }, [reportQuery.data]);
 
@@ -149,12 +161,10 @@ export function DailySalesReportForm({
     locale: es,
   });
 
-  const monthlyConsignmentsCount = monthlyConsignments.data ?? 0;
-  const consignmentGoalReached = monthlyConsignmentsCount >= CONSIGNMENT_MONTHLY_GOAL;
-  const consignmentProgressPct = Math.min(
-    100,
-    (monthlyConsignmentsCount / CONSIGNMENT_MONTHLY_GOAL) * 100,
-  );
+  // Barra de llamados: sube en vivo con cada llamado que se anota en el form del día.
+  const dailyCallsCount = progress.calls;
+  const dailyCallsPct = Math.min(100, (dailyCallsCount / CONSIGNMENT_CALLS_DAILY_GOAL) * 100);
+  const dailyGoalReached = dailyCallsCount >= CONSIGNMENT_CALLS_DAILY_GOAL;
 
   const updateCalls = (next: DailyReportCallRow[]) =>
     setPayload((p) => ({ ...p, calls: normalizeDailySalesReportPayload({ ...p, calls: next }).calls }));
@@ -168,14 +178,31 @@ export function DailySalesReportForm({
       ...p,
       social_posts: normalizeDailySalesReportPayload({ ...p, social_posts: next }).social_posts,
     }));
-  const updateConsignments = (next: DailyReportConsignmentRow[]) =>
-    setPayload((p) => ({
-      ...p,
-      effective_consignments: normalizeDailySalesReportPayload({
-        ...p,
-        effective_consignments: next,
-      }).effective_consignments,
-    }));
+
+  const handleDownload = async () => {
+    if (!user?.id) return;
+    setIsDownloading(true);
+    try {
+      const data = await fetchOwnReportPdfData({ userId: user.id, reportDate });
+      if (!data) {
+        toast({
+          title: "Nada para descargar",
+          description: "Primero envía el informe.",
+          variant: "destructive",
+        });
+        return;
+      }
+      await downloadVendedorReportPdf(data);
+    } catch (err) {
+      toast({
+        title: "No se pudo descargar",
+        description: err instanceof Error ? err.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (!user?.id || !user.tenant_id) {
@@ -201,11 +228,14 @@ export function DailySalesReportForm({
         existingId: reportQuery.data?.id ?? null,
       },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          setSubmittedOnce(true);
           toast({
             title: isSubmitted ? "Informe actualizado" : "Informe enviado",
-            description: "Quedó registrado para supervisión.",
-          }),
+            description: "Quedó registrado para supervisión. Descargando tu copia…",
+          });
+          void handleDownload();
+        },
         onError: (err) =>
           toast({
             title: "No se pudo guardar",
@@ -308,6 +338,40 @@ export function DailySalesReportForm({
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
+            <div className="xl:col-span-2 rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/60 dark:bg-pink-950/15 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <PhoneCall className="h-5 w-5 text-pink-500 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-pink-700 dark:text-pink-300">
+                      Llamados de hoy
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Meta diaria: {CONSIGNMENT_CALLS_DAILY_GOAL} llamados
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="text-2xl font-semibold skale-num text-pink-600 dark:text-pink-400">
+                    {dailyCallsCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    /{CONSIGNMENT_CALLS_DAILY_GOAL}
+                  </span>
+                </div>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
+                <div
+                  className="h-full rounded-full bg-pink-500 transition-all duration-500"
+                  style={{ width: `${dailyCallsPct}%` }}
+                />
+              </div>
+              {dailyGoalReached && (
+                <p className="text-xs font-medium text-pink-600 dark:text-pink-400">
+                  ¡Meta diaria completa! 🎯
+                </p>
+              )}
+            </div>
             {payload.calls.map((row, i) => (
               <EntryCard
                 key={i}
@@ -387,119 +451,6 @@ export function DailySalesReportForm({
                 </FieldGrid>
               </EntryCard>
             ))}
-            <div className="rounded-lg border-2 border-pink-300 dark:border-pink-800 bg-pink-50/40 dark:bg-pink-950/10 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-pink-500 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-pink-700 dark:text-pink-300">
-                      Registro bonus · Consignación efectiva
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {consignmentGoalReached
-                        ? "¡Meta alcanzada! Bono de $xxx.xxx"
-                        : `Supera las ${CONSIGNMENT_MONTHLY_GOAL} este mes y gana $xxx.xxx`}
-                    </p>
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="text-xl font-semibold skale-num text-pink-600 dark:text-pink-400">
-                    {monthlyConsignments.isLoading ? "…" : monthlyConsignmentsCount}
-                  </span>
-                  <span className="text-xs text-muted-foreground">/{CONSIGNMENT_MONTHLY_GOAL}</span>
-                </div>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-pink-100 dark:bg-pink-950">
-                <div
-                  className="h-full rounded-full bg-pink-500 transition-all"
-                  style={{ width: `${consignmentProgressPct}%` }}
-                />
-              </div>
-              {payload.effective_consignments.map((row, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-pink-200 dark:border-pink-900/60 bg-card p-3 space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wide text-pink-600 dark:text-pink-300">
-                      Registro {payload.calls.length + i + 1} · Bonus
-                    </span>
-                    {payload.effective_consignments.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                        onClick={() =>
-                          updateConsignments(
-                            payload.effective_consignments.filter((_, j) => j !== i),
-                          )
-                        }
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        Quitar
-                      </Button>
-                    )}
-                  </div>
-                  <FieldGrid cols={3}>
-                    <Field label="Nombre cliente">
-                      <Input
-                        value={row.customer_name}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], customer_name: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Patente">
-                      <Input
-                        placeholder="ABCD12"
-                        value={row.patente}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], patente: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Vehículo">
-                      <Input
-                        placeholder="Marca / modelo"
-                        value={row.vehicle}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], vehicle: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Observación">
-                      <Input
-                        value={row.observation}
-                        onChange={(e) => {
-                          const next = [...payload.effective_consignments];
-                          next[i] = { ...next[i], observation: e.target.value };
-                          updateConsignments(next);
-                        }}
-                      />
-                    </Field>
-                  </FieldGrid>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full border-pink-300 text-pink-600 hover:bg-pink-50 dark:border-pink-900 dark:text-pink-300"
-                onClick={() =>
-                  updateConsignments([...payload.effective_consignments, emptyConsignmentRow()])
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar consignación efectiva
-              </Button>
-            </div>
             <Button
               type="button"
               variant="outline"
@@ -715,26 +666,40 @@ export function DailySalesReportForm({
         )}
       </Accordion>
 
-      <div className="sticky bottom-0 z-10 mt-6 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 rounded-t-lg">
-        <div className="flex items-center justify-between gap-4 py-3">
-          {showAllSections && (
-            <p className="text-xs text-muted-foreground hidden sm:block">
-              {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
-            </p>
-          )}
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+        {showAllSections && (
+          <p className="mr-auto text-xs text-muted-foreground hidden sm:block">
+            {progress.sectionsFilled}/{progress.sectionsTotal} secciones con datos
+          </p>
+        )}
+        {(isSubmitted || submittedOnce) && (
           <Button
-            className="ml-auto min-w-[160px]"
-            onClick={handleSubmit}
-            disabled={submitMutation.isPending}
+            type="button"
+            variant="outline"
+            className="min-w-[160px]"
+            onClick={handleDownload}
+            disabled={isDownloading}
           >
-            {submitMutation.isPending ? (
+            {isDownloading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Download className="h-4 w-4 mr-2" />
             )}
-            {isSubmitted ? "Actualizar informe" : "Enviar informe"}
+            Descargar informe
           </Button>
-        </div>
+        )}
+        <Button
+          className="min-w-[160px]"
+          onClick={handleSubmit}
+          disabled={submitMutation.isPending}
+        >
+          {submitMutation.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
+          )}
+          {isSubmitted ? "Actualizar informe" : "Enviar informe"}
+        </Button>
       </div>
     </div>
   );

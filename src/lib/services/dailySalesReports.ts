@@ -155,6 +155,38 @@ export async function fetchMonthlyEffectiveConsignmentsCount(
   }, 0);
 }
 
+/**
+ * Datos para el PDF del propio informe de un vendedor (para descargarlo tras enviar).
+ * Reúne el informe guardado + nombre/sucursal del usuario + llamadas a leads del día,
+ * en el mismo formato de plantilla que usa la supervisión.
+ */
+export async function fetchOwnReportPdfData(input: {
+  userId: string;
+  reportDate: string;
+}): Promise<DailyReportPdfData | null> {
+  const [report, userRes, leadCalls] = await Promise.all([
+    fetchMyDailySalesReport(input.userId, input.reportDate),
+    supabase
+      .from("users")
+      .select("full_name, email, branch:branches(name)")
+      .eq("id", input.userId)
+      .maybeSingle(),
+    fetchLeadsCallsForUserDay({ userId: input.userId, reportDate: input.reportDate }),
+  ]);
+
+  if (!report) return null;
+
+  const u = userRes.data;
+  const branchJoin = u?.branch as { name?: string } | null | undefined;
+  return {
+    fullName: u?.full_name ?? u?.email ?? "Sin nombre",
+    branchName: branchJoin?.name ?? null,
+    reportDate: input.reportDate,
+    payload: report.payload,
+    leadCalls,
+  };
+}
+
 export async function fetchSubmittedReportPdfDataForDate(input: {
   tenantId: string;
   reportDate: string;

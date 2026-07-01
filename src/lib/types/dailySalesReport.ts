@@ -81,6 +81,9 @@ export const CONSIGNMENT_MONTHLY_GOAL = 20;
 // Monto del bono al superar la meta mensual de consignaciones efectivas. Ajustar aquí.
 export const CONSIGNMENT_BONUS_CLP = 100000;
 
+// Meta diaria de llamados a consignaciones.
+export const CONSIGNMENT_CALLS_DAILY_GOAL = 8;
+
 export const SELLER_ROLES_FOR_DAILY_REPORT = ["vendedor", "jefe_sucursal"] as const;
 
 export const SUPERVISOR_ROLES_FOR_DAILY_REPORT = [
@@ -108,7 +111,7 @@ export function emptyConsignmentRow(): DailyReportConsignmentRow {
 
 export function emptyDailySalesReportPayload(): DailySalesReportPayload {
   return {
-    calls: [emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow(), emptyCallRow()],
+    calls: Array.from({ length: CONSIGNMENT_CALLS_DAILY_GOAL }, () => emptyCallRow()),
     credits: [emptyCreditRow()],
     social_posts: [
       emptySocialPostRow(),
