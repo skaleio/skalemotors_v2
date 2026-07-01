@@ -14,7 +14,7 @@
 //   - (default)         -> { site, branches, vehicles } (home: trae todo acotado)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getPublicCorsHeaders } from "../_shared/cors.ts";
 
 const PUBLIC_VEHICLE_COLUMNS =
   "id, make, model, year, color, mileage, fuel_type, transmission, transmision_display, " +
@@ -42,7 +42,7 @@ function normalizeHost(raw: string | null): string | null {
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  const cors = getCorsHeaders(req);
+  const cors = getPublicCorsHeaders();
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
       status,
