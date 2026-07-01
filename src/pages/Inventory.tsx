@@ -56,6 +56,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/hooks/useVehicles";
+import { vehicleWebPublishService } from "@/lib/services/vehicleWebPublish";
 import { VehicleImage } from "@/components/VehicleImage";
 import { VehicleConsignacionPanel } from "@/components/inventory/VehicleConsignacionPanel";
 import {
@@ -741,6 +742,29 @@ export default function Inventory() {
       toast({
         title: "Error al publicar",
         description: e instanceof Error ? e.message : "No se pudo publicar en la plataforma.",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingKey(null);
+    }
+  };
+
+  const handleToggleWebPublish = async (vehicle: { id: string; publicado_web?: boolean | null }) => {
+    const key = `${vehicle.id}:web`;
+    setPublishingKey(key);
+    try {
+      if (vehicle.publicado_web) {
+        await vehicleWebPublishService.unpublish(vehicle.id);
+        toast({ title: "Quitado de la web", description: "El vehículo ya no aparece en tu vitrina." });
+      } else {
+        await vehicleWebPublishService.publish(vehicle.id);
+        toast({ title: "Publicado en la web", description: "Visible en tu vitrina con el sitio activo." });
+      }
+      await refetch();
+    } catch (e) {
+      toast({
+        title: vehicle.publicado_web ? "No se pudo quitar de la web" : "No se pudo publicar",
+        description: e instanceof Error ? e.message : "Error desconocido.",
         variant: "destructive",
       });
     } finally {
@@ -2026,6 +2050,12 @@ export default function Inventory() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
+                      {vehicle.publicado_web && (
+                        <Badge variant="default" className="text-xs bg-emerald-600 hover:bg-emerald-600">
+                          <Globe className="h-3 w-3 mr-1" />
+                          Web
+                        </Badge>
+                      )}
                       {(listingsByVehicle[vehicle.id] ?? []).map((l) => (
                         <Badge
                           key={l.id}
@@ -2117,16 +2147,21 @@ export default function Inventory() {
                             e.preventDefault();
                           }}
                         >
-                          {vehicle.status === 'ingreso' && (
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                              Publicar
-                            </DropdownMenuItem>
-                          )}
-                          {vehicle.status === 'disponible' && (
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                              Pausar publicación
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleToggleWebPublish(vehicle);
+                            }}
+                            disabled={publishingKey === `${vehicle.id}:web`}
+                          >
+                            {publishingKey === `${vehicle.id}:web` ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Globe className="h-4 w-4 mr-2" />
+                            )}
+                            {vehicle.publicado_web ? "Quitar de la web" : "Publicar en la web"}
+                          </DropdownMenuItem>
                           {marketplaceConnections.some((c) => c.platform === "mercadolibre") && vehicle.status === "disponible" && (
                             <DropdownMenuItem
                               onSelect={(e) => {
