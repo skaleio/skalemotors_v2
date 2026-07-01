@@ -155,6 +155,32 @@ export async function fetchMonthlyEffectiveConsignmentsCount(
   }, 0);
 }
 
+/**
+ * Total de llamados a consignación del mes en curso (hora Chile) de un vendedor.
+ * `excludeDate` omite ese día (típicamente hoy) para poder sumar en vivo los
+ * llamados del formulario sin contar dos veces el reporte de hoy ya guardado.
+ */
+export async function fetchMonthlyConsignmentCallsCount(
+  userId: string,
+  opts?: { excludeDate?: string; today?: string },
+): Promise<number> {
+  const { start, endExclusive } = chileMonthRange(opts?.today);
+  const { data, error } = await supabase
+    .from("daily_sales_reports")
+    .select("report_date, payload")
+    .eq("user_id", userId)
+    .gte("report_date", start)
+    .lt("report_date", endExclusive);
+
+  if (error) throw error;
+
+  return (data ?? []).reduce((total, row) => {
+    if (opts?.excludeDate && row.report_date === opts.excludeDate) return total;
+    const payload = normalizeDailySalesReportPayload(row.payload as DailySalesReportPayload);
+    return total + payload.calls.filter((r) => consignmentRowHasData(r)).length;
+  }, 0);
+}
+
 export async function fetchSubmittedReportPdfDataForDate(input: {
   tenantId: string;
   reportDate: string;

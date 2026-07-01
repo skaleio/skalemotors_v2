@@ -4,6 +4,7 @@ import {
   buildDailyReportSupervisionRows,
   fetchDailyReportById,
   fetchLeadsCallsForUserDay,
+  fetchMonthlyConsignmentCallsCount,
   fetchMonthlyEffectiveConsignmentsCount,
   fetchMyDailySalesReport,
   fetchUserReportMetrics,
@@ -120,6 +121,19 @@ export function useMonthlyEffectiveConsignments(
   return useQuery({
     queryKey: dailySalesReportQueryKey({ consignmentsMonth: userId }),
     queryFn: () => fetchMonthlyEffectiveConsignmentsCount(userId!),
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useMonthlyConsignmentCalls(
+  userId: string | undefined,
+  excludeDate: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ callsMonth: userId, exclude: excludeDate }),
+    queryFn: () => fetchMonthlyConsignmentCallsCount(userId!, { excludeDate }),
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });

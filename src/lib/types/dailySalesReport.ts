@@ -81,6 +81,10 @@ export const CONSIGNMENT_MONTHLY_GOAL = 20;
 // Monto del bono al superar la meta mensual de consignaciones efectivas. Ajustar aquí.
 export const CONSIGNMENT_BONUS_CLP = 100000;
 
+// Meta de llamados a consignaciones: 8 diarios → 48 semanales → 192 mensuales.
+export const CONSIGNMENT_CALLS_DAILY_GOAL = 8;
+export const CONSIGNMENT_CALLS_MONTHLY_GOAL = 192;
+
 export const SELLER_ROLES_FOR_DAILY_REPORT = ["vendedor", "jefe_sucursal"] as const;
 
 export const SUPERVISOR_ROLES_FOR_DAILY_REPORT = [
