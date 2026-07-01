@@ -5,7 +5,7 @@
 // El tenant_id JAMÁS viene del cliente. Anti-spam: honeypot + validación + dedup.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getPublicCorsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, getClientIp } from "../_shared/rateLimit.ts";
 
 function getEnvAny(names: string[]): string | null {
@@ -57,7 +57,7 @@ function sanitizeName(v: unknown, max = 200): string {
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  const cors = getCorsHeaders(req);
+  const cors = getPublicCorsHeaders();
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
       status,

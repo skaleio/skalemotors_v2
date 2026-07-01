@@ -61,6 +61,23 @@ export function getCorsHeaders(req: Request): Record<string, string> {
   };
 }
 
+/**
+ * CORS para endpoints PÚBLICOS y multi-dominio: las vitrinas de tenants viven en
+ * dominios arbitrarios de clientes (miami-motors.vercel.app, dominios propios, etc.),
+ * que no pueden estar en la allowlist ALLOWED_ORIGINS (esa es para la app admin).
+ * Devuelve wildcard: es seguro porque estos endpoints no usan credenciales/cookies
+ * y el tenant se resuelve server-side por hostname verificado, no por el Origin.
+ */
+export function getPublicCorsHeaders(): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+    "Access-Control-Allow-Methods": ALLOWED_METHODS,
+    "Access-Control-Max-Age": MAX_AGE,
+    Vary: "Accept-Encoding",
+  };
+}
+
 // Constante compartida. Si `ALLOWED_ORIGINS` está seteado en Supabase Secrets,
 // usa el primer origen permitido (lockdown CORS). Si no, fallback a `*` (legacy).
 // Para validación per-request real (multi-origen con echo del origen del request),
