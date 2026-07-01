@@ -31,6 +31,7 @@ const PhotographerTasks = lazy(() => import("./pages/PhotographerTasks"));
 const Albums = lazy(() => import("./pages/Albums"));
 const Finance = lazy(() => import("./pages/Finance"));
 const LibroVentas = lazy(() => import("./pages/LibroVentas"));
+const ComisionesDescuentos = lazy(() => import("./pages/ComisionesDescuentos"));
 const FundManagement = lazy(() => import("./pages/FundManagement"));
 const FinancialTracking = lazy(() => import("./pages/FinancialTracking"));
 const FinancialCalculator = lazy(() => import("./pages/FinancialCalculator"));
@@ -236,6 +237,13 @@ const App = () => (
                 <ProtectedRoute requiredPermission="finance:read">
                   <Layout>
                     <LibroVentas />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/app/comisiones" element={
+                <ProtectedRoute requiredPermission="finance:read">
+                  <Layout>
+                    <ComisionesDescuentos />
                   </Layout>
                 </ProtectedRoute>
               } />
