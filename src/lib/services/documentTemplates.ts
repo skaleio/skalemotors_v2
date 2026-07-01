@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { DocumentType } from "@/lib/services/documents";
 import {
   DEFAULT_CONSIGNACION_CLAUSES,
+  DEFAULT_RESERVA_CLAUSES,
   DEFAULT_VENTA_CLAUSES,
 } from "@/lib/documents/defaultTemplates";
 import {
@@ -45,9 +46,19 @@ function builtInTemplate(type: DocumentType): Omit<DocumentTemplate, "id" | "ten
   return {
     branch_id: null,
     type,
-    name: type === "contrato_consignacion" ? "Consignación (predeterminada)" : "Venta (predeterminada)",
+    name:
+      type === "contrato_consignacion"
+        ? "Consignación (predeterminada)"
+        : type === "nota_reserva"
+          ? "Reserva (predeterminada)"
+          : "Venta (predeterminada)",
     is_default: true,
-    clauses: type === "contrato_consignacion" ? DEFAULT_CONSIGNACION_CLAUSES : DEFAULT_VENTA_CLAUSES,
+    clauses:
+      type === "contrato_consignacion"
+        ? DEFAULT_CONSIGNACION_CLAUSES
+        : type === "nota_reserva"
+          ? DEFAULT_RESERVA_CLAUSES
+          : DEFAULT_VENTA_CLAUSES,
     settings: mergeTemplateSettings({}),
   };
 }

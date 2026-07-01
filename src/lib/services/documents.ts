@@ -8,6 +8,7 @@ export type Document = Database['public']['Tables']['documents']['Row'] & {
   down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
+  reservation_expires_at?: string | null;
 };
 export type DocumentInsert = Database['public']['Tables']['documents']['Insert'] & {
   template_id?: string | null;
@@ -16,6 +17,7 @@ export type DocumentInsert = Database['public']['Tables']['documents']['Insert']
   down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
+  reservation_expires_at?: string | null;
 };
 export type DocumentUpdate = Database['public']['Tables']['documents']['Update'] & {
   template_id?: string | null;
@@ -24,8 +26,9 @@ export type DocumentUpdate = Database['public']['Tables']['documents']['Update']
   down_payment?: number | null;
   vehicle_motor?: string | null;
   vehicle_chasis?: string | null;
+  reservation_expires_at?: string | null;
 };
-export type DocumentType = 'contrato_venta' | 'contrato_consignacion';
+export type DocumentType = 'contrato_venta' | 'contrato_consignacion' | 'nota_reserva';
 export type DocumentStatus = 'borrador' | 'generado' | 'firmado' | 'anulado';
 
 export interface DocumentFilters {
@@ -39,7 +42,7 @@ const generateDocumentNumber = async (
   type: DocumentType,
   branchId: string | null
 ): Promise<string> => {
-  const prefix = type === 'contrato_venta' ? 'CV' : 'CC';
+  const prefix = type === 'contrato_venta' ? 'CV' : type === 'nota_reserva' ? 'NR' : 'CC';
   const year = new Date().getFullYear();
 
   let query = supabase

@@ -704,18 +704,6 @@ export default function CRM() {
     live: true,
   });
 
-  const upcomingCitas = useMemo(() => {
-    const now = Date.now();
-    const closed = new Set(["cancelada", "completada", "no_asistio"]);
-    return (scopeAppointments as unknown as AppointmentListItem[])
-      .filter((apt) => {
-        const at = new Date(apt.scheduled_at).getTime();
-        return !Number.isNaN(at) && at >= now && !closed.has(apt.status);
-      })
-      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-      .slice(0, 8);
-  }, [scopeAppointments]);
-
   const [selectedCita, setSelectedCita] = useState<AppointmentListItem | null>(null);
 
   // Resumen del chatbot (lead.notes) por id, para mostrarlo en el detalle de la cita.
@@ -724,6 +712,25 @@ export default function CRM() {
     for (const lead of leads as LeadWithAssignee[]) map.set(lead.id, lead);
     return map;
   }, [leads]);
+
+  const upcomingCitas = useMemo(() => {
+    const now = Date.now();
+    const closed = new Set(["cancelada", "completada", "no_asistio"]);
+    return (scopeAppointments as unknown as AppointmentListItem[])
+      .filter((apt) => {
+        const at = new Date(apt.scheduled_at).getTime();
+        if (Number.isNaN(at) || at < now || closed.has(apt.status)) return false;
+        // Igual que el tablero: en la vista de un vendedor, solo sus citas
+        // (las de los leads asignados a ese vendedor). En vista global, todas.
+        if (supervisedVendorId) {
+          const lead = apt.lead?.id ? leadsById.get(apt.lead.id) : undefined;
+          if (lead?.assigned_to !== supervisedVendorId) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .slice(0, 8);
+  }, [scopeAppointments, supervisedVendorId, leadsById]);
 
   const scopedLeads = useMemo(() => {
     const roleScoped =
