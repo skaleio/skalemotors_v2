@@ -16,9 +16,10 @@ import {
   notificationLabelForType,
   type NotificationEventKey,
 } from "@/lib/notificationEvents";
-import { Bell, Check, Clock, Info, Loader2, User, UserCircle2, X } from "lucide-react";
+import { Bell, Building2, Check, Clock, Info, Loader2, User, UserCircle2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
+import { useStaffBranchByName } from "@/hooks/useStaffBranchByName";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
 import {
   useDismissNotification,
@@ -57,6 +58,7 @@ type NotificationMeta = {
   actor_name?: string | null;
   lead_full_name?: string | null;
   owner_name?: string | null;
+  branch_name?: string | null;
 };
 
 function metaOf(n: Notification): NotificationMeta {
@@ -80,6 +82,23 @@ function sellerNameOf(n: Notification, fallbackById: Map<string, string>): strin
 function leadNameOf(n: Notification): string | null {
   const m = metaOf(n);
   return m.lead_full_name?.trim() || m.owner_name?.trim() || null;
+}
+
+/**
+ * Sucursal a mostrar en el aviso: la del vendedor según Finanzas → Vendedores
+ * (branch_sales_staff), buscada por nombre. Si el vendedor no está en la
+ * plantilla, cae al branch_name que trae el metadata (sucursal del lead).
+ */
+function branchNameOf(
+  n: Notification,
+  sellerName: string | null,
+  branchByName: Map<string, string>,
+): string | null {
+  if (sellerName) {
+    const fromRoster = branchByName.get(sellerName.toLocaleLowerCase("es"));
+    if (fromRoster) return fromRoster;
+  }
+  return metaOf(n).branch_name?.trim() || null;
 }
 
 export default function Alerts() {
@@ -118,6 +137,13 @@ export default function Alerts() {
     }
     return map;
   }, [sellers]);
+
+  // Sucursal del vendedor según Finanzas → Vendedores (branch_sales_staff),
+  // fuente de verdad de la sucursal mostrada en cada aviso.
+  const { branchByName } = useStaffBranchByName({
+    tenantId: user?.tenant_id,
+    enabled: isAdmin && !!user?.tenant_id,
+  });
 
   // Cards visibles según el rol del usuario (solo las que le aplican).
   const visibleEvents = useMemo(
@@ -353,6 +379,7 @@ export default function Alerts() {
                 const archived = !!n.archived_at;
                 const sellerName = sellerNameOf(n, sellerNameById);
                 const leadName = leadNameOf(n);
+                const branchName = branchNameOf(n, sellerName, branchByName);
                 return (
                   <div
                     key={n.id}
@@ -370,7 +397,7 @@ export default function Alerts() {
                           {archived && <Badge variant="outline">Archivada</Badge>}
                         </div>
                         {n.message && <p className="text-sm text-muted-foreground mt-1">{n.message}</p>}
-                        {(sellerName || leadName) && (
+                        {(sellerName || leadName || branchName) && (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
                             {sellerName && (
                               <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -382,6 +409,12 @@ export default function Alerts() {
                               <span className="inline-flex items-center gap-1 text-muted-foreground">
                                 <UserCircle2 className="h-3 w-3 text-sky-600" />
                                 Lead: <span className="font-medium text-foreground">{leadName}</span>
+                              </span>
+                            )}
+                            {branchName && (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <Building2 className="h-3 w-3 text-amber-600" />
+                                Sucursal: <span className="font-medium text-foreground">{branchName}</span>
                               </span>
                             )}
                           </div>
