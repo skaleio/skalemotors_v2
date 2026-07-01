@@ -46,12 +46,22 @@ export function leadsAssignedToForQuery(role: string | undefined, userId: string
   return undefined;
 }
 
-/** Vendedor: no filtrar por sucursal en query — RLS + assigned_to ya acotan; evita ocultar delegaciones cross-branch. */
+/** Roles que ven todo el tenant (la RLS ya lo permite): no se filtran por sucursal. */
+const TENANT_WIDE_LEAD_ROLES = new Set(["admin", "jefe_jefe"]);
+
+/**
+ * Sucursal a filtrar en la query de leads.
+ * - vendedor: sin filtro (RLS + assigned_to ya acotan; evita ocultar delegaciones cross-branch).
+ * - admin / jefe_jefe: sin filtro — ven todo el tenant (Vista global del CRM). La RLS ya
+ *   restringe al tenant; filtrar por su propia sucursal ocultaba los leads de otras sucursales.
+ * - resto (jefe_sucursal, gerente, financiero): su sucursal.
+ */
 export function leadsBranchIdForQuery(
   role: string | undefined,
   branchId: string | null | undefined,
 ): string | undefined {
   if (role === "vendedor") return undefined;
+  if (role && TENANT_WIDE_LEAD_ROLES.has(role)) return undefined;
   return branchId ?? undefined;
 }
 
