@@ -15,6 +15,8 @@ export interface LibroVentaRow extends Row {
     vehicle_description: string | null
     seller_name: string | null
     sale_date: string | null
+    branch_id: string | null
+    branch: { name: string | null } | null
   } | null
 }
 
@@ -94,7 +96,7 @@ export const saleBreakdownService = {
     const { data, error } = await supabase
       .from('sale_breakdown')
       .select(
-        '*, sale:sales!sale_breakdown_sale_id_fkey(client_name, vehicle_description, seller_name, sale_date)',
+        '*, sale:sales!sale_breakdown_sale_id_fkey(client_name, vehicle_description, seller_name, sale_date, branch_id, branch:branches(name))',
       )
       .order('numero_venta', { ascending: true, nullsFirst: false })
     if (error) throw error

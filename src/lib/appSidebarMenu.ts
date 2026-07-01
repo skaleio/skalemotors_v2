@@ -117,6 +117,7 @@ const PHOTOGRAPHER_CATEGORIES: SidebarMenuCategory[] = [
       { title: "Álbumes", url: "/app/albums", icon: Camera },
       { title: "Precios web", url: "/app/website", icon: Globe },
       { title: "Tareas pendientes", url: "/app/mis-tareas", icon: ListChecks },
+      { title: "Redes sociales", url: "/app/redes-sociales", icon: Share2 },
     ],
   },
 ];

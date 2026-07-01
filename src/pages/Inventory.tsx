@@ -71,11 +71,11 @@ import {
   hidesInventoryCosts,
   isPhotographerRole,
 } from "@/lib/appRoles";
-import { formatCLP } from "@/lib/format";
+import { formatCLP, formatPatente, formatVehicleLabel, isValidPatente, normalizePatente } from "@/lib/format";
 import { leadService } from "@/lib/services/leads";
 import { saleService } from "@/lib/services/sales";
 import { vehicleService } from "@/lib/services/vehicles";
-import { getAppraisalByPatente } from "@/lib/services/vehicleAppraisalService";
+import { lookupVehicleByPatente } from "@/lib/services/vehicleAppraisalService";
 import { DASHBOARD_STATS_QUERY_KEY } from "@/hooks/useDashboardStats";
 import { optimizeVehicleImageForUpload } from "@/lib/vehicleImageOptimize";
 import { usePagination } from "@/hooks/usePagination";
@@ -355,6 +355,9 @@ function createEmptyNewVehicle() {
     combustible_display: "",
     engine_number: "",
     vin: "",
+    version: "",
+    doors: 0,
+    getapiExtras: {} as Record<string, unknown>,
     publicado: false,
     price: 0,
     cost: 0,
@@ -988,7 +991,7 @@ export default function Inventory() {
         owner_name: vehicleToEdit.owner_name || "",
         owner_phone: vehicleToEdit.owner_phone || "",
         consignment_type: getVehicleConsignmentType(vehicleToEdit),
-        patente: vehicleToEdit.patente || "",
+        patente: formatPatente(vehicleToEdit.patente || ""),
         consignatario_staff_id: vehicleToEdit.consignatario_staff_id || "",
         carroceria: normalizeInventoryCarroceria(vehicleToEdit.carroceria ?? ""),
         transmision_display: normalizeInventoryTransmisionDisplay(
@@ -1037,33 +1040,63 @@ export default function Inventory() {
   };
 
   const handleBuscarPatente = async () => {
-    const normalized = newVehicle.patente.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!/^[A-Z]{4}\d{2}$/.test(normalized)) {
-      toast({ variant: "destructive", title: "Patente inválida", description: "Formato chileno: 4 letras + 2 números (ej: ABCD12)." });
+    const normalized = normalizePatente(newVehicle.patente);
+    if (!isValidPatente(normalized)) {
+      toast({ variant: "destructive", title: "Patente inválida", description: "Patente chilena: BCDF12 (actual), AB1234 (antigua) o ABC12 (moto)." });
       return;
     }
     setPatenteLookupLoading(true);
     try {
-      const { vehicle } = await getAppraisalByPatente(normalized);
-      setNewVehicle((prev) => ({
-        ...prev,
-        patente: normalized,
-        make: vehicle.marca || prev.make,
-        model: vehicle.modelo || prev.model,
-        year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
-        color: vehicle.color || prev.color,
-        mileage: typeof vehicle.kilometraje === "number" ? vehicle.kilometraje : prev.mileage,
-        engine_size: vehicle.motor || prev.engine_size,
-        engine_number: vehicle.n_motor || prev.engine_number,
-        vin: vehicle.n_chasis || prev.vin,
-        transmision_display: vehicle.transmision || prev.transmision_display,
-        combustible_display: vehicle.combustible || prev.combustible_display,
-      }));
+      const vehicle = await lookupVehicleByPatente(normalized);
+      setNewVehicle((prev) => {
+        // Normalizar transmisión/combustible/carrocería de GetAPI al formato del
+        // selector y derivar los enums internos (transmission/fuel_type), para que
+        // queden seleccionados automáticamente y no como valor "anterior".
+        const transDisplay = vehicle.transmision
+          ? normalizeInventoryTransmisionDisplay(vehicle.transmision)
+          : prev.transmision_display;
+        const transMatch = INVENTORY_TRANSMISION_OPTIONS.find((o) => o.value === transDisplay);
+        const combDisplay = vehicle.combustible
+          ? normalizeInventoryCombustibleDisplay(vehicle.combustible)
+          : prev.combustible_display;
+        const combMatch = INVENTORY_COMBUSTIBLE_OPTIONS.find((o) => o.value === combDisplay);
+        const carroceriaNorm = vehicle.tipo_vehiculo
+          ? normalizeInventoryCarroceria(vehicle.tipo_vehiculo)
+          : prev.carroceria;
+        return {
+          ...prev,
+          patente: formatPatente(normalized),
+          make: vehicle.marca || prev.make,
+          model: vehicle.modelo || prev.model,
+          year: vehicle.año && vehicle.año > 0 ? vehicle.año : prev.year,
+          color: vehicle.color || prev.color,
+          mileage: typeof vehicle.kilometraje === "number" ? vehicle.kilometraje : prev.mileage,
+          engine_size: vehicle.motor || prev.engine_size,
+          engine_number: vehicle.n_motor || prev.engine_number,
+          vin: vehicle.n_chasis || prev.vin,
+          transmision_display: transDisplay,
+          transmission: transMatch?.transmission ?? prev.transmission,
+          combustible_display: combDisplay,
+          fuel_type: combMatch?.fuel_type ?? prev.fuel_type,
+          version: vehicle.version || prev.version,
+          carroceria: carroceriaNorm,
+          doors:
+            typeof vehicle.puertas === "number" && vehicle.puertas > 0
+              ? vehicle.puertas
+              : prev.doors,
+          getapiExtras: {
+            mes_revision_tecnica: vehicle.mes_revision_tecnica || null,
+            tasacion_fiscal: vehicle.tasacion_fiscal ?? null,
+            codigo_sii: vehicle.codigo_sii || null,
+            foto_url: vehicle.foto_url || null,
+          },
+        };
+      });
       setVehicleFormRevealed(true);
       toast({ title: "Datos cargados", description: `${vehicle.marca} ${vehicle.modelo} ${vehicle.año} — revisá y completá lo que falte.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo obtener los datos de la patente.";
-      toast({ variant: "destructive", title: "No se encontró la patente", description: message });
+      toast({ variant: "destructive", title: "No se pudo autocompletar", description: message });
     } finally {
       setPatenteLookupLoading(false);
     }
@@ -1089,13 +1122,15 @@ export default function Inventory() {
       const features = {
         drivetrain: newVehicle.drivetrain || null,
         min_down_payment: minDownPayment,
+        version: newVehicle.version?.trim() || null,
+        ...newVehicle.getapiExtras,
       };
 
       // Crear el vehículo primero (sin imágenes)
       // Asegurar que los números sean del tipo correcto para Supabase
       const vinToCreate = newVehicle.vin?.trim() || generateVin();
       const fallbackYear = new Date().getFullYear();
-      const patenteVal = newVehicle.patente.trim() || null;
+      const patenteVal = normalizePatente(newVehicle.patente) || null;
       const vehicleData = {
         vin: vinToCreate,
         make: newVehicle.make.trim() || "Sin marca",
@@ -1124,6 +1159,7 @@ export default function Inventory() {
         branch_id: user.branch_id,
         ...(user.tenant_id ? { tenant_id: user.tenant_id } : {}),
         location: newVehicle.location?.trim() || null,
+        doors: newVehicle.doors ? Number(newVehicle.doors) : null,
         images: [], // Inicialmente vacío, se llenará después de subir las imágenes
         features: features as any,
       };
@@ -1300,8 +1336,9 @@ export default function Inventory() {
 
       // Preparar datos de actualización
       const fallbackYear = new Date().getFullYear();
-      const patenteVal = newVehicle.patente.trim() || null;
+      const patenteVal = normalizePatente(newVehicle.patente) || null;
       const updateData = {
+        vin: newVehicle.vin?.trim() || vehicleToEdit.vin,
         make: newVehicle.make.trim() || "Sin marca",
         model: newVehicle.model.trim() || "Sin modelo",
         year: newVehicle.year && Number(newVehicle.year) > 0 ? parseInt(String(newVehicle.year), 10) : fallbackYear,
@@ -1849,7 +1886,7 @@ export default function Inventory() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">
-                          {vehicle.make} {vehicle.model}
+                          {formatVehicleLabel(vehicle.make)} {formatVehicleLabel(vehicle.model)}
                         </div>
                         <div className="text-sm text-muted-foreground">{vehicle.engine_size || ""}</div>
                       </div>
@@ -2697,21 +2734,21 @@ export default function Inventory() {
             <div className="rounded-lg border bg-muted/40 p-4">
               <Label htmlFor="patente-lookup" className="text-sm font-medium">Buscar por patente</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Ingresá la patente y traemos marca, modelo, año, color, kilometraje, N° motor y N° chasis automáticamente. Después revisás y completás lo que falte.
+                Ingresá la patente y traemos marca, modelo, versión, año, color, kilometraje, carrocería, puertas, N° de motor, VIN/N° de chasis, transmisión y combustible automáticamente. Después revisás y completás lo que falte.
               </p>
               <div className="flex gap-2">
                 <Input
                   id="patente-lookup"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value.toUpperCase() })}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleBuscarPatente();
                     }
                   }}
-                  placeholder="ABCD12"
-                  maxLength={6}
+                  placeholder="AB-CD-12"
+                  maxLength={8}
                   className="uppercase"
                   disabled={patenteLookupLoading}
                 />
@@ -2869,6 +2906,46 @@ export default function Inventory() {
                 />
               </div>
               <div>
+                <Label htmlFor="engine_number">N° de motor</Label>
+                <Input
+                  id="engine_number"
+                  value={newVehicle.engine_number}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_number: e.target.value })}
+                  placeholder="N° de motor (desde patente)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vin">N° de chasis / VIN</Label>
+                <Input
+                  id="vin"
+                  value={newVehicle.vin}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value })}
+                  placeholder="N° de chasis / VIN (desde patente)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="version">Versión</Label>
+                <Input
+                  id="version"
+                  value={newVehicle.version}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, version: e.target.value })}
+                  placeholder="Ej: Limited, Full, XLT"
+                />
+              </div>
+              <div>
+                <Label htmlFor="doors">Puertas</Label>
+                <Input
+                  id="doors"
+                  type="text"
+                  value={newVehicle.doors || ""}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    setNewVehicle({ ...newVehicle, doors: v === "" ? 0 : parseInt(v, 10) });
+                  }}
+                  placeholder="Ej: 4"
+                />
+              </div>
+              <div>
                 <Label htmlFor="transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
                 <Select
                   value={newVehicle.transmision_display || undefined}
@@ -2932,8 +3009,9 @@ export default function Inventory() {
                 <Input
                   id="patente"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
-                  placeholder="Ej: ABCD12"
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
+                  placeholder="Ej: AB-CD-12"
+                  maxLength={8}
                 />
               </div>
               <div>
@@ -3306,6 +3384,24 @@ export default function Inventory() {
                 />
               </div>
               <div>
+                <Label htmlFor="edit-engine_number">N° Motor</Label>
+                <Input
+                  id="edit-engine_number"
+                  value={newVehicle.engine_number}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, engine_number: e.target.value })}
+                  placeholder="N° de motor del vehículo"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-vin">N° Chasis (VIN)</Label>
+                <Input
+                  id="edit-vin"
+                  value={newVehicle.vin}
+                  onChange={(e) => setNewVehicle({ ...newVehicle, vin: e.target.value })}
+                  placeholder="N° de chasis / VIN"
+                />
+              </div>
+              <div>
                 <Label htmlFor="edit-transmision_display">{STOCK_ONLINE_COLUMN_LABELS.transmision}</Label>
                 <Select
                   value={newVehicle.transmision_display || undefined}
@@ -3369,8 +3465,9 @@ export default function Inventory() {
                 <Input
                   id="edit-patente"
                   value={newVehicle.patente}
-                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: e.target.value })}
-                  placeholder="Ej: ABCD12"
+                  onChange={(e) => setNewVehicle({ ...newVehicle, patente: formatPatente(e.target.value) })}
+                  placeholder="Ej: AB-CD-12"
+                  maxLength={8}
                 />
               </div>
               <div>

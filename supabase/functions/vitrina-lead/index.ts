@@ -38,6 +38,24 @@ function str(v: unknown, max = 2000): string | null {
   return s.slice(0, max);
 }
 
+// Sanea un nombre: descarta emojis/símbolos/control chars, colapsa espacios
+// y aplica Title Case. Devuelve "" si no queda nada útil.
+function sanitizeName(v: unknown, max = 200): string {
+  if (v === null || v === undefined) return "";
+  const cleaned = String(v)
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\s.'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+  return cleaned
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
 export default async function handler(req: Request): Promise<Response> {
   const cors = getCorsHeaders(req);
   const json = (status: number, body: unknown) =>
@@ -75,7 +93,7 @@ export default async function handler(req: Request): Promise<Response> {
   );
   if (!host) return json(400, { error: "Missing host" });
 
-  const fullName = str(body.full_name, 200);
+  const fullName = sanitizeName(body.full_name, 200);
   const phone = cleanPhone(body.phone);
   const email = str(body.email, 200);
   const message = str(body.message, 2000);

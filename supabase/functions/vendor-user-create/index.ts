@@ -19,6 +19,7 @@ type Body = {
   password?: string;
   full_name?: string;
   branch_id?: string | null;
+  sales_staff_id?: string | null;
 };
 
 function normalizeEmail(raw: string): string {
@@ -69,6 +70,10 @@ async function handler(req: Request): Promise<Response> {
   }
   if (!branchId || !UUID_RE.test(branchId)) {
     return jsonResponse(req,400, { ok: false, error: "Sucursal inválida" });
+  }
+  const salesStaffId = (body.sales_staff_id ?? "").trim();
+  if (salesStaffId && !UUID_RE.test(salesStaffId)) {
+    return jsonResponse(req,400, { ok: false, error: "Vendedor de plantilla inválido" });
   }
 
   const supabaseUrl = getEnv("SUPABASE_URL") ?? getEnv("PROJECT_URL");
@@ -132,6 +137,17 @@ async function handler(req: Request): Promise<Response> {
     return jsonResponse(req,400, { ok: false, error: "Sucursal no válida para tu organización" });
   }
 
+  if (salesStaffId) {
+    const { data: staffRow, error: staffErr } = await admin
+      .from("branch_sales_staff")
+      .select("id, tenant_id")
+      .eq("id", salesStaffId)
+      .maybeSingle();
+    if (staffErr || !staffRow || staffRow.tenant_id !== callerRow.tenant_id) {
+      return jsonResponse(req,400, { ok: false, error: "Vendedor de plantilla no válido para tu organización" });
+    }
+  }
+
   const { data: existingUser } = await admin
     .from("users")
     .select("id")
@@ -177,7 +193,10 @@ async function handler(req: Request): Promise<Response> {
 
   const { error: linkCreatorErr } = await admin
     .from("users")
-    .update({ created_by_user_id: userData.user.id })
+    .update({
+      created_by_user_id: userData.user.id,
+      ...(salesStaffId ? { sales_staff_id: salesStaffId } : {}),
+    })
     .eq("id", created.user.id);
   if (linkCreatorErr) {
     console.error("[vendor-user-create] created_by_user_id:", linkCreatorErr.code, linkCreatorErr.message);

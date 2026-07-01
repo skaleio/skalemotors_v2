@@ -223,6 +223,7 @@ export type Database = {
       }
       appointments: {
         Row: {
+          archived_at: string | null
           branch_id: string | null
           client_phone: string | null
           created_at: string | null
@@ -244,6 +245,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           branch_id?: string | null
           client_phone?: string | null
           created_at?: string | null
@@ -265,6 +267,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           branch_id?: string | null
           client_phone?: string | null
           created_at?: string | null
@@ -1929,34 +1932,43 @@ export type Database = {
       }
       lead_notes: {
         Row: {
+          attachments: Json
           body: string
           branch_id: string | null
+          channel: string | null
           created_at: string
           created_by: string | null
           id: string
           lead_id: string
+          next_action_at: string | null
           source: string
           tenant_id: string
           updated_at: string | null
         }
         Insert: {
+          attachments?: Json
           body: string
           branch_id?: string | null
+          channel?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id: string
+          next_action_at?: string | null
           source?: string
           tenant_id: string
           updated_at?: string | null
         }
         Update: {
+          attachments?: Json
           body?: string
           branch_id?: string | null
+          channel?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id?: string
+          next_action_at?: string | null
           source?: string
           tenant_id?: string
           updated_at?: string | null
@@ -1997,6 +2009,7 @@ export type Database = {
           archive_action: string
           archived_at: string
           archived_by: string | null
+          attachments: Json
           body: string
           branch_id: string | null
           created_by: string | null
@@ -2012,6 +2025,7 @@ export type Database = {
           archive_action: string
           archived_at?: string
           archived_by?: string | null
+          attachments?: Json
           body: string
           branch_id?: string | null
           created_by?: string | null
@@ -2027,6 +2041,7 @@ export type Database = {
           archive_action?: string
           archived_at?: string
           archived_by?: string | null
+          attachments?: Json
           body?: string
           branch_id?: string | null
           created_by?: string | null
@@ -2100,6 +2115,7 @@ export type Database = {
           full_name: string
           id: string
           last_contact_at: string | null
+          lead_type: string
           marca_preferida: string | null
           next_follow_up: string | null
           notes: string | null
@@ -2126,6 +2142,7 @@ export type Database = {
           updated_at: string | null
           uso_principal: string | null
           vehicle_interest: string | null
+          whatsapp_attempts: number
         }
         Insert: {
           alerta_crediticia?: string | null
@@ -2150,6 +2167,7 @@ export type Database = {
           full_name: string
           id?: string
           last_contact_at?: string | null
+          lead_type?: string
           marca_preferida?: string | null
           next_follow_up?: string | null
           notes?: string | null
@@ -2176,6 +2194,7 @@ export type Database = {
           updated_at?: string | null
           uso_principal?: string | null
           vehicle_interest?: string | null
+          whatsapp_attempts?: number
         }
         Update: {
           alerta_crediticia?: string | null
@@ -2200,6 +2219,7 @@ export type Database = {
           full_name?: string
           id?: string
           last_contact_at?: string | null
+          lead_type?: string
           marca_preferida?: string | null
           next_follow_up?: string | null
           notes?: string | null
@@ -2226,6 +2246,7 @@ export type Database = {
           updated_at?: string | null
           uso_principal?: string | null
           vehicle_interest?: string | null
+          whatsapp_attempts?: number
         }
         Relationships: [
           {
@@ -4106,6 +4127,7 @@ export type Database = {
           onboarding_completed: boolean | null
           phone: string | null
           role: string
+          sales_staff_id: string | null
           tenant_id: string | null
           updated_at: string | null
         }
@@ -4123,6 +4145,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           phone?: string | null
           role?: string
+          sales_staff_id?: string | null
           tenant_id?: string | null
           updated_at?: string | null
         }
@@ -4140,6 +4163,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           phone?: string | null
           role?: string
+          sales_staff_id?: string | null
           tenant_id?: string | null
           updated_at?: string | null
         }
@@ -4156,6 +4180,13 @@ export type Database = {
             columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_sales_staff_id_fkey"
+            columns: ["sales_staff_id"]
+            isOneToOne: false
+            referencedRelation: "branch_sales_staff"
             referencedColumns: ["id"]
           },
           {
@@ -4995,6 +5026,7 @@ export type Database = {
           tenant_id: string
           timezone: string
           updated_at: string
+          vehicle_id: string | null
           zernio_post_id: string | null
         }
         Insert: {
@@ -5012,6 +5044,7 @@ export type Database = {
           tenant_id: string
           timezone?: string
           updated_at?: string
+          vehicle_id?: string | null
           zernio_post_id?: string | null
         }
         Update: {
@@ -5029,6 +5062,7 @@ export type Database = {
           tenant_id?: string
           timezone?: string
           updated_at?: string
+          vehicle_id?: string | null
           zernio_post_id?: string | null
         }
         Relationships: [
@@ -5037,6 +5071,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zernio_posts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]

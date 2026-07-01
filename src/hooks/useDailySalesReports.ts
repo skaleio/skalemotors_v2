@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   buildDailyReportSupervisionRows,
   fetchDailyReportById,
+  fetchLeadsCallsForUserDay,
+  fetchMonthlyEffectiveConsignmentsCount,
   fetchMyDailySalesReport,
+  fetchUserReportMetrics,
   submitDailySalesReport,
   syncDailySalesReportTasks,
 } from "@/lib/services/dailySalesReports";
@@ -35,6 +38,19 @@ export function useMyDailySalesReport(
   return useQuery({
     queryKey: dailySalesReportQueryKey({ mine: userId, date: reportDate }),
     queryFn: () => fetchMyDailySalesReport(userId!, reportDate),
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useLeadsCallsForDay(
+  userId: string | undefined,
+  reportDate: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ leadCalls: userId, date: reportDate }),
+    queryFn: () => fetchLeadsCallsForUserDay({ userId: userId!, reportDate }),
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });
@@ -94,6 +110,31 @@ export function useSubmitDailySalesReport() {
         }),
       });
     },
+  });
+}
+
+export function useMonthlyEffectiveConsignments(
+  userId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ consignmentsMonth: userId }),
+    queryFn: () => fetchMonthlyEffectiveConsignmentsCount(userId!),
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUserReportMetrics(
+  userId: string | undefined,
+  days = 30,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: dailySalesReportQueryKey({ metrics: userId, days: String(days) }),
+    queryFn: () => fetchUserReportMetrics(userId!, days),
+    enabled: enabled && !!userId,
+    staleTime: 60 * 1000,
   });
 }
 

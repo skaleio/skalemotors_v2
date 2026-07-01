@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { LeadIngestApiKeysSection } from '@/components/settings/LeadIngestApiKeysSection';
+import { McpConnectionSection } from '@/components/settings/McpConnectionSection';
 import { MfaEnrollSection } from '@/components/settings/MfaEnrollSection';
 import { PrivacyComplianceSection } from '@/components/settings/PrivacyComplianceSection';
 import { KeyboardShortcutsSection } from '@/components/settings/KeyboardShortcutsSection';
@@ -1201,6 +1202,8 @@ export default function Settings() {
             </form>
           </CardContent>
         </Card>
+
+        <McpConnectionSection />
 
         <LeadIngestApiKeysSection showLinkToIntegrationsPage />
 

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  Download,
   Loader2,
   Printer,
   RefreshCw,
@@ -273,6 +274,21 @@ export default function DocumentEditor() {
       toast.error("Error al guardar");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current || !doc) return;
+    setDownloadingPdf(true);
+    try {
+      const { downloadDocumentPdf } = await import("@/lib/pdf/documentPdf");
+      await downloadDocumentPdf(printRef.current, doc.document_number ?? "documento");
+    } catch {
+      toast.error("No se pudo generar el PDF");
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -742,6 +758,15 @@ export default function DocumentEditor() {
               ))}
             </div>
             <div className="pt-2 space-y-2 border-t">
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+              >
+                <Download className="h-4 w-4" />
+                {downloadingPdf ? "Generando…" : "Descargar PDF"}
+              </Button>
               <Button variant="outline" className="w-full gap-2" onClick={handlePrint}>
                 <Printer className="h-4 w-4" />
                 Imprimir
