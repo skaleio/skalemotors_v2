@@ -2161,7 +2161,7 @@ export default function Consignaciones() {
               <Input
                 id="patente"
                 value={formState.patente}
-                onChange={(e) => setFormState({ ...formState, patente: e.target.value })}
+                onChange={(e) => setFormState({ ...formState, patente: e.target.value.toUpperCase() })}
                 placeholder="Ej: KD TR 90 · PL WY 18"
               />
             </div>

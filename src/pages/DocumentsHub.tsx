@@ -23,6 +23,7 @@ import { DocumentTemplatesPanel } from "@/components/documents/DocumentTemplates
 import { useAuth } from "@/contexts/AuthContext";
 import { documentService, Document, DocumentType } from "@/lib/services/documents";
 import { consignacionesService } from "@/lib/services/consignaciones";
+import { normalizePatente } from "@/lib/patente";
 import { vehicleService } from "@/lib/services/vehicles";
 import type { Database } from "@/lib/types/database";
 
@@ -56,7 +57,7 @@ const ACTIVE_CONSIGNACION_STATUSES = new Set([
 ]);
 
 function normalizePlate(patente?: string | null): string {
-  return patente?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+  return normalizePatente(patente) ?? "";
 }
 
 function vehicleThumbnailSrc(vehicle: Vehicle): string | null {

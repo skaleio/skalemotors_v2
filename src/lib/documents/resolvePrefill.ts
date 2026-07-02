@@ -77,14 +77,9 @@ export async function resolveConsignacionPrefill(
     return { form, consignacion: null, vehicle };
   }
 
-  // Si existe un registro de consignación, sus datos tienen prioridad.
+  // Si existe un registro de consignación, sus datos no vacíos tienen prioridad;
+  // los campos que la consignación no tenga conservan el valor del vehículo.
   form = { ...form, ...mapConsignacionToForm(consignacion) } as ConsignacionFormState;
-
-  if (consignacion.motor) form.vehicle_motor = form.vehicle_motor || consignacion.motor;
-  if (consignacion.vehicle_vin) {
-    form.vehicle_chasis = form.vehicle_chasis || consignacion.vehicle_vin;
-    form.vehicle_vin = form.vehicle_vin || consignacion.vehicle_vin;
-  }
 
   if (consignacion.consignacion_price != null && !form.min_sale_price) {
     form.min_sale_price = String(consignacion.consignacion_price);
@@ -109,7 +104,9 @@ export async function resolveVentaPrefill(
       branchId,
     });
     if (consignacion) {
-      if (consignacion.motor && !form.vehicle_motor) form.vehicle_motor = consignacion.motor;
+      if (consignacion.engine_number && !form.vehicle_motor) {
+        form.vehicle_motor = consignacion.engine_number;
+      }
       if (!form.vehicle_chasis) {
         form.vehicle_chasis = consignacion.vehicle_vin ?? form.vehicle_vin ?? "";
       }
@@ -134,7 +131,9 @@ export async function resolveReservaPrefill(
       branchId,
     });
     if (consignacion) {
-      if (consignacion.motor && !form.vehicle_motor) form.vehicle_motor = consignacion.motor;
+      if (consignacion.engine_number && !form.vehicle_motor) {
+        form.vehicle_motor = consignacion.engine_number;
+      }
       if (!form.vehicle_chasis) {
         form.vehicle_chasis = consignacion.vehicle_vin ?? form.vehicle_vin ?? "";
       }
