@@ -1,4 +1,5 @@
 import React from "react";
+import { registerSW } from "virtual:pwa-register";
 import { captureAppError, initObservability } from "@/lib/observability";
 import { setupPerformanceObservers } from "@/lib/performance";
 
@@ -178,6 +179,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 } else {
   initObservability();
   setupPerformanceObservers();
+  // Registra el service worker (autoUpdate). Habilita instalación PWA y push.
+  registerSW({ immediate: true });
   import("./index.css");
   Promise.all([
     import("react-dom/client"),
