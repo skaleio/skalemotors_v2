@@ -1,9 +1,16 @@
 import { supabase } from "../supabase";
+import { normalizePatente } from "../patente";
 import type { Database } from "../types/database";
 
 type Consignacion = Database["public"]["Tables"]["consignaciones"]["Row"];
 type ConsignacionInsert = Database["public"]["Tables"]["consignaciones"]["Insert"];
 type ConsignacionUpdate = Database["public"]["Tables"]["consignaciones"]["Update"];
+
+/** La patente se guarda en forma canónica; de eso depende el match con el vehículo. */
+function withCanonicalPatente<T extends { patente?: string | null }>(payload: T): T {
+  if (!("patente" in payload)) return payload;
+  return { ...payload, patente: normalizePatente(payload.patente) };
+}
 
 type ConsignacionWithRelations = Consignacion & {
   lead?: {
@@ -75,7 +82,7 @@ export const consignacionesService = {
   async create(payload: ConsignacionInsert): Promise<ConsignacionWithRelations> {
     const { data, error } = await supabase
       .from("consignaciones")
-      .insert(payload)
+      .insert(withCanonicalPatente(payload))
       .select("*")
       .single();
 
@@ -94,7 +101,7 @@ export const consignacionesService = {
   async update(id: string, updates: ConsignacionUpdate): Promise<ConsignacionWithRelations> {
     const { data, error } = await supabase
       .from("consignaciones")
-      .update(updates)
+      .update(withCanonicalPatente(updates))
       .eq("id", id)
       .select(
         `
@@ -146,7 +153,7 @@ export const consignacionesService = {
     if (e1) throw e1;
     if (byVehicle) return byVehicle as ConsignacionWithRelations;
 
-    const plate = params.patente?.trim().toUpperCase();
+    const plate = normalizePatente(params.patente);
     if (!plate) return null;
 
     let q = supabase

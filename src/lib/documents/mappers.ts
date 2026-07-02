@@ -139,25 +139,32 @@ export function mapVehicleToConsignacionForm(v: Vehicle): Partial<ConsignacionFo
 export function mapConsignacionToForm(c: Consignacion): Partial<ConsignacionFormState> {
   const suggested = c.sale_price ?? c.consignacion_price;
   const minimum = c.consignacion_price ?? c.sale_price;
-  return {
+  // Solo campos con valor: el resultado se hace spread sobre los datos del
+  // vehículo y un null de la consignación no debe borrarlos.
+  // vehicle_motor es el N° de motor (engine_number); c.motor es la cilindrada.
+  const candidate: Partial<ConsignacionFormState> = {
     consignacion_id: c.id,
-    vehicle_id: c.vehicle_id ?? "",
-    vehicle_make: c.vehicle_make ?? "",
-    vehicle_model: c.vehicle_model ?? "",
-    vehicle_year: c.vehicle_year != null ? String(c.vehicle_year) : "",
-    vehicle_vin: c.vehicle_vin ?? "",
-    vehicle_patente: (c.patente ?? "").toUpperCase(),
-    vehicle_km: c.vehicle_km != null ? String(c.vehicle_km) : "",
-    vehicle_motor: c.motor ?? "",
-    vehicle_chasis: c.vehicle_vin ?? "",
-    owner_name: c.owner_name ?? "",
-    owner_phone: c.owner_phone ?? "",
-    owner_email: c.owner_email ?? "",
-    sale_price: suggested != null ? String(suggested) : "",
-    min_sale_price: minimum != null ? String(minimum) : "",
-    notes: c.notes ?? "",
-    lead_id: c.lead_id ?? "",
+    vehicle_id: c.vehicle_id,
+    vehicle_make: c.vehicle_make,
+    vehicle_model: c.vehicle_model,
+    vehicle_year: c.vehicle_year != null ? String(c.vehicle_year) : null,
+    vehicle_vin: c.vehicle_vin,
+    vehicle_patente: c.patente ? c.patente.toUpperCase() : null,
+    vehicle_km: c.vehicle_km != null ? String(c.vehicle_km) : null,
+    vehicle_color: c.color,
+    vehicle_motor: c.engine_number,
+    vehicle_chasis: c.vehicle_vin,
+    owner_name: c.owner_name,
+    owner_phone: c.owner_phone,
+    owner_email: c.owner_email,
+    sale_price: suggested != null ? String(suggested) : null,
+    min_sale_price: minimum != null ? String(minimum) : null,
+    notes: c.notes,
+    lead_id: c.lead_id,
   };
+  return Object.fromEntries(
+    Object.entries(candidate).filter(([, value]) => value != null && value !== "")
+  ) as Partial<ConsignacionFormState>;
 }
 
 export function mapLeadToBuyer(lead: Lead): Partial<VentaFormState> {
