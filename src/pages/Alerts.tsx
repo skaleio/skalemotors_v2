@@ -18,6 +18,7 @@ import {
 } from "@/lib/notificationEvents";
 import { Bell, Building2, Check, Clock, Info, Loader2, User, UserCircle2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PushNotificationButton } from "@/components/PushNotificationButton";
 import { useBranchSellers } from "@/hooks/useBranchSellers";
 import { useStaffBranchByName } from "@/hooks/useStaffBranchByName";
 import { useNavigationWithLoading } from "@/hooks/useNavigationWithLoading";
@@ -231,6 +232,7 @@ export default function Alerts() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <PushNotificationButton />
           <Button variant="outline" size="sm" onClick={() => setIncludeArchived((v) => !v)}>
             {includeArchived ? "Ocultar archivadas" : "Mostrar archivadas"}
           </Button>
