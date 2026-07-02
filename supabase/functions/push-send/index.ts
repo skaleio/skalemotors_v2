@@ -4,9 +4,10 @@
 // notificación recién insertada. Envía un Web Push (RFC 8291) a cada device
 // suscrito del recipient. Suscripción muerta (404/410) -> se borra sola.
 //
-// Auth: verify_jwt = false. Validamos a mano que el Bearer == service_role key
-// (lo manda el dispatcher leyéndolo de Vault). Así funciona con cualquier
-// formato de key del proyecto.
+// Auth: verify_jwt = false. Validamos a mano que el Bearer == token de dispatch
+// guardado en Vault ('service_role_key'), leído vía RPC get_push_dispatch_secret.
+// El trigger manda ese mismo token; ambos leen del mismo Vault, así que no
+// dependemos del formato del service key inyectado (JWT legacy vs sb_secret).
 //
 // Secrets requeridos: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (base64url, de
 // `npx web-push generate-vapid-keys`), VAPID_SUBJECT (mailto:...).
@@ -112,9 +113,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  // Auth: el Bearer debe ser el service_role key (lo manda el dispatcher).
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
+
+  // Auth: el Bearer debe coincidir con el token de dispatch guardado en Vault,
+  // que el trigger envía y que leemos vía RPC (service_role). Así no dependemos
+  // del formato del service key inyectado (JWT legacy vs sb_secret nuevo). El
+  // service key solo se usa para acceder a la DB.
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!timingSafeEqual(bearer, serviceKey)) {
+  const { data: expectedToken, error: tokenErr } = await supabase.rpc(
+    "get_push_dispatch_secret",
+  );
+  if (tokenErr || typeof expectedToken !== "string" || expectedToken.length === 0) {
+    console.error("[push-send] dispatch secret unavailable:", tokenErr);
+    return new Response(JSON.stringify({ ok: false, error: "Dispatch secret unavailable" }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+  if (!timingSafeEqual(bearer, expectedToken)) {
     return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
       status: 401,
       headers: { ...cors, "Content-Type": "application/json" },
@@ -145,10 +163,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   }
-
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
 
   const { data: subs, error } = await supabase
     .from("push_subscriptions")
