@@ -59,7 +59,6 @@ Documentación de los **endpoints HTTP propios** de Skale Motors v2: rutas servi
 | `LEAD_INGEST_API_KEY` | `lead-create`, `landing-booking` (legacy) |
 | `LEAD_STATE_API_KEY` | `lead-state-update` (solo no-prod; prod usa clave mintada) |
 | `PENDING_TASK_API_KEY` | `pending-task-create` |
-| `CHILEAUTOS_SCRAPE_API_KEY` | `GET /api/chileautos-scrape` (obligatorio en prod) |
 
 ### 5. Webhooks firmados
 
@@ -289,52 +288,7 @@ Igual que ingesta (clave mintada).
 
 ---
 
-## 4. Búsqueda ChileAutos (scrape)
-
-### `GET /api/chileautos-scrape`
-
-Busca listados publicados en chileautos.cl. Uso interno / módulo inventario.
-
-#### Query
-
-| Parámetro | Requerido | Descripción |
-|-----------|-----------|-------------|
-| `q` | Sí | Término de búsqueda (máx. 200 chars) |
-| `offset` | No | Paginación (default `0`, máx. `1000`) |
-
-#### Autenticación
-
-- **Producción:** `x-api-key: <CHILEAUTOS_SCRAPE_API_KEY>` o query `?api_key=…`
-- **Dev/preview:** sin clave si la variable no está configurada
-
-Rate-limit: 30 req/min por IP.
-
-#### Respuesta `200`
-
-```json
-{
-  "keyword": "toyota corolla",
-  "offset": 0,
-  "total": 10,
-  "listings": [
-    {
-      "id": "…",
-      "title": "…",
-      "make": "…",
-      "model": "…",
-      "price": "…",
-      "priceText": "…",
-      "state": "…",
-      "details": ["…"],
-      "url": "https://www.chileautos.cl/…"
-    }
-  ]
-}
-```
-
----
-
-## 5. Proxy Edge (same-origin Vercel)
+## 4. Proxy Edge (same-origin Vercel)
 
 ### `POST /api/edge/{fn}`
 
@@ -576,7 +530,6 @@ Invocadas desde la app React con sesión Supabase. Todas aceptan `POST` salvo do
 | Función | Propósito |
 |---------|-----------|
 | `vehicle-lookup` | Consulta datos vehículo |
-| `vehicle-appraisal` | Tasación (scraper + respaldos) |
 | `vehicle-valuation` | Valoración |
 | `getapi-appraisal` | Tasación vía GetAPI |
 
@@ -608,13 +561,6 @@ Invocadas desde la app React con sesión Supabase. Todas aceptan `POST` salvo do
 |---------|-----------|
 | `vitrina-domain` | Gestionar dominios (JWT gerente/admin) |
 
-### Utilidades
-
-| Función | Propósito |
-|---------|-----------|
-| `chileautos-scrape` | Scrape ChileAutos (Edge; análogo al de Vercel) |
-| `chileautos-proxy` | Proxy HTML controlado a chileautos.cl |
-
 ---
 
 # Parte III — Variables de entorno (Vercel)
@@ -625,7 +571,6 @@ Invocadas desde la app React con sesión Supabase. Todas aceptan `POST` salvo do
 | `SUPABASE_SERVICE_ROLE_KEY` | Todos los de ingesta |
 | `N8N_LEAD_INGEST_API_KEY` | Ingesta leads/citas (solo dev) |
 | `LEAD_INGEST_ALLOWED_ORIGINS` | CORS ingesta (comma-separated) |
-| `CHILEAUTOS_SCRAPE_API_KEY` | `GET /api/chileautos-scrape` (prod) |
 | `VITE_SUPABASE_ANON_KEY` | Proxy `/api/edge/*` |
 
 ---
