@@ -463,7 +463,7 @@ function AdminReportView() {
       </div>
 
       {asVendedor ? (
-        <DailySalesReportForm showAllSections={false} />
+        <DailySalesReportForm showAllSections />
       ) : (
         <div className="space-y-6">
           <DailySalesReportSupervision />
@@ -496,7 +496,7 @@ export function DailySalesReportPanel() {
           <TabsTrigger value="supervision">Supervisión equipo</TabsTrigger>
         </TabsList>
         <TabsContent value="informe">
-          <DailySalesReportForm />
+          <DailySalesReportForm showAllSections />
         </TabsContent>
         <TabsContent value="supervision">
           <DailySalesReportSupervision />
@@ -510,7 +510,7 @@ export function DailySalesReportPanel() {
   }
 
   if (canFill) {
-    return <DailySalesReportForm />;
+    return <DailySalesReportForm showAllSections />;
   }
 
   return (
